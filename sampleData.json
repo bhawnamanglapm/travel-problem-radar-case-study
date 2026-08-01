@@ -1,0 +1,90 @@
+[
+  {
+    "cat": "traveler_pain",
+    "title": "American Airlines tops US complaints",
+    "summary": "In May 2026 it drew the most DOT complaints of any US carrier (1,181: 302 flight problems, 288 refunds, 149 baggage).",
+    "source": "Yahoo Travel",
+    "link": "https://travel.yahoo.com/flights/articles/travelers-avoiding-8-airlines-amid-162208721.html",
+    "region": "United States",
+    "date": "Jul 2026",
+    "severity": "High",
+    "opportunity": "An assistant that auto-files disruption and refund claims for the traveler."
+  },
+  {
+    "cat": "traveler_pain",
+    "title": "Summer refund vs. credit confusion",
+    "summary": "Travelers hit long service-counter queues, trouble getting hotel vouchers, and confusion over refunds versus future credits.",
+    "source": "The Traveler",
+    "link": "https://www.thetraveler.org/ongoing-flight-cancellations-test-summer-travelers-patience/",
+    "region": "Global",
+    "date": "Jul 2026",
+    "severity": "Medium",
+    "opportunity": "A claim tracker that chases carriers/OTAs and shows where a refund is stuck."
+  },
+  {
+    "cat": "gov_policy",
+    "title": "Japan cost spike",
+    "summary": "Departure tax tripled to \u00a53,000 (Jul 1), single-entry visa \u00a53,000\u2192\u00a515,000, tax-free shopping moves to airport refunds Nov 1.",
+    "source": "JapanSophy",
+    "link": "https://www.japansophy.com/post/japan-tourist-tax",
+    "region": "Japan",
+    "date": "Jul 2026",
+    "severity": "High",
+    "opportunity": "A \"true cost of travel\" calculator baking taxes/levies into the booking price."
+  },
+  {
+    "cat": "gov_policy",
+    "title": "Global fee wave",
+    "summary": "US $750 non-refundable premium visa-interview fast-track; Edinburgh tourist tax from Jul 24; ETIAS launching Q4.",
+    "source": "Travel And Tour World",
+    "link": "https://www.travelandtourworld.com/news/article/v35g6s6hdpac/",
+    "region": "Global",
+    "date": "Jul 2026",
+    "severity": "Medium",
+    "opportunity": "A live entry-rule and fee monitor alerting travelers to changes on their route."
+  },
+  {
+    "cat": "web_app",
+    "title": "Booking.com login & payment failures",
+    "summary": "Jul 14\u201327: \"Sign in failed\" errors, payments going through with no booking shown, Extranet messages not loading.",
+    "source": "IsDown",
+    "link": "https://isdown.app/status/booking-com",
+    "region": "Global",
+    "date": "Jul 2026",
+    "severity": "High",
+    "opportunity": "An independent booking-confirmation verifier."
+  },
+  {
+    "cat": "web_app",
+    "title": "Reservation mismatches",
+    "summary": "Users report paid bookings the system says don't exist, and listings showing the wrong hotel.",
+    "source": "Outage.Report",
+    "link": "https://outage.report/booking-com",
+    "region": "Global",
+    "date": "Jul 2026",
+    "severity": "Medium",
+    "opportunity": "A reservation-integrity monitor that flags silent changes."
+  },
+  {
+    "cat": "industry",
+    "title": "Majorca strikes + anti-tourism protests",
+    "summary": "From Jul 26: Swissport airport walkouts (also Aug 1/4/8, 7am\u201312pm & 7\u201310pm) plus an anti-tourism demonstration.",
+    "source": "NomadLawyer",
+    "link": "https://www.nomadlawyer.org/majorca-spain-anti-tourism-protests-airport-strikes-2026",
+    "region": "Spain",
+    "date": "Jul 2026",
+    "severity": "High",
+    "opportunity": "A predictive disruption calendar scoring an itinerary's strike/protest risk."
+  },
+  {
+    "cat": "industry",
+    "title": "UK + Italy airport disruption",
+    "summary": "Heathrow/Gatwick/Manchester saw one of summer's heaviest cancellation days on Jul 2; Italy ran national aviation strikes Jul 5.",
+    "source": "Wego",
+    "link": "https://blog.wego.com/uk-airport-strikes/",
+    "region": "Europe",
+    "date": "Jul 2026",
+    "severity": "Medium",
+    "opportunity": "A proactive rebooking concierge that pre-stages alternatives."
+  }
+]

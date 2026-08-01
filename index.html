@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Travel Problem Radar — Bhawna Mangla</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root{
+  --bg:#0B0B0D; --bg2:#141419; --surface:#17171D; --surface2:#1F1F27;
+  --line:#2A2A34; --line2:#3A3A46;
+  --text:#F4F4F7; --muted:#93939F; --faint:#63636E;
+  --pink:#FF2E88; --pink-dim:#B21D5F; --lime:#C6FF3D; --amber:#FFB020;
+  --display:'Bebas Neue','Arial Narrow',sans-serif;
+  --body:'Inter',system-ui,-apple-system,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--body);
+  line-height:1.6;-webkit-font-smoothing:antialiased;}
+a{color:inherit;}
+.wrap{max-width:1000px;margin:0 auto;padding:0 clamp(18px,5vw,40px);}
+
+/* nav */
+.nav{display:flex;align-items:center;justify-content:space-between;padding:20px 0;
+  border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(11,11,13,.85);
+  backdrop-filter:blur(10px);z-index:10;}
+.nav .back{font-family:var(--mono);font-size:12px;letter-spacing:.05em;color:var(--muted);
+  text-decoration:none;transition:.15s;}
+.nav .back:hover{color:var(--lime);}
+.nav .mark{font-family:var(--display);font-size:22px;letter-spacing:.04em;}
+.nav .mark span{color:var(--pink);}
+
+/* hero */
+.hero{position:relative;overflow:hidden;border-bottom:1px solid var(--line);}
+.hero-bg{position:absolute;inset:0;pointer-events:none;opacity:.5;
+  background:
+    radial-gradient(circle at 82% 18%, rgba(255,46,136,.12), transparent 40%),
+    radial-gradient(circle at 82% 18%, transparent 0 22%, rgba(198,255,61,.05) 22% 22.4%, transparent 23%),
+    radial-gradient(circle at 82% 18%, transparent 0 34%, rgba(198,255,61,.04) 34% 34.4%, transparent 35%);}
+.hero-inner{position:relative;display:grid;grid-template-columns:1.1fr .9fr;gap:40px;
+  align-items:center;padding:56px 0 50px;}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--pink);margin-bottom:14px;}
+h1{font-family:var(--display);font-weight:400;font-size:clamp(52px,9vw,90px);line-height:.88;
+  letter-spacing:.01em;margin:0 0 18px;}
+.lede{font-size:17px;color:var(--muted);max-width:44ch;margin:0 0 26px;}
+.meta{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:22px;}
+.chip{font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--muted);background:var(--surface);border:1px solid var(--line);
+  padding:6px 11px;border-radius:20px;}
+.hero-links{display:flex;flex-wrap:wrap;gap:10px;}
+.btn{font-family:var(--display);font-size:18px;letter-spacing:.05em;padding:10px 22px 7px;
+  border-radius:9px;text-decoration:none;display:inline-block;transition:transform .12s ease;}
+.btn:hover{transform:translateY(-1px);}
+.btn.pri{background:var(--lime);color:#0B0B0D;}
+.btn.sec{background:transparent;color:var(--text);border:1px solid var(--line2);}
+.btn.sec:hover{border-color:var(--pink);color:var(--pink);}
+
+/* hero preview mock */
+.mock{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;
+  box-shadow:0 30px 60px -30px rgba(0,0,0,.7);}
+.mock-top{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+.mock-radar{width:30px;height:30px;border-radius:50%;flex:none;position:relative;
+  border:1px solid var(--line2);overflow:hidden;
+  background:radial-gradient(circle,rgba(198,255,61,.1),transparent 70%);}
+.mock-radar::before{content:'';position:absolute;inset:0;border-radius:50%;
+  background:conic-gradient(from 0deg,rgba(255,46,136,.6),transparent 32%);animation:sweep 2.4s linear infinite;}
+.mock-radar::after{content:'';position:absolute;left:50%;top:50%;width:3px;height:3px;margin:-1.5px;
+  border-radius:50%;background:var(--lime);box-shadow:0 0 5px var(--lime);}
+@keyframes sweep{to{transform:rotate(360deg);}}
+.mock-title{font-family:var(--display);font-size:19px;letter-spacing:.03em;}
+.mock-title span{color:var(--pink);}
+.mock-pill{margin-left:auto;font-family:var(--display);font-size:13px;letter-spacing:.05em;
+  background:var(--lime);color:#0B0B0D;padding:5px 12px 3px;border-radius:7px;}
+.mcard{background:var(--bg2);border:1px solid var(--line);border-radius:11px;padding:12px 13px;margin-bottom:9px;}
+.mcard:last-child{margin-bottom:0;}
+.mcard .cat{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;}
+.mcard .cat.a{color:var(--pink);}
+.mcard .cat.b{color:var(--lime);}
+.mcard h4{margin:5px 0 4px;font-size:13px;font-weight:600;line-height:1.3;}
+.mcard .opp{border-left:2px solid var(--lime);padding-left:9px;font-size:11px;color:#DDE9C4;margin-top:6px;}
+.mcard .opp b{font-family:var(--display);font-weight:400;font-size:12px;letter-spacing:.06em;color:var(--lime);}
+
+/* sections */
+section{padding:52px 0;border-bottom:1px solid var(--line);}
+.sec-label{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--faint);margin-bottom:12px;}
+h2{font-family:var(--display);font-weight:400;font-size:clamp(30px,5vw,44px);letter-spacing:.02em;
+  margin:0 0 20px;}
+h2 em{font-style:normal;color:var(--pink);}
+p.body{font-size:16px;color:#CFCFD6;max-width:66ch;margin:0 0 16px;}
+p.body strong{color:var(--text);}
+
+/* feature grid */
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin-top:8px;}
+.feat{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:18px;}
+.feat .n{font-family:var(--display);font-size:26px;color:var(--lime);letter-spacing:.04em;}
+.feat h3{margin:8px 0 6px;font-size:15px;font-weight:600;}
+.feat p{margin:0;font-size:13.5px;color:var(--muted);line-height:1.5;}
+
+/* flow */
+.flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;counter-reset:step;}
+.step{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 15px;position:relative;}
+.step::before{counter-increment:step;content:counter(step,decimal-leading-zero);
+  font-family:var(--mono);font-size:11px;color:var(--pink);letter-spacing:.1em;}
+.step h4{font-family:var(--display);font-weight:400;font-size:19px;letter-spacing:.03em;margin:6px 0 5px;}
+.step p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.5;}
+
+/* decisions */
+.dec{border-left:2px solid var(--line2);padding:2px 0 2px 18px;margin-bottom:20px;}
+.dec h3{margin:0 0 5px;font-size:16px;font-weight:600;}
+.dec h3 span{color:var(--lime);}
+.dec p{margin:0;font-size:14.5px;color:var(--muted);max-width:64ch;}
+
+/* opportunities list */
+.opps{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;}
+.opp-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;}
+.opp-card .sig{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);}
+.opp-card h3{margin:7px 0 5px;font-size:15px;font-weight:600;color:var(--lime);}
+.opp-card p{margin:0;font-size:13.5px;color:var(--muted);line-height:1.5;}
+
+/* stack + footer */
+.stack{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;}
+.tech{font-family:var(--mono);font-size:12px;color:var(--muted);background:var(--surface);
+  border:1px solid var(--line);padding:8px 13px;border-radius:8px;}
+footer{padding:40px 0 60px;text-align:center;}
+footer .home{font-family:var(--display);font-size:20px;letter-spacing:.05em;color:var(--lime);
+  text-decoration:none;}
+footer p{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:14px;}
+
+@media (max-width:760px){
+  .hero-inner{grid-template-columns:1fr;gap:28px;}
+  .hero-bg{opacity:.35;}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none !important;}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <nav class="nav">
+    <a class="back" href="https://bhawnamanglapm.github.io">&larr; Back to portfolio</a>
+    <div class="mark">BHAWNA<span>.</span></div>
+  </nav>
+</div>
+
+<header class="hero">
+  <div class="hero-bg"></div>
+  <div class="wrap">
+    <div class="hero-inner">
+      <div>
+        <div class="eyebrow">AI-native tool · 2026</div>
+        <h1>Travel Problem<br>Radar</h1>
+        <p class="lede">A live global-signals engine that surfaces travel-industry problems every morning &mdash; each one tagged with a product opportunity a PM could actually build.</p>
+        <div class="meta">
+          <span class="chip">Role · Product &amp; build (solo)</span>
+          <span class="chip">Timeline · Jul 2026</span>
+          <span class="chip">Type · 0&rarr;1 AI product</span>
+        </div>
+        <div class="hero-links">
+          <a class="btn pri" href="#">Live dashboard</a>
+          <a class="btn sec" href="#">Daily digest</a>
+        </div>
+      </div>
+
+      <div class="mock" aria-hidden="true">
+        <div class="mock-top">
+          <div class="mock-radar"></div>
+          <div class="mock-title">TRAVEL <span>RADAR</span></div>
+          <div class="mock-pill">Run sweep</div>
+        </div>
+        <div class="mcard">
+          <div class="cat a">Traveler pain</div>
+          <h4>Airline complaint surge &mdash; refund vs. credit confusion</h4>
+          <div class="opp"><b>Opportunity</b><br>An assistant that auto-files disruption &amp; refund claims.</div>
+        </div>
+        <div class="mcard">
+          <div class="cat b">Gov &amp; policy</div>
+          <h4>Japan triples departure tax &amp; visa fees</h4>
+          <div class="opp"><b>Opportunity</b><br>A "true cost of travel" calculator baked into booking.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <section>
+    <div class="sec-label">The problem</div>
+    <h2>Opportunity signals are <em>scattered</em></h2>
+    <p class="body">The best product ideas in travel start as someone's bad day &mdash; a refund that never came, a visa fee that quietly quadrupled, a booking that vanished after payment. But those signals live everywhere: news wires, government notices, outage trackers, review sites, protest calendars. No PM has time to read all of it, every day, across the world.</p>
+    <p class="body">I wanted a standing radar: something that <strong>continuously scans global sources, buckets what it finds, and hands me the "so what"</strong> &mdash; the product angle worth building &mdash; before I've finished my coffee.</p>
+  </section>
+
+  <section>
+    <div class="sec-label">What I built</div>
+    <h2>A radar, not a report</h2>
+    <p class="body">An AI-powered dashboard that treats a language model plus live web search as its data layer. On demand or on a schedule, it sweeps four problem categories worldwide and returns structured, sourced, opportunity-tagged findings.</p>
+    <div class="grid">
+      <div class="feat"><div class="n">4</div><h3>Categories, global</h3><p>Traveler pain, gov &amp; policy, website &amp; app failures, and industry disruption &mdash; scanned worldwide each run.</p></div>
+      <div class="feat"><div class="n">1:1</div><h3>Opportunity per problem</h3><p>Every item ships with a one-line product angle a PM could build &mdash; the signal is turned into a brief.</p></div>
+      <div class="feat"><div class="n">&#9251;</div><h3>New-since-last flag</h3><p>Each run diffs against prior sweeps, so the feed shows what actually changed, not the same list again.</p></div>
+      <div class="feat"><div class="n">&#8734;</div><h3>Dated archive</h3><p>Every sweep is saved by date and browsable in a history tab &mdash; a running record, not a snapshot.</p></div>
+      <div class="feat"><div class="n">&#8599;</div><h3>Sourced &amp; linked</h3><p>Each finding carries its publication and a direct link back to the original article.</p></div>
+      <div class="feat"><div class="n">7&nbsp;AM</div><h3>Auto-delivered</h3><p>A scheduled task re-runs the sweep daily and posts the digest to Slack and email &mdash; hands-off.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-label">How it works</div>
+    <h2>Signal &rarr; brief, in six steps</h2>
+    <div class="flow">
+      <div class="step"><h4>Scan</h4><p>Four parallel web-search calls, one per problem category, across global sources.</p></div>
+      <div class="step"><h4>Structure</h4><p>Each hit is normalized: title, summary, source + link, region, severity, opportunity.</p></div>
+      <div class="step"><h4>Flag new</h4><p>Results are diffed against prior sweeps; anything unseen is marked New.</p></div>
+      <div class="step"><h4>Persist</h4><p>Every run is archived by date in browser storage for history and diffing.</p></div>
+      <div class="step"><h4>Deliver</h4><p>Rendered to the dashboard and compiled into a digest for Slack + email.</p></div>
+      <div class="step"><h4>Repeat</h4><p>A scheduled daily task fires the whole loop at 7&nbsp;AM, untouched.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-label">Decisions &amp; tradeoffs</div>
+    <h2>The <em>PM</em> calls behind it</h2>
+    <div class="dec">
+      <h3>On-demand <span>and</span> recurring</h3>
+      <p>A live dashboard for exploration and drill-down; a scheduled task for hands-off mornings. Two modes because "explore" and "stay informed" are different jobs.</p>
+    </div>
+    <div class="dec">
+      <h3>Per-category calls over one <span>big</span> prompt</h3>
+      <p>Splitting the scan into four focused calls kept each within model token limits and raised result quality &mdash; a deliberate reliability-over-elegance tradeoff.</p>
+    </div>
+    <div class="dec">
+      <h3>Persistent diffing for <span>"what's new"</span></h3>
+      <p>Storing each sweep and comparing runs is what turns a one-off search into a feed &mdash; the difference between a tool you check once and one you check daily.</p>
+    </div>
+    <div class="dec">
+      <h3>Naming the <span>constraints</span></h3>
+      <p>Scheduled runs execute locally (the machine must be awake); the email connector drafts rather than auto-sends. I documented these limits and routed around them instead of hiding them &mdash; the honest version ships trust.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-label">What it surfaced</div>
+    <h2>Real problems, buildable angles</h2>
+    <div class="opps">
+      <div class="opp-card"><div class="sig">Traveler pain</div><h3>Claim auto-filer</h3><p>Airline complaints spiked on refunds and delays &rarr; an assistant that files disruption &amp; refund claims for the traveler.</p></div>
+      <div class="opp-card"><div class="sig">Gov &amp; policy</div><h3>True-cost calculator</h3><p>Japan and Europe stacked new taxes and fees &rarr; a tool that bakes levies into the booking price up front.</p></div>
+      <div class="opp-card"><div class="sig">Website &amp; app</div><h3>Confirmation verifier</h3><p>Booking payments cleared with no reservation shown &rarr; an independent check that proves a booking actually landed.</p></div>
+      <div class="opp-card"><div class="sig">Industry</div><h3>Disruption calendar</h3><p>European strike season peaked &rarr; a predictive calendar that scores an itinerary's strike and protest risk.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-label">Why it matters</div>
+    <h2>Builds what she learns</h2>
+    <p class="body">This is a working tool, not a slide. It shows an <strong>AI-native product instinct</strong> &mdash; using an LLM and the live web as a data layer &mdash; wired end to end through persistent storage, Slack and Gmail connectors, and a scheduled task. And it navigates real constraints honestly rather than pretending they don't exist. Signal in, opportunity out, every morning.</p>
+    <div class="stack">
+      <span class="tech">React</span>
+      <span class="tech">Anthropic API (in-app)</span>
+      <span class="tech">Live web search</span>
+      <span class="tech">Persistent storage</span>
+      <span class="tech">Slack + Gmail (MCP)</span>
+      <span class="tech">Scheduled tasks</span>
+    </div>
+  </section>
+
+  <footer>
+    <a class="home" href="https://bhawnamanglapm.github.io">&larr; More work</a>
+    <p>Bhawna Mangla · Senior Product Manager · 2026</p>
+  </footer>
+
+</div>
+</body>
+</html>
