@@ -6,6 +6,14 @@ import { useState, useEffect, useRef } from "react";
    buckets problems into 4 categories, flags what's new since the last sweep,
    tags each with a product angle, and ARCHIVES every run by date so you can
    page back through past sweeps.
+
+   Two ways to run it:
+   - Live (default export, no props): inside Claude's artifact runtime, which
+     supplies the Anthropic API access and window.storage. Each sweep is four
+     real web-search calls.
+   - Demo (<TravelProblemRadar sample={...} />): used by demo/ on GitHub Pages.
+     A sweep replays the saved sample instead of calling any API, and history
+     is kept in the visitor's localStorage.
 --------------------------------------------------------------------------- */
 
 const CSS = `
@@ -254,20 +262,29 @@ async function scanCategory(cat) {
   if (!res.ok) throw new Error("http " + res.status);
   const data = await res.json();
   const arr = extractProblems(data);
-  return arr
-    .filter((p) => p && p.title)
-    .map((p) => ({
-      id: cat.key + ":" + slug(p.title),
-      cat: cat.key,
-      title: String(p.title).trim(),
-      summary: String(p.summary || "").trim(),
-      source: String(p.source || "—").trim(),
-      link: /^https?:\/\//.test(String(p.link || "").trim()) ? String(p.link).trim() : "",
-      region: String(p.region || "Global").trim(),
-      date: String(p.date || "").trim(),
-      severity: ["Low", "Medium", "High"].includes(p.severity) ? p.severity : "Medium",
-      opportunity: String(p.opportunity || "").trim(),
-    }));
+  return arr.filter((p) => p && p.title).map((p) => normalize(cat, p));
+}
+
+function normalize(cat, p) {
+  return {
+    id: cat.key + ":" + slug(p.title),
+    cat: cat.key,
+    title: String(p.title).trim(),
+    summary: String(p.summary || "").trim(),
+    source: String(p.source || "—").trim(),
+    link: /^https?:\/\//.test(String(p.link || "").trim()) ? String(p.link).trim() : "",
+    region: String(p.region || "Global").trim(),
+    date: String(p.date || "").trim(),
+    severity: ["Low", "Medium", "High"].includes(p.severity) ? p.severity : "Medium",
+    opportunity: String(p.opportunity || "").trim(),
+  };
+}
+
+// Demo mode: hand back the saved sample for this category. The short, staggered
+// pause only lets the progress list render; nothing is fetched.
+async function replayCategory(sample, cat, i) {
+  await new Promise((r) => setTimeout(r, 300 + i * 200));
+  return sample.filter((p) => p && p.cat === cat.key && p.title).map((p) => normalize(cat, p));
 }
 
 const KEY_SEEN = "radar:seenIds";
@@ -275,12 +292,31 @@ const KEY_INDEX = "radar:history";
 const KEY_LEGACY = "radar:lastSweep";
 const sweepKey = (id) => "radar:sweep:" + id;
 
+// Claude's artifact runtime provides window.storage; a normal web page does not,
+// so fall back to this browser's localStorage (same keys, under a demo prefix).
+const LOCAL_PREFIX = "tpr-demo/";
+const store = {
+  async get(key) {
+    if (window.storage) return window.storage.get(key, false);
+    const v = window.localStorage.getItem(LOCAL_PREFIX + key);
+    return v == null ? null : { value: v };
+  },
+  async set(key, value) {
+    if (window.storage) return window.storage.set(key, value, false);
+    window.localStorage.setItem(LOCAL_PREFIX + key, value);
+  },
+  async delete(key) {
+    if (window.storage) return window.storage.delete(key, false);
+    window.localStorage.removeItem(LOCAL_PREFIX + key);
+  },
+};
+
 async function loadJSON(key) {
-  try { const r = await window.storage.get(key, false); return r ? JSON.parse(r.value) : null; }
+  try { const r = await store.get(key); return r ? JSON.parse(r.value) : null; }
   catch (e) { return null; }
 }
 async function saveJSON(key, val) {
-  try { await window.storage.set(key, JSON.stringify(val), false); } catch (e) {}
+  try { await store.set(key, JSON.stringify(val)); } catch (e) {}
 }
 
 function groupByDay(entries) {
@@ -293,7 +329,8 @@ function groupByDay(entries) {
   return [...map.entries()];
 }
 
-export default function TravelProblemRadar() {
+export default function TravelProblemRadar({ sample } = {}) {
+  const demo = Array.isArray(sample);
   const [problems, setProblems] = useState([]);
   const [history, setHistory] = useState([]); // [{id, at, total, newCount, highCount}] oldest -> newest
   const [selId, setSelId] = useState(null);
@@ -334,6 +371,9 @@ export default function TravelProblemRadar() {
         }
       }
 
+      // demo/#report (the case study's "Sample digest" link) opens on the report
+      const wantReport = demo && window.location.hash === "#report";
+
       if (hist.length) {
         setHistory(hist);
         const latest = hist[hist.length - 1];
@@ -343,12 +383,15 @@ export default function TravelProblemRadar() {
           setSelId(latest.id);
           setSweptAt(latest.at);
           setStatus("done");
+          if (wantReport) setView("report");
+          return;
         }
       }
+      if (wantReport) runSweep("report");
     })();
   }, []);
 
-  async function runSweep() {
+  async function runSweep(nextView = "board") {
     setStatus("scanning");
     setView("board");
     setCopied(false);
@@ -358,9 +401,9 @@ export default function TravelProblemRadar() {
 
     const seenBefore = new Set(seenRef.current);
     const results = await Promise.allSettled(
-      CATS.map(async (c) => {
+      CATS.map(async (c, i) => {
         try {
-          const items = await scanCategory(c);
+          const items = demo ? await replayCategory(sample, c, i) : await scanCategory(c);
           setProgress((p) => ({ ...p, [c.key]: { state: "done", count: items.length } }));
           return items;
         } catch (e) {
@@ -401,7 +444,7 @@ export default function TravelProblemRadar() {
     if (hist.length > 60) {
       const drop = hist.slice(0, hist.length - 60);
       hist = hist.slice(hist.length - 60);
-      for (const d of drop) { try { await window.storage.delete(sweepKey(d.id), false); } catch (e) {} }
+      for (const d of drop) { try { await store.delete(sweepKey(d.id)); } catch (e) {} }
     }
 
     await saveJSON(sweepKey(id), { at, problems: merged });
@@ -412,6 +455,7 @@ export default function TravelProblemRadar() {
     setSelId(id);
     setSweptAt(at);
     setStatus("done");
+    setView(nextView);
 
     const union = new Set([...seenBefore, ...idset]);
     seenRef.current = union;
@@ -448,7 +492,11 @@ export default function TravelProblemRadar() {
     const d = sweptAt ? new Date(sweptAt) : new Date();
     const lines = [];
     lines.push(`TRAVEL PROBLEM RADAR — DIGEST`);
-    lines.push(`Swept ${d.toLocaleString()}`);
+    if (demo) {
+      lines.push(`Demo replay ${d.toLocaleString()} of a saved sample sweep (items dated Jul 2026)`);
+    } else {
+      lines.push(`Swept ${d.toLocaleString()}`);
+    }
     lines.push(`${problems.length} problems · ${newCount} new · ${highCount} high severity`);
     lines.push("");
     if (newCount) {
@@ -508,9 +556,10 @@ export default function TravelProblemRadar() {
               <button className={"tpr-tab" + (view === "history" ? " on" : "")} onClick={() => setView("history")}>History</button>
             </div>
           )}
-          {sweptAt && <div className="tpr-swept">Last swept<br /><b>{new Date(sweptAt).toLocaleString()}</b></div>}
-          <button className={"tpr-sweep-btn" + (busy ? " busy" : "")} onClick={runSweep} disabled={busy}>
-            <span className="dot" />{busy ? "Sweeping…" : "Run sweep"}
+          {sweptAt && <div className="tpr-swept">{demo ? "Last replayed" : "Last swept"}<br /><b>{new Date(sweptAt).toLocaleString()}</b></div>}
+          <button className={"tpr-sweep-btn" + (busy ? " busy" : "")} onClick={() => runSweep()} disabled={busy}>
+            <span className="dot" />
+            {demo ? (busy ? "Replaying…" : "Replay sample sweep") : (busy ? "Sweeping…" : "Run sweep")}
           </button>
         </div>
       </div>
@@ -640,8 +689,10 @@ export default function TravelProblemRadar() {
             </>
           ) : status === "scanning" ? (
             <>
-              <h2>Sweeping global sources…</h2>
-              <p>Scanning news, government sites, travel platforms and forums across all four problem types.</p>
+              <h2>{demo ? "Replaying the saved sample…" : "Sweeping global sources…"}</h2>
+              <p>{demo
+                ? "Loading the 8 saved items, two per problem type. Nothing is searched live in this demo."
+                : "Scanning news, government sites, travel platforms and forums across all four problem types."}</p>
               <div className="tpr-progress">
                 {CATS.map((c) => {
                   const pr = progress[c.key] || { state: "run", count: 0 };
@@ -658,17 +709,26 @@ export default function TravelProblemRadar() {
               </div>
             </>
           ) : (
-            <>
-              <h2>Radar’s ready</h2>
-              <p>Run a sweep to pull the latest travel problems from around the world — booking gripes, visa changes, platform outages and industry shocks — each tagged with a product angle worth building. Every run is saved by date.</p>
-            </>
+            demo ? (
+              <>
+                <h2>Radar’s ready (demo)</h2>
+                <p>This demo replays a saved sweep: 8 travel problems from July 2026, two per category, each with its source link and a product angle. It doesn’t search the web or call any AI model.</p>
+              </>
+            ) : (
+              <>
+                <h2>Radar’s ready</h2>
+                <p>Run a sweep to pull the latest travel problems from around the world — booking gripes, visa changes, platform outages and industry shocks — each tagged with a product angle worth building. Every run is saved by date.</p>
+              </>
+            )
           )}
         </div>
       )}
 
       {status === "done" && (
         <div className="tpr-note">
-          Every run is archived by date — open History to revisit past sweeps. Items unseen in any prior sweep are flagged New.
+          {demo
+            ? "Demo: replays a saved July 2026 sample and keeps history in this browser only. Replay it again and nothing is flagged New, because every item was already seen."
+            : "Every run is archived by date — open History to revisit past sweeps. Items unseen in any prior sweep are flagged New."}
         </div>
       )}
     </div>

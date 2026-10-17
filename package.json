@@ -1,0 +1,14 @@
+{
+  "name": "travel-problem-radar-case-study",
+  "private": true,
+  "description": "Case study and sample-data demo for Travel Problem Radar",
+  "scripts": {
+    "build": "esbuild demo/src/main.jsx --bundle --minify --jsx=automatic --loader:.js=jsx --define:process.env.NODE_ENV='\"production\"' --outfile=demo/radar.js --legal-comments=none",
+    "check": "node scripts/check.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.23.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  }
+}
