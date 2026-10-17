@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Travel Problem Radar — Demo</title>
+<meta name="description" content="Demo of Travel Problem Radar. Replays a saved sample of 8 travel-industry problems; no live search." />
+<style>
+  html, body { margin: 0; background: #0B0B0D; }
+  .demo-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px;
+    padding: 10px clamp(14px, 4vw, 40px); border-bottom: 1px solid #2A2A34;
+    font: 12px/1.5 'JetBrains Mono', ui-monospace, monospace; color: #93939F; }
+  .demo-strip b { color: #C6FF3D; font-weight: 500; letter-spacing: .08em; }
+  .demo-strip a { color: #F4F4F7; }
+  .demo-strip a:hover { color: #C6FF3D; }
+  .demo-strip .links { margin-left: auto; display: flex; gap: 16px; }
+  noscript { display: block; padding: 40px; color: #F4F4F7; font-family: system-ui, sans-serif; }
+</style>
+</head>
+<body>
+  <div class="demo-strip">
+    <span><b>DEMO</b> &middot; Replays a saved sample of 8 problems from July 2026. No live web search, no AI calls.</span>
+    <span class="links">
+      <a href="../">&larr; Case study</a>
+      <a href="https://github.com/bhawnamanglapm/travel-problem-radar-case-study">Source</a>
+    </span>
+  </div>
+  <div id="root"></div>
+  <noscript>This demo needs JavaScript. The sample items are also in sampleData.json in the repository.</noscript>
+  <script src="radar.js"></script>
+</body>
+</html>
