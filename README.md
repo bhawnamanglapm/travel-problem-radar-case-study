@@ -22,6 +22,8 @@ taxes, booking-site outages, strikes) and tags each one with a product idea a PM
 3. **Flags what's new:** anything not seen in an earlier sweep gets a "New" badge.
 4. **Keeps a dated history** of the last 60 sweeps, so you can open any past one.
 5. **Builds a plain-text digest** (new items first, then by category) with a Copy button.
+6. **Posts a daily digest to Slack** from a scheduled task in Claude's app. This is set up in Claude
+   (Slack connector and scheduled task), not in this repository's code.
 
 ## The demo vs. the live version
 
@@ -31,6 +33,7 @@ taxes, booking-site outages, strikes) and tags each one with a product idea a PM
 | What a sweep does | 4 real web-search calls to Claude | Replays the 8 saved items in `sampleData.json` |
 | AI or API calls | Yes, through Claude's app | None |
 | History is saved in | Claude's artifact storage | This browser's localStorage |
+| Daily digest | A scheduled task in Claude posts it to Slack | The "Sample digest" view |
 
 Both use the same component, [`travel-problem-radar.jsx`](travel-problem-radar.jsx). Given no props it
 runs live; given `sample={...}` it replays the sample. The live version can't run on a plain website as
@@ -48,8 +51,14 @@ is: it calls the Anthropic API from the browser without a key, which only works 
 | Live mode outside Claude's app | Fails safely: shows "The sweep came back empty", no errors | Headless browser with the API stubbed to refuse, 2026-10-18 |
 | Live sweep inside Claude's app | Not re-run | Needs Claude's app; the sweep code is unchanged apart from a storage fallback and the demo switch |
 
-**Not in this repo and not verified:** any scheduled daily run, Slack or email delivery, usage numbers,
-or measured result quality. The sample items are from one sweep in July 2026 and are now dated.
+**Owner-reported, not in this repo:** the scheduled daily run and Slack delivery. The owner confirms the
+Slack connection and the trigger worked in Claude's app, and has a screenshot of a digest posted to a
+Slack channel at 07:00 IST on 1 Aug 2026 ("Sent using Claude"). The schedule and Slack connector live
+in Claude, so this repo can't reproduce them. Scheduled runs execute on the owner's machine, so it must
+be awake.
+
+**Not verified:** email delivery, usage numbers, or measured result quality. The sample items are from
+one sweep in July 2026 and are now dated.
 
 ## Files
 

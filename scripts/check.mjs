@@ -32,7 +32,11 @@ check(!/href="#"/.test(page), 'index.html has no placeholder href="#" links');
 const local = [...page.matchAll(/href="([^"#:]+)(#[^"]*)?"/g)].map((m) => m[1]);
 const missing = local.filter((h) => !existsSync(h.endsWith("/") ? h + "index.html" : h));
 check(local.length > 0 && missing.length === 0, `local links resolve (${local.join(", ")})${missing.length ? " missing: " + missing : ""}`);
-check(!/Slack \+ Gmail|7&nbsp;AM|scheduled task/i.test(page), "no claims of scheduled Slack/email delivery (not in this repo)");
+// The owner confirmed the Slack connector and the daily trigger worked in Claude's app;
+// email delivery was not confirmed. Neither is in this repo's code, and the page must say so.
+check(!/Gmail/i.test(page), "no Gmail/email-delivery claim (not confirmed)");
+check(!/Slack/.test(page) || /not in this repository&rsquo;s code/.test(page),
+      "Slack delivery, if mentioned, is marked as set up in Claude's app, not this repo");
 
 // 3. Demo: page loads the built bundle, and the bundle contains the sample.
 const demo = readFileSync("demo/index.html", "utf8");

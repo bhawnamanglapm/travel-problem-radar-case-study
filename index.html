@@ -207,7 +207,7 @@ footer p{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:14
       <div class="feat"><div class="n">&#9251;</div><h3>New-since-last flag</h3><p>Each run diffs against prior sweeps, so the feed shows what actually changed, not the same list again.</p></div>
       <div class="feat"><div class="n">&#8734;</div><h3>Dated archive</h3><p>Every sweep is saved by date and browsable in a history tab &mdash; a running record, not a snapshot.</p></div>
       <div class="feat"><div class="n">&#8599;</div><h3>Sourced &amp; linked</h3><p>Each finding carries its publication and a direct link back to the original article.</p></div>
-      <div class="feat"><div class="n">&#10697;</div><h3>Copy-ready digest</h3><p>Each sweep compiles into a plain-text digest, new items first, ready to paste into Slack or email.</p></div>
+      <div class="feat"><div class="n">&#10697;</div><h3>Daily Slack digest</h3><p>Each sweep compiles into a plain-text digest, new items first. In my Claude setup, a scheduled task re-runs the sweep each morning at 7 AM and posts the digest to a Slack channel.</p></div>
     </div>
   </section>
 
@@ -219,17 +219,18 @@ footer p{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:14
       <div class="step"><h4>Structure</h4><p>Each hit is normalized: title, summary, source + link, region, severity, opportunity.</p></div>
       <div class="step"><h4>Flag new</h4><p>Results are diffed against prior sweeps; anything unseen is marked New.</p></div>
       <div class="step"><h4>Persist</h4><p>Every run is archived by date (the last 60 sweeps) for history and diffing.</p></div>
-      <div class="step"><h4>Deliver</h4><p>Rendered to the dashboard and compiled into a copy-ready text digest.</p></div>
-      <div class="step"><h4>Repeat</h4><p>Run it again any time; only items not seen before are flagged New.</p></div>
+      <div class="step"><h4>Deliver</h4><p>Rendered to the dashboard and compiled into a text digest, posted to Slack.</p></div>
+      <div class="step"><h4>Repeat</h4><p>A scheduled task in Claude re-runs the loop daily; only unseen items are flagged New.</p></div>
     </div>
+    <p class="body" style="margin-top:18px;font-size:14px;color:var(--muted);">The Slack connection and the daily schedule are set up in Claude&rsquo;s app, not in this repository&rsquo;s code.</p>
   </section>
 
   <section>
     <div class="sec-label">Decisions &amp; tradeoffs</div>
     <h2>The <em>PM</em> calls behind it</h2>
     <div class="dec">
-      <h3>A board to explore, a <span>digest</span> to share</h3>
-      <p>Filters and search for drill-down; a plain-text digest for passing findings on. Two views because "explore" and "stay informed" are different jobs.</p>
+      <h3>On-demand <span>and</span> recurring</h3>
+      <p>A dashboard for exploration and drill-down; a scheduled Slack digest for hands-off mornings. Two modes because "explore" and "stay informed" are different jobs.</p>
     </div>
     <div class="dec">
       <h3>Per-category calls over one <span>big</span> prompt</h3>
@@ -241,7 +242,7 @@ footer p{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:14
     </div>
     <div class="dec">
       <h3>Naming the <span>constraints</span></h3>
-      <p>Live sweeps run inside Claude&rsquo;s app, which provides the model access and storage. Opening it to the public would need a small server that holds the API key, caches one sweep a day, and caps spend &mdash; so the public demo replays a saved sample instead. I documented these limits rather than hiding them &mdash; the honest version ships trust.</p>
+      <p>Live sweeps run inside Claude&rsquo;s app, which provides the model access and storage, and scheduled runs execute locally, so the machine must be awake. Opening it to the public would need a small server that holds the API key, caches one sweep a day, and caps spend &mdash; so the public demo replays a saved sample instead. I documented these limits rather than hiding them &mdash; the honest version ships trust.</p>
     </div>
   </section>
 
@@ -260,12 +261,13 @@ footer p{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:14
   <section>
     <div class="sec-label">Why it matters</div>
     <h2>Builds what she learns</h2>
-    <p class="body">This is a working prototype, not a slide. It shows an <strong>AI-native product instinct</strong> &mdash; using an LLM and the live web as a data layer &mdash; wired through parallel scans, a "what's new" diff, and a dated archive. And it names its real constraints rather than pretending they don't exist. Signal in, opportunity out.</p>
+    <p class="body">This is a working prototype, not a slide. It shows an <strong>AI-native product instinct</strong> &mdash; using an LLM and the live web as a data layer &mdash; wired through parallel scans, a "what's new" diff, a dated archive, and a scheduled daily digest to Slack. And it names its real constraints rather than pretending they don't exist. Signal in, opportunity out.</p>
     <div class="stack">
       <span class="tech">React</span>
       <span class="tech">Anthropic API (inside Claude&rsquo;s app)</span>
       <span class="tech">Web search tool</span>
       <span class="tech">Artifact storage</span>
+      <span class="tech">Slack connector + scheduled task (Claude)</span>
       <span class="tech">GitHub Pages demo</span>
     </div>
   </section>
