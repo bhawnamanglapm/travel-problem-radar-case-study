@@ -1,7 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "buildCommand": null,
+  "buildCommand": "rm -rf public && mkdir public && cp -r index.html demo live public/ && rm -rf public/demo/src public/live/src",
+  "outputDirectory": "public",
   "crons": [{ "path": "/api/sweep", "schedule": "30 1 * * *" }],
   "functions": {
     "api/sweep.js": { "maxDuration": 300 }

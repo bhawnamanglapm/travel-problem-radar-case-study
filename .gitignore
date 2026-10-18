@@ -222,3 +222,6 @@ node_modules/
 
 .vercel
 .env*
+
+# Vercel static output (copied from the committed site at deploy time)
+public/
