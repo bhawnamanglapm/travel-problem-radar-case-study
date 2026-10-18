@@ -44,5 +44,21 @@ check(/<script src="radar.js"><\/script>/.test(demo), "demo/index.html loads rad
 const bundle = existsSync("demo/radar.js") ? readFileSync("demo/radar.js", "utf8") : "";
 check(sample.every((p) => bundle.includes(p.link)), "demo/radar.js is built and includes every sample link");
 
+// 4. Live page (Vercel): loads its bundle, and the bundle is built.
+const livePage = readFileSync("live/index.html", "utf8");
+check(/<script src="radar-live.js"><\/script>/.test(livePage), "live/index.html loads radar-live.js");
+const liveBundle = existsSync("live/radar-live.js") ? readFileSync("live/radar-live.js", "utf8") : "";
+check(liveBundle.includes("/api/data"), "live/radar-live.js is built and reads /api/data");
+
+// 5. The server copy of the prompt and categories must match the Claude artifact.
+const jsx = readFileSync("travel-problem-radar.jsx", "utf8");
+const srv = readFileSync("api/_lib/radar.js", "utf8");
+const squash = (t) => t.replace(/\s+/g, " ").trim();
+const jsxPrompt = (jsx.match(/const prompt =\s*([\s\S]*?);\s*const res = await fetch/) || [])[1];
+const srvPrompt = (srv.match(/return \(\s*([\s\S]*?)\s*\);\s*\}/) || [])[1];
+check(!!jsxPrompt && !!srvPrompt && squash(jsxPrompt) === squash(srvPrompt), "server prompt matches the artifact's prompt");
+const catText = (t) => [...t.matchAll(/label: "([^"]+)",\s*(?:color: "[^"]+",\s*)?desc:\s*"([^"]+)"/g)].map((m) => m[1] + "|" + m[2]).join("\n");
+check(catText(jsx).split("\n").length === 4 && catText(jsx) === catText(srv), "server categories match the artifact's categories");
+
 console.log(failures.length ? `\n${failures.length} failure(s)` : "\nAll checks passed.");
 process.exit(failures.length ? 1 : 0);
