@@ -1,0 +1,170 @@
+// Server side of the daily sweep. The categories, prompt, parser and normalizer
+// mirror travel-problem-radar.jsx (the single-file Claude artifact); scripts/check.mjs
+// fails if the prompt or category text drifts between the two.
+// Storage and fetch are passed in, so the offline tests can stub both.
+
+export const CATS = [
+  { key: "traveler_pain", label: "Traveler pain",
+    desc: "recurring frustrations travelers report — booking, airlines, hotels, refunds, loyalty, service failures" },
+  { key: "gov_policy", label: "Gov & policy",
+    desc: "new visa rules, entry requirements, travel bans, tourist taxes, and regulations affecting travelers" },
+  { key: "web_app", label: "Website & app",
+    desc: "outages, bugs, broken flows, UX failures, and data/security issues on travel platforms and OTAs" },
+  { key: "industry", label: "Industry",
+    desc: "strikes, bankruptcies, capacity cuts, overtourism, pricing shocks, and major operational disruptions" },
+];
+
+export const KEY_SEEN = "radar:seenIds";
+export const KEY_INDEX = "radar:history";
+export const sweepKey = (id) => "radar:sweep:" + id;
+
+const SEV_RANK = { High: 3, Medium: 2, Low: 1 };
+const MAX_SWEEPS = 60;
+const MAX_SEEN = 800;
+
+const slug = (s = "") =>
+  s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
+
+export function buildPrompt(cat) {
+  return (
+    `You are a travel-industry problem scout. Using web search, find the most recent, real, notable ` +
+    `problems, complaints, breakages, disruptions, or newly announced changes in this area: ` +
+    `"${cat.label}" (${cat.desc}). Focus on roughly the last 60 days, from sources anywhere in the world. ` +
+    `Return ONLY a JSON array (no prose, no markdown fences) of up to 5 objects with EXACTLY these string ` +
+    `fields: "title" (short, specific), "summary" (max 22 words, what the problem is), "source" ` +
+    `(publication or site name), "link" (the direct source URL you found it at, starting with https://), ` +
+    `"region" (country/region or "Global"), "date" (e.g. "Jul 2026"), ` +
+    `"severity" (one of: Low, Medium, High), "opportunity" (max 18 words: a concrete product a PM ` +
+    `could build to address it). Output must start with [ and end with ].`
+  );
+}
+
+export function extractProblems(data) {
+  const text = (data.content || [])
+    .filter((b) => b.type === "text")
+    .map((b) => b.text)
+    .join("\n");
+  if (!text) throw new Error("empty");
+  let s = text.replace(/```json/gi, "").replace(/```/g, "").trim();
+  const a = s.indexOf("["), b = s.lastIndexOf("]");
+  if (a === -1) throw new Error("no json");
+  s = b > a ? s.slice(a, b + 1) : s.slice(a);
+  try { return JSON.parse(s); }
+  catch (e) {
+    const last = s.lastIndexOf("}");
+    if (last > 0) { try { return JSON.parse(s.slice(0, last + 1) + "]"); } catch (_) {} }
+    throw e;
+  }
+}
+
+export function normalize(cat, p) {
+  return {
+    id: cat.key + ":" + slug(p.title),
+    cat: cat.key,
+    title: String(p.title).trim(),
+    summary: String(p.summary || "").trim(),
+    source: String(p.source || "—").trim(),
+    link: /^https?:\/\//.test(String(p.link || "").trim()) ? String(p.link).trim() : "",
+    region: String(p.region || "Global").trim(),
+    date: String(p.date || "").trim(),
+    severity: ["Low", "Medium", "High"].includes(p.severity) ? p.severity : "Medium",
+    opportunity: String(p.opportunity || "").trim(),
+  };
+}
+
+// One Claude call with web search for one category. Returns the items plus the
+// usage the API reported, so the sweep can log real token and search counts.
+export async function scanCategory(cat, { fetchFn = fetch, apiKey, model, maxSearches = 3 }) {
+  const res = await fetchFn("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 1000,
+      messages: [{ role: "user", content: buildPrompt(cat) }],
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: maxSearches }],
+    }),
+  });
+  if (!res.ok) throw new Error("http " + res.status);
+  const data = await res.json();
+  const items = extractProblems(data).filter((p) => p && p.title).map((p) => normalize(cat, p));
+  const u = data.usage || {};
+  return {
+    items,
+    usage: {
+      input: u.input_tokens || 0,
+      output: u.output_tokens || 0,
+      searches: (u.server_tool_use && u.server_tool_use.web_search_requests) || 0,
+    },
+  };
+}
+
+async function readJSON(storage, key) {
+  try {
+    const v = await storage.get(key);
+    return v == null ? null : JSON.parse(v);
+  } catch (e) { return null; }
+}
+
+// The server twin of runSweep() in the component: scan all four categories, merge,
+// flag what is new, keep the last 60 sweeps. Saves nothing if every category failed.
+export async function runDailySweep({ storage, scan, now = () => Date.now(), minGapHours = 20, log = () => {} }) {
+  const hist0 = await readJSON(storage, KEY_INDEX);
+  let hist = Array.isArray(hist0) ? hist0 : [];
+  const last = hist[hist.length - 1];
+  if (last && now() - new Date(last.at).getTime() < minGapHours * 3600 * 1000) {
+    return { status: "skipped", reason: `last sweep ${last.at} is under ${minGapHours} h old` };
+  }
+
+  const seen0 = await readJSON(storage, KEY_SEEN);
+  const seenBefore = new Set(Array.isArray(seen0) ? seen0 : []);
+
+  const results = await Promise.allSettled(CATS.map((c) => scan(c)));
+  const usage = { input: 0, output: 0, searches: 0 };
+  const perCat = {};
+  const merged = [];
+  const idset = new Set();
+  results.forEach((r, i) => {
+    const key = CATS[i].key;
+    if (r.status !== "fulfilled") { perCat[key] = "failed: " + String((r.reason && r.reason.message) || r.reason); return; }
+    perCat[key] = r.value.items.length + " items";
+    usage.input += r.value.usage.input;
+    usage.output += r.value.usage.output;
+    usage.searches += r.value.usage.searches;
+    r.value.items.forEach((it) => {
+      if (idset.has(it.id)) return;
+      idset.add(it.id);
+      merged.push({ ...it, isNew: !seenBefore.has(it.id) });
+    });
+  });
+  log({ perCat, usage });
+
+  if (merged.length === 0) return { status: "empty", perCat, usage };
+
+  merged.sort((a, b) => (b.isNew - a.isNew) || (SEV_RANK[b.severity] - SEV_RANK[a.severity]));
+
+  const at = new Date(now()).toISOString();
+  const id = String(now());
+  const entry = {
+    id, at, total: merged.length,
+    newCount: merged.filter((p) => p.isNew).length,
+    highCount: merged.filter((p) => p.severity === "High").length,
+  };
+
+  hist = [...hist, entry];
+  if (hist.length > MAX_SWEEPS) {
+    const drop = hist.slice(0, hist.length - MAX_SWEEPS);
+    hist = hist.slice(hist.length - MAX_SWEEPS);
+    for (const d of drop) { try { await storage.del(sweepKey(d.id)); } catch (e) {} }
+  }
+
+  await storage.set(sweepKey(id), JSON.stringify({ at, problems: merged }));
+  await storage.set(KEY_INDEX, JSON.stringify(hist));
+  await storage.set(KEY_SEEN, JSON.stringify([...new Set([...seenBefore, ...idset])].slice(-MAX_SEEN)));
+
+  return { status: "saved", id, total: entry.total, newCount: entry.newCount, perCat, usage };
+}

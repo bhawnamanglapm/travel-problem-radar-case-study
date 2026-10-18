@@ -295,17 +295,28 @@ const sweepKey = (id) => "radar:sweep:" + id;
 // Claude's artifact runtime provides window.storage; a normal web page does not,
 // so fall back to this browser's localStorage (same keys, under a demo prefix).
 const LOCAL_PREFIX = "tpr-demo/";
+// Read-only "remote" mode (the daily Vercel version): history is read from the server's
+// /api/data feed and never written from the browser.
+let REMOTE = null;
 const store = {
   async get(key) {
+    if (REMOTE !== null) {
+      const r = await fetch(REMOTE + "?key=" + encodeURIComponent(key));
+      if (r.status === 404) return null;
+      if (!r.ok) throw new Error("http " + r.status);
+      return r.json();
+    }
     if (window.storage) return window.storage.get(key, false);
     const v = window.localStorage.getItem(LOCAL_PREFIX + key);
     return v == null ? null : { value: v };
   },
   async set(key, value) {
+    if (REMOTE !== null) return;
     if (window.storage) return window.storage.set(key, value, false);
     window.localStorage.setItem(LOCAL_PREFIX + key, value);
   },
   async delete(key) {
+    if (REMOTE !== null) return;
     if (window.storage) return window.storage.delete(key, false);
     window.localStorage.removeItem(LOCAL_PREFIX + key);
   },
@@ -329,8 +340,10 @@ function groupByDay(entries) {
   return [...map.entries()];
 }
 
-export default function TravelProblemRadar({ sample } = {}) {
+export default function TravelProblemRadar({ sample, remote } = {}) {
   const demo = Array.isArray(sample);
+  const live = typeof remote === "string"; // read-only view of the daily server sweep
+  REMOTE = live ? remote : null;
   const [problems, setProblems] = useState([]);
   const [history, setHistory] = useState([]); // [{id, at, total, newCount, highCount}] oldest -> newest
   const [selId, setSelId] = useState(null);
@@ -556,11 +569,13 @@ export default function TravelProblemRadar({ sample } = {}) {
               <button className={"tpr-tab" + (view === "history" ? " on" : "")} onClick={() => setView("history")}>History</button>
             </div>
           )}
-          {sweptAt && <div className="tpr-swept">{demo ? "Last replayed" : "Last swept"}<br /><b>{new Date(sweptAt).toLocaleString()}</b></div>}
-          <button className={"tpr-sweep-btn" + (busy ? " busy" : "")} onClick={() => runSweep()} disabled={busy}>
-            <span className="dot" />
-            {demo ? (busy ? "Replaying…" : "Replay sample sweep") : (busy ? "Sweeping…" : "Run sweep")}
-          </button>
+          {sweptAt && <div className="tpr-swept">{demo ? "Last replayed" : live ? "Updated daily · last sweep" : "Last swept"}<br /><b>{new Date(sweptAt).toLocaleString()}</b></div>}
+          {!live && (
+            <button className={"tpr-sweep-btn" + (busy ? " busy" : "")} onClick={() => runSweep()} disabled={busy}>
+              <span className="dot" />
+              {demo ? (busy ? "Replaying…" : "Replay sample sweep") : (busy ? "Sweeping…" : "Run sweep")}
+            </button>
+          )}
         </div>
       </div>
 
@@ -709,7 +724,12 @@ export default function TravelProblemRadar({ sample } = {}) {
               </div>
             </>
           ) : (
-            demo ? (
+            live ? (
+              <>
+                <h2>The first daily sweep hasn’t run yet</h2>
+                <p>This page shows the result of an automatic sweep that runs once a day. Nothing has been saved yet, so there is nothing to show. In the meantime, <a href="../demo/" style={{ color: "inherit" }}>try the sample demo</a>.</p>
+              </>
+            ) : demo ? (
               <>
                 <h2>Radar’s ready (demo)</h2>
                 <p>This demo replays a saved sweep: 8 travel problems from July 2026, two per category, each with its source link and a product angle. It doesn’t search the web or call any AI model.</p>
@@ -726,7 +746,9 @@ export default function TravelProblemRadar({ sample } = {}) {
 
       {status === "done" && (
         <div className="tpr-note">
-          {demo
+          {live
+            ? "Live: an automatic sweep runs once a day and every visitor sees the latest saved result. Items are gathered by an AI model with web search, so check each source link. Items unseen in any earlier sweep are flagged New."
+            : demo
             ? "Demo: replays a saved July 2026 sample and keeps history in this browser only. Replay it again and nothing is flagged New, because every item was already seen."
             : "Every run is archived by date — open History to revisit past sweeps. Items unseen in any prior sweep are flagged New."}
         </div>

@@ -1,3 +1,4 @@
 * text=auto eol=lf
 *.zip binary
 demo/radar.js linguist-generated=true -diff
+live/radar-live.js linguist-generated=true -diff

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Travel Problem Radar — Live</title>
+<meta name="description" content="Travel Problem Radar, updated daily. An AI model with web search gathers travel-industry problems once a day; visitors see the saved result." />
+<style>
+  html, body { margin: 0; background: #0B0B0D; }
+  .live-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px;
+    padding: 10px clamp(14px, 4vw, 40px); border-bottom: 1px solid #2A2A34;
+    font: 12px/1.5 'JetBrains Mono', ui-monospace, monospace; color: #93939F; }
+  .live-strip b { color: #C6FF3D; font-weight: 500; letter-spacing: .08em; }
+  .live-strip a { color: #F4F4F7; }
+  .live-strip a:hover { color: #C6FF3D; }
+  .live-strip .links { margin-left: auto; display: flex; gap: 16px; }
+  noscript { display: block; padding: 40px; color: #F4F4F7; font-family: system-ui, sans-serif; }
+</style>
+</head>
+<body>
+  <div class="live-strip">
+    <span><b>LIVE</b> &middot; Gathered once a day by an AI model with web search. Check each source link; items are not verified.</span>
+    <span class="links">
+      <a href="../">&larr; Case study</a>
+      <a href="../demo/">Sample demo</a>
+      <a href="https://github.com/bhawnamanglapm/travel-problem-radar-case-study">Source</a>
+    </span>
+  </div>
+  <div id="root"></div>
+  <noscript>This page needs JavaScript.</noscript>
+  <script src="radar-live.js"></script>
+</body>
+</html>
