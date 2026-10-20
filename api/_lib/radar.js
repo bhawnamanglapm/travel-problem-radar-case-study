@@ -166,5 +166,5 @@ export async function runDailySweep({ storage, scan, now = () => Date.now(), min
   await storage.set(KEY_INDEX, JSON.stringify(hist));
   await storage.set(KEY_SEEN, JSON.stringify([...new Set([...seenBefore, ...idset])].slice(-MAX_SEEN)));
 
-  return { status: "saved", id, total: entry.total, newCount: entry.newCount, perCat, usage };
+  return { status: "saved", id, at, total: entry.total, newCount: entry.newCount, perCat, usage, problems: merged };
 }

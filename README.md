@@ -74,7 +74,7 @@ Full log with dates: [docs/decisions.md](docs/decisions.md).
 
 | Check | Result | How |
 |---|---|---|
-| Daily sweep: merge, de-duplicate, "New" flags, 20-hour gap, 60-sweep cap, partial and total failure, secret check, read-only data feed | 28 of 28 pass | `npm test`, with the Anthropic API and storage stubbed |
+| Daily sweep: merge, de-duplicate, "New" flags, 20-hour gap, 60-sweep cap, partial and total failure, secret check, Slack post, read-only data feed | 38 of 38 pass | `npm test`, with the Anthropic API and storage stubbed |
 | Sample data shape, page links, bundles up to date, server prompt matches the component | 17 of 17 pass | `npm run check` |
 | Demo: replay, filters, search, report, history, "New" flag, phone width, no AI or API calls | 19 checks pass | Headless browser, 18 Oct 2026 |
 | Live page with the data feed stubbed: cards, filters, history, report, empty state, read-only, phone width | 16 checks pass | Headless browser, 18 Oct 2026 |

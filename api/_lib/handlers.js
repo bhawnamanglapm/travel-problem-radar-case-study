@@ -2,6 +2,7 @@
 // them directly. api/sweep.js and api/data.js wire in the real ones.
 import { timingSafeEqual } from "node:crypto";
 import { runDailySweep, scanCategory } from "./radar.js";
+import { buildDigest, buildFailureNotice, postToSlack } from "./slack.js";
 
 const DEFAULT_MODEL = "claude-sonnet-5-5";
 
@@ -25,12 +26,23 @@ export function makeSweepHandler({ env, storage, fetchFn, now, log = console.log
     if (!env.ANTHROPIC_API_KEY) return send(res, 500, { error: "ANTHROPIC_API_KEY is not set; nothing was run or saved" });
     const model = env.RADAR_MODEL || DEFAULT_MODEL;
     const scan = (cat) => scanCategory(cat, { fetchFn, apiKey: env.ANTHROPIC_API_KEY, model });
+    const slack = (text) => postToSlack(env.SLACK_WEBHOOK_URL, text, { fetchFn });
+    const liveUrl = env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${env.VERCEL_PROJECT_PRODUCTION_URL}/live/` : "";
+    let out;
     try {
-      const out = await runDailySweep({ storage, scan, now, log: (x) => log("sweep", JSON.stringify({ model, ...x })) });
-      return send(res, out.status === "saved" || out.status === "skipped" ? 200 : 502, { model, ...out });
+      out = await runDailySweep({ storage, scan, now, log: (x) => log("sweep", JSON.stringify({ model, ...x })) });
     } catch (e) {
-      return send(res, 500, { error: "sweep failed: " + String((e && e.message) || e) });
+      const error = "sweep failed: " + String((e && e.message) || e);
+      const sent = await slack(buildFailureNotice({ at: new Date(now()).toISOString(), error }));
+      return send(res, 500, { error, slack: sent });
     }
+    // Slack hears about every sweep that ran: the digest if it saved, a notice if it didn't.
+    // A skipped run (a sweep in the last 20 h) posts nothing. Slack errors never fail the sweep.
+    const { problems, ...summary } = out;
+    if (out.status === "saved") summary.slack = await slack(buildDigest(out, liveUrl));
+    if (out.status === "empty") summary.slack = await slack(buildFailureNotice({ at: new Date(now()).toISOString(), perCat: out.perCat }));
+    if (summary.slack) log("slack", summary.slack);
+    return send(res, out.status === "saved" || out.status === "skipped" ? 200 : 502, { model, ...summary });
   };
 }
 

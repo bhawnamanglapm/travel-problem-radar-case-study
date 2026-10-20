@@ -148,6 +148,61 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   check(bad.res.code === 502, "all categories failed: 502 so the cron run shows as failed");
 }
 
+// ---- Slack delivery after the sweep
+{
+  const hook = "https://hooks.slack.com/services/T0/B0/hooksecret";
+  const env = { CRON_SECRET: "abc123", ANTHROPIC_API_KEY: "k", SLACK_WEBHOOK_URL: hook, VERCEL_PROJECT_PRODUCTION_URL: "radar.example.com" };
+  const some = { traveler_pain: [item(1, { severity: "High", title: "Fees <rise> & more" })], gov_policy: "http", web_app: [item(2)], industry: [] };
+  const allFail = { traveler_pain: "http", gov_policy: "http", web_app: "http", industry: "http" };
+  // Anthropic calls go to fakeFetch; calls to the webhook are recorded and answered with slackStatus.
+  const run = async ({ byCat = some, e = env, st = memStorage(), slackStatus = 200, slackThrows = false } = {}) => {
+    const posts = [];
+    const api = fakeFetch(byCat);
+    const fetchFn = async (url, init) => {
+      if (url !== hook) return api(url, init);
+      posts.push(JSON.parse(init.body));
+      if (slackThrows) throw new Error("connect ECONNREFUSED " + hook);
+      return { ok: slackStatus < 300, status: slackStatus };
+    };
+    const h = makeSweepHandler({ env: e, storage: st, fetchFn, now: () => 1_800_000_000_000, log: () => {} });
+    const res = mockRes(); await h({ headers: { authorization: "Bearer abc123" } }, res);
+    return { res, posts };
+  };
+
+  const ok = await run();
+  const text = (ok.posts[0] || {}).text || "";
+  check(ok.res.code === 200 && ok.res.json().slack === "sent" && ok.posts.length === 1, "saved sweep: digest posted to Slack once");
+  check(text.includes("<https://example.com/1|Fees &lt;rise&gt; &amp; more>") && text.includes("*NEW*"),
+    "digest links each title to its source, escapes Slack control characters, marks New");
+  check(text.includes("Failed this run: Gov &amp; policy") && text.includes("<https://radar.example.com/live/|Open the live board>"),
+    "digest names failed categories and links the live board");
+  check(ok.posts[0].unfurl_links === false && !ok.res.body.includes("hooksecret") && !("problems" in ok.res.json()),
+    "no link previews; response has neither the webhook URL nor the items");
+
+  const off = await run({ e: { CRON_SECRET: "abc123", ANTHROPIC_API_KEY: "k" } });
+  check(off.res.code === 200 && off.posts.length === 0 && off.res.json().slack === "not configured", "no webhook set: sweep saves, nothing posted");
+
+  const down = await run({ slackStatus: 404 });
+  check(down.res.code === 200 && down.res.json().status === "saved" && down.res.json().slack === "failed: http 404", "Slack error does not fail a saved sweep");
+  const unreachable = await run({ slackThrows: true });
+  check(unreachable.res.json().slack === "failed: network error" && !unreachable.res.body.includes("hooksecret"),
+    "Slack unreachable: reported without the webhook URL");
+
+  const none = await run({ byCat: allFail });
+  const notice = (none.posts[0] || {}).text || "";
+  check(none.res.code === 502 && none.posts.length === 1 && /sweep failed/.test(notice) && notice.includes("Traveler pain: failed: http 529"),
+    "all categories failed: failure notice posted, still 502");
+
+  const st = memStorage();
+  await run({ st });
+  const again = await run({ st });
+  check(again.res.json().status === "skipped" && again.posts.length === 0, "skipped run posts nothing");
+
+  const broken = { get: async () => null, set: async () => { throw new Error("Vercel Blob: No blob credentials found"); }, del: async () => {} };
+  const err = await run({ st: broken });
+  check(err.res.code === 500 && err.posts.length === 1 && /No blob credentials/.test(err.posts[0].text), "sweep error: failure notice posted, still 500");
+}
+
 // ---- /api/data
 {
   const st = memStorage();
