@@ -70,6 +70,8 @@ Slack workspace or Resend account. They are separate from the Slack digest set u
 | `scripts/check.mjs` | Offline checks: sample data, page links, bundles, prompt drift |
 | `.github/workflows/sweep.yml` | Calls `/api/sweep` every 5 hours, and on demand from the Actions tab |
 | `scripts/test-sweep.mjs` | Offline tests for the sweep, the Slack post, the email and the data feed (no network, no key) |
+| `scripts/test-subscriptions.mjs` | Offline tests for the subscriber features (storage listing so far; more as each task lands) |
+| `scripts/test-helpers.mjs` | Shared by both test files: PASS/FAIL printer, in-memory store, fake response |
 
 ## Rebuild the demo and live page
 

@@ -48,6 +48,7 @@ Vercel Cron: daily,      │                                                    
                          │     merge, de-duplicate, flag New, keep 60 sweeps        │
                          │     after saving: digest to Slack (optional) ────────────┼──▶ hooks.slack.com
                          │     and by email via Resend (optional) ──────────────────┼──▶ api.resend.com
+                         │     then: digests to subscribers (optional) ─────────────┼──▶ api.resend.com
                          │     writes ─────────────────────────────┐                │
                          │                                         ▼                │
                          │                              Private Vercel Blob store   │
@@ -349,6 +350,15 @@ Every run that is not skipped also returns `slack` and `email` fields. Each is `
 are unset, and otherwise `sent` or `failed: …` (see [Posting to Slack](#posting-to-slack-optional) and
 [Sending email](#sending-email-optional)). A run you start by hand is sent too, marked "manual run".
 
+A **saved** run also returns a `subscribers` field, after the owner's `slack` and `email` (so if the Resend quota runs
+out, it is the subscribers' send that stops, not yours). It is `not configured` while `SUBSCRIPTIONS_ENABLED` is not
+`1` or the Resend sender is not set up, and otherwise an object of counts only, never an address:
+`{"pro":{"due":N,"sent":N,"failed":N,"deferred":N},"free":{"due":N,"sent":N,"failed":N,"deferred":N,"alreadySent":N},"pending":N,"expired":N,"unreadable":N,"stopped":null}`.
+`deferred` means not attempted this run (the 240-second subscriber deadline, or a quota stop); a later sweep picks
+those up. `stopped` is `quota`, `deadline` or an `http …` reason. A manual run reports `"pro":{"skipped":"manual run"}`.
+A failure while delivering shows as `{"error":"…"}`; it never changes the 200 answer or what was saved. Skipped,
+`empty` and error answers have no `subscribers` field.
+
 ### 5.3 Check the page
 
 Open `/live/`. The board should show the saved items and the history should list one sweep.
@@ -631,6 +641,42 @@ How it behaves:
   key, the addresses or Resend's error message, because the GitHub Actions job prints the reply in a log that anyone
   can read in a public repository. Resend's dashboard shows the full error under **Logs**.
 - Status: covered by the offline tests (`npm test`); **not yet tried against a real Resend account**.
+
+### Managing subscribers
+
+`scripts/subscribers.mjs` runs on your own machine against the Blob store. It is not deployed (`.vercelignore` skips
+`scripts/`) and adds no public endpoint. It prints addresses only for `list` and `show`, and never a token.
+
+**One-time setup.** Create a read-write token for the Blob store in the Vercel dashboard, and
+put it in a file called `.env.local` in the repository root as `BLOB_READ_WRITE_TOKEN=…`. `.gitignore` ignores `.env*`
+and `npm run check` fails if one is tracked. `vercel env pull .env.local` may also bring a usable token; **not
+confirmed**: the store may only expose `BLOB_STORE_ID` with an OIDC token that does not work off Vercel. With no
+usable credentials the script prints the `@vercel/blob` error and exits 1.
+
+```
+node --env-file=.env.local scripts/subscribers.mjs stats [--days 30]
+node --env-file=.env.local scripts/subscribers.mjs list [--plan pro|free|pending]
+node --env-file=.env.local scripts/subscribers.mjs show <email>
+node --env-file=.env.local scripts/subscribers.mjs grant-pro <email> [--until 2027-01-31] [--yes]
+node --env-file=.env.local scripts/subscribers.mjs revoke-pro <email> [--yes]
+node --env-file=.env.local scripts/subscribers.mjs delete <email> [--yes]
+node --env-file=.env.local scripts/subscribers.mjs prune-events --older-than 400 [--yes]
+```
+
+| Command | What it does |
+|---|---|
+| `stats` | Counts now (pending, Free, Pro, Pro ending within 7 days) and per UTC day: sign-ups, confirmation emails, confirmations, unsubscribes (Free and Pro), expired, Free digests sent. Ends with the confirm rate, `confirmed / subscribed`. No addresses |
+| `list` | Address, status, plan, `proUntil` and confirmed date. A Pro record past its end date shows as `pro (lapsed)`: the sweep treats it as Free |
+| `show` | One record without its token |
+| `grant-pro` | Only for an active (confirmed) subscriber. Pro with `proSource: owner`. `--until 2027-01-31` makes Pro run through the end of that UTC day; leave it out for no end date. A past date is accepted and acts as Free. Refuses a paid Razorpay record |
+| `revoke-pro` | Back to Free, clearing the end date. Refuses a Razorpay record |
+| `delete` | Deletes the record. This is the answer to a deletion request. Event records hold no address or id. The one place the record's hashed id (not the address) can remain is a `radar:deliveries:<date>` file, which the sweep deletes after 7 days |
+| `prune-events` | Deletes event records older than N days |
+
+Every write only describes what it would change until you add `--yes` (and then exits 0). Exit codes: `0` done,
+`1` not found, refused or not applied, `2` bad usage. A granted Pro starts at the next scheduled sweep, because Pro
+email goes only with scheduled sweeps. `stats` is where the Phase 2 numbers in
+[`docs/subscriptions/pricing.md`](docs/subscriptions/pricing.md) come from.
 
 ### Changing the schedule
 

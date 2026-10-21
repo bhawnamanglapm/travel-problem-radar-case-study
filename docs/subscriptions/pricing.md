@@ -119,5 +119,7 @@ plan before raising it.
 1. Who is a subscriber: PMs on a team, solo PMs, founders, or recruiters? This sets the price range.
 2. Currency and price points, monthly versus yearly, and whether there is a free trial.
 3. The gate: how many confirmed subscribers and what unsubscribe rate count as enough to build Phase 2.
+   (The numbers come from `node scripts/subscribers.mjs stats`: confirmed subscribers now, the confirm rate, and
+   unsubscribes per day, split by plan. See DEPLOYMENT.md, "Managing subscribers".)
 4. Should Pro keep the free digest's timing (one a day) and add personalisation instead of volume?
 5. Refund policy, and which country's tax rules apply to the business.

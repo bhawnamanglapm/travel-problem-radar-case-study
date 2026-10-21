@@ -1,28 +1,32 @@
 // Email delivery for the scheduled sweep, through Resend (https://resend.com): the digest after
 // a saved sweep, or a short notice when nothing could be saved. Optional; it runs only when
 // RESEND_API_KEY and EMAIL_TO are set. Each message has an HTML and a plain-text part.
+import { esc } from "./http.js";
 import { CATS } from "./radar.js";
 
 // Resend's shared sender, so no domain of our own is needed. Resend delivers mail from it only
 // to the address the Resend account was created with; EMAIL_FROM on a verified domain lifts that.
 export const DEFAULT_FROM = "Travel Problem Radar <onboarding@resend.dev>";
 
-const esc = (s = "") => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-  .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 const when = (at) => at.slice(0, 16).replace("T", " ") + " UTC";
 
 const FONT = "font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5;color:#1a1a1a";
 const MUTED = "color:#5f6368";
 const NOTE = "Gathered by an AI model with web search. Items are not verified; check each source link.";
 
-export function buildDigestEmail({ at, problems, perCat = {}, manual = false }, liveUrl = "") {
+// The third argument is for the subscriber emails: `heading` replaces the title, and `subjectLead`
+// (for example "daily") makes the subject "Travel Problem Radar daily · <date> · ...". With no third
+// argument the output is exactly the owner's digest.
+export function buildDigestEmail({ at, problems, perCat = {}, manual = false }, liveUrl = "", { heading, subjectLead } = {}) {
   const failed = CATS.filter((c) => /^failed/.test(perCat[c.key] || "")).map((c) => c.label);
   const newCount = problems.filter((p) => p.isNew).length;
   const highCount = problems.filter((p) => p.severity === "High").length;
-  const title = manual ? "Travel Problem Radar: digest (manual run)" : "Travel Problem Radar: digest";
+  const title = heading || (manual ? "Travel Problem Radar: digest (manual run)" : "Travel Problem Radar: digest");
   const counts = `${problems.length} problems · ${newCount} new · ${highCount} high severity`;
   // The time keeps each subject unique, so mail apps don't thread five digests a day together.
-  const subject = `Travel Problem Radar · ${when(at)} · ${problems.length} problems, ${newCount} new${manual ? " (manual run)" : ""}`;
+  const lead = subjectLead ? `Travel Problem Radar ${subjectLead}` : "Travel Problem Radar";
+  const stamp = subjectLead ? at.slice(0, 10) : when(at);
+  const subject = `${lead} · ${stamp} · ${problems.length} problems, ${newCount} new${manual ? " (manual run)" : ""}`;
 
   const text = [title, `Swept ${when(at)} · ${counts}`];
   const html = [
@@ -80,6 +84,163 @@ export function buildFailureEmail({ at, perCat = {}, error = "" }) {
       `</div>`,
     ].join("\n"),
   };
+}
+
+// ---- subscriber emails (docs/subscriptions/tasks/T04)
+
+const PLAN_LINE = {
+  free: "You get this because you subscribed (Free plan: one email a day).",
+  pro: "You get this because you subscribed (Pro plan: an email after every sweep).",
+};
+const LINK_OK = /^https?:\/\/[^\s<>"]+$/;
+
+// A copy of a built message with the subscriber footer and the one-click unsubscribe headers
+// (RFC 8058). The digest is built once; only this footer differs per person.
+export function withSubscriberFooter(mail, { unsubscribeUrl, manageUrl = "", plan = "free" }) {
+  if (!LINK_OK.test(unsubscribeUrl || "")) throw new Error("withSubscriberFooter: bad unsubscribe link");
+  const intro = PLAN_LINE[plan] || PLAN_LINE.free;
+  const text = ["", "--", intro, `Unsubscribe: ${unsubscribeUrl}`];
+  const links = [`<a href="${esc(unsubscribeUrl)}">Unsubscribe</a>`];
+  if (manageUrl) {
+    text.push(`Manage subscription: ${manageUrl}`);
+    links.push(`<a href="${esc(manageUrl)}">Manage subscription</a>`);
+  }
+  const footer = `<p style="margin:20px 0 0;font-size:12px;${MUTED}">${esc(intro)} ${links.join(" · ")}</p>`;
+  return {
+    ...mail,
+    text: mail.text + "\n" + text.join("\n"),
+    html: /<\/div>\s*$/.test(mail.html) ? mail.html.replace(/<\/div>\s*$/, footer + "\n</div>") : mail.html + "\n" + footer,
+    headers: {
+      ...(mail.headers || {}),
+      "List-Unsubscribe": `<${unsubscribeUrl}>`,
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    },
+  };
+}
+
+export function buildConfirmEmail({ confirmUrl, siteUrl = "" }) {
+  if (!LINK_OK.test(confirmUrl || "")) throw new Error("buildConfirmEmail: bad confirm link");
+  const subject = "Confirm your Travel Problem Radar subscription";
+  const intro = "You asked to get the Travel Problem Radar digest by email: one email a day with the travel problems an AI model found in the last 24 hours.";
+  const ignore = "If you didn't ask for this, ignore this email; nothing more will be sent.";
+  const stored = "What we keep: your email address and the dates you subscribed and confirmed. Unsubscribing deletes it.";
+  return {
+    subject,
+    text: [subject, "", intro, "", `Confirm: ${confirmUrl}`, "", ignore, "", stored, ...(siteUrl ? ["", siteUrl] : [])].join("\n"),
+    html: [
+      `<div style="${FONT};max-width:640px">`,
+      `<h1 style="font-size:18px;margin:0 0 8px">${esc(subject)}</h1>`,
+      `<p style="margin:0 0 14px">${esc(intro)}</p>`,
+      `<p style="margin:0 0 14px"><a href="${esc(confirmUrl)}" style="display:inline-block;padding:10px 18px;background:#1a1a1a;color:#ffffff;text-decoration:none;border-radius:6px">Confirm subscription</a></p>`,
+      `<p style="margin:0 0 14px">${esc(ignore)}</p>`,
+      `<p style="margin:0;font-size:12px;${MUTED}">${esc(stored)}</p>`,
+      `</div>`,
+    ].join("\n"),
+  };
+}
+
+// ---- batch sending (https://resend.com/docs/api-reference/emails/send-batch-emails)
+
+export const BATCH_SIZE = 100; // Resend's documented maximum per call
+const defaultSleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function postBatch({ apiKey, from }, chunk, { fetchFn, timeoutMs, key }) {
+  const headers = {
+    authorization: "Bearer " + apiKey,
+    "content-type": "application/json",
+    "user-agent": "travel-problem-radar", // Resend refuses requests without one (403)
+  };
+  if (key) headers["idempotency-key"] = key;
+  try {
+    const r = await fetchFn("https://api.resend.com/emails/batch", {
+      method: "POST",
+      headers,
+      body: JSON.stringify(chunk.map((m) => ({ from, to: [m.to], subject: m.subject, html: m.html, text: m.text, ...(m.headers ? { headers: m.headers } : {}) }))),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    let body = null;
+    try { body = await r.json(); } catch (e) {}
+    const name = body && /^[a-z_]{1,40}$/.test(body.name) ? body.name : "";
+    const retryAfter = Number(r.headers && typeof r.headers.get === "function" ? r.headers.get("retry-after") : NaN);
+    return { ok: r.ok, status: r.status, name, retryAfter, count: !r.ok ? 0 : body && Array.isArray(body.data) ? body.data.length : chunk.length };
+  } catch (e) {
+    return { ok: false, status: 0, name: "", count: 0, error: e && e.name === "TimeoutError" ? "timeout" : "network error" };
+  }
+}
+
+const isQuota = (r) => r.status === 429 && /quota_exceeded$/.test(r.name);
+const why = (r) => r.error || `http ${r.status}${r.name ? " " + r.name : ""}`;
+
+// Sends one email per message (each has a single recipient), in chunks of BATCH_SIZE. Never
+// throws. The result holds counts, positions and reasons only: never an address, the key, or
+// Resend's message text. `sentIndexes` are positions in `messages`, so the caller can record who
+// was sent. Messages after a quota, auth or deadline stop are neither sent nor failed: the caller
+// counts them as deferred.
+//   messages: [{ to, subject, html, text, headers }]
+//   options:  fetchFn, timeoutMs, sleep, idempotencyKey (a base: "-<chunk n>" is added),
+//             shouldStop() (checked before each chunk; true stops with "deadline"),
+//             onChunk({ sentIndexes }) (awaited after each chunk, so progress can be saved)
+export async function sendBatch({ apiKey, from = "" }, messages, { fetchFn = fetch, timeoutMs = 10000, sleep = defaultSleep, idempotencyKey, shouldStop, onChunk } = {}) {
+  const out = { sent: 0, failed: 0, stopped: null, reason: null, sentIndexes: [] };
+  if (!apiKey) { out.stopped = "not configured: RESEND_API_KEY missing"; return out; }
+  if (!from || from === DEFAULT_FROM || /@resend\.dev\b/i.test(from)) {
+    out.stopped = "not configured: EMAIL_FROM must be on a verified domain";
+    return out;
+  }
+  const creds = { apiKey, from };
+  const opts = { fetchFn, timeoutMs };
+  try {
+    for (let start = 0, n = 0; start < messages.length; start += BATCH_SIZE, n++) {
+      if (shouldStop && shouldStop()) { out.stopped = "deadline"; break; }
+      const chunk = messages.slice(start, start + BATCH_SIZE);
+      const key = idempotencyKey ? `${idempotencyKey}-${n}` : undefined;
+      const sentHere = [];
+      let r = await postBatch(creds, chunk, { ...opts, key });
+      if (r.status === 429 && !isQuota(r)) {
+        await sleep(Math.min(Number.isFinite(r.retryAfter) ? r.retryAfter * 1000 : 1000, 2000));
+        r = await postBatch(creds, chunk, { ...opts, key });
+      }
+      if (r.ok) {
+        const c = Math.min(r.count, chunk.length);
+        for (let i = 0; i < c; i++) sentHere.push(start + i);
+        out.failed += chunk.length - c;
+        if (c < chunk.length) out.reason = "short reply";
+      } else if (isQuota(r)) {
+        out.stopped = "quota";
+      } else if (r.status === 401 || r.status === 403) {
+        out.stopped = why(r);
+        out.reason = out.stopped;
+      } else if ((r.status === 400 || r.status === 422) && chunk.length > 1) {
+        // One bad message can fail the whole call. Send them one at a time so only it fails.
+        for (let i = 0; i < chunk.length; i++) {
+          const one = await postBatch(creds, [chunk[i]], { ...opts, key: key ? `${key}-s${i}` : undefined });
+          if (one.ok) sentHere.push(start + i);
+          else if (isQuota(one)) { out.stopped = "quota"; break; }
+          else if (one.status === 401 || one.status === 403) { out.stopped = why(one); out.reason = out.stopped; break; }
+          else { out.failed++; out.reason = why(one); }
+        }
+      } else {
+        out.failed += chunk.length;
+        out.reason = why(r);
+      }
+      out.sent += sentHere.length;
+      out.sentIndexes.push(...sentHere);
+      if (onChunk) { try { await onChunk({ sentIndexes: sentHere }); } catch (e) {} }
+      if (out.stopped) break;
+    }
+  } catch (e) {
+    out.stopped = "error";
+    out.reason = "unexpected error";
+  }
+  return out;
+}
+
+// One message: "sent", or the same "failed: ..." strings sendEmail() uses.
+export async function sendOne(creds, message, options = {}) {
+  const r = await sendBatch(creds, [message], options);
+  if (r.sent === 1) return "sent";
+  if (r.stopped && r.stopped.startsWith("not configured")) return r.stopped;
+  return "failed: " + (r.reason || r.stopped || "unknown");
 }
 
 // Never throws. The result goes into /api/sweep's reply, which the GitHub Actions job prints to
