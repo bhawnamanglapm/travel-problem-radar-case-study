@@ -9,8 +9,8 @@ working in a real inbox; that is T12's staged launch.
 | Task | Status | Commit | Tests after | Notes |
 |---|---|---|---|---|
 | [T01](T01-storage-list.md) Storage `list()` + test helpers | done | 9175e84 | 73 pass (68 old + 5 new) | See T01 notes below |
-| [T02](T02-subscriber-records.md) Subscriber records module | done | see T03 row | 101 pass (+23 new) | See T02 notes below |
-| [T03](T03-http-helpers.md) HTTP helpers | todo | | | |
+| [T02](T02-subscriber-records.md) Subscriber records module | done | f0de053 | 96 pass (+23 new) | See T02 notes below |
+| [T03](T03-http-helpers.md) HTTP helpers | done | see T04 row | 117 pass (+21 new) | See T03 notes below |
 | [T04](T04-email-builders.md) Email builders + batch send | todo | | | |
 | [T05](T05-api-subscribe.md) `POST /api/subscribe` | todo | | | |
 | [T06](T06-api-confirm.md) `/api/confirm` | todo | | | |
@@ -41,3 +41,17 @@ working in a real inbox; that is T12's staged launch.
   domain starting or ending with a dot or containing `..`.
 - Not done: the task's line "this folder's record shape and this file agree" refers to the draft design docs;
   T12 updates those.
+
+### T03
+- `api/_lib/http.js` has `esc`, `sendJson`, `bearerOk`, `allowMethods`, `readBody`, `parseForm` and `sendPage`.
+  `handlers.js` and `email.js` now import from it; the 68 existing checks pass unchanged.
+- Added `readFields(req)` (not in the task): returns the fields as an object whether the platform pre-parsed the
+  body or not. T05 to T07 use it, so each handler doesn't repeat the logic. Also exported `BodyTooLargeError`
+  (`statusCode: 413`).
+- `sendPage` writes the title into an `<h1>` itself, so a page's `body` should not repeat it.
+- **Verify item (Vercel body handling), checked against Vercel's docs (search, Oct 2026):** for Node.js functions
+  `request.body` is an object when the request has a supported `Content-Type`, otherwise `undefined`. Docs show a
+  signed-webhook function reading the raw bytes by exporting `config = { api: { bodyParser: false } }` and reading
+  the stream (their example uses the `raw-body` package). **Not confirmed:** whether touching `req.body` first
+  consumes the stream. For T18 (Razorpay, Phase 2) the raw route must be tested on a Preview deployment before
+  relying on it; `readBody` already handles both a pre-read body and a stream.

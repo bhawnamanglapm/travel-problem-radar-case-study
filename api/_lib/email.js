@@ -1,14 +1,13 @@
 // Email delivery for the scheduled sweep, through Resend (https://resend.com): the digest after
 // a saved sweep, or a short notice when nothing could be saved. Optional; it runs only when
 // RESEND_API_KEY and EMAIL_TO are set. Each message has an HTML and a plain-text part.
+import { esc } from "./http.js";
 import { CATS } from "./radar.js";
 
 // Resend's shared sender, so no domain of our own is needed. Resend delivers mail from it only
 // to the address the Resend account was created with; EMAIL_FROM on a verified domain lifts that.
 export const DEFAULT_FROM = "Travel Problem Radar <onboarding@resend.dev>";
 
-const esc = (s = "") => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-  .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 const when = (at) => at.slice(0, 16).replace("T", " ") + " UTC";
 
 const FONT = "font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5;color:#1a1a1a";
