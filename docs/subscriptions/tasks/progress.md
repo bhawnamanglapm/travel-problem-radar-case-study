@@ -270,5 +270,7 @@ working in a real inbox; that is T12's staged launch.
 - **Why the firewall rule too:** each allowed attempt costs one list and one upload, on top of what sign-up already
   spends, and Hobby includes 2,000 advanced Blob operations a month (going over locks Blob for 30 days). Today's
   usage was not measured. The rule answers a flood with `429` before the function runs.
-- **Not done here (owner steps):** the Resend webhook and its secret, and the firewall rule. Neither has been seen
-  working in production yet.
+- **Firewall rule:** live on production since 2026-10-22, added with the Vercel CLI (the claude.ai Vercel connector
+  answered 403 for this team). It was the project's first firewall rule. Its settings were read back from the live
+  config and match DEPLOYMENT.md. It has not been triggered on purpose.
+- **Not done here (owner step):** the Resend webhook and its secret. Not yet seen working in production.
