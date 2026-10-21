@@ -32,12 +32,20 @@ const item = (n, over = {}) => ({
   region: "Global", date: "Oct 2026", severity: "Medium", opportunity: "o", ...over,
 });
 // Fake Anthropic: each category gets its own list of items, or an error.
+// "cutoff" is a reply that spent its whole budget thinking: no text, stop_reason max_tokens.
 const fakeFetch = (byCat, { seenCats = [] } = {}) => async (url, init) => {
   const body = JSON.parse(init.body);
   seenCats.push({ headers: init.headers, body });
   const cat = CATS.find((c) => body.messages[0].content.includes(`"${c.label}"`));
   const v = byCat[cat.key];
   if (v === "http") return { ok: false, status: 529, json: async () => ({}) };
+  if (v === "cutoff") return {
+    ok: true, status: 200,
+    json: async () => ({
+      content: [{ type: "thinking", thinking: "" }], stop_reason: "max_tokens",
+      usage: { input_tokens: 100, output_tokens: 8000, server_tool_use: { web_search_requests: 1 } },
+    }),
+  };
   const text = typeof v === "string" ? v : JSON.stringify(v);
   return {
     ok: true, status: 200,
@@ -112,6 +120,10 @@ const sweepOpts = (storage, byCat, now) => ({
   const st2 = memStorage();
   const none = await runDailySweep(sweepOpts(st2, { traveler_pain: "http", gov_policy: "http", web_app: "http", industry: "http" }, () => 1_800_000_000_000));
   check(none.status === "empty" && st2.m.size === 0, "all four failed: nothing saved");
+
+  const cut = await runDailySweep(sweepOpts(memStorage(), { traveler_pain: "cutoff", gov_policy: [item(1)], web_app: [], industry: [] }, () => 1_800_000_000_000));
+  check(cut.perCat.traveler_pain === "failed: empty (stop_reason: max_tokens)", "a failed category says why the model stopped");
+  check(cut.usage.output === 8150 && cut.usage.searches === 7 && cut.usage.input === 400, "usage includes failed categories, which are billed too");
 }
 
 // ---- 60-sweep cap
@@ -140,7 +152,8 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   const seen = [];
   await scanCategory(CATS[0], { fetchFn: fakeFetch({ traveler_pain: [] }, { seenCats: seen }), apiKey: "sekret", model: "claude-test", maxSearches: 3 });
   const b = seen[0].body;
-  check(b.model === "claude-test" && b.max_tokens === 1000 && b.tools[0].max_uses === 3, "request uses the configured model, 1000 max tokens, 3 searches");
+  check(b.model === "claude-test" && b.max_tokens === 8000 && b.output_config.effort === "low" && b.tools[0].max_uses === 3,
+    "request uses the configured model, 8000 max tokens, low effort, 3 searches");
   check(seen[0].headers["x-api-key"] === "sekret" && !JSON.stringify(b).includes("sekret"), "key goes in a header, never in the body");
 }
 

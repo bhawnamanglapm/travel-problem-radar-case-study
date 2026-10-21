@@ -114,13 +114,18 @@ If `git diff` shows changes, commit the rebuilt bundles before deploying.
 |---|---|---|
 | API calls | 4 (one per category) | 120, plus 4 for each manual run |
 | Web searches | At most 12 (3 per call), billed at $10 per 1,000 | At most 360, about **$3.60** |
-| Output tokens | At most 4,000 (1,000 per call) | At most 120,000 |
+| Output tokens, thinking included | At most 32,000 (8,000 per call); low effort should keep it well under that | At most 960,000 |
 | Input tokens | Search results count as input, so this varies | Logged by every sweep (see [section 9](#9-operating-the-daily-sweep)) |
 
-**First real sweep (20 Oct 2026, default model `claude-sonnet-5-5`):** 56,223 input tokens, 2,361 output tokens and
-6 searches, in 12.7 seconds. At $2 input / $10 output per million tokens plus $10 per 1,000 searches, that is about
-**$0.20**. Two of the four categories failed, so a sweep where all four succeed will cost more. Until more runs are
-logged, $0.30–0.40 a sweep (about $10–12 a month) is a reasonable guess, not a measurement.
+**The first two real sweeps (20–21 Oct 2026, default model `claude-sonnet-5-5`)** logged 56,223 input / 2,361
+output tokens and 6 searches, then 29,107 / 1,270 and 3. At $2 input / $10 output per million tokens plus $10 per
+1,000 searches, that is about $0.20 and $0.09. **Both figures are too low.** The categories that failed (2, then 3)
+were billed, but the code at the time did not count their tokens. It does now, so the `usage` of the next sweep is
+the first complete figure. The Anthropic Console's usage page has the real totals for those two runs.
+
+**With the token fix (local test, 21 Oct 2026, all four categories succeeded):** 62,513 input tokens, 4,001 output
+tokens and 5 searches, about **$0.21 a sweep**, or roughly $6–7 a month for one sweep a day. Each category took 7–10
+seconds.
 
 **Set a monthly spend limit in the Anthropic Console.** That is the real cost cap. A limit around $20 a month leaves
 room above the illustration; adjust it once real usage is known.
@@ -382,7 +387,7 @@ needed at runtime.
 |---|---|---|---|
 | `CRON_SECRET` | You | `/api/sweep` | Vercel sends it as `Authorization: Bearer <value>` on cron calls. If it is unset, `/api/sweep` always answers 401 |
 | `ANTHROPIC_API_KEY` | You | `/api/sweep` | Sent to the Anthropic API in a header; never returned in a response |
-| `RADAR_MODEL` | You (optional) | `/api/sweep` | Claude model ID. Default `claude-sonnet-5-5` (`api/_lib/handlers.js`) |
+| `RADAR_MODEL` | You (optional) | `/api/sweep` | Claude model ID. Default `claude-sonnet-5-5` (`api/_lib/handlers.js`). Must support `effort` (Claude 4.6 or later) |
 | `SLACK_WEBHOOK_URL` | You (optional) | `/api/sweep` | Slack incoming webhook. Treat it as a secret: anyone who has it can post to the channel |
 | `VERCEL_PROJECT_PRODUCTION_URL` | Vercel, automatically | `/api/sweep` | Builds the "Open the live board" link in the Slack message. If it is missing, the link is left out |
 | `BLOB_STORE_ID` or `BLOB_READ_WRITE_TOKEN` | Vercel, when the store is connected | `api/_lib/storage.js` | Do not set by hand unless running outside Vercel |
@@ -538,7 +543,7 @@ answers `skipped`, so it costs nothing. A missed run is picked up the next day.
 | `502` with every `perCat` entry `failed: http 400` | Web search disabled for the organization, an unknown model ID in `RADAR_MODEL`, or a request the model rejects | Check Console → Settings → Capabilities, the model ID, and the Anthropic Console logs |
 | `perCat` entries `failed: http 401` | Invalid or revoked API key | Replace the key; redeploy |
 | `perCat` entries `failed: http 429` or `http 529` | Rate limit or API overload | Usually temporary; the next day's run will try again |
-| `perCat` entries `failed: empty` or `failed: no json` | The model's reply had no JSON array: the output may have run out of tokens, or the turn paused before the answer | See Known issue 2 below |
+| `perCat` entries `failed: empty (stop_reason: …)` or `failed: no json (…)` | The model's reply had no JSON array. The stop reason says why: `max_tokens` (ran out of output tokens, thinking included), `refusal` (a safety classifier declined), `pause_turn` (a long search turn paused before the answer) | `max_tokens`: see Known issue 2. `refusal`: try a different model in `RADAR_MODEL`. `pause_turn`: rare with 3 searches; the next run usually succeeds |
 | `200 skipped` when you expected a run | The call carried the timer's headers (`trigger: scheduled`) and the timer swept less than 20 hours ago. This can happen with `vercel crons run` or the dashboard | Run it with the `curl` command in 5.1, which always sweeps (see 5.5) |
 | Function times out (`FUNCTION_INVOCATION_TIMEOUT`) | The run took more than 300 s | Rare with 3 searches per call. On Pro, raise `maxDuration` (up to 800) |
 | Deploy fails: "Hobby accounts are limited to daily cron jobs" | The schedule runs more than once a day | Use a daily schedule, or move to Pro |
@@ -551,8 +556,8 @@ answers `skipped`, so it costs nothing. A missed run is picked up the next day.
 
 ## Known issues to fix before or after the first sweep
 
-Found while writing this guide (21 Oct 2026). None of them is fixed in this commit. Remove each one from this list
-once it is fixed.
+Found while writing this guide (21 Oct 2026). Issue 1 is still open, and issue 2 has a fix waiting to be confirmed by
+a real sweep. Remove each one from this list once it is resolved.
 
 ### 1. `/live` and `/demo` without a trailing slash render a blank page
 
@@ -573,25 +578,29 @@ It leaves `/live/` and `/live/index.html` alone and sends `/live` to `/live/`.
 Do **not** fix this with `"trailingSlash": true` in `vercel.json`. That also redirects `/api/sweep` to
 `/api/sweep/`, and Vercel cron jobs do not follow redirects, so the daily sweep would stop running.
 
-### 2. The default model may run out of output tokens
+### 2. Categories failing with `empty`: fix applied, not yet confirmed by a real run
 
-**Seen on the first real sweep (20 Oct 2026, 22:53 UTC).** With the default model, `gov_policy` and `industry`
-failed with `empty`, and the other two categories returned 4 items each. The code doesn't log the API's stop
-reason, so the cause below is not confirmed, but it fits what happened. The server defaults to `claude-sonnet-5-5`
-with `max_tokens: 1000` and does not set `thinking`. On Claude Sonnet 5.5, thinking is on unless the request turns it off, and thinking
-tokens count against `max_tokens`. If thinking uses most of the 1,000 tokens, the JSON answer is cut short or
-missing, and that category fails with `empty` or `no json`. The version that worked in Claude's app used
-`claude-sonnet-4-6`, which does not think unless asked.
+**What happened.** The first two real sweeps lost categories to `empty`: 2 of 4 on 20 Oct (22:53 UTC) and 3 of 4 on
+21 Oct (00:13 UTC). The default model, `claude-sonnet-5-5`, thinks by default, and thinking counts toward
+`max_tokens`, which was 1,000. That most likely used up the budget before any answer was written. The code didn't
+record the stop reason then, so this is the likely cause, not a confirmed one. The version that worked in Claude's
+app used `claude-sonnet-4-6`, which does not think unless asked.
 
-**Options, from least to most change:**
+**What changed** (`scanCategory` in `api/_lib/radar.js`):
 
-- **No code change:** set `RADAR_MODEL=claude-sonnet-4-6` for the first sweeps. That is the setup that worked in
-  Claude's app.
-- **Small code change in `api/_lib/radar.js` (`scanCategory`):** raise `max_tokens` (for example to 4000), or turn
-  thinking off for this call with `thinking: { type: "between_tools" }`, or both. `scripts/test-sweep.mjs` asserts
-  `max_tokens === 1000`, so update that test as well.
+- Each call now sends `output_config: { effort: "low" }`, which keeps thinking short. This is the setting
+  Anthropic's docs recommend first for a request like this.
+- `max_tokens` is now 8,000, leaving room for thinking plus the answer. Only tokens actually produced are billed.
+- A failed category now says why the model stopped, for example `failed: empty (stop_reason: max_tokens)`.
+- The `usage` totals now include failed categories.
 
-Whichever you choose, check `perCat` and `usage.output` after the first run.
+**Tested locally (21 Oct 2026)** with the same code and model, calling each category separately: all four returned
+4–5 items with `stop_reason: end_turn` and 0 thinking tokens, using 813–1,148 output tokens each. The answers alone
+were about 1,000 tokens, so the old 1,000 limit was too tight even without thinking.
+
+**Still to confirm on production:** after deploying, every category in the next sweep should report `N items`. If
+one still fails, its stop reason says what to change next. If you set `RADAR_MODEL`, pick a model that supports `effort` (Claude 4.6 or later); older models
+reject the request with a 400.
 
 ### 3. Smaller improvements (optional)
 

@@ -74,6 +74,9 @@ export function normalize(cat, p) {
 
 // One Claude call with web search for one category. Returns the items plus the
 // usage the API reported, so the sweep can log real token and search counts.
+// Current models think by default and thinking counts toward max_tokens: with 1000 the
+// thinking could use it all and leave no answer. Low effort keeps thinking short, and the
+// larger cap leaves room for it (only tokens actually produced are billed).
 export async function scanCategory(cat, { fetchFn = fetch, apiKey, model, maxSearches = 3 }) {
   const res = await fetchFn("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -84,23 +87,31 @@ export async function scanCategory(cat, { fetchFn = fetch, apiKey, model, maxSea
     },
     body: JSON.stringify({
       model,
-      max_tokens: 1000,
+      max_tokens: 16000,
+      output_config: { effort: "low" },
       messages: [{ role: "user", content: buildPrompt(cat) }],
       tools: [{ type: "web_search_20250305", name: "web_search", max_uses: maxSearches }],
     }),
   });
   if (!res.ok) throw new Error("http " + res.status);
   const data = await res.json();
-  const items = extractProblems(data).filter((p) => p && p.title).map((p) => normalize(cat, p));
   const u = data.usage || {};
-  return {
-    items,
-    usage: {
-      input: u.input_tokens || 0,
-      output: u.output_tokens || 0,
-      searches: (u.server_tool_use && u.server_tool_use.web_search_requests) || 0,
-    },
+  const usage = {
+    input: u.input_tokens || 0,
+    output: u.output_tokens || 0,
+    searches: (u.server_tool_use && u.server_tool_use.web_search_requests) || 0,
   };
+  let items;
+  try {
+    items = extractProblems(data).filter((p) => p && p.title).map((p) => normalize(cat, p));
+  } catch (e) {
+    // No usable answer: say why the model stopped (max_tokens, refusal, pause_turn, ...) and
+    // keep the usage, because a failed call is billed too.
+    const err = new Error(e.message + (data.stop_reason ? ` (stop_reason: ${data.stop_reason})` : ""));
+    err.usage = usage;
+    throw err;
+  }
+  return { items, usage };
 }
 
 async function readJSON(storage, key) {
@@ -131,13 +142,16 @@ export async function runDailySweep({ storage, scan, now = () => Date.now(), min
   const perCat = {};
   const merged = [];
   const idset = new Set();
+  const addUsage = (u) => { usage.input += u.input; usage.output += u.output; usage.searches += u.searches; };
   results.forEach((r, i) => {
     const key = CATS[i].key;
-    if (r.status !== "fulfilled") { perCat[key] = "failed: " + String((r.reason && r.reason.message) || r.reason); return; }
+    if (r.status !== "fulfilled") {
+      perCat[key] = "failed: " + String((r.reason && r.reason.message) || r.reason);
+      if (r.reason && r.reason.usage) addUsage(r.reason.usage);
+      return;
+    }
     perCat[key] = r.value.items.length + " items";
-    usage.input += r.value.usage.input;
-    usage.output += r.value.usage.output;
-    usage.searches += r.value.usage.searches;
+    addUsage(r.value.usage);
     r.value.items.forEach((it) => {
       if (idset.has(it.id)) return;
       idset.add(it.id);
