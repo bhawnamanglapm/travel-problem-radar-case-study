@@ -25,9 +25,11 @@ export function makeSweepHandler({ env, storage, fetchFn, now, log = console.log
     if (!bearerOk(req.headers.authorization, env.CRON_SECRET)) return send(res, 401, { error: "unauthorized" });
     if (!env.ANTHROPIC_API_KEY) return send(res, 500, { error: "ANTHROPIC_API_KEY is not set; nothing was run or saved" });
     const model = env.RADAR_MODEL || DEFAULT_MODEL;
-    // Vercel's timer sends this user agent and header. Any other call with the secret is a
-    // manual run, which always sweeps (see runDailySweep).
-    const scheduled = /^vercel-cron\//.test(req.headers["user-agent"] || "") || Boolean(req.headers["x-vercel-cron-schedule"]);
+    // Vercel's cron sends this user agent and header; the GitHub Actions schedule sends
+    // x-sweep-trigger: scheduled. Any other call with the secret is a manual run, which always
+    // sweeps (see runDailySweep). Faking these headers only makes a call more restricted.
+    const scheduled = /^vercel-cron\//.test(req.headers["user-agent"] || "") || Boolean(req.headers["x-vercel-cron-schedule"])
+      || req.headers["x-sweep-trigger"] === "scheduled";
     const trigger = scheduled ? "scheduled" : "manual";
     const scan = (cat) => scanCategory(cat, { fetchFn, apiKey: env.ANTHROPIC_API_KEY, model });
     const slack = (text) => postToSlack(env.SLACK_WEBHOOK_URL, text, { fetchFn });

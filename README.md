@@ -16,7 +16,7 @@ each item with a product idea a PM could build.
 | **Case study** | https://bhawnamanglapm.github.io/travel-problem-radar-case-study/ |
 | **Try the demo** | https://bhawnamanglapm.github.io/travel-problem-radar-case-study/demo/ (replays a saved sample; no AI calls) |
 | **Sample digest** | https://bhawnamanglapm.github.io/travel-problem-radar-case-study/demo/#report |
-| **Live daily page** | https://travel-problem-radar.vercel.app/live/. It is deployed, but **no real sweep has run yet**, so it shows an empty state (checked 19 Oct 2026). |
+| **Live page** | https://travel-problem-radar.vercel.app/live/. Deployed; a sweep runs every 5 hours. The first production sweep (Oct 2026) saved items from only 1 of 4 categories; the cause, an output token limit, is fixed and a local run returned all four. |
 | **More** | [Technical reference](docs/TECHNICAL.md) · [PRD](docs/PRD.md) · [Decision log](docs/decisions.md) · [Changelog](CHANGELOG.md) |
 
 ---
@@ -54,7 +54,7 @@ Full log with dates: [docs/decisions.md](docs/decisions.md).
 1. **Four category calls instead of one big prompt.** *Gave up:* a single ranked list across categories. *Got:* the
    calls run in parallel, and one failed category doesn't sink the other three. A test checks that a broken category
    is skipped and the rest are saved.
-2. **Visitors never trigger an AI call.** The daily page reads a sweep saved by a once-a-day server job.
+2. **Visitors never trigger an AI call.** The live page reads a sweep saved by a server job that runs every 5 hours.
    *Gave up:* fresh results whenever someone visits. *Got:* the cost is one sweep a day whatever the traffic, and the
    API key stays on the server.
 3. **The public demo replays a saved sample.** *Gave up:* live data in the demo. *Got:* a demo anyone can open, with
@@ -63,7 +63,7 @@ Full log with dates: [docs/decisions.md](docs/decisions.md).
    are stored. *Gave up:* recognising the same event under a different headline, which will show as New again.
    *Got:* a simple rule that can be tested.
 5. **One component, three ways to run.** The same React file runs inside Claude's app (live), on GitHub Pages
-   (sample replay) and on Vercel (read-only daily page). *Gave up:* the server keeps its own copy of the prompt.
+   (sample replay) and on Vercel (read-only live page). *Gave up:* the server keeps its own copy of the prompt.
    *Got:* one dashboard to maintain, and `npm run check` fails if the two prompts drift apart.
 6. **Name the constraints instead of hiding them.** Every item is AI-gathered, and the live page tells visitors to
    check each source link. Claims the repo can't back were removed (see below).
@@ -74,7 +74,7 @@ Full log with dates: [docs/decisions.md](docs/decisions.md).
 
 | Check | Result | How |
 |---|---|---|
-| Daily sweep: merge, de-duplicate, "New" flags, 20-hour gap for the timer, manual runs, 60-sweep cap, partial and total failure, secret check, Slack post, read-only data feed | 46 of 46 pass | `npm test`, with the Anthropic API and storage stubbed |
+| Scheduled sweep: merge, de-duplicate, "New" flags, 2-hour gap for scheduled runs, GitHub Actions trigger, manual runs, 60-sweep cap, partial and total failure, secret check, Slack post, read-only data feed | 48 of 48 pass | `npm test`, with the Anthropic API and storage stubbed |
 | Sample data shape, page links, bundles up to date, server prompt matches the component, no secrets in the repo | 19 of 19 pass | `npm run check` |
 | Demo: replay, filters, search, report, history, "New" flag, phone width, no AI or API calls | 19 checks pass | Headless browser, 18 Oct 2026 |
 | Live page with the data feed stubbed: cards, filters, history, report, empty state, read-only, phone width | 16 checks pass | Headless browser, 18 Oct 2026 |
@@ -84,7 +84,7 @@ Full log with dates: [docs/decisions.md](docs/decisions.md).
 the repo is the 8-item July 2026 sample, and only its links were checked. There is no `evals/` folder because there
 is no set of real results to score yet.
 
-**Proposed scoring (draft, not run):** once the daily page has saved 20 or more items, score each one on:
+**Proposed scoring (draft, not run):** once the live page has saved 20 or more items, score each one on:
 - the source link loads;
 - the source supports the summary;
 - the item is recent (within the last 30 days);
@@ -113,10 +113,10 @@ changed:
 | Every category fails | Nothing is saved, and the run reports an error so the failure is visible | `npm test` |
 | The model returns text that isn't clean JSON | Code fences are stripped; a reply cut off mid-list keeps the complete items; an empty or unreadable reply fails that category | `npm test`; `extractProblems()` |
 | A link that isn't a web address | Dropped from the item | Code: `normalize()` in `api/_lib/radar.js` |
-| Someone calls the sweep to run up costs | Refused without the secret (401); a repeat timer call within 20 hours is skipped. A manual call with the secret always runs, so if the secret leaks the Anthropic spend limit is the cap | `npm test`; preview deployment returned 401 |
+| Someone calls the sweep to run up costs | Refused without the secret (401); a repeat scheduled call within 2 hours is skipped. A manual call with the secret always runs, so if the secret leaks the Anthropic spend limit is the cap | `npm test`; preview deployment returned 401 |
 | Someone reads other stored data | The data feed serves only history and sweep keys and refuses writes | `npm test` |
 | Storage grows forever | Only the last 60 sweeps are kept | `npm test` |
-| A reader treats AI findings as fact | The live page says: "Gathered once a day by an AI model with web search. Check each source link; items are not verified." The demo says it replays a saved sample. | `live/index.html`; demo banner |
+| A reader treats AI findings as fact | The live page says: "Gathered every 5 hours by an AI model with web search. Check each source link; items are not verified." The demo says it replays a saved sample. | `live/index.html`; demo banner |
 | **The model invents or misreads a source** | **No guardrail beyond the link check.** This is the main open risk. | Not measured |
 | Spend runs away | The owner sets a monthly limit in the Anthropic Console; one sweep a day, up to 3 searches per category | Owner step; not verified here |
 
@@ -151,7 +151,7 @@ posted the digest to a Slack channel. The owner has a screenshot of a digest pos
 ## How I built it
 
 Product owner, built with AI (Claude). The first version (July 2026) was built in Claude's app as an artifact, with
-the Slack digest set up there. The demo, the Vercel daily page and the tests were added in October 2026 with Claude
+the Slack digest set up there. The demo, the Vercel live page and the tests were added in October 2026 with Claude
 Code; those commits are co-authored by Claude.
 
 > **OWNER INPUT NEEDED:** confirm or edit this line before publishing: *"Implemented with Claude Code; I owned the
@@ -159,7 +159,7 @@ Code; those commits are co-authored by Claude.
 > decided what.
 
 **Stack:** React (one component), Claude with the web-search tool, Vercel Functions, Cron and Blob storage, GitHub
-Pages, esbuild. Details in the [technical reference](docs/TECHNICAL.md).
+Actions (the 5-hour schedule), GitHub Pages, esbuild. Details in the [technical reference](docs/TECHNICAL.md).
 
 ## License
 

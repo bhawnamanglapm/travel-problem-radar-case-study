@@ -1,4 +1,4 @@
-// Server side of the daily sweep. The categories, prompt, parser and normalizer
+// Server side of the scheduled sweep. The categories, prompt, parser and normalizer
 // mirror travel-problem-radar.jsx (the single-file Claude artifact); scripts/check.mjs
 // fails if the prompt or category text drifts between the two.
 // Storage and fetch are passed in, so the offline tests can stub both.
@@ -123,10 +123,11 @@ async function readJSON(storage, key) {
 
 // The server twin of runSweep() in the component: scan all four categories, merge,
 // flag what is new, keep the last 60 sweeps. Saves nothing if every category failed.
-// The 20-hour gap stops the timer sweeping twice (Vercel can deliver a cron call more than
-// once). A manual run skips the gap and is left out of it, so it never cancels the next
-// scheduled sweep.
-export async function runDailySweep({ storage, scan, now = () => Date.now(), minGapHours = 20, manual = false, log = () => {} }) {
+// Scheduled runs come every 5 hours from GitHub Actions, plus Vercel's daily cron as a
+// backstop. The 2-hour gap stops them doubling up (a repeated cron delivery, or both
+// schedulers firing close together). A manual run skips the gap and is left out of it, so it
+// never cancels the next scheduled sweep.
+export async function runDailySweep({ storage, scan, now = () => Date.now(), minGapHours = 2, manual = false, log = () => {} }) {
   const hist0 = await readJSON(storage, KEY_INDEX);
   let hist = Array.isArray(hist0) ? hist0 : [];
   const last = hist.filter((e) => !e.manual).pop();

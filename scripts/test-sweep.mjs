@@ -78,34 +78,34 @@ const sweepOpts = (storage, byCat, now) => ({
   check(saved.problems.every((p) => p.isNew) && saved.problems[0].severity === "High", "all flagged New, High sorted first");
   check(out.usage.searches === 8 && out.usage.input === 400, "usage totals come from the API response");
 
-  // a second run within 20 h is refused, nothing written
-  t += 10 * 3600 * 1000;
+  // a second run within 2 h is refused, nothing written
+  t += 1 * 3600 * 1000;
   const before = st.m.size;
   const again = await runDailySweep(sweepOpts(st, four, () => t));
-  check(again.status === "skipped" && st.m.size === before, "second run within 20 h is skipped, nothing written");
+  check(again.status === "skipped" && st.m.size === before, "second run within 2 h is skipped, nothing written");
 
-  // next day: one repeat, one fresh item
-  t += 20 * 3600 * 1000;
+  // next scheduled run, 5 h after the first: one repeat, one fresh item
+  t += 4 * 3600 * 1000;
   const next = { ...four, traveler_pain: [item(1), item(9)] };
   const out2 = await runDailySweep(sweepOpts(st, next, () => t));
   const p2 = JSON.parse(st.m.get(sweepKey(out2.id))).problems;
   check(out2.status === "saved" && p2.find((p) => p.title === "Problem 9").isNew && !p2.find((p) => p.title === "Problem 1").isNew,
-    "next day: unseen item is New, repeat is not");
+    "next run: unseen item is New, repeat is not");
   check(JSON.parse(st.m.get("radar:history")).length === 2, "history now has 2 sweeps");
 }
 
-// ---- manual runs skip the 20-hour gap and don't count toward it
+// ---- manual runs skip the 2-hour gap and don't count toward it
 {
   const st = memStorage();
   const t0 = Date.UTC(2026, 9, 18, 1, 30);
   const one = { traveler_pain: [item(1)], gov_policy: [], web_app: [], industry: [] };
   await runDailySweep(sweepOpts(st, one, () => t0));
-  const m = await runDailySweep({ ...sweepOpts(st, one, () => t0 + 10 * 3600 * 1000), manual: true });
-  check(m.status === "saved" && JSON.parse(st.m.get("radar:history"))[1].manual === true, "manual run 10 h after a scheduled one still sweeps, marked manual");
-  const next = await runDailySweep(sweepOpts(st, one, () => t0 + 21 * 3600 * 1000));
-  check(next.status === "saved", "next scheduled run goes ahead: only scheduled sweeps count toward the gap");
-  const dup = await runDailySweep(sweepOpts(st, one, () => t0 + 22 * 3600 * 1000));
-  check(dup.status === "skipped", "a repeat scheduled run within 20 h is still skipped");
+  const m = await runDailySweep({ ...sweepOpts(st, one, () => t0 + 4 * 3600 * 1000), manual: true });
+  check(m.status === "saved" && JSON.parse(st.m.get("radar:history"))[1].manual === true, "manual run 4 h after a scheduled one sweeps, marked manual");
+  const next = await runDailySweep(sweepOpts(st, one, () => t0 + 5 * 3600 * 1000));
+  check(next.status === "saved", "next scheduled run 1 h after the manual one goes ahead: only scheduled sweeps count toward the gap");
+  const dup = await runDailySweep(sweepOpts(st, one, () => t0 + 6 * 3600 * 1000));
+  check(dup.status === "skipped", "a repeat scheduled run within 2 h is still skipped");
 }
 
 // ---- partial and total failure
@@ -131,7 +131,7 @@ const sweepOpts = (storage, byCat, now) => ({
   const st = memStorage();
   let t = 1_800_000_000_000;
   for (let i = 0; i < 62; i++) {
-    t += 21 * 3600 * 1000;
+    t += 5 * 3600 * 1000;
     await runDailySweep(sweepOpts(st, { traveler_pain: [item(i)], gov_policy: [], web_app: [], industry: [] }, () => t));
   }
   const hist = JSON.parse(st.m.get("radar:history"));
@@ -152,8 +152,8 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   const seen = [];
   await scanCategory(CATS[0], { fetchFn: fakeFetch({ traveler_pain: [] }, { seenCats: seen }), apiKey: "sekret", model: "claude-test", maxSearches: 3 });
   const b = seen[0].body;
-  check(b.model === "claude-test" && b.max_tokens === 8000 && b.output_config.effort === "low" && b.tools[0].max_uses === 3,
-    "request uses the configured model, 8000 max tokens, low effort, 3 searches");
+  check(b.model === "claude-test" && b.max_tokens === 16000 && b.output_config.effort === "low" && b.tools[0].max_uses === 3,
+    "request uses the configured model, 16000 max tokens, low effort, 3 searches");
   check(seen[0].headers["x-api-key"] === "sekret" && !JSON.stringify(b).includes("sekret"), "key goes in a header, never in the body");
 }
 
@@ -179,9 +179,18 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   const first = await run(cron, env, st);
   const cronAgain = await run(cron, env, st);
   const manualAgain = await run({ authorization: "Bearer abc123" }, env, st);
-  check(first.res.json().trigger === "scheduled" && cronAgain.res.json().status === "skipped", "timer call within 20 h of the last one is skipped");
+  check(first.res.json().trigger === "scheduled" && cronAgain.res.json().status === "skipped", "timer call within 2 h of the last one is skipped");
   check(manualAgain.res.code === 200 && manualAgain.res.json().status === "saved" && manualAgain.res.json().trigger === "manual",
-    "manual call with the secret sweeps even within 20 h");
+    "manual call with the secret sweeps even within 2 h");
+
+  // the GitHub Actions schedule marks itself with x-sweep-trigger; its "Run workflow" button doesn't
+  const gh = (trigger) => ({ authorization: "Bearer abc123", "user-agent": "curl/8.5.0", "x-sweep-trigger": trigger });
+  const st2 = memStorage();
+  const ghFirst = await run(gh("scheduled"), env, st2);
+  const ghAgain = await run(gh("scheduled"), env, st2);
+  const ghButton = await run(gh("manual"), env, st2);
+  check(ghFirst.res.json().trigger === "scheduled" && ghAgain.res.json().status === "skipped", "GitHub Actions schedule counts as scheduled and respects the gap");
+  check(ghButton.res.json().trigger === "manual" && ghButton.res.json().status === "saved", "GitHub Actions \"Run workflow\" counts as manual and sweeps");
 }
 
 // ---- Slack delivery after the sweep
@@ -234,7 +243,7 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   const sched = await run({ st, headers: cron });
   const again = await run({ st, headers: cron });
   check(again.res.json().status === "skipped" && again.posts.length === 0, "skipped timer call posts nothing");
-  check(/daily digest/.test(sched.posts[0].text) && /digest \(manual run\)/.test(text), "digest title says whether the timer or a manual run produced it");
+  check(/^\*Travel Problem Radar: digest\*/.test(sched.posts[0].text) && /digest \(manual run\)/.test(text), "digest title says whether the timer or a manual run produced it");
 
   const broken = { get: async () => null, set: async () => { throw new Error("Vercel Blob: No blob credentials found"); }, del: async () => {} };
   const err = await run({ st: broken });

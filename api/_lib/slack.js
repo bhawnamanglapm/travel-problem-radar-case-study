@@ -1,4 +1,4 @@
-// Slack delivery for the daily sweep: the digest after a saved sweep, or a short notice
+// Slack delivery for the scheduled sweep: the digest after a saved sweep, or a short notice
 // when nothing could be saved. Optional; it runs only when SLACK_WEBHOOK_URL is set.
 // Text uses Slack's mrkdwn, laid out like the component's "Copy report" digest.
 import { CATS } from "./radar.js";
@@ -12,7 +12,7 @@ export function buildDigest({ at, problems, perCat = {}, manual = false }, liveU
   const newCount = problems.filter((p) => p.isNew).length;
   const highCount = problems.filter((p) => p.severity === "High").length;
   const lines = [
-    manual ? "*Travel Problem Radar: digest (manual run)*" : "*Travel Problem Radar: daily digest*",
+    manual ? "*Travel Problem Radar: digest (manual run)*" : "*Travel Problem Radar: digest*",
     `Swept ${when(at)} · ${problems.length} problems · ${newCount} new · ${highCount} high severity`,
   ];
   if (failed.length) lines.push(`Failed this run: ${failed.join(", ")}`);

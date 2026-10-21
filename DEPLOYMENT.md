@@ -1,15 +1,20 @@
 # Deploying Travel Problem Radar on Vercel
 
-This guide covers deploying and running the **live daily page** on Vercel: the once-a-day server sweep, the read-only
-data feed and the `/live/` dashboard. It is for the person who owns the Vercel project, or anyone running their own
-copy. It assumes you can use a terminal and the Vercel dashboard; no earlier Vercel experience is needed.
+This guide covers deploying and running the **live page** on Vercel: the server sweep that runs every 5 hours, the
+read-only data feed and the `/live/` dashboard. It is for the person who owns the Vercel project, or anyone running
+their own copy. It assumes you can use a terminal and the Vercel dashboard; no earlier Vercel experience is needed.
 
 The case study and the sample demo are also served by **GitHub Pages** from `main`. Nothing in this guide changes that.
+The 5-hour schedule runs on **GitHub Actions**, because Vercel's Hobby plan allows a cron job at most once a day
+(see 4.7).
 
 > **Status (checked 21 Oct 2026).** The project is deployed at https://travel-problem-radar.vercel.app. The Blob store
 > is connected in production, and `/api/sweep` refuses calls without the secret (`401`). **The first real sweep was
 > run by hand on 20 Oct 2026 at 22:53 UTC** and saved 8 items. Two of the four categories failed; see
 > [Known issues](#known-issues-to-fix-before-or-after-the-first-sweep), issue 2.
+>
+> **Schedule (changed 21 Oct 2026):** every 5 hours from GitHub Actions, with Vercel's daily cron kept as a backstop.
+> The GitHub schedule starts once the `CRON_SECRET` repository secret is added (4.7).
 
 ---
 
@@ -23,7 +28,7 @@ The case study and the sample demo are also served by **GitHub Pages** from `mai
 6. [Deploy from the command line (optional)](#6-deploy-from-the-command-line-optional)
 7. [Configuration reference](#7-configuration-reference)
 8. [Day-to-day: changes, previews and rollbacks](#8-day-to-day-changes-previews-and-rollbacks)
-9. [Operating the daily sweep](#9-operating-the-daily-sweep)
+9. [Operating the scheduled sweep](#9-operating-the-scheduled-sweep)
 10. [Troubleshooting](#10-troubleshooting)
 11. [Known issues to fix before or after the first sweep](#known-issues-to-fix-before-or-after-the-first-sweep)
 
@@ -33,15 +38,18 @@ The case study and the sample demo are also served by **GitHub Pages** from `mai
 
 ```
                          ┌──────────────────── Vercel project ─────────────────────┐
-Vercel Cron, daily       │                                                          │
-01:30 UTC (07:00 IST) ──▶│  /api/sweep  (api/sweep.js, up to 300 s)                 │
-  Authorization:         │     checks CRON_SECRET; timer skips if swept < 20 h ago  │
-  Bearer $CRON_SECRET    │     4 × Anthropic Messages API + web search ─────────────┼──▶ api.anthropic.com
+GitHub Actions: every    │                                                          │
+5 h from 00:17 UTC       │                                                          │
+Vercel Cron: daily,      │                                                          │
+01:30 UTC (backstop)  ──▶│  /api/sweep  (api/sweep.js, up to 300 s)                 │
+  Authorization:         │     checks CRON_SECRET; a scheduled call skips if a      │
+  Bearer $CRON_SECRET    │     scheduled sweep ran < 2 h ago                        │
+                         │     4 × Anthropic Messages API + web search ─────────────┼──▶ api.anthropic.com
                          │     merge, de-duplicate, flag New, keep 60 sweeps        │
                          │     after saving: digest to Slack (optional) ────────────┼──▶ hooks.slack.com
                          │     writes ─────────────────────────────┐                │
                          │                                         ▼                │
-                         │                              Private Vercel Blob store    │
+                         │                              Private Vercel Blob store   │
                          │                                         ▲                │
 Visitor ──▶ /live/  ──▶  │  /api/data?key=…  (api/data.js, read-only, allow-listed) │
            (static)      │     CDN-cached for 5 minutes                             │
@@ -54,10 +62,11 @@ Visitor ──▶ /live/  ──▶  │  /api/data?key=…  (api/data.js, read-
 |---|---|---|
 | Case study (copy) | `index.html` | `/` |
 | Sample demo (copy) | `demo/index.html`, `demo/radar.js` | `/demo/` |
-| Live daily page | `live/index.html`, `live/radar-live.js` | `/live/` |
-| Daily sweep function | `api/sweep.js` → `api/_lib/` | `/api/sweep` (secret required) |
+| Live page | `live/index.html`, `live/radar-live.js` | `/live/` |
+| Sweep function | `api/sweep.js` → `api/_lib/` | `/api/sweep` (secret required) |
 | Data feed function | `api/data.js` → `api/_lib/` | `/api/data?key=radar:history` and `?key=radar:sweep:<id>` |
-| Daily timer | `crons` in `vercel.json` | Calls `/api/sweep` once a day |
+| 5-hour schedule | `.github/workflows/sweep.yml` (runs on GitHub Actions, not Vercel) | Calls `/api/sweep` every 5 hours |
+| Backstop timer | `crons` in `vercel.json` | Calls `/api/sweep` once a day; usually skipped (5.5) |
 | Storage | Vercel Blob (private store), via `api/_lib/storage.js` | Not public; read only through `/api/data` |
 | Slack digest (optional) | `api/_lib/slack.js`, called by the sweep | Posted to one Slack channel when `SLACK_WEBHOOK_URL` is set |
 
@@ -66,8 +75,8 @@ Two things that are easy to miss:
 - **Vercel does not build the JavaScript bundles.** `demo/radar.js` and `live/radar-live.js` are built locally with
   `npm run build` and committed. The Vercel build step only copies files into `public/`. CI fails if a committed
   bundle is out of date.
-- **Visitors never trigger an AI call.** Only the timer (or you, with the secret) can run a sweep, so cost is one sweep
-  a day whatever the traffic, plus any sweeps you run by hand.
+- **Visitors never trigger an AI call.** Only the schedule (or you, with the secret) can run a sweep, so cost is about
+  five sweeps a day whatever the traffic, plus any sweeps you run by hand.
 
 ---
 
@@ -76,7 +85,7 @@ Two things that are easy to miss:
 | You need | Why | Notes |
 |---|---|---|
 | A Vercel account (Hobby is enough) | Hosts the page, functions, cron and Blob store | Hobby limits are in [section 3](#3-costs-and-plan-limits) |
-| Access to the GitHub repo | Vercel deploys from it | Owner, or a fork for your own copy |
+| Access to the GitHub repo | Vercel deploys from it, and GitHub Actions runs the 5-hour schedule from it | Owner, or a fork for your own copy. Adding the Actions secret (4.7) needs owner or admin access |
 | An Anthropic Console account with billing set up | The sweep calls the Claude API | https://platform.claude.com |
 | An Anthropic API key | Stored as a Vercel secret | Create one just for this project, so it can be revoked on its own |
 | Web search allowed for your Anthropic organization | Every sweep call uses the web-search tool | On by default. If an admin turned it off in Console settings (Settings → Capabilities), every call fails with a 400 |
@@ -102,20 +111,29 @@ If `git diff` shows changes, commit the rebuilt bundles before deploying.
 
 | Limit | Hobby | What it means here |
 |---|---|---|
-| Cron frequency | Once per day at most | The schedule `30 1 * * *` is allowed. A schedule that runs more often fails the deploy |
-| Cron timing | Within the hour (±59 min) | The 01:30 UTC job can fire any time from **01:00 to 01:59 UTC** (06:30–07:29 IST) |
+| Cron frequency | Once per day at most | The backstop `30 1 * * *` is allowed. A Vercel schedule that runs more often fails the deploy, which is why the 5-hour schedule runs on GitHub Actions |
+| Cron timing | Within the hour (±59 min) | The 01:30 UTC backstop can fire any time from **01:00 to 01:59 UTC** (06:30–07:29 IST) |
 | Function duration | 300 s default and maximum (Fluid compute, on by default) | `vercel.json` sets `maxDuration: 300` for the sweep. Pro allows up to 800 s |
-| Cron retries | None | A failed sweep is not retried. The next attempt is the next day |
+| Cron retries | None | A failed sweep is not retried. The next attempt is the next scheduled run |
 | Blob storage | Included on all plans, within usage limits | This app stores a few small JSON files (at most 60 sweeps plus 2 index files) |
+
+### GitHub Actions (the 5-hour schedule, as documented in October 2026)
+
+| Limit | What it means here |
+|---|---|
+| Cost | Free on GitHub-hosted runners for a public repository. Each run only waits for the sweep (at most about 5 minutes) |
+| Timing | Scheduled runs can start late, especially near the top of the hour, and at very busy times a queued run can be dropped. The workflow runs at minute 17 to reduce this |
+| Inactivity | In a public repository, GitHub turns scheduled workflows off after 60 days with no repository activity. The Vercel backstop keeps sweeping once a day until you turn the GitHub schedule back on (section 9) |
+| Branch | Only the copy of the workflow on the default branch (`main`) is scheduled |
 
 ### Anthropic API (per sweep, from the code)
 
-| Item | Per sweep | Per 30 days |
+| Item | Per sweep | Per 30 days (5 scheduled sweeps a day = 150) |
 |---|---|---|
-| API calls | 4 (one per category) | 120, plus 4 for each manual run |
-| Web searches | At most 12 (3 per call), billed at $10 per 1,000 | At most 360, about **$3.60** |
-| Output tokens, thinking included | At most 32,000 (8,000 per call); low effort should keep it well under that | At most 960,000 |
-| Input tokens | Search results count as input, so this varies | Logged by every sweep (see [section 9](#9-operating-the-daily-sweep)) |
+| API calls | 4 (one per category) | 600, plus 4 for each manual run |
+| Web searches | At most 12 (3 per call), billed at $10 per 1,000 | At most 1,800, about **$18**. The local test used 5 a sweep, which is about $7.50 |
+| Output tokens, thinking included | At most 64,000 (16,000 per call); the local test used about 4,000 | At most 9.6 million; about 600,000 at the local test's rate |
+| Input tokens | Search results count as input, so this varies | Logged by every sweep (see [section 9](#9-operating-the-scheduled-sweep)) |
 
 **The first two real sweeps (20–21 Oct 2026, default model `claude-sonnet-5-5`)** logged 56,223 input / 2,361
 output tokens and 6 searches, then 29,107 / 1,270 and 3. At $2 input / $10 output per million tokens plus $10 per
@@ -124,11 +142,12 @@ were billed, but the code at the time did not count their tokens. It does now, s
 the first complete figure. The Anthropic Console's usage page has the real totals for those two runs.
 
 **With the token fix (local test, 21 Oct 2026, all four categories succeeded):** 62,513 input tokens, 4,001 output
-tokens and 5 searches, about **$0.21 a sweep**, or roughly $6–7 a month for one sweep a day. Each category took 7–10
-seconds.
+tokens and 5 searches, about **$0.21 a sweep**. Each category took 7–10 seconds. At five scheduled sweeps a day that
+is about **$1.05 a day, or roughly $32 a month**, plus $0.21 for each manual run.
 
-**Set a monthly spend limit in the Anthropic Console.** That is the real cost cap. A limit around $20 a month leaves
-room above the illustration; adjust it once real usage is known.
+**Set a monthly spend limit in the Anthropic Console.** That is the real cost cap. A limit around $50 a month leaves
+room above that figure; adjust it once real usage is known. When the limit is reached the API refuses the calls:
+nothing is saved, the live page keeps showing the last sweep, and Slack (if set up) gets a failure notice.
 
 ---
 
@@ -190,7 +209,7 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 ```
 
 Tick **Sensitive** for both secrets, so the dashboard never shows them again. Save a copy of `CRON_SECRET` in your
-password manager: you need it to run a sweep by hand.
+password manager: you need it for the GitHub Actions schedule (4.7) and to run a sweep by hand.
 
 Why production only: Vercel sends `CRON_SECRET` to the cron job automatically, and cron jobs run only on the
 production deployment. Leaving both secrets off previews means a preview's `/api/sweep` always answers `401`, so a
@@ -232,14 +251,42 @@ What the `/api/data?key=radar:history` answer tells you:
 | `200 {"value":"[…]"}` | Storage is connected and at least one sweep is saved |
 | `502 {"error":"storage unavailable"}` | The Blob store is not connected to this environment, or the deploy predates the connection. Fix this **before** running a sweep (see the note in 5.1) |
 
-Finally, open **Settings → Cron Jobs** and confirm one job is listed: `/api/sweep`, schedule `30 1 * * *`.
+Finally, open **Settings → Cron Jobs** and confirm one job is listed: `/api/sweep`, schedule `30 1 * * *`. That is
+the daily backstop; the 5-hour schedule is set up next.
+
+### 4.7 Turn on the 5-hour schedule (GitHub Actions)
+
+Vercel's Hobby plan runs a cron job at most once a day, so the 5-hour schedule runs from GitHub instead.
+`.github/workflows/sweep.yml` calls `/api/sweep` with the same secret at **00:17, 05:17, 10:17, 15:17 and 20:17 UTC**
+(05:47, 10:47, 15:47, 20:47 and 01:47 IST). The gap over midnight is 4 hours, because 24 isn't divisible by 5.
+
+Vercel's daily cron stays as a backstop. On a normal day it fires within 2 hours of the 00:17 run, so it answers
+`skipped` and costs nothing (5.5). If the 00:17 run was missed or failed, the backstop sweeps instead.
+
+1. On GitHub, open the repository's **Settings → Secrets and variables → Actions**.
+2. Choose **New repository secret**. Name: `CRON_SECRET`. Value: the same value as `CRON_SECRET` in Vercel.
+3. Open the **Actions** tab. If GitHub asks, allow workflows to run. Select the **sweep** workflow.
+4. To test it now, choose **Run workflow** on `main`. That is a manual run, so it always sweeps and costs a full
+   sweep. The job log ends with the JSON answer (5.2).
+
+If you run your own copy, change the URL at the end of `.github/workflows/sweep.yml` to your domain.
+
+What to expect:
+
+- **A failed sweep fails the job.** A `401`, `500` or `502` answer marks the run failed (red X). GitHub notifies the
+  person who last edited the `cron` line in the workflow file. A `skipped` answer is a `200` and shows as passed.
+- **Runs can start late.** GitHub may delay scheduled runs at busy times. The 2-hour rule (5.5) leaves room for that.
+- **It stops after 60 quiet days.** In a public repository, GitHub turns scheduled workflows off after 60 days with no
+  repository activity. See [Keeping the GitHub schedule on](#keeping-the-github-schedule-on).
+- **The secret stays secret.** GitHub masks it in logs, and the job has no access to the repository
+  (`permissions: {}`). The Anthropic key is never given to GitHub; only Vercel holds it.
 
 ---
 
 ## 5. Run the first sweep
 
-The timer will run the first sweep on its own at the next 01:00–01:59 UTC window. To run it now and see the result,
-call the endpoint with the secret.
+Once 4.7 is done, the schedule runs the first sweep at the next 5-hour slot. To run it now and see the result, call
+the endpoint with the secret, or use **Run workflow** on GitHub (4.7).
 
 ### 5.1 Run it
 
@@ -252,6 +299,9 @@ curl -sS --max-time 320 \
 
 The call usually takes from several seconds to a few minutes (four searches run in parallel). `--max-time 320`
 gives it a little more than the function's 300-second limit.
+
+**GitHub:** **Actions → sweep → Run workflow** sends the same request as the `curl` above, and the job log shows the
+answer. It counts as a manual run.
 
 Vercel also has two ways to start the job, but neither prints the response. Read the result in the runtime logs
 (section 9) or check `/api/data?key=radar:history` afterwards:
@@ -277,7 +327,7 @@ automatically after every production deploy, call the same URL from a GitHub Act
 | HTTP | Body | Meaning | What to do |
 |---|---|---|---|
 | 200 | `{"model":…,"trigger":"manual","status":"saved","id":…,"total":N,"newCount":N,"perCat":{…},"usage":{…}}` | Saved. `perCat` shows items per category, `usage` the real token and search counts | Open `/live/` |
-| 200 | `{"trigger":"scheduled","status":"skipped","reason":"last scheduled sweep … is under 20 h old"}` | The timer called again within 20 hours of its last sweep. Manual calls never get this | Nothing; this stops duplicate timer calls |
+| 200 | `{"trigger":"scheduled","status":"skipped","reason":"last scheduled sweep … is under 2 h old"}` | A scheduled call came within 2 hours of the last scheduled sweep, for example Vercel's backstop after the 00:17 run. Manual calls never get this | Nothing; this stops duplicate scheduled calls |
 | 502 | `{"status":"empty","perCat":{…}}` | All four categories failed; nothing was saved | Read `perCat` and see [Troubleshooting](#10-troubleshooting) |
 | 500 | `{"error":"ANTHROPIC_API_KEY is not set; …"}` | Key missing in this deployment | Add it (4.3) and redeploy (4.5) |
 | 500 | `{"error":"sweep failed: …"}` | Storage or another unexpected error | Read the message; usually storage (see Troubleshooting) |
@@ -286,8 +336,8 @@ automatically after every production deploy, call the same URL from a GitHub Act
 If some categories fail and others succeed, the run still saves (status `saved`), and `perCat` marks the failed
 ones as `failed: …`.
 
-`trigger` says how the server classed the call: `scheduled` for Vercel's timer, `manual` for anything else. Every
-run that is not skipped also returns a `slack` field. It is `not configured` when `SLACK_WEBHOOK_URL` is unset,
+`trigger` says how the server classed the call: `scheduled` for the GitHub Actions schedule or Vercel's timer,
+`manual` for anything else, including **Run workflow**. Every run that is not skipped also returns a `slack` field. It is `not configured` when `SLACK_WEBHOOK_URL` is unset,
 and otherwise `sent` or `failed: …`. A run you start by hand posts to Slack too, titled "digest (manual run)".
 
 ### 5.3 Check the page
@@ -299,15 +349,16 @@ Open `/live/`. The board should show the saved items and the history should list
 The README's "What's next" asks for the time taken against the 300-second limit and the token and search counts.
 `usage` in the response gives the counts; the function's duration is in the runtime logs (section 9).
 
-### 5.5 Manual runs and the daily timer
+### 5.5 Manual runs and the schedule
 
-The server tells the two kinds of call apart by the headers Vercel's timer sends (a `vercel-cron/1.0` user agent and
-an `x-vercel-cron-schedule` header):
+The server tells the two kinds of call apart by their headers. Vercel's timer sends a `vercel-cron/1.0` user agent
+and an `x-vercel-cron-schedule` header. The GitHub Actions schedule sends `X-Sweep-Trigger: scheduled`, and its
+**Run workflow** button sends `X-Sweep-Trigger: manual`.
 
-| Call | 20-hour rule | Counts toward the timer's 20 hours |
+| Call | 2-hour rule | Counts toward the 2 hours |
 |---|---|---|
-| **Scheduled:** Vercel's timer | Skipped if the timer swept less than 20 hours ago, so a duplicate delivery costs nothing | Yes |
-| **Manual:** any other call with the secret, such as the `curl` in 5.1 | Never skipped: it always sweeps | No, so it never cancels the next scheduled sweep |
+| **Scheduled:** the GitHub Actions schedule or Vercel's timer | Skipped if a scheduled sweep ran less than 2 hours ago, so a duplicate delivery, or the backstop firing soon after the 00:17 run, costs nothing | Yes |
+| **Manual:** any other call with the secret, such as the `curl` in 5.1 or **Run workflow** | Never skipped: it always sweeps | No, so it never cancels the next scheduled sweep |
 
 Manual runs are marked `"manual": true` in the history. Keep in mind:
 
@@ -316,6 +367,8 @@ Manual runs are marked `"manual": true` in the history. Keep in mind:
 - **A manual run uses up New flags.** Items it finds are no longer flagged New in the next scheduled digest.
 - **Vercel's own run options may count as scheduled.** `vercel crons run` and the dashboard's run option may send
   the timer's headers. If one answers `skipped`, use the `curl` command in 5.1 instead.
+- **The headers grant nothing.** Every call still needs the secret. Sending `X-Sweep-Trigger: scheduled` by hand only
+  makes a call skippable.
 
 ---
 
@@ -336,6 +389,8 @@ vercel env add CRON_SECRET production
 vercel env add ANTHROPIC_API_KEY production
 vercel env add RADAR_MODEL production         # optional
 vercel env add SLACK_WEBHOOK_URL production   # optional, see "Posting to Slack"
+
+gh secret set CRON_SECRET                     # same value, for the 5-hour schedule (GitHub CLI; prompts for it)
 
 vercel --prod                                 # deploy to production
 ```
@@ -369,12 +424,26 @@ Do not commit the `.vercel/` folder that `vercel link` creates. It is already in
 | `framework: null` | No framework preset; Vercel treats this as a plain static site plus functions |
 | `buildCommand` | Copies `index.html`, `demo/` and `live/` into `public/`, then removes the JSX sources. It does **not** run `npm run build` |
 | `outputDirectory` | Serves `public/` as the static site |
-| `crons` | Calls `/api/sweep` daily at 01:30 UTC (07:00 IST); within the hour on Hobby |
+| `crons` | The daily backstop: calls `/api/sweep` at 01:30 UTC (07:00 IST), within the hour on Hobby |
 | `functions["api/sweep.js"].maxDuration` | Lets the sweep run for up to 300 s, the Hobby maximum |
 
 The functions are found automatically: every `.js` file in `api/` becomes a route, except files in folders that start
 with `_` (so `api/_lib/` is shared code, not a route). `package.json` sets `"type": "module"`, so the functions are ES
 modules. `@vercel/blob` is the only runtime dependency.
+
+### `.github/workflows/sweep.yml`
+
+| Setting | What it does |
+|---|---|
+| `cron: "17 */5 * * *"` | Runs at 00:17, 05:17, 10:17, 15:17 and 20:17 UTC |
+| `workflow_dispatch` | Adds **Run workflow** to the Actions tab. Those runs are manual |
+| `X-Sweep-Trigger` header | `scheduled` for the timer, `manual` for **Run workflow**. The server uses it for the 2-hour rule (5.5) |
+| `curl --fail-with-body` | A `401`, `500` or `502` answer fails the job and prints the answer |
+| `--max-time 320`, `timeout-minutes: 7` | Waits out the function's 300-second limit |
+| `permissions: {}` | The job gets no access to the repository |
+| `secrets.CRON_SECRET` | Repository secret with the same value as in Vercel. If it is missing, the job stops with a message saying so |
+
+The URL is written into the file; change it for your own copy or a custom domain.
 
 ### `.vercelignore`
 
@@ -385,7 +454,7 @@ needed at runtime.
 
 | Name | Set by | Used by | Notes |
 |---|---|---|---|
-| `CRON_SECRET` | You | `/api/sweep` | Vercel sends it as `Authorization: Bearer <value>` on cron calls. If it is unset, `/api/sweep` always answers 401 |
+| `CRON_SECRET` | You | `/api/sweep` | Vercel sends it as `Authorization: Bearer <value>` on cron calls; the GitHub workflow sends the same value from its repository secret. If it is unset, `/api/sweep` always answers 401 |
 | `ANTHROPIC_API_KEY` | You | `/api/sweep` | Sent to the Anthropic API in a header; never returned in a response |
 | `RADAR_MODEL` | You (optional) | `/api/sweep` | Claude model ID. Default `claude-sonnet-5-5` (`api/_lib/handlers.js`). Must support `effort` (Claude 4.6 or later) |
 | `SLACK_WEBHOOK_URL` | You (optional) | `/api/sweep` | Slack incoming webhook. Treat it as a secret: anyone who has it can post to the channel |
@@ -409,8 +478,8 @@ not a letter or digit with `-`.
   sweep, the live page can show the previous sweep for about 5 minutes, sometimes a little longer while the CDN
   refreshes.
 - Error responses and `/api/sweep` use `no-store`.
-- Vercel Blob itself can take up to 60 seconds to serve a new version of an overwritten file. With one sweep a day
-  this does not matter.
+- Vercel Blob itself can take up to 60 seconds to serve a new version of an overwritten file. With sweeps hours
+  apart this does not matter.
 
 ---
 
@@ -439,19 +508,23 @@ JSON. Open previews in a browser where you are signed in to Vercel.
 static files, functions and cron definition. Stored sweeps are not touched.
 
 **Custom domain.** Add it under **Settings → Domains**. Then update the hard-coded live link in `index.html`
-(`https://travel-problem-radar.vercel.app/live/`) and the "Live daily page" row in `README.md`.
+(`https://travel-problem-radar.vercel.app/live/`), the "Live page" row in `README.md`, and the URL in
+`.github/workflows/sweep.yml`.
 
 ---
 
-## 9. Operating the daily sweep
+## 9. Operating the scheduled sweep
 
 ### Watching runs
 
-- **Settings → Cron Jobs → View Logs** opens the runtime logs filtered to `requestPath:/api/sweep`.
+- **Settings → Cron Jobs → View Logs** opens the runtime logs filtered to `requestPath:/api/sweep`. That covers
+  every call, whichever scheduler made it.
+- **GitHub → Actions → sweep** lists each GitHub run, scheduled or manual. Each job log ends with the JSON answer.
 - Each run logs one line starting with `sweep`, with the model, the per-category result and the API usage, for example:
   `sweep {"model":"claude-sonnet-5-5","perCat":{"traveler_pain":"5 items",…},"usage":{"input":…,"output":…,"searches":…}}`
 - Hobby keeps runtime logs only for a short time, so check on the day if you are tracking cost or duration.
-- A failed run (`502` or `500`) shows as an error in the logs. Vercel does not retry it.
+- A failed run (`502` or `500`) shows as an error in the logs, and as a failed job on GitHub. Neither retries it;
+  the next scheduled run is 5 hours later (4 over midnight).
 
 The quickest health check needs no logs:
 
@@ -459,7 +532,7 @@ The quickest health check needs no logs:
 curl -s "https://travel-problem-radar.vercel.app/api/data?key=radar:history" | head -c 400
 ```
 
-The last entry's `at` should be from the last day.
+The last entry's `at` should be less than about 5 hours old; allow some extra time for GitHub's delays.
 
 ### Costs
 
@@ -474,7 +547,7 @@ After each sweep, the server can post to one Slack channel through an incoming w
 |---|---|
 | Saved | The digest: counts, any failed categories, a link to the live board, then every item by category, with severity, a NEW tag, the title linked to its source, summary, source, region, date and opportunity |
 | Every category failed, or an error stopped the run | A short notice that nothing was saved, with the reason for each category or the error |
-| Skipped (a repeat timer call within 20 hours) | Nothing |
+| Skipped (a repeat scheduled call within 2 hours) | Nothing |
 
 To turn it on:
 
@@ -488,12 +561,14 @@ To turn it on:
    ```
 3. Add it in Vercel as `SLACK_WEBHOOK_URL`, for **Production only**, marked **Sensitive**, then redeploy.
 4. To see it straight away, run a sweep by hand (5.1). It posts a digest titled "digest (manual run)". Scheduled
-   sweeps post the "daily digest".
+   sweeps post one titled "digest".
 
 How it behaves:
 
 - The sweep is saved before anything is posted, and a Slack problem never fails the sweep. The outcome shows in the
   `slack` field of the reply and as a `slack` line in the runtime logs.
+- Every saved sweep posts, so the channel gets about five digests a day. Each lists every item in that sweep, with
+  the ones not seen before tagged NEW.
 - The Slack call gives up after 10 seconds. Link previews are turned off to keep the message compact.
 - The webhook URL never appears in a reply or a log line.
 - Status: covered by the offline tests (`npm test`); **not yet tried against a real Slack workspace**. The Slack
@@ -501,17 +576,32 @@ How it behaves:
 
 ### Changing the schedule
 
-Edit `schedule` in `vercel.json` and push. On Hobby it must run at most once a day. The cron expression is in UTC.
+The 5-hour schedule is the `cron` line in `.github/workflows/sweep.yml`, in UTC. Edit it and push to `main`. If you
+make runs closer together, keep `minGapHours` in `runDailySweep` (`api/_lib/radar.js`, now 2) well below the new
+interval, or late runs will be skipped. Each extra sweep a day adds about $0.21 a day, roughly $6 a month.
+
+Vercel's backstop is `schedule` in `vercel.json`. On Hobby it must run at most once a day.
 
 ### Pausing the sweep
 
-**Settings → Cron Jobs → Disable Cron Jobs.** This stays in effect across deploys and rollbacks until you enable the
-jobs again. The live page keeps showing the last saved sweep.
+There are two schedules to pause:
+
+- **GitHub:** **Actions → sweep → ⋯ → Disable workflow.**
+- **Vercel:** **Settings → Cron Jobs → Disable Cron Jobs.** This stays in effect across deploys and rollbacks.
+
+Each stays off until you enable it again. The live page keeps showing the last saved sweep.
+
+### Keeping the GitHub schedule on
+
+In a public repository, GitHub turns scheduled workflows off after 60 days with no repository activity, such as a
+commit. The Vercel backstop then still sweeps once a day. To turn the 5-hour schedule back on, open **Actions →
+sweep** and choose **Enable workflow**.
 
 ### Rotating secrets
 
-- **`CRON_SECRET`:** change the value in Settings → Environment Variables, then redeploy. Vercel sends the new value
-  to the cron automatically.
+- **`CRON_SECRET`:** change the value in Vercel's Settings → Environment Variables and redeploy, then update the
+  GitHub repository secret (**Settings → Secrets and variables → Actions → `CRON_SECRET` → Update**). Vercel sends the
+  new value to its cron automatically. Until both match, GitHub runs answer `401` and fail.
 - **`ANTHROPIC_API_KEY`:** create a new key in the Anthropic Console, update the variable, redeploy, then revoke the
   old key.
 
@@ -520,10 +610,12 @@ jobs again. The live page keeps showing the last saved sweep.
 Delete the objects under `radar/` from the store's browser in the **Storage** tab. The next sweep starts a fresh
 history, and every item is flagged New again. This cannot be undone.
 
-### Duplicate or missed cron calls
+### Duplicate, late or missed scheduled calls
 
-Vercel's cron delivery is best effort: a run can occasionally be missed or delivered twice. A duplicate within 20 hours
-answers `skipped`, so it costs nothing. A missed run is picked up the next day.
+Both schedulers are best effort. Vercel can miss a run or deliver it twice. GitHub can start a run late, or drop it at
+very busy times. A scheduled call within 2 hours of the last scheduled sweep answers `skipped`, so duplicates cost
+nothing. A missed run is made up at the next slot, at most about 5 hours later. Around midnight, Vercel's backstop
+covers a missed 00:17 run.
 
 ---
 
@@ -542,11 +634,14 @@ answers `skipped`, so it costs nothing. A missed run is picked up the next day.
 | `/api/data` answers `502 storage unavailable` | Same as the two rows above, for reads | Same fix |
 | `502` with every `perCat` entry `failed: http 400` | Web search disabled for the organization, an unknown model ID in `RADAR_MODEL`, or a request the model rejects | Check Console → Settings → Capabilities, the model ID, and the Anthropic Console logs |
 | `perCat` entries `failed: http 401` | Invalid or revoked API key | Replace the key; redeploy |
-| `perCat` entries `failed: http 429` or `http 529` | Rate limit or API overload | Usually temporary; the next day's run will try again |
+| `perCat` entries `failed: http 429` or `http 529` | Rate limit or API overload | Usually temporary; the next scheduled run will try again |
 | `perCat` entries `failed: empty (stop_reason: …)` or `failed: no json (…)` | The model's reply had no JSON array. The stop reason says why: `max_tokens` (ran out of output tokens, thinking included), `refusal` (a safety classifier declined), `pause_turn` (a long search turn paused before the answer) | `max_tokens`: see Known issue 2. `refusal`: try a different model in `RADAR_MODEL`. `pause_turn`: rare with 3 searches; the next run usually succeeds |
-| `200 skipped` when you expected a run | The call carried the timer's headers (`trigger: scheduled`) and the timer swept less than 20 hours ago. This can happen with `vercel crons run` or the dashboard | Run it with the `curl` command in 5.1, which always sweeps (see 5.5) |
+| `200 skipped` when you expected a run | The call counted as scheduled (`trigger: scheduled`) and a scheduled sweep ran less than 2 hours ago. This can happen with `vercel crons run`, the dashboard, or a GitHub run that started late | Run it with the `curl` command in 5.1 or **Run workflow**, which always sweep (see 5.5) |
 | Function times out (`FUNCTION_INVOCATION_TIMEOUT`) | The run took more than 300 s | Rare with 3 searches per call. On Pro, raise `maxDuration` (up to 800) |
-| Deploy fails: "Hobby accounts are limited to daily cron jobs" | The schedule runs more than once a day | Use a daily schedule, or move to Pro |
+| Deploy fails: "Hobby accounts are limited to daily cron jobs" | The schedule in `vercel.json` runs more than once a day | Keep `vercel.json` daily; the 5-hour schedule belongs in `.github/workflows/sweep.yml` |
+| GitHub **sweep** job fails: "Add CRON_SECRET under Settings > Secrets and variables > Actions" | The repository secret is missing | Add it (4.7) |
+| GitHub **sweep** job fails with `{"error":"unauthorized"}` | The GitHub secret and Vercel's `CRON_SECRET` differ | Make them match; redeploy if you changed Vercel's |
+| No GitHub runs for a while | GitHub turned the schedule off after 60 days without repository activity, or Actions are disabled for the repository | **Actions → sweep → Enable workflow** |
 | CI fails: "A bundle is stale" | Bundles not rebuilt after a source change | `npm run build`, commit `demo/radar.js` and `live/radar-live.js` |
 | No Slack message after a sweep | Check `slack` in the reply or the `slack` log line. `not configured` means the variable is missing for Production or the deploy predates it. Skipped runs never post | Add `SLACK_WEBHOOK_URL` for Production; redeploy |
 | `slack: failed: http 403`, `404` or `410` | The webhook was revoked, its channel was deleted or archived, or the Slack app was removed | Create a new webhook; update the variable; redeploy |
@@ -576,7 +671,8 @@ so nothing renders. `/demo` behaves the same way with `radar.js`. GitHub Pages i
 It leaves `/live/` and `/live/index.html` alone and sends `/live` to `/live/`.
 
 Do **not** fix this with `"trailingSlash": true` in `vercel.json`. That also redirects `/api/sweep` to
-`/api/sweep/`, and Vercel cron jobs do not follow redirects, so the daily sweep would stop running.
+`/api/sweep/`. Vercel cron jobs do not follow redirects, and neither does the GitHub workflow's `curl`, so scheduled
+sweeps would stop running.
 
 ### 2. Categories failing with `empty`: fix applied, not yet confirmed by a real run
 
@@ -590,7 +686,7 @@ app used `claude-sonnet-4-6`, which does not think unless asked.
 
 - Each call now sends `output_config: { effort: "low" }`, which keeps thinking short. This is the setting
   Anthropic's docs recommend first for a request like this.
-- `max_tokens` is now 8,000, leaving room for thinking plus the answer. Only tokens actually produced are billed.
+- `max_tokens` is now 16,000, leaving room for thinking plus the answer. Only tokens actually produced are billed.
 - A failed category now says why the model stopped, for example `failed: empty (stop_reason: max_tokens)`.
 - The `usage` totals now include failed categories.
 

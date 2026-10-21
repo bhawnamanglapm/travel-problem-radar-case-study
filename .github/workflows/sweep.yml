@@ -1,0 +1,30 @@
+name: sweep
+
+# Runs the sweep every 5 hours: 00:17, 05:17, 10:17, 15:17 and 20:17 UTC (a 4-hour gap over
+# midnight, because 24 isn't divisible by 5). Vercel's Hobby plan only allows a daily cron, so
+# this calls the same endpoint with the same secret; the daily Vercel cron stays as a backstop.
+# Minute 17 avoids the top of the hour, when GitHub delays scheduled runs the most.
+# "Run workflow" on the Actions tab runs a sweep by hand (it counts as a manual run).
+on:
+  schedule:
+    - cron: "17 */5 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Call /api/sweep
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          TRIGGER: ${{ github.event_name == 'schedule' && 'scheduled' || 'manual' }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then echo "Add CRON_SECRET under Settings > Secrets and variables > Actions"; exit 1; fi
+          curl -sS --fail-with-body --max-time 320 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "X-Sweep-Trigger: $TRIGGER" \
+            https://travel-problem-radar.vercel.app/api/sweep
+          echo
