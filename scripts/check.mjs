@@ -57,6 +57,7 @@ check(/fetch\("\/api\/subscribe"/.test(subPage) && /action="\/api\/subscribe"/.t
 check(/name="email"/.test(subPage) && /name="website"/.test(subPage), "subscribe/index.html has the email field and the website honeypot field");
 check(/We store your email address and the dates you subscribed and confirmed/.test(subPage) && /Unsubscribing deletes it/.test(subPage), "subscribe/index.html has the privacy note");
 check(/Gathered by an AI model with web search\. Items are not verified/.test(subPage), "subscribe/index.html has the AI notice");
+check(/Questions or a deletion request: email <a href="mailto:hello@pehchanthetraveller\.com">/.test(subPage) && !/will be added here/.test(subPage), "subscribe/index.html has a real contact address, not the placeholder");
 check(subPage.length > 0 && !/<script[^>]*\ssrc=|<link[^>]*rel=["']?stylesheet|@import|url\(\s*["']?https?:/i.test(subPage), "subscribe/index.html is self-contained (no external script, stylesheet, import or font URL)");
 const vercelJson = JSON.parse(readFileSync("vercel.json", "utf8"));
 check(/\bcp -r [^&]*\bsubscribe\b[^&]* public\//.test(vercelJson.buildCommand || ""), "vercel.json's buildCommand copies subscribe into public/");
