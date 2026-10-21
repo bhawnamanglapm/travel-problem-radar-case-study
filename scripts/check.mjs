@@ -1,7 +1,7 @@
 // Offline checks for the case study and demo. No network, no API key.
 // Run from the repository root:  node scripts/check.mjs
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 
 const failures = [];
 const check = (ok, label) => {
@@ -71,6 +71,11 @@ check(!/\.innerHTML\s*=/.test(manPage), "manage/index.html writes server data wi
 check(manPage.length > 0 && !/<script[^>]*\ssrc=|<link[^>]*rel=["']?stylesheet|@import|url\(\s*["']?https?:/i.test(manPage), "manage/index.html is self-contained (no external script, stylesheet, import or font URL)");
 check(/\bcp -r [^&]*\bmanage\b[^&]* public\//.test(vercelJson.buildCommand || ""), "vercel.json's buildCommand copies manage into public/");
 check(existsSync("api/account.js"), "api/account.js exists (the manage page's endpoint)");
+// T13: the Resend webhook, the firewall rule's 429, and Hobby's 12-function limit (no framework).
+check(existsSync("api/resend-webhook.js"), "api/resend-webhook.js exists (bounces and complaints from Resend)");
+check(/x\.status === 429/.test(subPage), "subscribe/index.html shows a message on 429 (the firewall rate limit)");
+const fns = readdirSync("api").filter((f) => f.endsWith(".js"));
+check(fns.length <= 12, `at most 12 functions in api/, Hobby's limit (${fns.length}: ${fns.join(", ")})`);
 for (const f of ["subscribe/index.html", "manage/index.html", "live/index.html"]) {
   const t = existsSync(f) ? readFileSync(f, "utf8") : "";
   check(t.includes('if (/\\.github\\.io$/.test(location.hostname)) location.replace("https://travel-problem-radar.vercel.app" + location.pathname'), `${f} sends a GitHub Pages visit to the Vercel copy (Pages has no /api/)`);
