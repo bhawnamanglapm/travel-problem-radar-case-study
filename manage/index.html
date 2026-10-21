@@ -28,7 +28,13 @@
   button:hover { background: #d8ff6f; }
   button[disabled] { opacity: .6; cursor: default; }
   #status { min-height: 1.6em; margin: 12px 0 0; color: #F4F4F7; }
-  #status.err { color: #FF8A80; }
+  #status.err, #catStatus.err { color: #FF8A80; }
+  #catStatus { min-height: 1.6em; margin: 12px 0 0; color: #F4F4F7; }
+  h2 { font-size: 16px; margin: 0 0 8px; color: #F4F4F7; }
+  .cats { border: 0; margin: 0 0 14px; padding: 0; }
+  .cats label { display: block; margin: 0 0 6px; color: #F4F4F7; }
+  .cats input { margin-right: 8px; accent-color: #C6FF3D; }
+  .cats input[disabled] + span { color: #93939F; }
   .small { font-size: 13px; color: #93939F; }
   [hidden] { display: none !important; }
 </style>
@@ -48,6 +54,19 @@
     <p id="status" role="status" aria-live="polite"></p>
   </div>
 
+  <div class="card" id="catsCard" hidden>
+    <h2>Categories</h2>
+    <p id="catsNote">Choose which categories your Pro emails include.</p>
+    <fieldset class="cats" id="cats">
+      <label><input type="checkbox" value="traveler_pain" /><span>Traveler pain</span></label>
+      <label><input type="checkbox" value="gov_policy" /><span>Gov &amp; policy</span></label>
+      <label><input type="checkbox" value="web_app" /><span>Website &amp; app</span></label>
+      <label><input type="checkbox" value="industry" /><span>Industry</span></label>
+    </fieldset>
+    <button id="saveCats" type="button">Save categories</button>
+    <p id="catStatus" role="status" aria-live="polite"></p>
+  </div>
+
   <p id="leave" hidden><a id="unsub" href="#">Unsubscribe</a> <span class="small">(stops every email and deletes your address)</span></p>
   <p class="small">This page is reached from the link in your emails; don&rsquo;t share it. Questions: <a href="mailto:hello@pehchanthetraveller.com">hello@pehchanthetraveller.com</a>.</p>
 </main>
@@ -58,7 +77,19 @@
   var planEl = document.getElementById("plan"), detail = document.getElementById("detail");
   var ask = document.getElementById("ask"), req = document.getElementById("req");
   var statusEl = document.getElementById("status");
+  var catsCard = document.getElementById("catsCard"), catsNote = document.getElementById("catsNote");
+  var saveCats = document.getElementById("saveCats"), catStatus = document.getElementById("catStatus");
+  var boxes = Array.prototype.slice.call(document.querySelectorAll("#cats input"));
   function say(text, isErr) { statusEl.textContent = text; statusEl.className = isErr ? "err" : ""; }
+  function sayCats(text, isErr) { catStatus.textContent = text; catStatus.className = isErr ? "err" : ""; }
+  // Pro only (T14). No choice saved (null) means every category.
+  function showCats(a) {
+    catsCard.hidden = false;
+    var isPro = a.effectivePlan === "pro";
+    boxes.forEach(function (b) { b.checked = !a.cats || a.cats.indexOf(b.value) !== -1; b.disabled = !isPro; });
+    saveCats.hidden = !isPro;
+    catsNote.textContent = isPro ? "Choose which categories your Pro emails include." : "Choosing categories is a Pro feature. The daily digest always has all four.";
+  }
   function day(iso) { return iso ? iso.slice(0, 10) : ""; }
   function setPlan(name, rest) {
     planEl.textContent = "Your plan: ";
@@ -73,6 +104,7 @@
     }
     document.getElementById("unsub").href = "/api/unsubscribe?id=" + encodeURIComponent(id) + "&t=" + encodeURIComponent(t);
     document.getElementById("leave").hidden = false;
+    showCats(a);
     if (a.effectivePlan === "pro") {
       setPlan("Pro", "An email after every sweep" + (a.proUntil ? ", until " + day(a.proUntil) + "." : "."));
     } else if (a.proRequestedAt) {
@@ -111,6 +143,22 @@
     }).catch(function () {
       say("Couldn’t reach the server. Please try again in a minute.", true);
     }).then(function () { req.disabled = false; });
+  });
+
+  saveCats.addEventListener("click", function () {
+    var cats = boxes.filter(function (b) { return b.checked; }).map(function (b) { return b.value; });
+    if (!cats.length) { sayCats("Pick at least one category.", true); return; }
+    saveCats.disabled = true;
+    sayCats("Saving…", false);
+    call("POST", { id: id, t: t, action: "set-cats", cats: cats }).then(function (x) {
+      if (x.status === 200) { showCats(x.body); sayCats(x.body.cats ? "Saved. Your next Pro email has only these categories." : "Saved. You get every category.", false); }
+      else if (x.status === 403) { sayCats("Choosing categories is a Pro feature.", true); }
+      else if (x.status === 400) { sayCats("That choice couldn’t be saved. Reload the page and try again.", true); }
+      else if (x.status === 409) { sayCats("Confirm your address first, using the email we sent you.", true); }
+      else fail(x);
+    }).catch(function () {
+      sayCats("Couldn’t reach the server. Please try again in a minute.", true);
+    }).then(function () { saveCats.disabled = false; });
   });
 })();
 </script>
