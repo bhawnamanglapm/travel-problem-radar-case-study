@@ -9,6 +9,7 @@ import {
 } from "../api/_lib/subscribers.js";
 import { BodyTooLargeError, allowMethods, bearerOk, esc, parseForm, readBody, readFields, sendJson, sendPage } from "../api/_lib/http.js";
 import { DEFAULT_FROM, buildConfirmEmail, buildDigestEmail, sendBatch, sendOne, withSubscriberFooter } from "../api/_lib/email.js";
+import { KEY_SUBSCRIBER_COUNT, makeSubscribeHandler, siteUrl } from "../api/_lib/subscription-handlers.js";
 import { check, finish, memStorage, mockRes } from "./test-helpers.mjs";
 
 // A repeatable random source: each call returns bytes that count up from a seed.
@@ -284,6 +285,192 @@ const iso = (ms) => new Date(ms).toISOString();
   r = fakeResend([{ status: 500, body: { name: "internal_server_error" } }]);
   check((await sendOne(creds, msgs(1)[0], { fetchFn: r.fn })) === "failed: http 500 internal_server_error", "sendOne: failed with a reason");
   check(/^not configured/.test(await sendOne({ apiKey: "" }, msgs(1)[0], { fetchFn: r.fn })), "sendOne: not configured");
+}
+
+// ---- T05: POST /api/subscribe
+{
+  const ENV = { SUBSCRIPTIONS_ENABLED: "1", RESEND_API_KEY: "re_k", EMAIL_FROM: "Radar <hello@pehchanthetraveller.com>", SITE_URL: "https://site.example/", MAX_SUBSCRIBERS: "5000" };
+  // `opts.count` seeds radar:subscriberCount (stored under storage.js's file name); `opts.t0` sets the clock.
+  const world = (envOver = {}, opts = {}) => {
+    const st = memStorage();
+    if (opts.count !== undefined) st.m.set("radar:subscriberCount", String(opts.count));
+    const sent = [];
+    const logs = [];
+    let resendStatus = opts.resendStatus || 200;
+    let clock = opts.t0 || T0;
+    const fetchFn = async (url, init) => {
+      const body = JSON.parse(init.body);
+      if (resendStatus === 200) sent.push(...body);
+      return { ok: resendStatus === 200, status: resendStatus, headers: { get: () => null }, json: async () => (resendStatus === 200 ? { data: body.map((_, i) => ({ id: "m" + i })) } : { name: "internal_server_error" }) };
+    };
+    const env = { ...ENV, ...envOver };
+    const handler = makeSubscribeHandler({ env, storage: st, fetchFn, now: () => clock, randomBytes: seeded(7), log: (...a) => logs.push(a.join(" ")) });
+    const post = async (fields, { type = "application/json", method = "POST" } = {}) => {
+      const res = mockRes();
+      const req = { method, headers: { "content-type": type }, body: typeof fields === "string" ? undefined : fields };
+      if (typeof fields === "string") req[Symbol.asyncIterator] = async function* () { yield Buffer.from(fields); };
+      await handler(req, res);
+      return res;
+    };
+    return { st, sent, logs, post, tick: (ms) => { clock += ms; }, setResend: (c) => { resendStatus = c; }, env };
+  };
+  const OK = '{"ok":true,"message":"If that address can be subscribed, a confirmation link is on its way."}';
+  const subKeys = (w) => [...w.st.m.keys()].filter((k) => k.startsWith("radar:sub:"));
+  const evKeys = (w, type) => [...w.st.m.keys()].filter((k) => k.startsWith("radar:event:") && k.includes(`-${type}-`));
+  const DAY = 24 * 3600 * 1000;
+
+  // rows 1-4
+  let w = world();
+  let r = await w.post({ email: "a@example.com" }, { method: "GET" });
+  check(r.code === 405 && r.headers.allow === "POST", "subscribe row 1: GET gets 405 with Allow: POST");
+  w = world({ SUBSCRIPTIONS_ENABLED: "" });
+  r = await w.post({ email: "a@example.com" });
+  check(r.code === 503 && r.json().error === "subscriptions are not open yet" && w.st.m.size === 0, "subscribe row 2: switch off gives 503 and nothing is written");
+  let reads = 0;
+  w = world({ SUBSCRIPTIONS_ENABLED: "0" });
+  const get0 = w.st.get;
+  w.st.get = async (k) => { reads++; return get0(k); };
+  await w.post({ email: "a@example.com" });
+  check(reads === 0, "subscribe row 2: no storage read when switched off");
+  for (const [label, over] of [["no API key", { RESEND_API_KEY: "" }], ["unset sender", { EMAIL_FROM: "" }], ["shared sender", { EMAIL_FROM: "Radar <onboarding@resend.dev>" }], ["no site url", { SITE_URL: "" }]]) {
+    w = world(over);
+    r = await w.post({ email: "a@example.com" });
+    check(r.code === 503 && r.json().error === "subscriptions are not open yet" && w.logs.includes("subscribe not configured") && w.st.m.size === 0 && w.sent.length === 0, `subscribe row 3: ${label} gives 503 and logs "subscribe not configured"`);
+  }
+  w = world({ SITE_URL: "", VERCEL_PROJECT_PRODUCTION_URL: "radar.vercel.app" }, { count: 0 });
+  r = await w.post({ email: "a@example.com" });
+  check(r.code === 200 && w.sent[0].text.includes("https://radar.vercel.app/api/confirm?id="), "subscribe: SITE_URL falls back to the Vercel production URL");
+  check(siteUrl({ SITE_URL: "javascript:x" }) === "" && siteUrl({ SITE_URL: "https://s.example///" }) === "https://s.example", "siteUrl: rejects a non-http link and trims slashes");
+  w = world();
+  r = await w.post("email=" + "x".repeat(9000), { type: "application/x-www-form-urlencoded" });
+  check(r.code === 413, "subscribe row 4: a body over 8 KB gets 413");
+
+  // rows 5 and 6
+  w = world({}, { count: 0 });
+  r = await w.post({ email: "a@example.com", website: "http://spam" });
+  check(r.code === 200 && r.body === OK && subKeys(w).length === 0 && w.sent.length === 0, "subscribe row 5: honeypot filled gives the OK reply and stores nothing");
+  let badOk = true;
+  for (const bad of ["", "not-an-email", "a b@example.com", null]) {
+    r = await w.post({ email: bad });
+    if (!(r.code === 400 && r.json().error === "enter a valid email address")) badOk = false;
+  }
+  check(badOk, "subscribe row 6: bad addresses get 400 \"enter a valid email address\"");
+  r = await w.post("not json at all");
+  check(r.code === 400 && subKeys(w).length === 0, "subscribe row 6: an unreadable body gets 400 and stores nothing");
+
+  // row 12: a new address
+  w = world({}, { count: 3 });
+  r = await w.post({ email: "  New.Person@Example.COM " });
+  const newBody = r.body;
+  const subs = subKeys(w);
+  const rec = JSON.parse(w.st.m.get(subs[0]));
+  check(r.code === 200 && newBody === OK && subs.length === 1, "subscribe row 12: a new address gets the OK reply and one pending record");
+  check(rec.status === "pending" && rec.plan === "free" && rec.email === "new.person@example.com" && rec.id === subscriberId("new.person@example.com"), "subscribe row 12: the record is pending, free, with the normalised address");
+  check(w.sent.length === 1 && w.sent[0].to[0] === "new.person@example.com" && w.sent[0].text.includes(`https://site.example/api/confirm?id=${rec.id}&t=${rec.token}`), "subscribe row 12: the confirmation link has the record's id and token and the SITE_URL");
+  check(evKeys(w, "subscribed").length === 1 && evKeys(w, "confirmsent").length === 1, "subscribe row 12: subscribed and confirmsent events recorded");
+  check([...w.st.m.entries()].filter(([k]) => k.startsWith("radar:event:")).every(([k, v]) => !/@|[0-9a-f]{64}/.test(k + v)), "subscribe: event records hold no address or id");
+  check(!w.logs.some((l) => /@|[0-9a-f]{64}/.test(l) || l.includes(rec.token)), "subscribe: no log line holds the address, id or token");
+  check(w.sent[0].headers === undefined, "subscribe: the confirmation email carries no unsubscribe header");
+
+  // row 7: already active, in another case
+  w.st.m.set(subs[0], JSON.stringify({ ...rec, status: "active", confirmedAt: iso(T0) }));
+  const before = w.st.m.size;
+  r = await w.post({ email: "NEW.PERSON@example.com" });
+  check(r.body === newBody && w.sent.length === 1 && w.st.m.size === before, "subscribe row 7: an active address (any case) gets the identical reply; nothing is sent or stored");
+
+  // rows 8 and 9: pending
+  w = world({}, { count: 0 });
+  await w.post({ email: "p@example.com" });
+  const pk = subKeys(w)[0];
+  const tok = JSON.parse(w.st.m.get(pk)).token;
+  w.tick(23 * 3600 * 1000);
+  r = await w.post({ email: "p@example.com" });
+  check(r.body === OK && w.sent.length === 1, "subscribe row 8: pending, confirmation sent 23 h ago: identical reply, no new email");
+  w.tick(2 * 3600 * 1000);
+  r = await w.post({ email: "P@example.com" });
+  const after9 = JSON.parse(w.st.m.get(pk));
+  check(r.body === OK && w.sent.length === 2 && after9.token === tok && after9.confirmSentAt === iso(T0 + 25 * 3600 * 1000), "subscribe row 9: pending 25 h on: new email, same token, confirmSentAt updated");
+  check(w.sent[1].text.includes(`t=${tok}`) && subKeys(w).length === 1, "subscribe row 9: the new email carries the same token; still one record");
+
+  // row 10: the list cap
+  w = world({ MAX_SUBSCRIBERS: "" }, { count: 0 });
+  r = await w.post({ email: "a@example.com" });
+  check(r.body === OK && subKeys(w).length === 0 && w.sent.length === 0, "subscribe row 10: MAX_SUBSCRIBERS unset means closed; nothing stored");
+  w = world({ MAX_SUBSCRIBERS: "abc" }, { count: 0 });
+  await w.post({ email: "a@example.com" });
+  check(subKeys(w).length === 0, "subscribe row 10: MAX_SUBSCRIBERS not a number means closed");
+  w = world({ MAX_SUBSCRIBERS: "100" }, { count: 100 });
+  r = await w.post({ email: "a@example.com" });
+  check(r.body === OK && subKeys(w).length === 0 && w.sent.length === 0, "subscribe row 10: count at the cap: nothing stored, identical reply");
+  w = world({ MAX_SUBSCRIBERS: "100" }, { count: 99 });
+  await w.post({ email: "a@example.com" });
+  check(subKeys(w).length === 1, "subscribe row 10: one below the cap still stores");
+  w = world({}, { count: '{"count":5000,"at":"x"}' });
+  await w.post({ email: "a@example.com" });
+  check(subKeys(w).length === 0, "subscribe: the count file may hold {count, at}");
+  w = world({}, { count: "garbage" });
+  await w.post({ email: "a@example.com" });
+  check(subKeys(w).length === 0, "subscribe: an unreadable count file counts as full");
+  w = world();
+  await w.post({ email: "a@example.com" });
+  check(subKeys(w).length === 1, "subscribe: no count file yet (before the first sweep) counts as 0");
+  check(KEY_SUBSCRIBER_COUNT === "radar:subscriberCount", "subscribe: the count key is radar:subscriberCount");
+
+  // row 11: the daily confirmation cap
+  w = world({ MAX_CONFIRMS_PER_DAY: "10" }, { count: 0 });
+  for (let i = 0; i < 11; i++) await w.post({ email: `user${i}@example.com` });
+  check(w.sent.length === 10 && subKeys(w).length === 10, "subscribe row 11: eleven new addresses with the cap at 10 give ten emails and ten records");
+  r = await w.post({ email: "user10@example.com" });
+  check(r.body === OK, "subscribe row 11: the capped reply is identical");
+  w.tick(DAY);
+  await w.post({ email: "user10@example.com" });
+  check(w.sent.length === 11, "subscribe row 11: the next UTC day starts a fresh count");
+  w = world({}, { count: 0 });
+  for (let i = 0; i < 11; i++) await w.post({ email: `u${i}@example.com` });
+  check(w.sent.length === 10, "subscribe: MAX_CONFIRMS_PER_DAY unset defaults to 10");
+  w = world({ MAX_CONFIRMS_PER_DAY: "0" }, { count: 0 });
+  await w.post({ email: "u@example.com" });
+  check(w.sent.length === 0 && subKeys(w).length === 0, "subscribe: MAX_CONFIRMS_PER_DAY=0 stops all confirmations");
+  // q signs up at 00:00 UTC; at 00:00:01 the next day r signs up (the cap of 1 is spent), so q's re-send is held back
+  w = world({ MAX_CONFIRMS_PER_DAY: "1" }, { count: 0, t0: Date.UTC(2026, 9, 21, 0, 0, 0) });
+  await w.post({ email: "q@example.com" });
+  w.tick(DAY + 1000);
+  await w.post({ email: "r@example.com" });
+  await w.post({ email: "q@example.com" });
+  check(w.sent.length === 2 && w.sent[1].to[0] === "r@example.com", "subscribe: a re-send also counts against the daily cap");
+
+  // Resend fails
+  w = world({}, { count: 0, resendStatus: 500 });
+  r = await w.post({ email: "fail@example.com" });
+  check(r.code === 200 && r.body === OK && subKeys(w).length === 1, "subscribe: Resend failing still replies OK and keeps the record");
+  check(w.logs.some((l) => l.startsWith("subscribe confirm-email failed: ")) && !w.logs.some((l) => l.includes("@")), "subscribe: the failure is logged without the address");
+  w.setResend(200);
+  w.tick(25 * 3600 * 1000);
+  await w.post({ email: "fail@example.com" });
+  check(w.sent.length === 1 && w.sent[0].to[0] === "fail@example.com", "subscribe: a later sign-up after 24 h retries the confirmation");
+
+  // storage failure
+  w = world({}, { count: 0 });
+  w.st.set = async () => { throw new Error("blob down for fail@example.com"); };
+  r = await w.post({ email: "fail@example.com" });
+  check(r.code === 500 && !r.body.includes("@") && !w.logs.some((l) => l.includes("@")) && w.sent.length === 0, "subscribe: a storage failure gives 500, sends nothing, and leaks nothing");
+
+  // body formats
+  w = world({}, { count: 0 });
+  await w.post("email=form%40example.com&website=", { type: "application/x-www-form-urlencoded" });
+  await w.post({ email: "json@example.com" });
+  check(subKeys(w).length === 2 && w.sent.map((m) => m.to[0]).sort().join() === "form@example.com,json@example.com", "subscribe: form-encoded and JSON bodies both work");
+  r = await w.post('{"email":"streamed@example.com"}', { type: "text/plain" });
+  check(r.code === 400 && subKeys(w).length === 2, "subscribe: a body with an unsupported content type has no fields (400)");
+
+  // the rows that reply OK are byte-identical, headers included
+  w = world({}, { count: 0 });
+  const replies = [
+    await w.post({ email: "x1@example.com" }), // new
+    await w.post({ email: "x1@example.com" }), // pending, recent
+    await w.post({ email: "x2@example.com", website: "bot" }), // honeypot
+  ];
+  check(replies.every((x) => x.body === OK && x.code === 200 && JSON.stringify(x.headers) === JSON.stringify(replies[0].headers)), "subscribe: new, pending-recent and honeypot replies are byte-identical, headers included");
 }
 
 finish("subscription tests");

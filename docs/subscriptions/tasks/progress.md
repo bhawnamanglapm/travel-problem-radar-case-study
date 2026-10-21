@@ -11,8 +11,8 @@ working in a real inbox; that is T12's staged launch.
 | [T01](T01-storage-list.md) Storage `list()` + test helpers | done | 9175e84 | 73 pass (68 old + 5 new) | See T01 notes below |
 | [T02](T02-subscriber-records.md) Subscriber records module | done | f0de053 | 96 pass (+23 new) | See T02 notes below |
 | [T03](T03-http-helpers.md) HTTP helpers | done | 536cc33 | 117 pass (+21 new) | See T03 notes below |
-| [T04](T04-email-builders.md) Email builders + batch send | done | see T05 row | 155 pass (+38 new) | See T04 notes below |
-| [T05](T05-api-subscribe.md) `POST /api/subscribe` | todo | | | |
+| [T04](T04-email-builders.md) Email builders + batch send | done | 87bbdcb | 155 pass (+38 new) | See T04 notes below |
+| [T05](T05-api-subscribe.md) `POST /api/subscribe` | done | see T06 row | 200 pass (+45 new) | See T05 notes below |
 | [T06](T06-api-confirm.md) `/api/confirm` | todo | | | |
 | [T07](T07-api-unsubscribe.md) `/api/unsubscribe` | todo | | | |
 | [T08](T08-subscribe-page.md) `/subscribe/` page, build, checks | todo | | | |
@@ -72,4 +72,25 @@ working in a real inbox; that is T12's staged launch.
 - **Not confirmed:** the reply shape when only some messages in a batch fail (undocumented), and any
   validation-only mode. The code treats a reply with fewer ids than messages as "short reply" and counts the
   rest failed. The fake Resend in the tests is built from the docs, not from a real response.
+
+### T05
+- `api/_lib/subscription-handlers.js` (`makeSubscribeHandler`, `siteUrl`) and `api/subscribe.js`. The handler is
+  off until `SUBSCRIPTIONS_ENABLED=1`; with it off nothing is read or written (tested).
+- Every row of the task's table has a test. Rows 5, 7, 8, 9, 10, 11 and 12 reply with the identical body; the
+  honeypot, new and pending-recent replies are compared including headers.
+- **Choices beyond the task text:**
+  - The daily confirmation cap (`MAX_CONFIRMS_PER_DAY`, default 10; `0` closes confirmations) also applies to the
+    row 9 re-send, because a re-send spends the same email quota. If the events can't be counted, the cap counts as
+    reached.
+  - `radar:subscriberCount` may hold a bare number or `{count, at}`. T10 must write one of these. A missing file
+    counts as 0 (no sweep has run yet; the daily cap still bounds sign-ups). An unreadable file counts as full.
+  - A storage failure gives `500 {"error":"could not process the request; try again later"}`; the log line holds
+    only the error's class name.
+  - The confirmation email is sent with an idempotency key per record and `confirmSentAt`.
+  - The `confirmsent` event is recorded when the send is attempted, so a Resend outage can't turn into a retry storm.
+- **Known race:** two simultaneous first sign-ups of the same address both write a pending record; the later write
+  wins, so the earlier email's link fails and the later one works. Storage has no conditional create.
+- **Verify items not confirmed:** the Hobby plan's function-count limit (a Vercel docs search this session did not
+  answer it; check the Vercel dashboard or limits page when deploying a preview: Phase 1 takes the project from
+  2 to 5 functions). The visitor-IP header was not looked up, since the per-IP limit is T13.
 
