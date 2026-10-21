@@ -4,7 +4,7 @@
 // sending anyone the same digest twice. Never throws; the result and the log hold counts only.
 import { buildDigestEmail, sendBatch, withSubscriberFooter } from "./email.js";
 import { KEY_INDEX, sweepKey } from "./radar.js";
-import { KEY_SUBSCRIBER_COUNT, senderOk, siteUrl } from "./subscription-handlers.js";
+import { KEY_SUBSCRIBER_COUNT, managePath, senderOk, siteUrl } from "./subscription-handlers.js";
 import { PENDING_TTL_DAYS, deleteSubscriber, effectivePlan, listSubscribers, recordEvent, utcDay } from "./subscribers.js";
 
 export const KEY_DELIVERIES_PREFIX = "radar:deliveries:";
@@ -89,7 +89,7 @@ export async function deliverToSubscribers({ env, storage, fetchFn, now, randomB
     const free = sendable.filter((r) => effectivePlan(r, t) !== "pro");
     const message = (r, mail, plan) => ({
       to: r.email,
-      ...withSubscriberFooter(mail, { unsubscribeUrl: `${site}/api/unsubscribe?id=${r.id}&t=${r.token}`, plan }),
+      ...withSubscriberFooter(mail, { unsubscribeUrl: `${site}/api/unsubscribe?id=${r.id}&t=${r.token}`, manageUrl: site + managePath(r.id, r.token), plan }),
     });
     const liveUrl = `${site}/live/`;
     let halted = false;
