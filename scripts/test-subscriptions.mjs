@@ -8,6 +8,7 @@ import {
   newPending, newToken, normaliseEmail, putSubscriber, recordEvent, subscriberId, tokenOk, utcDay,
 } from "../api/_lib/subscribers.js";
 import { BodyTooLargeError, allowMethods, bearerOk, esc, parseForm, readBody, readFields, sendJson, sendPage } from "../api/_lib/http.js";
+import { DEFAULT_FROM, buildConfirmEmail, buildDigestEmail, sendBatch, sendOne, withSubscriberFooter } from "../api/_lib/email.js";
 import { check, finish, memStorage, mockRes } from "./test-helpers.mjs";
 
 // A repeatable random source: each call returns bytes that count up from a seed.
@@ -157,6 +158,132 @@ const iso = (ms) => new Date(ms).toISOString();
   check(j.code === 201 && j.headers["cache-control"] === "no-store" && j.json().a === 1, "sendJson: status, no-store, JSON body");
   check(bearerOk("Bearer s3", "s3") && !bearerOk("Bearer s4", "s3") && !bearerOk("", "s3") && !bearerOk("Bearer s3", ""), "bearerOk still works from its new home");
   check(esc(`<a href="x">&'`) === "&lt;a href=&quot;x&quot;&gt;&amp;&#39;" && esc() === "", "esc escapes & < > \" ' and defaults to an empty string");
+}
+
+// ---- T04: subscriber emails and batch sending
+{
+  const at = "2026-10-21T08:09:10.123Z";
+  const problems = [
+    { cat: "airlines", severity: "High", isNew: true, title: "Strike <b>", summary: "s", source: "X", region: "EU", date: "2026-10-20", link: "https://example.com/a" },
+    { cat: "airlines", severity: "Low", isNew: false, title: "Delay", summary: "", source: "Y", region: "", date: "", link: "" },
+  ];
+  const owner = buildDigestEmail({ at, problems, perCat: {}, manual: false }, "https://live.example");
+  const sameAgain = buildDigestEmail({ at, problems, perCat: {}, manual: false }, "https://live.example", {});
+  check(owner.subject === sameAgain.subject && owner.html === sameAgain.html && owner.text === sameAgain.text, "buildDigestEmail: no third argument gives exactly the owner's digest");
+  check(owner.subject.startsWith("Travel Problem Radar · 2026-10-21 08:09 UTC"), "buildDigestEmail: owner subject unchanged");
+
+  const sub = buildDigestEmail({ at, problems, perCat: {} }, "https://live.example", { heading: "Your daily Travel Problem Radar", subjectLead: "daily" });
+  check(sub.subject === "Travel Problem Radar daily · 2026-10-21 · 2 problems, 1 new", "buildDigestEmail: subscriber subject uses the lead and the date");
+  check(sub.html.includes("Your daily Travel Problem Radar") && sub.text.startsWith("Your daily Travel Problem Radar"), "buildDigestEmail: heading replaces the title");
+
+  const U = "https://site.example/api/unsubscribe?id=" + "a".repeat(64) + "&t=tok";
+  const M = "https://site.example/subscribe/";
+  const f = withSubscriberFooter(sub, { unsubscribeUrl: U, manageUrl: M, plan: "free" });
+  check(f.text.includes("Unsubscribe: " + U) && f.text.includes("one email a day") && f.text.includes("Manage subscription: " + M), "footer (free): text has the unsubscribe link, plan line and manage link");
+  check(f.html.includes(esc(U)) && f.html.includes("Unsubscribe</a>") && f.html.trimEnd().endsWith("</div>"), "footer: html has the link and stays inside the wrapper");
+  check(f.headers["List-Unsubscribe"] === `<${U}>` && f.headers["List-Unsubscribe-Post"] === "List-Unsubscribe=One-Click", "footer: List-Unsubscribe headers per RFC 8058");
+  check(withSubscriberFooter(sub, { unsubscribeUrl: U, plan: "pro" }).text.includes("after every sweep"), "footer (pro): different plan line");
+  check(!withSubscriberFooter(sub, { unsubscribeUrl: U }).text.includes("Manage subscription"), "footer: no manage line without a manage link");
+  check(sub.headers === undefined && !sub.text.includes("Unsubscribe"), "footer: the shared digest is not modified");
+  let bad = 0;
+  for (const u of ["", "javascript:alert(1)", "https://x.example/a b", 'https://x.example/"><script>']) {
+    try { withSubscriberFooter(sub, { unsubscribeUrl: u }); } catch (e) { bad++; }
+  }
+  check(bad === 4, "footer: refuses a missing or unsafe unsubscribe link");
+
+  const C = "https://site.example/api/confirm?id=" + "b".repeat(64) + "&t=tok2";
+  const ce = buildConfirmEmail({ confirmUrl: C, siteUrl: "https://site.example" });
+  check(ce.subject === "Confirm your Travel Problem Radar subscription" && ce.text.includes(C) && ce.html.includes(esc(C)), "buildConfirmEmail: subject and confirm link in both parts");
+  check(/ignore this email/.test(ce.text) && /Unsubscribing deletes it/.test(ce.text), "buildConfirmEmail: says what to do if unasked and what is kept");
+  let badC = 0;
+  try { buildConfirmEmail({ confirmUrl: "ftp://x" }); } catch (e) { badC++; }
+  check(badC === 1, "buildConfirmEmail: refuses a bad link");
+
+  // A fake Resend. `script` is a list of replies, consumed one per request (the last repeats).
+  const fakeResend = (script) => {
+    const calls = [];
+    const fn = async (url, init) => {
+      const body = JSON.parse(init.body);
+      calls.push({ url, headers: init.headers, body });
+      const step = script[Math.min(calls.length - 1, script.length - 1)];
+      if (step === "throw") throw new Error("socket hang up secret-detail");
+      const h = new Map(Object.entries(step.headers || {}));
+      return { ok: step.status >= 200 && step.status < 300, status: step.status, headers: { get: (k) => h.get(k) ?? null },
+        json: async () => (step.body !== undefined ? step.body : { data: body.map((_, i) => ({ id: "m" + i })) }) };
+    };
+    return { fn, calls };
+  };
+  const msgs = (n) => Array.from({ length: n }, (_, i) => ({ to: `user${i}@example.com`, subject: "S", html: "<p>h</p>", text: "t", headers: { "List-Unsubscribe": "<https://x.example/u>" } }));
+  const creds = { apiKey: "re_secretkey", from: "Radar <hello@pehchanthetraveller.com>" };
+  const noSleep = async () => {};
+
+  let r = fakeResend([{ status: 200 }]);
+  let out = await sendBatch(creds, msgs(250), { fetchFn: r.fn, sleep: noSleep, idempotencyKey: "deliver-20261021" });
+  check(r.calls.length === 3 && r.calls.map((c) => c.body.length).join() === "100,100,50", "sendBatch: 250 messages go in chunks of 100, 100, 50");
+  check(out.sent === 250 && out.failed === 0 && out.stopped === null && out.sentIndexes.length === 250 && out.sentIndexes[249] === 249, "sendBatch: all sent, with positions");
+  check(r.calls[0].url === "https://api.resend.com/emails/batch" && r.calls[0].headers.authorization === "Bearer re_secretkey" && r.calls[0].headers["user-agent"], "sendBatch: batch endpoint, bearer key, user agent");
+  check(r.calls[0].headers["idempotency-key"] === "deliver-20261021-0" && r.calls[2].headers["idempotency-key"] === "deliver-20261021-2", "sendBatch: one idempotency key per chunk");
+  check(r.calls[0].body[0].to.length === 1 && r.calls[0].body[0].from === creds.from && r.calls[0].body[0].headers["List-Unsubscribe"], "sendBatch: one recipient per message, sender and per-email headers carried");
+
+  r = fakeResend([{ status: 200 }]);
+  out = await sendBatch(creds, [], { fetchFn: r.fn });
+  check(r.calls.length === 0 && out.sent === 0 && out.stopped === null, "sendBatch: nothing to send makes no request");
+
+  for (const [label, c] of [["no key", { apiKey: "", from: creds.from }], ["default sender", { apiKey: "k", from: DEFAULT_FROM }], ["resend.dev sender", { apiKey: "k", from: "R <x@resend.dev>" }], ["no sender", { apiKey: "k" }]]) {
+    r = fakeResend([{ status: 200 }]);
+    out = await sendBatch(c, msgs(2), { fetchFn: r.fn });
+    check(r.calls.length === 0 && /^not configured/.test(out.stopped), `sendBatch: ${label} sends nothing and says not configured`);
+  }
+
+  r = fakeResend([{ status: 429, headers: { "retry-after": "1" }, body: { name: "rate_limit_exceeded", message: "slow down" } }, { status: 200 }]);
+  let slept = [];
+  out = await sendBatch(creds, msgs(3), { fetchFn: r.fn, sleep: async (ms) => { slept.push(ms); } });
+  check(out.sent === 3 && r.calls.length === 2 && slept[0] === 1000 && r.calls[0].headers["idempotency-key"] === undefined, "sendBatch: a rate limit waits retry-after and retries once");
+
+  r = fakeResend([{ status: 429, body: { name: "daily_quota_exceeded", message: "x" } }]);
+  out = await sendBatch(creds, msgs(250), { fetchFn: r.fn, sleep: noSleep });
+  check(r.calls.length === 1 && out.stopped === "quota" && out.sent === 0 && out.failed === 0, "sendBatch: a quota error stops, and the rest are neither sent nor failed");
+
+  r = fakeResend([{ status: 200 }, { status: 429, body: { name: "monthly_quota_exceeded" } }]);
+  out = await sendBatch(creds, msgs(250), { fetchFn: r.fn, sleep: noSleep });
+  check(out.sent === 100 && out.stopped === "quota" && out.sentIndexes.length === 100, "sendBatch: chunks sent before a quota stop still count");
+
+  r = fakeResend([{ status: 401, body: { name: "restricted_api_key", message: "re_secretkey is bad" } }]);
+  out = await sendBatch(creds, msgs(250), { fetchFn: r.fn, sleep: noSleep });
+  check(r.calls.length === 1 && out.stopped === "http 401 restricted_api_key" && !JSON.stringify(out).includes("re_secretkey"), "sendBatch: an auth error stops and does not leak the key");
+
+  r = fakeResend([{ status: 422, body: { name: "validation_error", message: "bad@ address" } }, { status: 200 }, { status: 422, body: { name: "validation_error" } }, { status: 200 }]);
+  out = await sendBatch(creds, msgs(3), { fetchFn: r.fn, sleep: noSleep, idempotencyKey: "k" });
+  check(r.calls.length === 4 && out.sent === 2 && out.failed === 1 && out.sentIndexes.join() === "0,2" && out.stopped === null, "sendBatch: a rejected chunk is retried one by one so only the bad message fails");
+  check(!JSON.stringify(out).includes("@"), "sendBatch: the result holds no address or Resend message text");
+
+  r = fakeResend([{ status: 500, body: { name: "internal_server_error" } }]);
+  out = await sendBatch(creds, msgs(250), { fetchFn: r.fn, sleep: noSleep });
+  check(out.sent === 0 && out.failed === 250 && out.stopped === null && out.reason === "http 500 internal_server_error", "sendBatch: a server error fails the chunks and carries on");
+
+  r = fakeResend(["throw"]);
+  out = await sendBatch(creds, msgs(2), { fetchFn: r.fn, sleep: noSleep });
+  check(out.failed === 2 && out.reason === "network error" && !JSON.stringify(out).includes("secret-detail"), "sendBatch: a network error is reported without its detail");
+
+  r = fakeResend([{ status: 200, body: { data: [{ id: "a" }] } }]);
+  out = await sendBatch(creds, msgs(3), { fetchFn: r.fn, sleep: noSleep });
+  check(out.sent === 1 && out.failed === 2 && out.reason === "short reply", "sendBatch: a reply with fewer ids than messages counts the rest as failed");
+
+  r = fakeResend([{ status: 200 }]);
+  let allowed = 1;
+  out = await sendBatch(creds, msgs(250), { fetchFn: r.fn, sleep: noSleep, shouldStop: () => allowed-- <= 0 });
+  check(r.calls.length === 1 && out.sent === 100 && out.stopped === "deadline", "sendBatch: shouldStop() ends the run between chunks");
+
+  r = fakeResend([{ status: 200 }]);
+  const seen = [];
+  await sendBatch(creds, msgs(150), { fetchFn: r.fn, sleep: noSleep, onChunk: async ({ sentIndexes }) => { seen.push(sentIndexes.length); throw new Error("save failed"); } });
+  check(seen.join() === "100,50", "sendBatch: onChunk gets each chunk's sent positions, and its failure doesn't stop the run");
+
+  r = fakeResend([{ status: 200 }]);
+  check((await sendOne(creds, msgs(1)[0], { fetchFn: r.fn })) === "sent", "sendOne: sent");
+  r = fakeResend([{ status: 500, body: { name: "internal_server_error" } }]);
+  check((await sendOne(creds, msgs(1)[0], { fetchFn: r.fn })) === "failed: http 500 internal_server_error", "sendOne: failed with a reason");
+  check(/^not configured/.test(await sendOne({ apiKey: "" }, msgs(1)[0], { fetchFn: r.fn })), "sendOne: not configured");
 }
 
 finish("subscription tests");
