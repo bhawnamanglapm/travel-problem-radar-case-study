@@ -775,6 +775,19 @@ secret), `500` (a storage error, so Resend tries again). No reply or log line co
   - Then **Rate Limit**: fixed window, **10 minutes**, **5 requests**, keyed by **IP**, action **Default (429)**.
   - Save the rule, then review and publish the change.
 
+  The same from the command line (the rule is staged, then `publish` makes it live):
+
+  ```bash
+  vercel --scope <team> firewall rules add "subscribe rate limit" --project <project> \
+    --condition '{"type":"path","op":"eq","value":"/api/subscribe"}' \
+    --condition '{"type":"method","op":"eq","value":"POST"}' \
+    --action rate_limit --rate-limit-algo fixed_window --rate-limit-window 600 \
+    --rate-limit-requests 5 --rate-limit-keys ip --rate-limit-action rate_limit --yes
+  vercel --scope <team> firewall publish --project <project> --yes
+  ```
+
+  Production has had this rule since 2026-10-22. `vercel firewall status` shows it as `Rules 1 active`.
+
   The sign-up page shows "Too many tries from your connection. Please try again in a few minutes." on a `429`. The
   rule's traffic shows on the Firewall overview.
 

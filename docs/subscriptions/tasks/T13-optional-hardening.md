@@ -7,7 +7,7 @@
 | Size | M |
 | Depends on | T12 |
 | Trigger | Build part A once Resend's dashboard shows bounces or complaints; part B once sign-up abuse appears in the event counts |
-| Status | **Built** on 2026-10-22, both parts, before either trigger (owner's choice). Offline tests pass; the webhook secret and the firewall rule are owner steps after merge (see "Built" below) |
+| Status | **Built** on 2026-10-22, both parts, before either trigger (owner's choice). Offline tests pass. The firewall rule is live (2026-10-22); the webhook secret is an owner step (see "Built" below) |
 
 ## Why
 
@@ -61,5 +61,9 @@ the daily confirmation cap (T05) may not stop a determined bot.
 - **Part B uses both guards** (owner's choice): the Blob counters above, and a Vercel Firewall rate-limit rule
   (5 requests per 10 minutes per IP on `POST /api/subscribe`, `429`) so a flood doesn't spend Blob's 2,000 included
   advanced operations a month. The CAPTCHA was not needed.
-- **Owner steps after merge:** add the Resend webhook and `RESEND_WEBHOOK_SECRET`, redeploy, add the firewall rule.
+- **Firewall rule: live on production since 2026-10-22**, added with the Vercel CLI after the owner's OK. The project
+  had no firewall rules before, so it takes Hobby's one rate-limit slot without replacing anything. Read back from
+  the live config: `subscribe rate limit`, path equals `/api/subscribe` and method `POST`, 5 requests per 600 s,
+  fixed window, keyed by IP, action `rate_limit` (429). Not triggered on purpose, to avoid flooding production.
+- **Owner steps after merge:** add the Resend webhook and `RESEND_WEBHOOK_SECRET`, then redeploy.
   Checks: DEPLOYMENT.md, "Subscriber email (optional)".
