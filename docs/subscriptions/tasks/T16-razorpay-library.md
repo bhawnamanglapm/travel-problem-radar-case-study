@@ -1,0 +1,69 @@
+# T16 · Razorpay library
+
+| | |
+|---|---|
+| Phase | 2, paid Pro |
+| Who | Developer |
+| Size | M |
+| Depends on | T15 (test-mode account, plan id) |
+| Unblocks | T17, T18 |
+
+## Why
+
+Checkout, cancel and the webhook all need the same few calls and the same two signature checks. Putting them in one
+module, with fixed test vectors, keeps the security-relevant code in one place and testable offline. The repo's rule
+of no new npm packages holds: Razorpay's REST API works with plain `fetch` and Basic auth, and HMAC comes from
+`node:crypto`.
+
+**Everything Razorpay-specific below must be checked against the current Razorpay docs before building**: endpoint
+paths, field names, header names, event names and the signature formats.
+
+## What to build: `api/_lib/razorpay.js`
+
+| Export | What it does |
+|---|---|
+| `razorpayConfigured(env)` | True only if `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` and `RAZORPAY_PLAN_ID` are all set |
+| `isTestKey(env)` | True if `RAZORPAY_KEY_ID` starts with `rzp_test_`. Used by T19 to refuse test keys on Production and live keys on Preview |
+| `verifyWebhook(rawBody, signatureHeader, secret)` | HMAC-SHA256 of the **raw body bytes** with the webhook secret, hex, compared with `timingSafeEqual` (lengths checked first). Header: `x-razorpay-signature` (**verify**) |
+| `verifyCheckout({paymentId, subscriptionId, signature}, keySecret)` | HMAC-SHA256 of `paymentId + "|" + subscriptionId` with the key secret (**verify** the order). Same comparison |
+| `createSubscription({env, fetchFn, planId, subscriberId, totalCount})` | `POST https://api.razorpay.com/v1/subscriptions` with `plan_id`, `total_count`, `customer_notify`, and `notes: {sid: subscriberId}`. Returns `{id, status, shortUrl}` or `{error}`. **No email in `notes`**; the subscriber id is enough to find the record |
+| `cancelSubscription({env, fetchFn, subscriptionId, atCycleEnd})` | `POST /v1/subscriptions/<id>/cancel` with `cancel_at_cycle_end` (**verify** the field and its type) |
+| `fetchSubscription({env, fetchFn, subscriptionId})` | `GET /v1/subscriptions/<id>`. For the admin script and for checking state when a webhook looks wrong |
+
+- Auth header: `Basic base64(KEY_ID:KEY_SECRET)`.
+- Timeouts through `AbortSignal.timeout` (10 seconds), like the rest of the code.
+- Never throw. On a non-2xx reply return `{error: <status number or short code>}`. Never put the secret, the full
+  reply body or any address in the return value or in logs.
+- The `total_count` value (how many billing cycles before the subscription ends) is **OWNER INPUT NEEDED** in T15;
+  Razorpay requires one (**verify**).
+
+## Secret scanning
+
+Add a pattern to `scripts/check.mjs` so a committed Razorpay secret fails the check. Key ids start with `rzp_test_`
+or `rzp_live_` (**verify** the formats); the key id itself isn't secret, so flag any file that has an `rzp_` key id
+**and** a 20-plus character value on a line naming `secret`. Test the check with a fixture string built at runtime,
+so the test file itself doesn't trip it.
+
+## Acceptance criteria
+
+- [ ] Both verify functions accept the fixed good vectors and refuse: one changed byte of the body, a wrong secret,
+  an empty or missing header, a header of the wrong length
+- [ ] The create, cancel and fetch calls send the right method, path, auth header and body (checked with
+  `fakeFetch`)
+- [ ] No function throws, whatever `fetchFn` does (rejects, times out, returns HTML)
+- [ ] `npm run check` catches a fake committed secret
+
+## Tests (new block in `test-subscriptions.mjs`)
+
+- Test vectors: compute expected signatures in the test with `createHmac` from known inputs, and also include **one
+  vector copied from Razorpay's docs** if they publish one, so the test doesn't only agree with itself
+- `fakeFetch` cases: 200, 400, 401, 500, network error, timeout
+
+## Out of scope
+
+- Razorpay's Node SDK (a new dependency; not needed for four calls)
+- One-time payments, refunds through the API (do refunds by hand in the dashboard)
+
+## Docs
+
+- TECHNICAL.md file table
