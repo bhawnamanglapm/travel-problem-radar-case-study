@@ -655,7 +655,7 @@ usable credentials the script prints the `@vercel/blob` error and exits 1.
 
 ```
 node --env-file=.env.local scripts/subscribers.mjs stats [--days 30]
-node --env-file=.env.local scripts/subscribers.mjs list [--plan pro|free|pending]
+node --env-file=.env.local scripts/subscribers.mjs list [--plan pro|free|pending|requested]
 node --env-file=.env.local scripts/subscribers.mjs show <email>
 node --env-file=.env.local scripts/subscribers.mjs grant-pro <email> [--until 2027-01-31] [--yes]
 node --env-file=.env.local scripts/subscribers.mjs revoke-pro <email> [--yes]
@@ -665,10 +665,10 @@ node --env-file=.env.local scripts/subscribers.mjs prune-events --older-than 400
 
 | Command | What it does |
 |---|---|
-| `stats` | Counts now (pending, Free, Pro, Pro ending within 7 days) and per UTC day: sign-ups, confirmation emails, confirmations, unsubscribes (Free and Pro), expired, Free digests sent. Ends with the confirm rate, `confirmed / subscribed`. No addresses |
-| `list` | Address, status, plan, `proUntil` and confirmed date. A Pro record past its end date shows as `pro (lapsed)`: the sweep treats it as Free |
+| `stats` | Counts now (pending, Free, Pro, Pro ending within 7 days, waiting for Pro) and per UTC day: sign-ups, confirmation emails, confirmations, unsubscribes (Free and Pro), expired, Pro requests, Free digests sent. Ends with the confirm rate, `confirmed / subscribed`. No addresses |
+| `list` | Address, status, plan, `proUntil`, confirmed date and the date they asked for Pro. `--plan requested` lists the active Free subscribers who asked for Pro (the waiting list). A Pro record past its end date shows as `pro (lapsed)`: the sweep treats it as Free |
 | `show` | One record without its token |
-| `grant-pro` | Only for an active (confirmed) subscriber. Pro with `proSource: owner`. `--until 2027-01-31` makes Pro run through the end of that UTC day; leave it out for no end date. A past date is accepted and acts as Free. Refuses a paid Razorpay record |
+| `grant-pro` | Only for an active (confirmed) subscriber. Pro with `proSource: owner`, and the Pro request is cleared (the `prorequested` event keeps the history). `--until 2027-01-31` makes Pro run through the end of that UTC day; leave it out for no end date. A past date is accepted and acts as Free. Refuses a paid Razorpay record |
 | `revoke-pro` | Back to Free, clearing the end date. Refuses a Razorpay record |
 | `delete` | Deletes the record. This is the answer to a deletion request. Event records hold no address or id. The one place the record's hashed id (not the address) can remain is a `radar:deliveries:<date>` file, which the sweep deletes after 7 days |
 | `prune-events` | Deletes event records older than N days |
@@ -677,6 +677,14 @@ Every write only describes what it would change until you add `--yes` (and then 
 `1` not found, refused or not applied, `2` bad usage. A granted Pro starts at the next scheduled sweep, because Pro
 email goes only with scheduled sweeps. `stats` is where the Phase 2 numbers in
 [`docs/subscriptions/pricing.md`](docs/subscriptions/pricing.md) come from.
+
+**Handling Pro requests.** Until payments exist (T16 to T19), Pro is free and switched on by hand. A subscriber asks
+for it in one of two places: the "I'd also like Pro" box on `/subscribe/` (counted only once they press Confirm), or
+the "Request Pro" button on `/manage/`, which every digest links to as "Manage subscription" (the link carries their
+id and token; `/api/account` answers it and never returns the address). Each request sends one email to `EMAIL_TO`,
+subject "Travel Problem Radar: Pro request". It names nobody, so run `list --plan requested` to see who is waiting,
+then `grant-pro <email> --yes`. A repeat click sends nothing more, and a failed owner email still records the request.
+The subscriber is not emailed when Pro is switched on: their next email after a scheduled sweep is the Pro update.
 
 ### Changing the schedule
 

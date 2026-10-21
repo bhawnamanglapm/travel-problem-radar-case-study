@@ -23,7 +23,7 @@ Run `node scripts/subscribers.mjs stats --days <period>` (T11) and fill in:
 | Confirmed subscribers | | |
 | Confirm rate (`confirmed / subscribed`) | | |
 | Unsubscribes per digest sent | | |
-| People who said they'd pay, and how much | | |
+| People who said they'd pay, and how much (`stats` counts Pro requests; the "how much" still needs asking) | | |
 | At least one real sweep scored with the README's rubric | Required | |
 
 If any threshold is missed: stop here, stay Free, and record the decision in decisions.md. Owner-granted Pro (T11)
