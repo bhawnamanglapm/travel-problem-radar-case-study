@@ -1,18 +1,19 @@
 # Subscriptions: how the pieces fit together
 
-> **Draft proposal, nothing here is built.** Written on 21 Oct 2026 from the current code and
-> [DEPLOYMENT.md](../../DEPLOYMENT.md). Items marked **new** do not exist yet. The design is split across three
-> documents: [pricing and rollout](pricing.md), [free email sign-up](email-signup.md) and
-> [paid Pro through Razorpay](payments-razorpay.md).
+> **Phase 1 (free email sign-up) is built** and switched on in production since 21 Oct 2026; launch checks are in
+> progress ([T12](tasks/T12-docs-and-launch.md)). **Phase 2 (Razorpay) is not built.** Items marked **later** do not
+> exist yet. The design is split across three documents: [pricing and rollout](pricing.md),
+> [free email sign-up](email-signup.md) and [paid Pro through Razorpay](payments-razorpay.md). How to run what is
+> built: [DEPLOYMENT.md](../../DEPLOYMENT.md#subscriber-email-optional).
 
-## What exists today and what would be added
+## What existed before and what was added
 
-| Today | Added by this plan |
-|---|---|
-| A sweep every 5 hours (GitHub Actions, plus Vercel's daily cron as a backstop) | Nothing changes in how a sweep is gathered or saved |
-| The sweep emails and Slack-posts the owner only | After the owner's delivery, a digest to confirmed subscribers |
-| A public board that anyone can read | A sign-up page, a confirm link, an unsubscribe link |
-| No accounts, no payments | A subscriber record per address; later, a paid plan checked against Razorpay's signed events |
+| Before | Added in Phase 1 (built) | Phase 2 (later) |
+|---|---|---|
+| A sweep every 5 hours (GitHub Actions, plus Vercel's daily cron as a backstop) | Nothing changed in how a sweep is gathered or saved | — |
+| The sweep emails and Slack-posts the owner only | After the owner's delivery, a digest to confirmed subscribers | — |
+| A public board that anyone can read | A sign-up page, a confirm page, an unsubscribe link, a manage page | Checkout on the manage page |
+| No accounts, no payments | A subscriber record per address; Pro granted by the owner on request | Pro checked against Razorpay's signed events |
 
 The cost of a sweep (about $0.21, or about $32 a month at 5 sweeps a day) does not depend on the number of
 subscribers. Subscribers add email volume, not AI calls.
@@ -25,19 +26,20 @@ flowchart LR
   GHA["GitHub Actions<br/>every 5 hours"]
   subgraph Site["Static site"]
     LIVE["/live/ board"]
-    SUBP["/subscribe/ page (new)"]
-    MAN["/manage/ page (new)"]
+    SUBP["/subscribe/ page"]
+    MAN["/manage/ page"]
   end
   subgraph Fn["Vercel Functions"]
     SWEEP["api/sweep"]
     DATA["api/data (read-only)"]
-    SUBS["api/subscribe (new)"]
-    CONF["api/confirm (new)"]
-    UNS["api/unsubscribe (new)"]
-    CHK["api/checkout (new)"]
-    WH["api/razorpay-webhook (new)"]
+    SUBS["api/subscribe"]
+    CONF["api/confirm"]
+    UNS["api/unsubscribe"]
+    ACC["api/account"]
+    CHK["api/checkout (later)"]
+    WH["api/razorpay-webhook (later)"]
   end
-  BLOB[("Vercel Blob<br/>sweeps, history,<br/>subscribers (new)")]
+  BLOB[("Vercel Blob<br/>sweeps, history,<br/>subscribers, events")]
   ANTH["Anthropic API<br/>+ web search"]
   RES["Resend email"]
   SLK["Slack webhook"]
@@ -54,7 +56,9 @@ flowchart LR
   SUBS --> RES
   V -->|email link| CONF --> BLOB
   V -->|email link| UNS --> BLOB
-  V --> MAN --> CHK --> RZP
+  V -->|email link| MAN --> ACC --> BLOB
+  ACC -->|Pro request| RES
+  MAN --> CHK --> RZP
   RZP -->|signed events| WH --> BLOB
 ```
 
@@ -69,13 +73,15 @@ sequenceDiagram
   participant R as Resend
   participant C as api/confirm
   U->>P: enters email
-  P->>S: POST email and honeypot
+  P->>S: POST email, trap field, Pro box
   S->>B: save as pending, with token
   S->>R: confirmation email
   S-->>P: same reply for every address
-  U->>C: clicks link with token
-  C->>B: status = free
-  C-->>U: You are subscribed
+  U->>C: GET link with id and token
+  C-->>U: page with a Confirm button
+  U->>C: POST Confirm
+  C->>B: status = active
+  C-->>U: You're subscribed
 ```
 
 ## C. Sweep to delivery (extends today's `deliver()` step)
@@ -90,10 +96,14 @@ flowchart TD
   D --> E{Any category saved?}
   E -- no --> F[Failure notice to the owner]
   E -- yes --> G[Save sweep and history]
-  G --> H["Owner: Slack and email, unchanged"]
-  G --> I["Pro subscribers: digest every sweep (new)"]
-  G --> J{First saved sweep of this UTC day?}
-  J -- yes --> K["Free subscribers: digest (new)"]
+  G --> H["Owner: Slack and email, unchanged, sent first"]
+  H --> S{SUBSCRIPTIONS_ENABLED and configured?}
+  S -- no --> N["subscribers: not configured"]
+  S -- yes --> P{Scheduled call?}
+  P -- yes --> I["Pro subscribers: this sweep's digest"]
+  P -- no --> Q["Pro: skipped, manual run"]
+  S -- yes --> J{"Free subscribers not yet in<br/>radar:deliveries:today?"}
+  J -- yes --> K["Free: 24-hour roll-up, ids recorded after each batch"]
   J -- no --> L[Free subscribers: nothing]
 ```
 
@@ -124,10 +134,10 @@ sequenceDiagram
 ```mermaid
 stateDiagram-v2
   [*] --> Pending: signs up
-  Pending --> Free: clicks confirm link
-  Pending --> [*]: link ignored, record expires
-  Free --> Pro: webhook activated or charged
-  Pro --> Free: halted, cancelled or completed
+  Pending --> Free: presses Confirm (status active, plan free)
+  Pending --> [*]: not confirmed in 7 days, record deleted
+  Free --> Pro: owner grant-pro (now), or webhook activated or charged (later)
+  Pro --> Free: owner revoke-pro, proUntil passes, or halted, cancelled or completed (later)
   Free --> [*]: unsubscribes, record deleted
   Pro --> [*]: unsubscribes after cancelling
 ```
@@ -136,7 +146,7 @@ stateDiagram-v2
 
 ```mermaid
 flowchart LR
-  P0["Phase 0: today<br/>public board, owner-only email"] --> P1["Phase 1: free email sign-up<br/>needs a verified domain"]
+  P0["Phase 0<br/>public board, owner-only email"] --> P1["Phase 1: free email sign-up<br/>built, launch checks in progress"]
   P1 --> G{"Demand measured?<br/>sign-ups, confirm rate,<br/>unsubscribes, would you pay"}
   G -- "below the owner's threshold" --> S[Stay free, improve quality first]
   G -- "meets the threshold" --> P2["Phase 2: Razorpay Pro<br/>needs Vercel Pro, KYC, policy pages"]
@@ -144,20 +154,23 @@ flowchart LR
 
 ## Everything the plan adds, in one place
 
-| Kind | Name | Used by | Defined in |
-|---|---|---|---|
-| Page | `/subscribe/` | Visitors | [email-signup.md](email-signup.md) |
-| Page | `/manage/` | Subscribers (Phase 2) | [payments-razorpay.md](payments-razorpay.md) |
-| Endpoint | `POST /api/subscribe` | Subscribe page | [email-signup.md](email-signup.md) |
-| Endpoint | `GET /api/confirm` | Link in the confirmation email | [email-signup.md](email-signup.md) |
-| Endpoint | `GET` and `POST /api/unsubscribe` | Link in every digest | [email-signup.md](email-signup.md) |
-| Endpoint | `POST /api/checkout` | Manage page (Phase 2) | [payments-razorpay.md](payments-razorpay.md) |
-| Endpoint | `POST /api/razorpay-webhook` | Razorpay (Phase 2) | [payments-razorpay.md](payments-razorpay.md) |
-| Blob key | `radar:sub:<hash of email>` | All of the above | [email-signup.md](email-signup.md) |
-| Blob key | `radar:lastFreeDigestAt` | Sweep handler | [email-signup.md](email-signup.md) |
-| Blob key | `radar:rzp-event:<id>` | Webhook | [payments-razorpay.md](payments-razorpay.md) |
-| Variable | `EMAIL_FROM` (existing), `MAX_SUBSCRIBERS`, `SITE_URL`, `UNSUBSCRIBE_SECRET` | Email | [email-signup.md](email-signup.md) |
-| Variable | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `RAZORPAY_PLAN_ID` | Payments | [payments-razorpay.md](payments-razorpay.md) |
+| Kind | Name | Used by | Status | Defined in |
+|---|---|---|---|---|
+| Page | `/subscribe/` | Visitors | Built | [email-signup.md](email-signup.md) |
+| Page | `/manage/` | Subscribers: plan and Request Pro now, checkout later | Built (checkout later) | [email-signup.md](email-signup.md), [payments-razorpay.md](payments-razorpay.md) |
+| Endpoint | `POST /api/subscribe` | Subscribe page | Built | [email-signup.md](email-signup.md) |
+| Endpoint | `GET` and `POST /api/confirm` | Link in the confirmation email | Built | [email-signup.md](email-signup.md) |
+| Endpoint | `GET` and `POST /api/unsubscribe` | Link and one-click header in every email | Built | [email-signup.md](email-signup.md) |
+| Endpoint | `GET` and `POST /api/account` | Manage page | Built | [email-signup.md](email-signup.md) |
+| Endpoint | `POST /api/checkout` | Manage page | Later | [payments-razorpay.md](payments-razorpay.md) |
+| Endpoint | `POST /api/razorpay-webhook` | Razorpay | Later | [payments-razorpay.md](payments-razorpay.md) |
+| Blob key | `radar:sub:<hash of email>` | All of the above | Built | [email-signup.md](email-signup.md) |
+| Blob key | `radar:event:<day>-<time>-<type>-<random>` | Sign-up metrics, `stats` | Built | [email-signup.md](email-signup.md) |
+| Blob key | `radar:deliveries:<YYYYMMDD>` | Sweep handler (Free sends) | Built | [email-signup.md](email-signup.md) |
+| Blob key | `radar:subscriberCount` | Sign-up cap | Built | [email-signup.md](email-signup.md) |
+| Blob key | `radar:rzp-event:<id>` | Webhook | Later | [payments-razorpay.md](payments-razorpay.md) |
+| Variable | `EMAIL_FROM` (on a verified domain), `SUBSCRIPTIONS_ENABLED`, `MAX_SUBSCRIBERS`, `MAX_CONFIRMS_PER_DAY`, `SITE_URL` | Email | Built | [DEPLOYMENT.md](../../DEPLOYMENT.md#environment-variables) |
+| Variable | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `RAZORPAY_PLAN_ID` | Payments | Later | [payments-razorpay.md](payments-razorpay.md) |
 
 Everything in the Blob store stays private. `/api/data` serves only history and sweep keys, so none of the new keys
-can be read through it (a test should prove this when the code is written).
+can be read through it; `npm test` checks that each subscriber key is refused.
