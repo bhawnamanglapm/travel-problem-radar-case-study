@@ -642,6 +642,42 @@ How it behaves:
   can read in a public repository. Resend's dashboard shows the full error under **Logs**.
 - Status: covered by the offline tests (`npm test`); **not yet tried against a real Resend account**.
 
+### Managing subscribers
+
+`scripts/subscribers.mjs` runs on your own machine against the Blob store. It is not deployed (`.vercelignore` skips
+`scripts/`) and adds no public endpoint. It prints addresses only for `list` and `show`, and never a token.
+
+**One-time setup.** Create a read-write token for the Blob store in the Vercel dashboard, and
+put it in a file called `.env.local` in the repository root as `BLOB_READ_WRITE_TOKEN=…`. `.gitignore` ignores `.env*`
+and `npm run check` fails if one is tracked. `vercel env pull .env.local` may also bring a usable token; **not
+confirmed**: the store may only expose `BLOB_STORE_ID` with an OIDC token that does not work off Vercel. With no
+usable credentials the script prints the `@vercel/blob` error and exits 1.
+
+```
+node --env-file=.env.local scripts/subscribers.mjs stats [--days 30]
+node --env-file=.env.local scripts/subscribers.mjs list [--plan pro|free|pending]
+node --env-file=.env.local scripts/subscribers.mjs show <email>
+node --env-file=.env.local scripts/subscribers.mjs grant-pro <email> [--until 2027-01-31] [--yes]
+node --env-file=.env.local scripts/subscribers.mjs revoke-pro <email> [--yes]
+node --env-file=.env.local scripts/subscribers.mjs delete <email> [--yes]
+node --env-file=.env.local scripts/subscribers.mjs prune-events --older-than 400 [--yes]
+```
+
+| Command | What it does |
+|---|---|
+| `stats` | Counts now (pending, Free, Pro, Pro ending within 7 days) and per UTC day: sign-ups, confirmation emails, confirmations, unsubscribes (Free and Pro), expired, Free digests sent. Ends with the confirm rate, `confirmed / subscribed`. No addresses |
+| `list` | Address, status, plan, `proUntil` and confirmed date. A Pro record past its end date shows as `pro (lapsed)`: the sweep treats it as Free |
+| `show` | One record without its token |
+| `grant-pro` | Only for an active (confirmed) subscriber. Pro with `proSource: owner`. `--until 2027-01-31` makes Pro run through the end of that UTC day; leave it out for no end date. A past date is accepted and acts as Free. Refuses a paid Razorpay record |
+| `revoke-pro` | Back to Free, clearing the end date. Refuses a Razorpay record |
+| `delete` | Deletes the record. This is the answer to a deletion request. Event records hold no address or id. The one place the record's hashed id (not the address) can remain is a `radar:deliveries:<date>` file, which the sweep deletes after 7 days |
+| `prune-events` | Deletes event records older than N days |
+
+Every write only describes what it would change until you add `--yes` (and then exits 0). Exit codes: `0` done,
+`1` not found, refused or not applied, `2` bad usage. A granted Pro starts at the next scheduled sweep, because Pro
+email goes only with scheduled sweeps. `stats` is where the Phase 2 numbers in
+[`docs/subscriptions/pricing.md`](docs/subscriptions/pricing.md) come from.
+
 ### Changing the schedule
 
 The 5-hour schedule is the `cron` line in `.github/workflows/sweep.yml`, in UTC. Edit it and push to `main`. If you

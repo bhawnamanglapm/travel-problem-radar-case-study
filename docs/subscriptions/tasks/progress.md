@@ -18,7 +18,7 @@ working in a real inbox; that is T12's staged launch.
 | [T08](T08-subscribe-page.md) `/subscribe/` page, build, checks | done | 147fd24 | 238 pass + 7 new `npm run check` checks | See T08 notes below |
 | [T09](T09-delivery-engine.md) Delivery engine | done | ef7831b | 281 pass (+43 new) | See T09 notes below |
 | [T10](T10-sweep-integration.md) Wire delivery into the sweep | done | 0d3b008 | 300 pass (+19 new) | See T10 notes below |
-| [T11](T11-admin-script-and-metrics.md) Admin script + metrics | todo | | | |
+| [T11](T11-admin-script-and-metrics.md) Admin script + metrics | done | TBD11 | 340 pass (+37 new; 303 before T11) | See T11 notes below |
 
 ## Notes per task
 
@@ -175,3 +175,33 @@ working in a real inbox; that is T12's staged launch.
 - **Not verified:** the 240 s deadline against a real run's timing (the 4 Anthropic calls run in parallel; the
   owner's measured duration is the 5.4 step in DEPLOYMENT.md). The sweep's total time with 5000 subscribers (50 batch
   requests) has not been measured against the 300 s limit.
+
+### Bug found and fixed on the way (commit 9ddaba3)
+- `countEvents` lists `radar:event:<day>-`, but `blobStorage().list` accepted only prefixes ending in `:`. On the real
+  store it would have thrown, and T05 treats that as "cap reached", so **every sign-up would have been refused a
+  confirmation email**. The memory store used in the tests accepts any prefix, so it was not caught. Now `list`
+  accepts a prefix that starts with `radar:` and ends in `:` or `-`, and two tests run `countEvents` through
+  `blobStorage()` with a fake Blob client. Lesson: any test of code that lists should go through `blobStorage()` too.
+
+### T11
+- `scripts/subscribers.mjs`: `stats`, `list`, `show`, `grant-pro`, `revoke-pro`, `delete`, `prune-events`, as in the
+  task. The logic is exported as functions that take `storage` and `now` (`computeStats`, `grantPro`, `revokePro`,
+  `removeSubscriber`, `pruneEvents`, `listRows`, `showRecord`, `main`); the file runs the CLI only when it is the
+  entry point, so the tests import it without side effects.
+- **Choices beyond the task text:**
+  - Without `--yes`, a write prints what it would change, changes nothing and exits **1** (there is no interactive
+    prompt, so it works in a script).
+  - `--until 2027-01-31` means the end of that UTC day (`23:59:59.999Z`), so the date given is the last day of Pro.
+    A past date is accepted and the sweep treats it as Free. A malformed or impossible date is a usage error (2).
+  - `grant-pro` also refuses a record that is a paid Razorpay Pro, and `revoke-pro` says "nothing to do" for a record
+    already on Free.
+  - `delete` records no event (there is no event type for it, and the task does not ask for one).
+  - `stats` unsubscribe-by-plan reads the file of each `unsubscribed` event in the period; every other count comes
+    from the key names alone. The confirm rate is `confirmed / subscribed` over the same days, as the task defines
+    it, so people who subscribed before the period can push it above what a cohort would give.
+  - `.vercelignore` is checked by a test, so the script cannot slip into the deployment unnoticed.
+- DEPLOYMENT.md has "Managing subscribers" (commands, token step); pricing.md's gate question points at `stats`.
+- **Not verified:** whether `vercel env pull` gives a token that works from a laptop (the task's own verify item;
+  the script's error message when there is no usable credential is shown by running it with none). Nothing here has
+  been run against the real store. Whether the deploy's file list excludes `scripts/` needs a real deploy to confirm
+  (acceptance item 5): `.vercelignore` lists it.

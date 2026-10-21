@@ -1024,4 +1024,161 @@ const iso = (ms) => new Date(ms).toISOString();
   check(keys.length >= 3 && refused === keys.length, `sweep: every subscriber key a sweep wrote is refused by /api/data (${refused}/${keys.length})`);
 }
 
+// ---- T11: owner admin script (scripts/subscribers.mjs)
+{
+  const admin = await import("./subscribers.mjs");
+  const DAY = 24 * 3600 * 1000;
+  const world = async () => {
+    const st = memStorage();
+    const mk = async (n, over = {}) => {
+      const rec = { ...newPending(`p${n}@example.com`, { now: T0 - 5 * DAY, randomBytes: seeded(40 + n) }), token: "secret-token-" + n, status: "active", confirmedAt: iso(T0 - 4 * DAY), ...over };
+      await putSubscriber(st, rec);
+      return rec;
+    };
+    return { st, mk };
+  };
+  const run = async (st, argv, { now = T0 } = {}) => {
+    const out = []; const err = [];
+    const code = await admin.main(argv, { storage: st, now, rb: seeded(70), out: (s) => out.push(s), err: (s) => err.push(s) });
+    return { code, out: out.join("\n"), err: err.join("\n"), all: out.concat(err).join("\n") };
+  };
+  const rec = async (st, n) => JSON.parse(st.m.get("radar:sub:" + subscriberId(`p${n}@example.com`)));
+  const eventsOf = (st, type) => [...st.m.entries()].filter(([k]) => k.startsWith("radar:event:") && k.includes(`-${type}-`));
+
+  // grant-pro
+  let { st, mk } = await world();
+  await mk(1); await mk(2, { status: "pending", confirmedAt: null }); await mk(3, { plan: "pro", proSource: "razorpay", proUntil: iso(T0 + 20 * DAY) });
+  let r = await run(st, ["grant-pro", "p1@example.com"]);
+  check(r.code === 1 && /add --yes/.test(r.all) && (await rec(st, 1)).plan === "free" && eventsOf(st, "progranted").length === 0, "grant-pro without --yes: says what it would change, changes nothing, exit 1");
+  r = await run(st, ["grant-pro", "P1@Example.com", "--yes"]);
+  let a = await rec(st, 1);
+  check(r.code === 0 && a.plan === "pro" && a.proSource === "owner" && a.proUntil === null && a.status === "active", "grant-pro --yes on an active record: Pro, source owner, no end date");
+  const ev = eventsOf(st, "progranted");
+  check(ev.length === 1 && JSON.parse(ev[0][1]).plan === "pro" && !/@|[0-9a-f]{64}/.test(ev[0][0] + ev[0][1]), "grant-pro: a progranted event with no address or id");
+  check(!r.all.includes("secret-token"), "grant-pro: never prints the token");
+  r = await run(st, ["grant-pro", "p2@example.com", "--yes"]);
+  check(r.code === 1 && /pending/.test(r.err) && (await rec(st, 2)).plan === "free", "grant-pro on a pending record: refused");
+  r = await run(st, ["grant-pro", "nobody@example.com", "--yes"]);
+  check(r.code === 1 && /not found/.test(r.err), "grant-pro on an unknown address: not found, exit 1");
+  r = await run(st, ["grant-pro", "p3@example.com", "--yes"]);
+  check(r.code === 1 && /Razorpay/.test(r.err) && (await rec(st, 3)).proUntil === iso(T0 + 20 * DAY), "grant-pro on a paid Razorpay Pro: refused, record unchanged");
+  r = await run(st, ["grant-pro", "p1@example.com", "--until", "2027-01-31", "--yes"]);
+  a = await rec(st, 1);
+  check(r.code === 0 && a.proUntil === "2027-01-31T23:59:59.999Z" && effectivePlan(a, T0) === "pro" && effectivePlan(a, Date.UTC(2027, 1, 1)) === "free", "grant-pro --until: Pro through the end of that UTC day, Free after");
+  const badUntil = [];
+  for (const bad of ["2027-02-30", "tomorrow", "2027-1-5"]) badUntil.push((await run(st, ["grant-pro", "p1@example.com", "--until", bad, "--yes"])).code);
+  check(badUntil.every((c) => c === 2) && (await rec(st, 1)).proUntil === "2027-01-31T23:59:59.999Z", `grant-pro --until with an impossible or malformed date: usage error, exit 2, record unchanged (${badUntil.join(",")})`);
+
+  // the next scheduled sweep gives a granted address the Pro email, and a past --until makes them Free
+  {
+    const sent = [];
+    const fetchFn = async (url, init) => { const b = JSON.parse(init.body); sent.push(...b); return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ data: b.map(() => ({ id: "x" })) }) }; };
+    const w = await world();
+    await w.mk(1); await w.mk(2); await w.mk(3);
+    await run(w.st, ["grant-pro", "p1@example.com", "--yes"]);
+    await run(w.st, ["grant-pro", "p2@example.com", "--until", "2026-10-01", "--yes"]);
+    const sweep = { id: "1792570150123", at: iso(T0), problems: [{ id: "a", cat: "traveler_pain", title: "T", summary: "", source: "S", link: "https://example.com/a", region: "EU", date: "2026-10-20", severity: "High", opportunity: "", isNew: true }], perCat: {} };
+    await deliverToSubscribers({ env: { SUBSCRIPTIONS_ENABLED: "1", RESEND_API_KEY: "re_k", EMAIL_FROM: "Radar <hello@pehchanthetraveller.com>", SITE_URL: "https://site.example" },
+      storage: w.st, fetchFn, now: () => T0, randomBytes: seeded(3), sweep, scheduled: true, log: () => {} });
+    const proMail = sent.filter((m) => /Pro update/.test(m.text)).map((m) => m.to[0]);
+    const freeMail = sent.filter((m) => /daily digest/.test(m.text)).map((m) => m.to[0]).sort();
+    check(proMail.join() === "p1@example.com" && freeMail.join() === "p2@example.com,p3@example.com", "grant-pro then a scheduled sweep: the granted address gets the Pro email; one with a past --until gets the Free digest");
+  }
+
+  // revoke-pro
+  ({ st, mk } = await world());
+  await mk(1, { plan: "pro", proSource: "owner", proUntil: iso(T0 + 9 * DAY) }); await mk(2, { plan: "pro", proSource: "razorpay", proUntil: iso(T0 + 9 * DAY) }); await mk(3);
+  r = await run(st, ["revoke-pro", "p1@example.com"]);
+  check(r.code === 1 && (await rec(st, 1)).plan === "pro" && eventsOf(st, "prorevoked").length === 0, "revoke-pro without --yes: changes nothing");
+  r = await run(st, ["revoke-pro", "p1@example.com", "--yes"]);
+  a = await rec(st, 1);
+  check(r.code === 0 && a.plan === "free" && a.proUntil === null && a.proSource === null && eventsOf(st, "prorevoked").length === 1, "revoke-pro --yes: Free, no source, no end date, a prorevoked event");
+  r = await run(st, ["revoke-pro", "p2@example.com", "--yes"]);
+  check(r.code === 1 && /Razorpay/.test(r.err) && (await rec(st, 2)).plan === "pro", "revoke-pro on a Razorpay record: refused, record unchanged");
+  r = await run(st, ["revoke-pro", "p3@example.com", "--yes"]);
+  check(r.code === 1 && /already/.test(r.err), "revoke-pro on a Free record: nothing to do");
+  r = await run(st, ["revoke-pro", "nobody@example.com", "--yes"]);
+  check(r.code === 1 && /not found/.test(r.err), "revoke-pro on an unknown address: not found");
+
+  // delete removes the record and nothing else
+  ({ st, mk } = await world());
+  await mk(1); await mk(2);
+  st.m.set("radar:history", "[]"); st.m.set("radar:event:20261021-080910123-subscribed-aabbcc", "{}"); st.m.set("radar:deliveries:20261021", '{"free":[]}');
+  const keysBefore = [...st.m.keys()].sort();
+  r = await run(st, ["delete", "p1@example.com"]);
+  check(r.code === 1 && st.m.size === keysBefore.length, "delete without --yes: nothing deleted");
+  r = await run(st, ["delete", "p1@example.com", "--yes"]);
+  const gone = keysBefore.filter((k) => !st.m.has(k));
+  check(r.code === 0 && gone.length === 1 && gone[0] === "radar:sub:" + subscriberId("p1@example.com") && st.m.size === keysBefore.length - 1, "delete --yes: removes that record and nothing else");
+  r = await run(st, ["delete", "p1@example.com", "--yes"]);
+  check(r.code === 1 && /not found/.test(r.err), "delete again: not found");
+
+  // show and list
+  ({ st, mk } = await world());
+  await mk(1); await mk(2, { plan: "pro", proSource: "owner", proUntil: iso(T0 + 3 * DAY) }); await mk(3, { plan: "pro", proSource: "owner", proUntil: iso(T0 - DAY) }); await mk(4, { status: "pending", confirmedAt: null });
+  r = await run(st, ["show", "p2@example.com"]);
+  check(r.code === 0 && r.out.includes("p2@example.com") && r.out.includes('"plan": "pro"') && !r.out.includes("token") && !r.out.includes("secret-token"), "show: the record, without the token");
+  r = await run(st, ["show", "nobody@example.com"]);
+  check(r.code === 1, "show an unknown address: exit 1");
+  r = await run(st, ["list", "--plan", "pro"]);
+  check(r.code === 0 && r.out.includes("p2@example.com") && !r.out.includes("p3@example.com") && !r.out.includes("p1@example.com") && !r.out.includes("secret-token"), "list --plan pro: only effective Pro, no token");
+  r = await run(st, ["list", "--plan", "free"]);
+  check(r.out.includes("p1@example.com") && r.out.includes("p3@example.com") && r.out.includes("(lapsed)") && !r.out.includes("p4@example.com"), "list --plan free: includes a lapsed Pro, marked lapsed, not pending");
+  r = await run(st, ["list", "--plan", "pending"]);
+  check(r.out.includes("p4@example.com") && !r.out.includes("p1@example.com"), "list --plan pending");
+  r = await run(st, ["list"]);
+  check(r.out.split("\n").length === 1 + 4 + 1, "list: header, all 4 records, a count");
+  r = await run(st, ["list", "--plan", "gold"]);
+  check(r.code === 2, "list with an unknown plan: usage error");
+
+  // stats
+  ({ st, mk } = await world());
+  await mk(1); await mk(2, { plan: "pro", proSource: "owner", proUntil: iso(T0 + 3 * DAY) }); await mk(3, { plan: "pro", proSource: "owner" });
+  await mk(4, { plan: "pro", proSource: "owner", proUntil: iso(T0 - DAY) }); await mk(5, { status: "pending", confirmedAt: null });
+  let n = 0;
+  const ev1 = (day, type, plan = null) => st.m.set(`radar:event:${day}-${String(80910000 + n).padStart(9, "0")}-${type}-${(0xaa0000 + n++).toString(16)}`, JSON.stringify({ type, at: "x", plan }));
+  for (const [day, type, k, plan] of [["20261019", "subscribed", 2], ["20261019", "confirmsent", 2], ["20261019", "confirmed", 1], ["20261020", "subscribed", 1], ["20261020", "confirmsent", 1],
+    ["20261020", "confirmed", 2], ["20261020", "unsubscribed", 1, "free"], ["20261021", "subscribed", 1], ["20261021", "unsubscribed", 1, "pro"], ["20261021", "expired", 1], ["20261018", "subscribed", 5]]) {
+    for (let i = 0; i < k; i++) ev1(day, type, plan);
+  }
+  st.m.set("radar:deliveries:20261020", JSON.stringify({ free: ["a", "b", "c"] }));
+  const s = await admin.computeStats(st, { now: T0, days: 3 });
+  check(s.now.pending === 1 && s.now.free === 2 && s.now.pro === 2 && s.now.proExpiring7d === 1, `stats: counts now (1 pending, 2 Free incl. a lapsed Pro, 2 Pro, 1 ending within 7 days) (${JSON.stringify(s.now)})`);
+  const d = Object.fromEntries(s.perDay.map((x) => [x.day, x]));
+  check(s.perDay.length === 3 && d["20261019"].subscribed === 2 && d["20261019"].confirmed === 1 && d["20261020"].confirmed === 2 && d["20261020"].unsubscribedFree === 1 && d["20261021"].unsubscribedPro === 1 && d["20261021"].expired === 1 && d["20261020"].freeDelivered === 3,
+    "stats: per-day counts, unsubscribes split by plan, Free sends from the deliveries file");
+  check(s.totals.subscribed === 4 && s.totals.confirmed === 3 && s.totals.confirmsent === 3 && s.totals.unsubscribed === 2 && s.confirmRate === 0.75, "stats: totals leave out days before the period; confirm rate is confirmed / subscribed (3/4)");
+  r = await run(st, ["stats", "--days", "3"]);
+  check(r.code === 0 && r.out.includes("75.0%") && !/@/.test(r.out) && !r.out.includes("secret-token"), "stats: prints the confirm rate and no address or token");
+  r = await run(st, ["stats", "--days", "0"]);
+  check(r.code === 2, "stats --days 0: usage error");
+  const empty = await admin.computeStats(memStorage(), { now: T0, days: 7 });
+  check(empty.confirmRate === null && /n\/a/.test(admin.formatStats(empty)), "stats with no events: confirm rate n/a, no division by zero");
+
+  // prune-events
+  ({ st } = await world());
+  for (const k of ["radar:event:20250101-080910123-subscribed-aaaaaa", "radar:event:20260101-080910123-confirmed-bbbbbb", "radar:event:20261020-080910123-confirmed-cccccc"]) st.m.set(k, "{}");
+  st.m.set("radar:history", "[]");
+  r = await run(st, ["prune-events", "--older-than", "400"]);
+  check(r.code === 1 && st.m.size === 4 && /would delete 1 /.test(r.err), "prune-events without --yes: reports the count, deletes nothing");
+  r = await run(st, ["prune-events", "--older-than", "400", "--yes"]);
+  check(r.code === 0 && st.m.size === 3 && !st.m.has("radar:event:20250101-080910123-subscribed-aaaaaa") && st.m.has("radar:history"), "prune-events --older-than 400 --yes: deletes only events older than that");
+  r = await run(st, ["prune-events", "--yes"]);
+  check(r.code === 2, "prune-events without --older-than: usage error");
+
+  // usage and failures
+  const bads = [[], ["nope"], ["show"], ["show", "a@b.com", "extra"], ["show", "not an email"], ["stats", "--wat"], ["stats", "--yes"], ["grant-pro", "a@b.com", "--until"], ["list", "--plan"]];
+  const codes = [];
+  for (const argv of bads) codes.push((await run(memStorage(), argv)).code);
+  check(codes.every((c) => c === 2), `bad usage exits 2 (${codes.join(",")})`);
+  const broken = memStorage();
+  broken.list = async () => { throw new Error("blob down"); };
+  r = await run(broken, ["stats"]);
+  check(r.code === 1 && /blob down/.test(r.err), "a storage failure is reported with exit 1, not a stack trace");
+
+  // the script is kept out of the deployment
+  const { readFileSync } = await import("node:fs");
+  check(readFileSync(new URL("../.vercelignore", import.meta.url), "utf8").split(/\r?\n/).includes("scripts"), ".vercelignore keeps scripts/ (and so this tool) out of the deployment");
+}
+
 finish("subscription tests");
