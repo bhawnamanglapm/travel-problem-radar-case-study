@@ -124,7 +124,7 @@ If `git diff` shows changes, commit the rebuilt bundles before deploying.
 | Cron timing | Within the hour (±59 min) | The 01:30 UTC backstop can fire any time from **01:00 to 01:59 UTC** (06:30–07:29 IST) |
 | Function duration | 300 s default and maximum (Fluid compute, on by default) | `vercel.json` sets `maxDuration: 300` for the sweep. Pro allows up to 800 s |
 | Cron retries | None | A failed sweep is not retried. The next attempt is the next scheduled run |
-| Blob storage | Included on all plans, within usage limits | This app stores a few small JSON files (at most 60 sweeps plus 2 index files) |
+| Blob storage | Included on all plans, within usage limits. Hobby includes 2,000 advanced operations a month (uploads and lists; deletes are free) and 10,000 simple operations. Going over locks Blob for 30 days | A few small JSON files per sweep, plus one per subscriber and event. Each sign-up that reaches the storage code costs a few advanced operations, which is why the Vercel Firewall rule in [Limiting sign-ups](#subscriber-email-optional) stops floods first. Usage: **Usage** tab in the dashboard (not measured here) |
 
 ### GitHub Actions (the 5-hour schedule, as documented in October 2026)
 
@@ -215,6 +215,8 @@ Open **Settings → Environment Variables** and add:
 | `SUBSCRIPTIONS_ENABLED` | `1` | **Production only** | No. Turns subscriber sign-up and delivery on; see [Subscriber email](#subscriber-email-optional) |
 | `MAX_SUBSCRIBERS` | A whole number, for example `5000` | **Production only** | Only with `SUBSCRIPTIONS_ENABLED`. Unset means the list takes nobody new |
 | `MAX_CONFIRMS_PER_DAY` | A whole number | **Production only** | No. Defaults to 10 confirmation emails a day |
+| `MAX_SIGNUPS_PER_IP_HOUR` | A whole number | **Production only** | No. Defaults to 5 sign-ups per connection per UTC hour |
+| `RESEND_WEBHOOK_SECRET` | The signing secret (`whsec_…`) of the Resend webhook | **Production only** | No. Turns on `/api/resend-webhook`; see [Subscriber email](#subscriber-email-optional) |
 | `SITE_URL` | `https://` plus your production domain, no trailing slash | **Production only** | No. Defaults to the Vercel production domain |
 
 Generate the secret with either:
@@ -224,7 +226,7 @@ openssl rand -hex 32
 node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 ```
 
-Tick **Sensitive** for both secrets, and for `SLACK_WEBHOOK_URL` and `RESEND_API_KEY` if you add them, so the
+Tick **Sensitive** for both secrets, and for `SLACK_WEBHOOK_URL`, `RESEND_API_KEY` and `RESEND_WEBHOOK_SECRET` if you add them, so the
 dashboard never shows them again. Save a copy of `CRON_SECRET` in your
 password manager: you need it for the GitHub Actions schedule (4.7) and to run a sweep by hand.
 
@@ -495,6 +497,8 @@ needed at runtime.
 | `SUBSCRIPTIONS_ENABLED` | You (optional) | The subscriber endpoints, `/api/sweep` | `1` turns sign-up and subscriber delivery on together. Anything else, or unset, means off |
 | `MAX_SUBSCRIBERS` | You (with subscriptions) | `/api/subscribe` | The cap on records (pending and active). Unset or not a positive whole number means **closed**: the sign-up reply looks the same but nothing is stored. The count is the one the last saved sweep wrote |
 | `MAX_CONFIRMS_PER_DAY` | You (optional) | `/api/subscribe` | Confirmation emails per UTC day, across all addresses. Default 10; `0` stops confirmation emails |
+| `MAX_SIGNUPS_PER_IP_HOUR` | You (optional) | `/api/subscribe` | Sign-up attempts per client IP per UTC hour. Default 5; unset or not a positive whole number means 5. Over it the reply is the same and nothing is stored or sent |
+| `RESEND_WEBHOOK_SECRET` | You (optional) | `/api/resend-webhook` | The Resend webhook's signing secret. If it is unset, the endpoint answers `503` and does nothing |
 | `SITE_URL` | You (optional) | The subscriber endpoints, `/api/sweep` | Base of the links in subscriber emails. If unset, `https://` plus `VERCEL_PROJECT_PRODUCTION_URL`. With neither, subscriber email is off |
 | `VERCEL_PROJECT_PRODUCTION_URL` | Vercel, automatically | `/api/sweep`, the subscriber endpoints | Builds the "Open the live board" link in the Slack message, and the subscriber links when `SITE_URL` is unset. If it is missing, the Slack link is left out |
 | `BLOB_STORE_ID` or `BLOB_READ_WRITE_TOKEN` | Vercel, when the store is connected | `api/_lib/storage.js` | Do not set by hand unless running outside Vercel |
@@ -510,9 +514,10 @@ not a letter or digit with `-`.
 | `radar:sweep:<id>` | `radar/radar-sweep-<id>.json` | One sweep's items | Yes |
 | `radar:seenIds` | `radar/radar-seenIds.json` | Up to 800 item IDs already seen, used for the New flag | No |
 | `radar:sub:<id>` | `radar/radar-sub-<id>.json` | One subscriber: address, status, plan, token, dates. `<id>` is the SHA-256 of the lowercased address | No |
-| `radar:event:<YYYYMMDD>-<time>-<type>-<random>` | `radar/radar-event-….json` | One sign-up, confirmation, unsubscribe or Pro event: type, time and plan, **no address or id**. Kept until `prune-events` deletes it | No |
+| `radar:event:<YYYYMMDD>-<time>-<type>-<random>` | `radar/radar-event-….json` | One sign-up, confirmation, unsubscribe, Pro, bounce or complaint event: type, time and plan, **no address or id**. Kept until `prune-events` deletes it | No |
 | `radar:deliveries:<YYYYMMDD>` | `radar/radar-deliveries-<YYYYMMDD>.json` | Record ids already sent that day's Free digest. Deleted by the sweep after 7 days | No |
 | `radar:subscriberCount` | `radar/radar-subscriberCount.json` | Pending plus active records at the last saved sweep; the sign-up cap reads it | No |
+| `radar:iphit:<YYYYMMDDHH>-<16 hex>-<6 hex>` | `radar/radar-iphit-….json` | One sign-up attempt: its time only. The 16 hex are from a SHA-256 of the client IP; **the IP itself is not stored**. Deleted by the sweep after 2 hours | No |
 
 `/api/data` allows only `radar:history` and `radar:sweep:<id>`; the tests check that every subscriber key is refused.
 
@@ -669,7 +674,7 @@ How it behaves:
 ### Subscriber email (optional)
 
 Anyone can sign up for the digest by email at `/subscribe/`. This is separate from the owner's email above, which is
-unchanged. Code: `api/subscribe.js`, `api/confirm.js`, `api/unsubscribe.js` and `api/account.js`, with the logic in
+unchanged. Code: `api/subscribe.js`, `api/confirm.js`, `api/unsubscribe.js`, `api/account.js` and `api/resend-webhook.js`, with the logic in
 `api/_lib/subscription-handlers.js`, `api/_lib/subscribers.js` and `api/_lib/subscriber-delivery.js`. Design notes:
 [docs/subscriptions/email-signup.md](docs/subscriptions/email-signup.md).
 
@@ -695,7 +700,8 @@ unchanged. Code: `api/subscribe.js`, `api/confirm.js`, `api/unsubscribe.js` and 
 - `RESEND_API_KEY` (as for the owner's email).
 - `MAX_SUBSCRIBERS`. Without it the list is closed.
 - `SUBSCRIPTIONS_ENABLED=1`.
-- Optional: `SITE_URL` and `MAX_CONFIRMS_PER_DAY` (see the [environment variables](#environment-variables)).
+- Optional: `SITE_URL`, `MAX_CONFIRMS_PER_DAY`, `MAX_SIGNUPS_PER_IP_HOUR` and `RESEND_WEBHOOK_SECRET` (see the
+  [environment variables](#environment-variables)).
 
 All for **Production only**. Redeploy after adding them. If any is missing, `/api/subscribe` answers
 `503 subscriptions are not open yet` and the sweep reply says `"subscribers": "not configured"`.
@@ -731,6 +737,46 @@ then. The owner's digest is always sent first, so a used-up quota stops subscrib
 **Turning it off.** Remove `SUBSCRIPTIONS_ENABLED` (or set it to anything but `1`) and redeploy. Sign-up then answers
 `503`, confirm and manage links show "Subscriptions are paused", and the sweep sends no subscriber email. Records are
 kept, and unsubscribe links still work. Set it back to `1` and redeploy to resume.
+
+**Bounces and spam complaints (Resend webhook, T13).** `POST /api/resend-webhook` takes Resend's `email.bounced` and
+`email.complained` events. A hard bounce (`bounce.type` is `Permanent`) or a complaint deletes that address's record
+and records a `bounced` or `complained` event, with no address. Soft bounces (`Transient`, `Undetermined`) and other
+event types are ignored, and so is an address that isn't a subscriber, such as `EMAIL_TO`. Every request's signature
+(Resend signs the Svix way) is checked against the raw body before anything is read, and a timestamp more than 5
+minutes off is refused. Like unsubscribe, it works while `SUBSCRIPTIONS_ENABLED` is off. Setup:
+
+1. In Resend, open **Webhooks** and add an endpoint: `https://travel-problem-radar.vercel.app/api/resend-webhook`,
+   with the events `email.bounced` and `email.complained`.
+2. Copy its signing secret (it starts with `whsec_`) into `RESEND_WEBHOOK_SECRET`, **Production only**, Sensitive.
+   Redeploy.
+3. Check that an unsigned call is refused:
+   `curl -i -X POST https://travel-problem-radar.vercel.app/api/resend-webhook` should answer `401`. A `503` means
+   the secret doesn't reach this deployment.
+4. Check a real bounce: sign up `bounced@resend.dev` (Resend's test address) on `/subscribe/`. Its confirmation
+   bounces; afterwards `list` no longer shows it and `stats` shows a `bounced` event. `complained@resend.dev` does
+   the same with a `complained` event. Each uses one of the day's `MAX_CONFIRMS_PER_DAY` confirmation emails.
+   Resend's webhook log should show `200` replies.
+
+Replies: `200` (handled or ignored), `401` (bad or old signature), `400` (not JSON), `413` (over 64 KB), `503` (no
+secret), `500` (a storage error, so Resend tries again). No reply or log line contains an address.
+
+**Limiting sign-ups per connection (T13).** Two guards, so one sender can't use up the day's confirmation emails:
+
+- **In the code:** at most `MAX_SIGNUPS_PER_IP_HOUR` (default 5) sign-ups per client IP per UTC hour. Over it the
+  reply is the usual one and nothing is stored or sent. The IP comes from `x-vercel-forwarded-for` (or
+  `x-forwarded-for`), which Vercel sets itself so a client can't choose it. Each allowed attempt stores a
+  `radar:iphit:` file holding a hash of the IP, never the IP; the sweep deletes them after 2 hours. A count that
+  can't be read counts as reached. Without an IP header (local runs) there is no limit.
+- **In front, a Vercel Firewall rule:** a flood is answered `429` before the function runs, so it costs no Blob
+  operations (see the Blob row in [section 3](#3-costs-and-plan-limits)). Hobby allows one rate-limit rule per
+  project. In the dashboard: the project → **Firewall** → **Configure** → **New Rule**, then:
+  - Name: `subscribe rate limit`.
+  - If **Request Path** equals `/api/subscribe` **and** **Method** equals `POST`.
+  - Then **Rate Limit**: fixed window, **10 minutes**, **5 requests**, keyed by **IP**, action **Default (429)**.
+  - Save the rule, then review and publish the change.
+
+  The sign-up page shows "Too many tries from your connection. Please try again in a few minutes." on a `429`. The
+  rule's traffic shows on the Firewall overview.
 
 ### Managing subscribers
 
@@ -857,7 +903,10 @@ covers a missed 00:17 run.
 | `email: failed: http 429 daily_quota_exceeded` (or `monthly_quota_exceeded`) | The plan's sending quota is used up; each recipient counts. Unlikely with one recipient | Fewer recipients or a paid plan. The daily quota resets at midnight UTC |
 | `/subscribe/` says "Subscriptions aren't open yet" (`503`) | `SUBSCRIPTIONS_ENABLED` isn't `1`, or `RESEND_API_KEY`, a verified-domain `EMAIL_FROM` or a site URL is missing for this deployment | Set them for Production; redeploy (see [Subscriber email](#subscriber-email-optional)) |
 | `"subscribers": "not configured"` in the sweep reply | Same as the row above | Same fix |
-| Sign-up says the link is on its way, but no confirmation email comes | In order: the spam folder; `MAX_SUBSCRIBERS` unset (the list is closed) or reached; `MAX_CONFIRMS_PER_DAY` used up today; a second sign-up within 24 hours of the first; the address is already confirmed. The reply is the same in every case on purpose | Check spam first. Then the `subscribe confirm-email` log line in Vercel (kept about 30 minutes), `stats` for today's confirmation emails, and Resend's **Logs** |
+| Sign-up says the link is on its way, but no confirmation email comes | In order: the spam folder; `MAX_SUBSCRIBERS` unset (the list is closed) or reached; `MAX_CONFIRMS_PER_DAY` used up today; more than `MAX_SIGNUPS_PER_IP_HOUR` sign-ups from the same connection this hour; a second sign-up within 24 hours of the first; the address is already confirmed. The reply is the same in every case on purpose | Check spam first. Then the `subscribe confirm-email` log line in Vercel (kept about 30 minutes), `stats` for today's confirmation emails, and Resend's **Logs** |
+| `/subscribe/` says "Too many tries from your connection" (`429`) | The Vercel Firewall rule: more than 5 sign-up requests from one IP in 10 minutes | Wait 10 minutes. Many people behind one office or mobile network share an IP; raise the rule's limit if that matters |
+| Resend's webhook log shows `401` | `RESEND_WEBHOOK_SECRET` isn't this webhook's signing secret (for example after re-creating the webhook), or the server clock and the event's timestamp differ by more than 5 minutes | Copy the secret again from Resend's webhook page; redeploy. Resend retries failed deliveries |
+| Resend's webhook log shows `503` | `RESEND_WEBHOOK_SECRET` isn't set for this deployment, or was added without a redeploy | Set it for Production; redeploy |
 | Subscriber emails land in spam | A new sending domain has no reputation yet. SPF, DKIM and DMARC are set for `pehchanthetraveller.com` | Mark the emails "not spam"; it usually improves with time. Nothing to change in the code |
 | `subscribers.stopped: "quota"`, with `deferred` counts | Resend's daily quota ran out. The owner's email went first | The rest go at the next sweep. If it happens often, see the quota formula in [Subscriber email](#subscriber-email-optional) |
 | `subscribers.stopped: "deadline"`, with `deferred` counts | The sweep reached 240 seconds before sending finished | The rest go at the next sweep; nothing is sent twice |

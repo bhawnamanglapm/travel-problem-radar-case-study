@@ -72,21 +72,22 @@ Email has been sent through a real Resend account since 21 Oct 2026, from the ve
 | `api/sweep.js` | Scheduled job: runs the 4 searches, saves the result, then sends the owner's and subscribers' email (needs a secret to call) |
 | `api/data.js` | Read-only feed the live page uses (allow-listed keys only) |
 | `api/subscribe.js`, `api/confirm.js`, `api/unsubscribe.js`, `api/account.js` | Sign-up, the Confirm button, unsubscribe (also one-click from mail apps), and the manage page's data and Request Pro |
+| `api/resend-webhook.js` | Resend's signed bounce and complaint events: a hard bounce or a spam complaint deletes the address |
 | `api/_lib/radar.js`, `handlers.js` | Sweep logic and the sweep and data handlers |
 | `api/_lib/storage.js` | The private Blob store: `get`, `set`, `del`, `list`; reads skip Blob's CDN cache except for `/api/data` |
 | `api/_lib/slack.js`, `email.js` | The Slack post; every email (owner digest, subscriber digest, confirmation, Pro request) and Resend sending |
 | `api/_lib/http.js` | Shared request helpers: allowed methods, body reading with a size limit, JSON and HTML replies |
 | `api/_lib/subscribers.js` | Subscriber records, tokens, plans and event records |
-| `api/_lib/subscription-handlers.js` | The four subscriber endpoints |
+| `api/_lib/subscription-handlers.js` | The four subscriber endpoints, the per-IP sign-up limit and the Resend webhook |
 | `api/_lib/subscriber-delivery.js` | After a saved sweep: Pro and Free sends, the 24-hour roll-up, resuming a cut-off send |
 | `vercel.json` | Daily backstop cron (01:30 UTC), 300 s limit, build that publishes `index.html`, `demo/`, `live/`, `subscribe/`, `manage/` |
 | `travel-problem-radar.jsx` | The dashboard component (live in Claude's app, demo on the web) |
 | `sampleData.json` | 8 saved items, two per category, each with a source link |
-| `scripts/check.mjs` | Offline checks: sample data, page links, bundles, the subscribe and manage pages, prompt drift, secrets |
+| `scripts/check.mjs` | Offline checks: sample data, page links, bundles, the subscribe and manage pages, prompt drift, secrets, Hobby's 12-function limit |
 | `scripts/subscribers.mjs` | Owner admin tool, run on your own machine: `stats`, `list`, `show`, `grant-pro`, `revoke-pro`, `delete`, `prune-events`. Not deployed |
 | `.github/workflows/sweep.yml` | Calls `/api/sweep` every 5 hours, and on demand from the Actions tab |
 | `scripts/test-sweep.mjs` | Offline tests for the sweep, the Slack post, the email and the data feed (no network, no key) |
-| `scripts/test-subscriptions.mjs` | Offline tests for the subscriber features: storage, records, emails, every endpoint, delivery, the sweep wiring and the admin script (fake Resend, no network) |
+| `scripts/test-subscriptions.mjs` | Offline tests for the subscriber features: storage, records, emails, every endpoint (the Resend webhook's signature check too), the per-IP limit, delivery, the sweep wiring and the admin script (fake Resend, no network) |
 | `scripts/test-helpers.mjs` | Shared by both test files: PASS/FAIL printer, in-memory store, fake response |
 
 ## Rebuild the demo and live page

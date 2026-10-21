@@ -7,6 +7,7 @@
 | Size | M |
 | Depends on | T12 |
 | Trigger | Build part A once Resend's dashboard shows bounces or complaints; part B once sign-up abuse appears in the event counts |
+| Status | **Built** on 2026-10-22, both parts, before either trigger (owner's choice). Offline tests pass; the webhook secret and the firewall rule are owner steps after merge (see "Built" below) |
 
 ## Why
 
@@ -42,7 +43,23 @@ the daily confirmation cap (T05) may not stop a determined bot.
 
 ## Acceptance criteria
 
-- [ ] (A) A complaint or hard bounce removes the address within one webhook delivery
-- [ ] (A) Forged and replayed webhooks are refused
-- [ ] (B) More than the limit from one IP in an hour stores nothing, with the same reply as always
-- [ ] Docs: DEPLOYMENT.md variables and setup steps for whichever parts are built
+- [x] (A) A complaint or hard bounce removes the address within one webhook delivery (offline tests; not yet seen
+  in production)
+- [x] (A) Forged and replayed webhooks are refused (a replay after 5 minutes is refused; one inside 5 minutes
+  deletes an already-deleted record, so it changes nothing)
+- [x] (B) More than the limit from one IP in an hour stores nothing, with the same reply as always (offline tests)
+- [x] Docs: DEPLOYMENT.md variables and setup steps for whichever parts are built
+
+## Built
+
+- **Checked against the docs (October 2026):** event names `email.bounced` and `email.complained`, and
+  `data.bounce.type` `Permanent` / `Transient` / `Undetermined` (resend.com/docs); the Svix scheme, signed text
+  `id.timestamp.body`, HMAC-SHA256 with the base64 key after `whsec_` (docs.svix.com); a Web-standard handler
+  (`export default { fetch }`) gives the exact raw body on Vercel; Vercel overwrites `x-forwarded-for`, so a client
+  can't set it (vercel.com/docs/headers/request-headers). **Not confirmed:** whether Resend sends `email.bounced`
+  for soft bounces at all; they are ignored either way.
+- **Part B uses both guards** (owner's choice): the Blob counters above, and a Vercel Firewall rate-limit rule
+  (5 requests per 10 minutes per IP on `POST /api/subscribe`, `429`) so a flood doesn't spend Blob's 2,000 included
+  advanced operations a month. The CAPTCHA was not needed.
+- **Owner steps after merge:** add the Resend webhook and `RESEND_WEBHOOK_SECRET`, redeploy, add the firewall rule.
+  Checks: DEPLOYMENT.md, "Subscriber email (optional)".

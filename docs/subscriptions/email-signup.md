@@ -47,9 +47,10 @@ One Blob file per subscriber, so two sign-ups at the same moment can't overwrite
 | Key | Holds |
 |---|---|
 | `radar:sub:<sha256 of the lowercased address>` | `{ v, id, email, status: "pending" or "active", plan: "free" or "pro", proUntil, proSource, token, createdAt, confirmSentAt, confirmedAt, proRequestedAt, cats, rzp }` |
-| `radar:event:<YYYYMMDD>-<HHMMSSmmm>-<type>-<6 hex>` | One event (`subscribed`, `confirmsent`, `confirmed`, `unsubscribed`, `expired`, `progranted`, `prorevoked`, `prorequested`, and `bounced` and `complained` reserved): type, time and plan. No address and no id, so the counts survive a deletion |
+| `radar:event:<YYYYMMDD>-<HHMMSSmmm>-<type>-<6 hex>` | One event (`subscribed`, `confirmsent`, `confirmed`, `unsubscribed`, `expired`, `progranted`, `prorevoked`, `prorequested`, and `bounced` and `complained` from the Resend webhook): type, time and plan. No address and no id, so the counts survive a deletion |
 | `radar:deliveries:<YYYYMMDD>` | The record ids already sent that day's Free digest. Written only by the sweep; deleted after 7 days |
 | `radar:subscriberCount` | Pending plus active records at the last saved sweep, which the sign-up cap reads |
+| `radar:iphit:<YYYYMMDDHH>-<16 hex of sha256 of the IP>-<6 hex>` | One sign-up attempt, for the per-IP limit (T13). No raw IP. Deleted by the sweep after 2 hours |
 
 Notes:
 - `status` and `plan` are separate fields because a paid plan can end while the address stays confirmed.
@@ -87,12 +88,12 @@ Slack and email and only when the sweep saved. The owner's `EMAIL_TO` path is un
 | Risk | Guardrail |
 |---|---|
 | Someone signs up another person | Double opt-in by button; nothing is sent after the one confirmation email until confirmed |
-| Confirmation emails used to spam an address | At most one confirmation per address per 24 hours, and `MAX_CONFIRMS_PER_DAY` (default 10) across all addresses. A per-IP limit only if abuse appears (T13) |
+| Confirmation emails used to spam an address | At most one confirmation per address per 24 hours, and `MAX_CONFIRMS_PER_DAY` (default 10) across all addresses. At most `MAX_SIGNUPS_PER_IP_HOUR` (default 5) sign-ups per connection per hour, with a Vercel Firewall rate limit (5 per 10 minutes, `429`) in front so a flood costs no Blob operations (T13) |
 | Bots | The trap field. A CAPTCHA only if bots appear |
 | Addresses leak in logs | The sweep reply, which the public GitHub Actions log prints, gets **counts only**. Error text is cleaned of anything that looks like an address, id or token |
 | Subscriber data read through the public feed | `ALLOWED_KEY` in `api/_lib/handlers.js` only allows history and sweep keys; tests check that every subscriber key is refused |
 | A link guessed | 32-byte random tokens, compared in constant time; an unknown id and a wrong token get the same answer |
-| Spam complaints | One-click unsubscribe, a visible sender name, at most one Free email a day |
+| Spam complaints and bounces | One-click unsubscribe, a visible sender name, at most one Free email a day. A complaint or a hard bounce deletes the address, through Resend's signed webhook (`/api/resend-webhook`, T13) |
 | Privacy | The sign-up page says what is stored (the address, the dates, whether Pro was asked for) and that unsubscribing deletes it, with a contact address for deletion requests. Advice on India's DPDP Act: not recorded as done |
 
 ## Tests

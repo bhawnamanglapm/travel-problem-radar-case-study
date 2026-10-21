@@ -23,6 +23,7 @@ working in a real inbox; that is T12's staged launch.
 | Fresh Blob reads (bug fix) | done | 61b2f79 (#9) | 374 pass (+3 new) | Reads skip Blob's CDN cache except `/api/data`'s |
 | [T12](T12-docs-and-launch.md) Docs | done | branch `fix/pages-redirect-and-launch-docs` | 374 pass; 39 `npm run check` checks | Docs 1 to 6; see "T12" below |
 | [T12](T12-docs-and-launch.md) Staged launch | in progress | | | Steps recorded under "T12" below |
+| [T13](T13-optional-hardening.md) Bounces, complaints, per-IP limit | done (offline) | branch `feat/t13-hardening` | 423 pass (355 subscriber + 68 sweep; +49 new) and 3 new `npm run check` checks | See "T13" below |
 
 ## Notes per task
 
@@ -255,3 +256,19 @@ working in a real inbox; that is T12's staged launch.
   the first chance after the secret was the 20:17 UTC slot, which had not started by 21:03 UTC.
 - **Not written down yet (owner):** the Phase 2 gate thresholds and the measuring period (acceptance item 3). They
   must be set before looking at results.
+
+### T13
+- **Part A:** `api/resend-webhook.js` (function 7 of Hobby's 12) is a Web-standard handler, so the signature is
+  checked on the exact raw body. `verifySvix` uses `node:crypto` only (no new package) and refuses a missing header,
+  a timestamp more than 5 minutes off, or no matching `v1` signature. A hard bounce or a complaint deletes the record
+  and records a `bounced` or `complained` event; soft bounces, other events and unknown addresses get `200` and
+  change nothing. No reply or log line has an address (tested).
+- **Part B:** the sign-up limit runs after the email check and before any other storage call. The client IP is
+  `x-vercel-forwarded-for`, else `x-forwarded-for`, else `x-real-ip`; Vercel overwrites `x-forwarded-for`, so a
+  client can't choose it. Counter keys hold a 16-hex SHA-256 prefix of the IP, never the IP. The sweep's tidy-up
+  deletes counters older than 2 hours (only when subscriptions are configured, like the other tidy-ups).
+- **Why the firewall rule too:** each allowed attempt costs one list and one upload, on top of what sign-up already
+  spends, and Hobby includes 2,000 advanced Blob operations a month (going over locks Blob for 30 days). Today's
+  usage was not measured. The rule answers a flood with `429` before the function runs.
+- **Not done here (owner steps):** the Resend webhook and its secret, and the firewall rule. Neither has been seen
+  working in production yet.

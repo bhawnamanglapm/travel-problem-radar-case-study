@@ -36,6 +36,7 @@ flowchart LR
     CONF["api/confirm"]
     UNS["api/unsubscribe"]
     ACC["api/account"]
+    RWH["api/resend-webhook"]
     CHK["api/checkout (later)"]
     WH["api/razorpay-webhook (later)"]
   end
@@ -58,6 +59,7 @@ flowchart LR
   V -->|email link| UNS --> BLOB
   V -->|email link| MAN --> ACC --> BLOB
   ACC -->|Pro request| RES
+  RES -->|signed bounces, complaints| RWH --> BLOB
   MAN --> CHK --> RZP
   RZP -->|signed events| WH --> BLOB
 ```
@@ -162,14 +164,16 @@ flowchart LR
 | Endpoint | `GET` and `POST /api/confirm` | Link in the confirmation email | Built | [email-signup.md](email-signup.md) |
 | Endpoint | `GET` and `POST /api/unsubscribe` | Link and one-click header in every email | Built | [email-signup.md](email-signup.md) |
 | Endpoint | `GET` and `POST /api/account` | Manage page | Built | [email-signup.md](email-signup.md) |
+| Endpoint | `POST /api/resend-webhook` | Resend (bounces and complaints) | Built (T13) | [DEPLOYMENT.md](../../DEPLOYMENT.md#subscriber-email-optional) |
 | Endpoint | `POST /api/checkout` | Manage page | Later | [payments-razorpay.md](payments-razorpay.md) |
 | Endpoint | `POST /api/razorpay-webhook` | Razorpay | Later | [payments-razorpay.md](payments-razorpay.md) |
 | Blob key | `radar:sub:<hash of email>` | All of the above | Built | [email-signup.md](email-signup.md) |
 | Blob key | `radar:event:<day>-<time>-<type>-<random>` | Sign-up metrics, `stats` | Built | [email-signup.md](email-signup.md) |
 | Blob key | `radar:deliveries:<YYYYMMDD>` | Sweep handler (Free sends) | Built | [email-signup.md](email-signup.md) |
 | Blob key | `radar:subscriberCount` | Sign-up cap | Built | [email-signup.md](email-signup.md) |
+| Blob key | `radar:iphit:<hour>-<hash of IP>-<random>` | Per-IP sign-up limit | Built (T13) | [email-signup.md](email-signup.md) |
 | Blob key | `radar:rzp-event:<id>` | Webhook | Later | [payments-razorpay.md](payments-razorpay.md) |
-| Variable | `EMAIL_FROM` (on a verified domain), `SUBSCRIPTIONS_ENABLED`, `MAX_SUBSCRIBERS`, `MAX_CONFIRMS_PER_DAY`, `SITE_URL` | Email | Built | [DEPLOYMENT.md](../../DEPLOYMENT.md#environment-variables) |
+| Variable | `EMAIL_FROM` (on a verified domain), `SUBSCRIPTIONS_ENABLED`, `MAX_SUBSCRIBERS`, `MAX_CONFIRMS_PER_DAY`, `SITE_URL`, `MAX_SIGNUPS_PER_IP_HOUR`, `RESEND_WEBHOOK_SECRET` | Email | Built | [DEPLOYMENT.md](../../DEPLOYMENT.md#environment-variables) |
 | Variable | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `RAZORPAY_PLAN_ID` | Payments | Later | [payments-razorpay.md](payments-razorpay.md) |
 
 Everything in the Blob store stays private. `/api/data` serves only history and sweep keys, so none of the new keys
