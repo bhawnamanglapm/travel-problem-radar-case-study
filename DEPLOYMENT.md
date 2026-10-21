@@ -365,7 +365,7 @@ are unset, and otherwise `sent` or `failed: …` (see [Posting to Slack](#postin
 A **saved** run also returns a `subscribers` field, after the owner's `slack` and `email` (so if the Resend quota runs
 out, it is the subscribers' send that stops, not yours). It is `not configured` while `SUBSCRIPTIONS_ENABLED` is not
 `1` or the Resend sender is not set up, and otherwise an object of counts only, never an address:
-`{"pro":{"due":N,"sent":N,"failed":N,"deferred":N},"free":{"due":N,"sent":N,"failed":N,"deferred":N,"alreadySent":N},"pending":N,"expired":N,"unreadable":N,"stopped":null}`.
+`{"pro":{"due":N,"sent":N,"failed":N,"deferred":N,"emptyForCats":N},"free":{"due":N,"sent":N,"failed":N,"deferred":N,"alreadySent":N},"pending":N,"expired":N,"unreadable":N,"stopped":null}`.
 `deferred` means not attempted this run (the 240-second subscriber deadline, or a quota stop); a later sweep picks
 those up. `stopped` is `quota`, `deadline` or an `http …` reason. A manual run reports `"pro":{"skipped":"manual run"}`.
 A failure while delivering shows as `{"error":"…"}`; it never changes the 200 answer or what was saved. Skipped,
@@ -513,7 +513,7 @@ not a letter or digit with `-`.
 | `radar:history` | `radar/radar-history.json` | Index of saved sweeps (id, time, counts), last 60 | Yes |
 | `radar:sweep:<id>` | `radar/radar-sweep-<id>.json` | One sweep's items | Yes |
 | `radar:seenIds` | `radar/radar-seenIds.json` | Up to 800 item IDs already seen, used for the New flag | No |
-| `radar:sub:<id>` | `radar/radar-sub-<id>.json` | One subscriber: address, status, plan, token, dates. `<id>` is the SHA-256 of the lowercased address | No |
+| `radar:sub:<id>` | `radar/radar-sub-<id>.json` | One subscriber: address, status, plan, token, dates, and chosen categories (`cats`, Pro only). `<id>` is the SHA-256 of the lowercased address | No |
 | `radar:event:<YYYYMMDD>-<time>-<type>-<random>` | `radar/radar-event-….json` | One sign-up, confirmation, unsubscribe, Pro, bounce or complaint event: type, time and plan, **no address or id**. Kept until `prune-events` deletes it | No |
 | `radar:deliveries:<YYYYMMDD>` | `radar/radar-deliveries-<YYYYMMDD>.json` | Record ids already sent that day's Free digest. Deleted by the sweep after 7 days | No |
 | `radar:subscriberCount` | `radar/radar-subscriberCount.json` | Pending plus active records at the last saved sweep; the sign-up cap reads it | No |
@@ -722,13 +722,15 @@ then. The owner's digest is always sent first, so a used-up quota stops subscrib
 
 ```json
 "subscribers": {
-  "pro": { "due": 1, "sent": 1, "failed": 0, "deferred": 0 },
+  "pro": { "due": 1, "sent": 1, "failed": 0, "deferred": 0, "emptyForCats": 0 },
   "free": { "due": 1, "sent": 1, "failed": 0, "deferred": 0, "alreadySent": 0 },
   "pending": 0, "expired": 0, "unreadable": 0, "stopped": null
 }
 ```
 
 - `pro` is `{ "skipped": "manual run" }` for a manual run.
+- `pro.emptyForCats` counts Pro subscribers who chose categories that had nothing in this sweep. They are sent
+  nothing for it.
 - `free.alreadySent` counts subscribers who already had today's digest; later sweeps that day send them nothing.
 - `deferred` is anyone not reached this time, because the 240-second deadline passed or sending stopped. They are
   tried again at the next sweep, and nobody gets the same day's Free digest twice.
@@ -835,6 +837,14 @@ subject "Travel Problem Radar: Pro request". It names nobody, so run `list --pla
 then `grant-pro <email> --yes`. A repeat click sends nothing more, and a failed owner email still records the request.
 The subscriber is not emailed when Pro is switched on: their next email after a scheduled sweep is the Pro update.
 
+**Pro categories (T14).** On `/manage/`, a Pro subscriber ticks the categories they want and presses Save. The page
+posts `action: "set-cats"` to `/api/account`, and the choice is stored on their record as `cats`: `null` means all
+four, otherwise a list of category keys. Their Pro emails then hold only those categories, with the counts in the
+subject and heading worked out for them. If none of their categories has anything in a sweep, they get no email for
+it (`pro.emptyForCats` in the sweep reply). Free subscribers see the boxes disabled and always get every category in
+the daily digest. If Pro ends, the choice stays stored but is ignored, so it applies again if Pro is granted again.
+`show <email>` prints it.
+
 ### Changing the schedule
 
 The 5-hour schedule is the `cron` line in `.github/workflows/sweep.yml`, in UTC. Edit it and push to `main`. If you
@@ -925,7 +935,7 @@ covers a missed 00:17 run.
 | `subscribers.stopped: "deadline"`, with `deferred` counts | The sweep reached 240 seconds before sending finished | The rest go at the next sweep; nothing is sent twice |
 | `free.due: 0` with `alreadySent` above 0 | Today's Free digest has already gone to those subscribers | Expected; the next one goes after the first sweep of the next UTC day |
 | `pro: { "skipped": "manual run" }` | Pro email goes only with scheduled sweeps (decision D4) | Expected |
-| A Pro subscriber got no Pro email | Pro was granted after the last scheduled sweep, or `proUntil` has passed (`list` shows `pro (lapsed)`) | Wait for the next scheduled sweep, or grant again |
+| A Pro subscriber got no Pro email | Pro was granted after the last scheduled sweep; `proUntil` has passed (`list` shows `pro (lapsed)`); or the categories they chose had nothing in that sweep (`pro.emptyForCats` above 0) | Wait for the next scheduled sweep, or grant again. For categories, `show <email>` prints `cats`; they can tick more on `/manage/` |
 | A confirm or manage link says "This link isn't valid" | The record was deleted (unsubscribed, or pending for more than 7 days), or the mail app cut the link short | Sign up again, or use the links in the most recent email |
 | `/subscribe/`, `/manage/` or `/live/` opened on GitHub Pages | Pages has no `/api/`, so these pages send the visit on to the Vercel copy | Nothing to fix; link to `https://travel-problem-radar.vercel.app/subscribe/` |
 

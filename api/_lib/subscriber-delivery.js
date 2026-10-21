@@ -5,7 +5,7 @@
 import { buildDigestEmail, sendBatch, withSubscriberFooter } from "./email.js";
 import { KEY_INDEX, sweepKey } from "./radar.js";
 import { IPHIT_KEEP_HOURS, KEY_IPHIT_PREFIX, KEY_SUBSCRIBER_COUNT, managePath, senderOk, siteUrl, utcHour } from "./subscription-handlers.js";
-import { PENDING_TTL_DAYS, deleteSubscriber, effectivePlan, listSubscribers, recordEvent, utcDay } from "./subscribers.js";
+import { PENDING_TTL_DAYS, deleteSubscriber, effectivePlan, listSubscribers, normaliseCats, recordEvent, utcDay } from "./subscribers.js";
 
 export const KEY_DELIVERIES_PREFIX = "radar:deliveries:";
 const DAY_MS = 24 * 3600 * 1000;
@@ -50,6 +50,13 @@ export async function buildRollup(storage, sweep, now) {
     }
   }
   return [...byId.values()].sort((a, b) => (b.isNew - a.isNew) || ((SEV_RANK[b.severity] || 0) - (SEV_RANK[a.severity] || 0)));
+}
+
+// A Pro record's categories as a group key: "all", or the chosen keys joined with "+". A stored
+// value that normaliseCats wouldn't accept (hand-edited, or from an older shape) counts as "all".
+export function proCatsKey(cats) {
+  const n = normaliseCats(cats);
+  return n.ok && n.cats ? n.cats.join("+") : "all";
 }
 
 export async function deliverToSubscribers({ env, storage, fetchFn, now, randomBytes, sweep, scheduled, deadlineAt, log = console.log }) {
@@ -99,12 +106,34 @@ export async function deliverToSubscribers({ env, storage, fetchFn, now, randomB
     if (!scheduled) {
       result.pro = { skipped: "manual run" };
     } else if (pro.length) {
-      const mail = buildDigestEmail({ at: sweep.at, problems: sweep.problems, perCat: sweep.perCat }, liveUrl, { heading: "Travel Problem Radar: Pro update" });
-      const r = await sendBatch(creds, pro.map((rec) => message(rec, mail, "pro")), { fetchFn, shouldStop, idempotencyKey: `${sweep.id}-pro` });
-      result.pro = { due: pro.length, sent: r.sent, failed: r.failed, deferred: pro.length - r.sent - r.failed };
-      note(r);
+      // One email body per distinct set of chosen categories (T14), at most 15. "all" keeps the
+      // idempotency key Pro had before categories, so a retry around a deploy can't send twice.
+      result.pro = { due: pro.length, sent: 0, failed: 0, deferred: 0, emptyForCats: 0 };
+      const groups = new Map();
+      for (const rec of pro) {
+        const key = proCatsKey(rec.cats);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(rec);
+      }
+      const keys = [...groups.keys()].sort((a, b) => (a === "all" ? -1 : b === "all" ? 1 : a < b ? -1 : 1));
+      for (const key of keys) {
+        const recs = groups.get(key);
+        const cats = key === "all" ? null : key.split("+");
+        const problems = cats ? sweep.problems.filter((p) => cats.includes(p.cat)) : sweep.problems;
+        if (!problems.length) { result.pro.emptyForCats += recs.length; continue; }
+        if (halted) { result.pro.deferred += recs.length; continue; }
+        const perCat = cats ? Object.fromEntries(Object.entries(sweep.perCat || {}).filter(([k]) => cats.includes(k))) : sweep.perCat;
+        const mail = buildDigestEmail({ at: sweep.at, problems, perCat }, liveUrl, { heading: "Travel Problem Radar: Pro update", cats });
+        const r = await sendBatch(creds, recs.map((rec) => message(rec, mail, "pro")), {
+          fetchFn, shouldStop, idempotencyKey: key === "all" ? `${sweep.id}-pro` : `${sweep.id}-pro-${key}`,
+        });
+        result.pro.sent += r.sent;
+        result.pro.failed += r.failed;
+        result.pro.deferred += recs.length - r.sent - r.failed;
+        note(r);
+      }
     } else {
-      result.pro = { due: 0, sent: 0, failed: 0, deferred: 0 };
+      result.pro = { due: 0, sent: 0, failed: 0, deferred: 0, emptyForCats: 0 };
     }
 
     // 4 and 5. Free: once per UTC day

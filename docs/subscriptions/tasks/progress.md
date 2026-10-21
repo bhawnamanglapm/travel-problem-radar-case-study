@@ -24,6 +24,7 @@ working in a real inbox; that is T12's staged launch.
 | [T12](T12-docs-and-launch.md) Docs | done | branch `fix/pages-redirect-and-launch-docs` | 374 pass; 39 `npm run check` checks | Docs 1 to 6; see "T12" below |
 | [T12](T12-docs-and-launch.md) Staged launch | in progress | | | Steps recorded under "T12" below |
 | [T13](T13-optional-hardening.md) Bounces, complaints, per-IP limit | done, live on production (webhook and firewall rule) | merged as #12 | 423 pass (355 subscriber + 68 sweep; +49 new) and 3 new `npm run check` checks | See "T13" below |
+| [T14](T14-optional-pro-categories.md) Pro chooses categories | done (offline); not deployed yet | branch `feat/t14-pro-categories` | 454 pass (386 subscriber + 68 sweep; +29 new); 46 `npm run check` checks (+1) | See "T14" below |
 
 ## Notes per task
 
@@ -277,3 +278,9 @@ working in a real inbox; that is T12's staged launch.
   Tested there with `bounced@resend.dev` and `complained@resend.dev`: Resend's log shows `200` for both, both
   pending records were deleted, and `stats` (which now has `bounced` and `complained` columns, #15) counts one of
   each. Those two test sign-ups are in the 21 Oct (UTC) sign-up counts, so they lower that day's confirm rate.
+
+### T14
+- Built on `/manage/` and `/api/account` (no new function; still 7 of 12). Free sees the boxes disabled.
+- A Pro whose categories have nothing in a sweep gets no email for it; the sweep reply counts them in
+  `pro.emptyForCats`.
+- **Not checked yet:** a real Pro email with one category, and the page on a phone. Owner steps are in the PR.

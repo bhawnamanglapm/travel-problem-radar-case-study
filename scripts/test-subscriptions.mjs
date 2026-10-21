@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { blobStorage } from "../api/_lib/storage.js";
 import {
   CONFIRM_RESEND_HOURS, PENDING_TTL_DAYS, countEvents, deleteSubscriber, effectivePlan, getSubscriber, listSubscribers,
-  newPending, newToken, normaliseEmail, putSubscriber, recordEvent, subscriberId, tokenOk, utcDay,
+  newPending, newToken, normaliseCats, normaliseEmail, putSubscriber, recordEvent, subscriberId, tokenOk, utcDay,
 } from "../api/_lib/subscribers.js";
 import { BodyTooLargeError, allowMethods, bearerOk, esc, parseForm, readBody, readFields, sendJson, sendPage } from "../api/_lib/http.js";
 import { DEFAULT_FROM, buildConfirmEmail, buildDigestEmail, sendBatch, sendOne, withSubscriberFooter } from "../api/_lib/email.js";
@@ -14,7 +14,7 @@ import {
   KEY_IPHIT_PREFIX, KEY_SUBSCRIBER_COUNT, WEBHOOK_TOLERANCE_S, clientIp, makeConfirmHandler, makeResendWebhookHandler, makeSubscribeHandler, makeUnsubscribeHandler,
   siteUrl, utcHour, verifySvix,
 } from "../api/_lib/subscription-handlers.js";
-import { deliverToSubscribers } from "../api/_lib/subscriber-delivery.js";
+import { deliverToSubscribers, proCatsKey } from "../api/_lib/subscriber-delivery.js";
 import { makeDataHandler } from "../api/_lib/handlers.js";
 import { check, finish, memStorage, mockRes } from "./test-helpers.mjs";
 
@@ -1542,6 +1542,137 @@ const iso = (ms) => new Date(ms).toISOString();
   const res = mockRes();
   await dh({ method: "GET", url: "/api/data?key=" + encodeURIComponent(w.hits()[0]), headers: {} }, res);
   check(res.code === 400, "per-IP: /api/data refuses radar:iphit: keys");
+}
+
+// ---- T14: Pro subscribers choose categories
+{
+  const { makeAccountHandler } = await import("../api/_lib/subscription-handlers.js");
+  const ALL = ["traveler_pain", "gov_policy", "web_app", "industry"];
+
+  // normaliseCats
+  const n = normaliseCats(["web_app", "gov_policy", "gov_policy"]);
+  check(n.ok && JSON.stringify(n.cats) === '["gov_policy","web_app"]', "normaliseCats: keeps CATS order and drops repeats");
+  check(normaliseCats([...ALL].reverse()).ok && normaliseCats([...ALL].reverse()).cats === null, "normaliseCats: all four is stored as null");
+  check([[], "gov_policy", null, undefined, ["nope"], ["gov_policy", 3], [...ALL, "gov_policy"], { 0: "gov_policy" }].every((x) => normaliseCats(x).ok === false),
+    "normaliseCats: refuses an empty list, a non-list, an unknown key, a non-string and more than four");
+  check(proCatsKey(null) === "all" && proCatsKey(["web_app", "gov_policy"]) === "gov_policy+web_app" && proCatsKey(["bogus"]) === "all" && proCatsKey(ALL) === "all",
+    "proCatsKey: \"all\", or the chosen keys joined with +; a stored value that isn't valid counts as all");
+
+  // POST /api/account action set-cats
+  const ENV = { SUBSCRIPTIONS_ENABLED: "1", RESEND_API_KEY: "re_k", EMAIL_FROM: "Radar <hello@pehchanthetraveller.com>", EMAIL_TO: "owner@example.com", SITE_URL: "https://site.example" };
+  const st = memStorage();
+  const sent = [];
+  const acct = makeAccountHandler({ env: ENV, storage: st, fetchFn: async (u, i) => { sent.push(i); return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ id: "m" }) }; }, now: () => T0, randomBytes: seeded(4), log: () => {} });
+  const call = async (req) => { const res = mockRes(); await acct({ headers: { "content-type": "application/json" }, ...req }, res); return res; };
+  const post = (rec, cats, t = rec.token) => call({ method: "POST", body: { id: rec.id, t, action: "set-cats", cats } });
+  const add = async (email, over = {}) => {
+    const r = { ...newPending(email, { now: T0 - 3600_000, randomBytes: seeded(200 + email.length) }), status: "active", confirmedAt: iso(T0 - 1800_000), ...over };
+    await putSubscriber(st, r);
+    return r;
+  };
+  const stored = async (rec) => (await getSubscriber(st, rec.id)).cats;
+  const pro = await add("pro@example.com", { plan: "pro", proSource: "owner" });
+  const free = await add("free@example.com");
+  const lapsed = await add("lapsed@example.com", { plan: "pro", proSource: "owner", proUntil: iso(T0 - 1000), cats: ["industry"] });
+  const pend = { ...newPending("pend@example.com", { now: T0, randomBytes: seeded(250) }) };
+  await putSubscriber(st, pend);
+  const replies = [];
+
+  let r = await post(pro, ["gov_policy"]);
+  replies.push(r.body);
+  check(r.code === 200 && r.json().ok === true && JSON.stringify(r.json().cats) === '["gov_policy"]' && JSON.stringify(await stored(pro)) === '["gov_policy"]', "set-cats: a Pro subscriber saves [gov_policy] and it is stored");
+  r = await call({ method: "GET", query: { id: pro.id, t: pro.token } });
+  replies.push(r.body);
+  check(r.code === 200 && JSON.stringify(r.json().cats) === '["gov_policy"]', "account GET: returns the chosen categories");
+  r = await post(pro, ALL);
+  check(r.code === 200 && r.json().cats === null && (await stored(pro)) === null, "set-cats: choosing all four stores null");
+  r = await call({ method: "GET", query: { id: free.id, t: free.token } });
+  check(r.json().cats === null, "account GET: cats is null for someone who never chose");
+  r = await post(free, ["gov_policy"]);
+  replies.push(r.body);
+  check(r.code === 403 && r.json().error === "pro_only" && (await stored(free)) === null, "set-cats: Free gets 403 pro_only and nothing is stored");
+  r = await post(lapsed, ["gov_policy"]);
+  check(r.code === 403 && r.json().error === "pro_only" && JSON.stringify(await stored(lapsed)) === '["industry"]', "set-cats: a lapsed Pro gets 403 and keeps what they chose before");
+  r = await post(pend, ["gov_policy"]);
+  check(r.code === 409 && r.json().error === "not_confirmed", "set-cats: a pending address gets 409 not_confirmed");
+  for (const bad of [["nope"], [], "gov_policy", undefined]) {
+    r = await post(pro, bad);
+    replies.push(r.body);
+    check(r.code === 400 && r.json().error === "unknown category" && (await stored(pro)) === null, `set-cats: ${JSON.stringify(bad) || "no list"} is refused with 400 and nothing changes`);
+  }
+  r = await post(pro, ["gov_policy"], "wrong-token");
+  check(r.code === 404, "set-cats: a wrong token is 404");
+  check(replies.every((b) => !b.includes("@") && !b.includes(pro.token)), "set-cats: no address or token in any reply");
+  check(sent.length === 0, "set-cats: sends no email");
+  r = await call({ method: "POST", body: { id: free.id, t: free.token, action: "request-pro" } });
+  check(r.code === 200 && r.json().proRequestedAt === iso(T0), "account: request-pro still works next to set-cats");
+
+  // delivery: one body per distinct set of categories
+  const DENV = { SUBSCRIPTIONS_ENABLED: "1", RESEND_API_KEY: "re_k", EMAIL_FROM: "Radar <hello@pehchanthetraveller.com>", SITE_URL: "https://site.example" };
+  const prob = (id, cat, over = {}) => ({ id, cat, title: "Item " + id, summary: "", source: "S", link: "https://example.com/" + id, region: "EU", date: "2026-10-20", severity: "Medium", opportunity: "", isNew: false, ...over });
+  const problems = [prob("t1", "traveler_pain", { isNew: true }), prob("t2", "traveler_pain"), prob("g1", "gov_policy", { severity: "High", isNew: true }), prob("w1", "web_app")];
+  const sweep = { id: "1792570150123", at: iso(T0), problems, perCat: { traveler_pain: "2 items", gov_policy: "1 item", web_app: "1 item", industry: "failed: timeout" }, newCount: 2 };
+  const dw = async (subs) => {
+    const ds = memStorage();
+    for (const [i, s] of subs.entries()) {
+      await putSubscriber(ds, {
+        ...newPending(s.email, { now: T0 - 3600_000, randomBytes: seeded(300 + i) }), token: "tok" + i, status: "active",
+        plan: s.plan || "pro", proSource: s.plan === "free" ? null : "owner", proUntil: s.proUntil || null, cats: s.cats || null,
+      });
+    }
+    const calls = [];
+    const fetchFn = async (url, init) => {
+      const body = JSON.parse(init.body);
+      calls.push({ key: init.headers["idempotency-key"], body });
+      return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ data: body.map((_, i) => ({ id: "m" + i })) }) };
+    };
+    const out = await deliverToSubscribers({ env: DENV, storage: ds, fetchFn, now: () => T0, randomBytes: seeded(9), sweep, scheduled: true, log: () => {} });
+    const mails = calls.flatMap((c) => c.body);
+    return { out, calls, mails, to: (e) => mails.filter((m) => m.to[0] === e) };
+  };
+
+  const d = await dw([
+    { email: "gov1@example.com", cats: ["gov_policy"] },
+    { email: "gov2@example.com", cats: ["gov_policy"] },
+    { email: "all@example.com" },
+    { email: "ind@example.com", cats: ["industry"] },
+    { email: "free@example.com", plan: "free", cats: ["gov_policy"] },
+    { email: "lapsed@example.com", proUntil: iso(T0 - 1000), cats: ["gov_policy"] },
+  ]);
+  const gov = d.to("gov1@example.com")[0];
+  check(gov && /Item g1/.test(gov.text) && !/Item t1|Item t2|Item w1/.test(gov.text) && /GOV & POLICY \(1\)/.test(gov.text) && !/TRAVELER PAIN|WEBSITE & APP/.test(gov.text),
+    "pro cats: [gov_policy] gets only the Gov & policy items");
+  check(/· 1 problems, 1 new$/.test(gov.subject) && /1 problems · 1 new · 1 high severity/.test(gov.text) && /Your categories: Gov & policy/.test(gov.text) && /Your categories: Gov &amp; policy/.test(gov.html),
+    "pro cats: the subject and heading counts are for their categories, and the email names them");
+  check(!/Failed this run/.test(gov.text), "pro cats: a failed category they didn't choose isn't mentioned");
+  const all = d.to("all@example.com")[0];
+  check(all && /4 problems, 2 new$/.test(all.subject) && /Item t1/.test(all.text) && /Item w1/.test(all.text) && /Failed this run: Industry/.test(all.text) && !/Your categories/.test(all.text),
+    "pro cats: no choice (null) gets every category, as before");
+  const govCall = d.calls.find((c) => c.body.some((m) => m.to[0] === "gov1@example.com"));
+  check(govCall.body.length === 2 && govCall.body.some((m) => m.to[0] === "gov2@example.com") && govCall.body[0].subject === govCall.body[1].subject
+    && govCall.body[0].text.split("\n--\n")[0] === govCall.body[1].text.split("\n--\n")[0],
+  "pro cats: two subscribers with the same set share one body and one batch call");
+  const proKeys = d.calls.filter((c) => c.body.some((m) => /Pro update/.test(m.text))).map((c) => c.key);
+  check(proKeys.length === 2 && proKeys.includes(`${sweep.id}-pro-0`) && proKeys.includes(`${sweep.id}-pro-gov_policy-0`),
+    "pro cats: \"all\" keeps the old idempotency key; another set gets its own");
+  check(d.to("ind@example.com").length === 0 && d.out.pro.emptyForCats === 1 && d.out.pro.due === 4 && d.out.pro.sent === 3 && d.out.pro.deferred === 0,
+    "pro cats: a set with nothing this sweep is not sent and is counted as emptyForCats");
+  for (const e of ["free@example.com", "lapsed@example.com"]) {
+    const m = d.to(e);
+    check(m.length === 1 && /daily digest/.test(m[0].text) && /Item t1/.test(m[0].text) && /Item w1/.test(m[0].text) && !/Your categories/.test(m[0].text),
+      `pro cats: ${e.split("@")[0]} gets every category in the daily digest; cats is ignored`);
+  }
+
+  // a stop in one group defers the groups after it
+  const ds2 = memStorage();
+  for (const [i, c] of [[0, null], [1, ["gov_policy"]]]) {
+    await putSubscriber(ds2, { ...newPending(`q${i}@example.com`, { now: T0 - 3600_000, randomBytes: seeded(400 + i) }), token: "q" + i, status: "active", plan: "pro", proSource: "owner", cats: c });
+  }
+  const out2 = await deliverToSubscribers({
+    env: DENV, storage: ds2, now: () => T0, randomBytes: seeded(9), sweep, scheduled: true, log: () => {},
+    fetchFn: async () => ({ ok: false, status: 429, headers: { get: () => null }, json: async () => ({ name: "daily_quota_exceeded" }) }),
+  });
+  check(out2.stopped === "quota" && out2.pro.sent === 0 && out2.pro.deferred === 2, "pro cats: a quota stop in the first group defers the next group instead of trying it");
 }
 
 finish("subscription tests");

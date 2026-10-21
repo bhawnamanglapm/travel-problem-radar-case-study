@@ -4,6 +4,7 @@
 // listSubscribers hand it back, to their caller.
 // Times are milliseconds since the epoch (what the handlers' injected now() returns).
 import { createHash, timingSafeEqual } from "node:crypto";
+import { CATS } from "./radar.js";
 
 export const KEY_SUB_PREFIX = "radar:sub:";
 export const KEY_EVENT_PREFIX = "radar:event:";
@@ -90,6 +91,16 @@ export function effectivePlan(record, now) {
   if (record.proUntil == null) return "pro";
   const until = Date.parse(record.proUntil);
   return Number.isFinite(until) && until > now ? "pro" : "free";
+}
+
+// A Pro subscriber's chosen categories (T14). Takes the list the manage page sent and returns
+// { ok: true, cats } with cats in CATS order and without repeats, or null when all four are chosen,
+// so "all" is stored one way only. Anything else (not a list, empty, an unknown key) is { ok: false }.
+export function normaliseCats(input) {
+  if (!Array.isArray(input) || input.length === 0 || input.length > CATS.length) return { ok: false };
+  if (!input.every((k) => typeof k === "string" && CATS.some((c) => c.key === k))) return { ok: false };
+  const cats = CATS.map((c) => c.key).filter((k) => input.includes(k));
+  return { ok: true, cats: cats.length === CATS.length ? null : cats };
 }
 
 export function newPending(email, { now, randomBytes }) {
