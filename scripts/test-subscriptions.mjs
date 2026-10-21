@@ -1153,7 +1153,8 @@ const iso = (ms) => new Date(ms).toISOString();
   let n = 0;
   const ev1 = (day, type, plan = null) => st.m.set(`radar:event:${day}-${String(80910000 + n).padStart(9, "0")}-${type}-${(0xaa0000 + n++).toString(16)}`, JSON.stringify({ type, at: "x", plan }));
   for (const [day, type, k, plan] of [["20261019", "subscribed", 2], ["20261019", "confirmsent", 2], ["20261019", "confirmed", 1], ["20261020", "subscribed", 1], ["20261020", "confirmsent", 1],
-    ["20261020", "confirmed", 2], ["20261020", "unsubscribed", 1, "free"], ["20261021", "subscribed", 1], ["20261021", "unsubscribed", 1, "pro"], ["20261021", "expired", 1], ["20261018", "subscribed", 5]]) {
+    ["20261020", "confirmed", 2], ["20261020", "unsubscribed", 1, "free"], ["20261021", "subscribed", 1], ["20261021", "unsubscribed", 1, "pro"], ["20261021", "expired", 1], ["20261021", "bounced", 2], ["20261020", "complained", 1],
+    ["20261018", "subscribed", 5], ["20261018", "bounced", 4]]) {
     for (let i = 0; i < k; i++) ev1(day, type, plan);
   }
   st.m.set("radar:deliveries:20261020", JSON.stringify({ free: ["a", "b", "c"] }));
@@ -1163,8 +1164,11 @@ const iso = (ms) => new Date(ms).toISOString();
   check(s.perDay.length === 3 && d["20261019"].subscribed === 2 && d["20261019"].confirmed === 1 && d["20261020"].confirmed === 2 && d["20261020"].unsubscribedFree === 1 && d["20261021"].unsubscribedPro === 1 && d["20261021"].expired === 1 && d["20261020"].freeDelivered === 3,
     "stats: per-day counts, unsubscribes split by plan, Free sends from the deliveries file");
   check(s.totals.subscribed === 4 && s.totals.confirmed === 3 && s.totals.confirmsent === 3 && s.totals.unsubscribed === 2 && s.confirmRate === 0.75, "stats: totals leave out days before the period; confirm rate is confirmed / subscribed (3/4)");
+  check(d["20261021"].bounced === 2 && d["20261020"].complained === 1 && s.totals.bounced === 2 && s.totals.complained === 1,
+    "stats: bounces and complaints from the Resend webhook, per day and in total (days before the period left out)");
   r = await run(st, ["stats", "--days", "3"]);
   check(r.code === 0 && r.out.includes("75.0%") && !/@/.test(r.out) && !r.out.includes("secret-token"), "stats: prints the confirm rate and no address or token");
+  check(/ bounced  complained /.test(r.out) && /2 bounced, 1 complained/.test(r.out), "stats: prints the bounced and complained columns and totals");
   r = await run(st, ["stats", "--days", "0"]);
   check(r.code === 2, "stats --days 0: usage error");
   const empty = await admin.computeStats(memStorage(), { now: T0, days: 7 });

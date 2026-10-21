@@ -814,7 +814,7 @@ node --env-file=.env.local scripts/subscribers.mjs prune-events --older-than 400
 
 | Command | What it does |
 |---|---|
-| `stats` | Counts now (pending, Free, Pro, Pro ending within 7 days, waiting for Pro) and per UTC day: sign-ups, confirmation emails, confirmations, unsubscribes (Free and Pro), expired, Pro requests, Free digests sent. Ends with the confirm rate, `confirmed / subscribed`. No addresses |
+| `stats` | Counts now (pending, Free, Pro, Pro ending within 7 days, waiting for Pro) and per UTC day: sign-ups, confirmation emails, confirmations, unsubscribes (Free and Pro), expired, bounced and complained (deleted by the Resend webhook), Pro requests, Free digests sent. Ends with the confirm rate, `confirmed / subscribed`. No addresses |
 | `list` | Address, status, plan, `proUntil`, confirmed date and the date they asked for Pro. `--plan requested` lists the active Free subscribers who asked for Pro (the waiting list). A Pro record past its end date shows as `pro (lapsed)`: the sweep treats it as Free |
 | `show` | One record without its token |
 | `grant-pro` | Only for an active (confirmed) subscriber. Pro with `proSource: owner`, and the Pro request is cleared (the `prorequested` event keeps the history). `--until 2027-01-31` makes Pro run through the end of that UTC day; leave it out for no end date. A past date is accepted and acts as Free. Refuses a paid Razorpay record |

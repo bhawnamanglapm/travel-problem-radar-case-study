@@ -5,6 +5,8 @@ grouped by date.
 
 ## 2026-10-22
 
+- The admin script's `stats` shows `bounced` and `complained` per day and in the totals: the addresses the Resend
+  webhook deleted.
 - Fixed: `/live` and `/demo` typed without the trailing slash showed a blank page, because the script loaded from
   the site root. Each page now adds the slash itself (Known issue 1 in `DEPLOYMENT.md`).
 - **Bounces, spam complaints and a per-IP sign-up limit** (T13): a signed Resend webhook (`/api/resend-webhook`)
