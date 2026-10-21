@@ -18,7 +18,7 @@ each item with a product idea a PM could build.
 | **Sample digest** | https://bhawnamanglapm.github.io/travel-problem-radar-case-study/demo/#report |
 | **Live page** | https://travel-problem-radar.vercel.app/live/. Deployed; a sweep runs every 5 hours. The first production sweep (Oct 2026) saved items from only 1 of 4 categories; the cause, an output token limit, is fixed and a local run returned all four. |
 | **Get it by email** | https://travel-problem-radar.vercel.app/subscribe/. Free: one digest a day. Pro, an email after every sweep, is free while it's being tested: tick the box when you sign up, or use "Request Pro" on the manage page your emails link to. |
-| **More** | [Technical reference](docs/TECHNICAL.md) · [PRD](docs/PRD.md) · [Decision log](docs/decisions.md) · [Subscription plan (draft)](docs/subscriptions/architecture.md) · [Changelog](CHANGELOG.md) |
+| **More** | [Technical reference](docs/TECHNICAL.md) · [PRD](docs/PRD.md) · [Decision log](docs/decisions.md) · [Subscriptions: how it fits together](docs/subscriptions/architecture.md) · [Changelog](CHANGELOG.md) |
 
 ---
 
@@ -76,7 +76,8 @@ Full log with dates: [docs/decisions.md](docs/decisions.md).
 | Check | Result | How |
 |---|---|---|
 | Scheduled sweep: merge, de-duplicate, "New" flags, 2-hour gap for scheduled runs, GitHub Actions trigger, manual runs, 60-sweep cap, partial and total failure, secret check, Slack post, email through Resend, read-only data feed | 68 of 68 pass | `npm test`, with the Anthropic API and storage stubbed |
-| Sample data shape, page links, bundles up to date, server prompt matches the component, no secrets in the repo | 19 of 19 pass | `npm run check` |
+| Subscriber email: sign-up, Confirm button, unsubscribe (also one-click), manage page and Request Pro, Free daily roll-up, Pro every scheduled sweep, quota and deadline stops, resuming a cut-off send, admin script, no addresses in replies or logs | 306 of 306 pass | `npm test`, with Resend and storage stubbed |
+| Sample data shape, page links, bundles up to date, server prompt matches the component, subscribe and manage pages, no secrets in the repo | 39 of 39 pass | `npm run check` |
 | Demo: replay, filters, search, report, history, "New" flag, phone width, no AI or API calls | 19 checks pass | Headless browser, 18 Oct 2026 |
 | Live page with the data feed stubbed: cards, filters, history, report, empty state, read-only, phone width | 16 checks pass | Headless browser, 18 Oct 2026 |
 | Sample source links load | 7 of 8 | isdown.app blocks automated requests; article contents were not re-checked |
@@ -123,6 +124,10 @@ changed:
 | A reply is cut off by the output token limit | Raised to 16,000 tokens, because the model's thinking counts toward it; a reply with no usable answer says why the model stopped | `npm test`; `scanCategory()` in `api/_lib/radar.js` |
 | **The model invents or misreads a source** | **No guardrail beyond the link check.** This is the main open risk. | Not measured |
 | Spend runs away | The owner sets a monthly limit in the Anthropic Console; about five scheduled sweeps a day, up to 3 searches per category | Owner step; not verified here |
+| Someone signs up another person's address | Double opt-in: one confirmation email, and nothing else until the Confirm button is pressed. At most one per address per 24 hours, and 10 a day in all | `npm test` |
+| Subscriber addresses leak | Replies and log lines carry counts only; the data feed refuses subscriber keys; the manage page's endpoint never returns the address | `npm test` |
+| More subscribers than the email quota allows | The owner's email goes first; the rest wait for the next sweep, and nobody gets a day's digest twice. Sign-up stops at `MAX_SUBSCRIBERS` | `npm test` |
+| Subscriber mail has to stop at once | One switch, `SUBSCRIPTIONS_ENABLED`, stops sign-up and delivery; unsubscribe keeps working | `npm test` |
 
 ## Users and iteration
 
@@ -156,8 +161,12 @@ records no delivery to a real Slack workspace or inbox yet.
 3. **Recognise the same event under a new headline**, so "New" means a new event and not just new wording.
 4. **Refresh the sample** (the items are from July 2026).
 5. **Ask PMs whether the opportunities are useful:** for example, how many items they would act on in a week.
-6. **Subscriptions (planned, nothing built):** free email sign-up first, then a paid plan through Razorpay only if
-   people sign up. Needs a verified domain. See [docs/subscriptions/](docs/subscriptions/architecture.md).
+6. **Subscriptions (built and tested; launch checks in progress):** email sign-up is open at `/subscribe/`, sending
+   from a verified domain. Free gets one digest a day; Pro, an email after every scheduled sweep, is switched on by
+   hand while it's free. Still to check: one-click unsubscribe from Gmail, delivery to an Outlook inbox, and
+   confirmation emails reaching the inbox rather than spam. A paid plan through Razorpay comes only if people sign
+   up; the owner has not yet set the numbers that would count as enough. See
+   [docs/subscriptions/](docs/subscriptions/architecture.md).
 
 ## How I built it
 

@@ -1,4 +1,4 @@
-# Progress: T01 to T11
+# Progress: T01 to T12
 
 Working log for the build of Phase 1 (Free and Pro email digests). One task at a time: implement, test locally
 (`npm run build && npm run check && npm test`), commit, push, then the next. Branch: `feat/subscriptions`.
@@ -19,7 +19,10 @@ working in a real inbox; that is T12's staged launch.
 | [T09](T09-delivery-engine.md) Delivery engine | done | ef7831b | 281 pass (+43 new) | See T09 notes below |
 | [T10](T10-sweep-integration.md) Wire delivery into the sweep | done | 0d3b008 | 300 pass (+19 new) | See T10 notes below |
 | [T11](T11-admin-script-and-metrics.md) Admin script + metrics | done | d344d34 | 340 pass (+37 new; 303 before T11) | See T11 notes below |
-| Request Pro (owner-approved, before payments) | in progress | | 371 pass (+31 new) + 7 new `npm run check` checks | See "Request Pro" notes below |
+| Request Pro (owner-approved, before payments) | done | aba8d26 (#8) | 371 pass (+31 new) + 7 new `npm run check` checks | See "Request Pro" notes below |
+| Fresh Blob reads (bug fix) | done | 61b2f79 (#9) | 374 pass (+3 new) | Reads skip Blob's CDN cache except `/api/data`'s |
+| [T12](T12-docs-and-launch.md) Docs | done | branch `fix/pages-redirect-and-launch-docs` | 374 pass; 39 `npm run check` checks | Docs 1 to 6; see "T12" below |
+| [T12](T12-docs-and-launch.md) Staged launch | in progress | | | Steps recorded under "T12" below |
 
 ## Notes per task
 
@@ -224,3 +227,31 @@ working in a real inbox; that is T12's staged launch.
   person straight back on the waiting list; the `prorequested` event keeps the history.
 - **Not verified:** none of this has run on the real deployment yet. The function count (6) against the Hobby limit
   has not been re-checked.
+- Update, 2026-10-21: deployed. The manage page showed a real record's plan and took a Pro request, so the sixth
+  function deploys and answers on Hobby.
+
+### T12
+- **Docs 1 to 6 done:** DEPLOYMENT.md "Subscriber email (optional)" plus the 4.3 and section 7 tables, stored keys,
+  troubleshooting rows and the `vercel.json` block; TECHNICAL.md; README; email-signup.md and architecture.md now
+  describe the build; decision log rows D1 to D9 and three later choices; CHANGELOG.
+- **Fix found on the way:** GitHub Pages also served `/subscribe/`, `/manage/` and `/live/`, but has no `/api/`, so
+  those copies couldn't work. Each page now sends a Pages visit to the Vercel copy (`c518855`, with checks).
+- **Launch steps, as of 2026-10-21 21:00 UTC** (facts only; the owner's checks of inboxes are theirs to record):
+
+| Step | Result |
+|---|---|
+| 1. Deploy switched off | Not run as a separate step: production was configured before this check |
+| 2. Variables | Done. All set for Production (checked by name only): `EMAIL_FROM`, `MAX_SUBSCRIBERS`, `MAX_CONFIRMS_PER_DAY`, `SITE_URL`, `SUBSCRIPTIONS_ENABLED` and the rest |
+| 3. Confirmation email | Arrived from `EMAIL_FROM`, but **in spam**, so the check "not in spam" failed. SPF, DKIM (`resend._domainkey`) and DMARC (`p=none`) records exist for the domain |
+| 4. Confirm, `stats` | Done |
+| 5. Free digest | A manual sweep at 19:50 UTC replied `free.sent: 1`. Arrival not yet confirmed by the owner |
+| 6. Pro | `grant-pro` done for one address. Waiting for the next scheduled sweep (00:17 UTC on 2026-10-22) |
+| 7. Gmail Unsubscribe button | Not done |
+| 8. Other providers (Outlook) | Not done |
+| 9. Links | Done (#10). The Pages redirect above completes "links work from both GitHub Pages and Vercel" once merged |
+
+- **Seen while checking:** the scheduled GitHub runs at 10:15 and 15:22 UTC on 2026-10-21 failed with "Add
+  CRON_SECRET". The repository secret was added at 19:46 UTC, after both. No scheduled GitHub run has succeeded yet;
+  the first chance after the secret was the 20:17 UTC slot, which had not started by 21:03 UTC.
+- **Not written down yet (owner):** the Phase 2 gate thresholds and the measuring period (acceptance item 3). They
+  must be set before looking at results.
