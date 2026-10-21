@@ -55,8 +55,8 @@ Full log with dates: [docs/decisions.md](docs/decisions.md).
    calls run in parallel, and one failed category doesn't sink the other three. A test checks that a broken category
    is skipped and the rest are saved.
 2. **Visitors never trigger an AI call.** The live page reads a sweep saved by a server job that runs every 5 hours.
-   *Gave up:* fresh results whenever someone visits. *Got:* the cost is one sweep a day whatever the traffic, and the
-   API key stays on the server.
+   *Gave up:* fresh results whenever someone visits. *Got:* the cost is about five sweeps a day whatever the traffic,
+   and the API key stays on the server.
 3. **The public demo replays a saved sample.** *Gave up:* live data in the demo. *Got:* a demo anyone can open, with
    no key, no cost and nothing that can break. The trade-off is that the sample (July 2026) is now dated.
 4. **"New" means the headline hasn't been seen before.** Each item's ID is its category plus its title, and past IDs
@@ -103,7 +103,8 @@ changed:
 | "Posts the digest to Slack and email" | Slack kept as owner-reported; email removed. The original text itself said the email connector only drafts. | `a960184`, `5141067` |
 | Four calls "raised result quality" | Removed: it was never measured. The reason given now is reliability. | `a960184` |
 | "Product & build (solo)" | "Product owner, built with AI (Claude)" | `a960184` |
-| Public live version described as future work | Built: daily server sweep and read-only page (first real sweep still pending) | `66f2bf1` |
+| Public live version described as future work | Built: server sweep (now every 5 hours) and read-only page. The first production sweep saved 1 of 4 categories; the token-limit cause is fixed | `66f2bf1`, `b691d54`, `f200a79` |
+| Slack and email described as Claude-app only | The server sweep can also post to Slack and email through Resend (both optional; tested offline only) | `493ddbd`, `bb78fbb` |
 
 ## Failure modes and guardrails
 
@@ -117,8 +118,10 @@ changed:
 | Someone reads other stored data | The data feed serves only history and sweep keys and refuses writes | `npm test` |
 | Storage grows forever | Only the last 60 sweeps are kept | `npm test` |
 | A reader treats AI findings as fact | The live page says: "Gathered every 5 hours by an AI model with web search. Check each source link; items are not verified." The demo says it replays a saved sample. | `live/index.html`; demo banner |
+| Slack or email delivery fails | The sweep is still saved; each channel reports its own outcome, and replies never include the webhook, API key or addresses | `npm test` |
+| A reply is cut off by the output token limit | Raised to 16,000 tokens, because the model's thinking counts toward it; a reply with no usable answer says why the model stopped | `npm test`; `scanCategory()` in `api/_lib/radar.js` |
 | **The model invents or misreads a source** | **No guardrail beyond the link check.** This is the main open risk. | Not measured |
-| Spend runs away | The owner sets a monthly limit in the Anthropic Console; one sweep a day, up to 3 searches per category | Owner step; not verified here |
+| Spend runs away | The owner sets a monthly limit in the Anthropic Console; about five scheduled sweeps a day, up to 3 searches per category | Owner step; not verified here |
 
 ## Users and iteration
 
@@ -129,6 +132,10 @@ changed:
 **Owner-reported, not verifiable from this repo:** a scheduled task in Claude's app ran the sweep each morning and
 posted the digest to a Slack channel. The owner has a screenshot of a digest posted at 07:00 IST on 1 Aug 2026
 ("Sent using Claude"). Scheduled runs execute on the owner's machine, so it must be awake.
+
+Since October 2026 the server sweep can send the same digest itself, to a Slack incoming webhook and by email through
+Resend, or a short notice if a sweep saves nothing. Both are optional and covered by the offline tests; the repo
+records no delivery to a real Slack workspace or inbox yet.
 
 > **OWNER INPUT NEEDED.** Who read the digest, and did any item turn into real work: a PRD, a pitch, a decision?
 > Did you stop using it, and if so why?
@@ -141,8 +148,9 @@ posted the digest to a Slack channel. The owner has a screenshot of a digest pos
 
 ## What's next
 
-1. **Run the first real sweep** (owner steps: add the API key in Vercel, set a spend limit, run the job once). Then
-   record the time taken against the 300-second limit, plus token and search counts.
+1. **Confirm a full production sweep.** The first one saved 1 of 4 categories; after the token-limit fix, check
+   that a scheduled run saves all four, and record the time taken against the 300-second limit, plus token and
+   search counts.
 2. **Score the first 20+ real items** with the rubric above and publish the results.
 3. **Recognise the same event under a new headline**, so "New" means a new event and not just new wording.
 4. **Refresh the sample** (the items are from July 2026).
@@ -159,7 +167,8 @@ Code; those commits are co-authored by Claude.
 > decided what.
 
 **Stack:** React (one component), Claude with the web-search tool, Vercel Functions, Cron and Blob storage, GitHub
-Actions (the 5-hour schedule), GitHub Pages, esbuild. Details in the [technical reference](docs/TECHNICAL.md).
+Actions (the 5-hour schedule), Slack incoming webhooks, Resend (email), GitHub Pages, esbuild. Setup steps are in
+[DEPLOYMENT.md](DEPLOYMENT.md). Details in the [technical reference](docs/TECHNICAL.md).
 
 ## License
 
