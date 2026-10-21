@@ -3,30 +3,8 @@
 //   node scripts/test-sweep.mjs
 import { makeDataHandler, makeSweepHandler } from "../api/_lib/handlers.js";
 import { CATS, extractProblems, runDailySweep, scanCategory, sweepKey } from "../api/_lib/radar.js";
+import { check, finish, memStorage, mockRes } from "./test-helpers.mjs";
 
-const failures = [];
-const check = (ok, label) => {
-  console.log((ok ? "PASS " : "FAIL ") + label);
-  if (!ok) failures.push(label);
-};
-
-const memStorage = () => {
-  const m = new Map();
-  return {
-    m,
-    get: async (k) => (m.has(k) ? m.get(k) : null),
-    set: async (k, v) => { m.set(k, v); },
-    del: async (k) => { m.delete(k); },
-  };
-};
-const mockRes = () => {
-  const r = { code: 0, headers: {}, body: "" };
-  r.setHeader = (k, v) => { r.headers[k.toLowerCase()] = v; };
-  r.end = (b) => { r.body = b; };
-  Object.defineProperty(r, "statusCode", { set(v) { r.code = v; }, get() { return r.code; } });
-  r.json = () => JSON.parse(r.body);
-  return r;
-};
 const item = (n, over = {}) => ({
   title: "Problem " + n, summary: "s", source: "Src", link: "https://example.com/" + n,
   region: "Global", date: "Oct 2026", severity: "Medium", opportunity: "o", ...over,
@@ -349,5 +327,4 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   check((await call("/api/data?key=radar:history", "POST")).code === 405, "non-GET is refused (read-only)");
 }
 
-console.log(failures.length ? `\n${failures.length} failure(s)` : "\nAll server tests passed.");
-process.exit(failures.length ? 1 : 0);
+finish("server tests");
