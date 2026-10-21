@@ -5,10 +5,13 @@ import { del, get, list, put } from "@vercel/blob";
 const path = (key) => "radar/" + key.replace(/[^a-z0-9]+/gi, "-") + ".json";
 
 // `blob` is the @vercel/blob client; the offline tests pass a fake with the same four calls.
-export function blobStorage(blob = { del, get, list, put }) {
+// Reads skip Blob's CDN cache by default: an overwritten file can be served stale for up to 60 seconds, and most
+// callers read, change and write back (subscriber records, the sweep index, delivery files), so a stale read would
+// undo a recent write. `cached: true` is for read-only callers that can show a minute-old copy (/api/data).
+export function blobStorage(blob = { del, get, list, put }, { cached = false } = {}) {
   return {
     async get(key) {
-      const r = await blob.get(path(key), { access: "private" });
+      const r = await blob.get(path(key), { access: "private", useCache: cached });
       if (!r || r.statusCode !== 200) return null;
       return await new Response(r.stream).text();
     },
