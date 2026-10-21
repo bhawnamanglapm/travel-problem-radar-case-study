@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex" />
+<meta name="referrer" content="no-referrer" />
+<title>Manage your Travel Problem Radar digest</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #0B0B0D; color: #F4F4F7; }
+  body { font: 16px/1.55 -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 0 16px; }
+  main { max-width: 640px; margin: 0 auto; padding: 40px 0 56px; }
+  h1 { font-size: 26px; line-height: 1.25; margin: 0 0 12px; }
+  p { margin: 0 0 14px; color: #C9C9D2; }
+  a { color: #C6FF3D; }
+  .nav { font: 12px/1.5 ui-monospace, 'JetBrains Mono', monospace; color: #93939F; margin: 0 0 28px; }
+  .nav a { color: #F4F4F7; }
+  .card { border: 1px solid #2A2A34; background: #131318; border-radius: 8px; padding: 16px 18px; margin: 20px 0 24px; }
+  .plan { font-size: 20px; font-weight: 600; color: #F4F4F7; margin: 0 0 6px; }
+  .plan b { color: #C6FF3D; }
+  button { font: inherit; font-weight: 600; background: #C6FF3D; color: #0B0B0D; border: 0; border-radius: 6px;
+    padding: 10px 20px; cursor: pointer; }
+  button:hover { background: #d8ff6f; }
+  button[disabled] { opacity: .6; cursor: default; }
+  #status { min-height: 1.6em; margin: 12px 0 0; color: #F4F4F7; }
+  #status.err { color: #FF8A80; }
+  .small { font-size: 13px; color: #93939F; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <p class="nav"><a href="../">&larr; Case study</a> &middot; <a href="../live/">Live board</a></p>
+  <h1>Your Travel Problem Radar digest</h1>
+
+  <div class="card">
+    <p class="plan" id="plan">Loading&hellip;</p>
+    <p id="detail"></p>
+    <div id="ask" hidden>
+      <p>Pro sends an email after every sweep (about 5 a day) instead of one a day. It&rsquo;s free while it&rsquo;s being tested and is switched on by hand, so it can take a day.</p>
+      <button id="req" type="button">Request Pro</button>
+    </div>
+    <p id="status" role="status" aria-live="polite"></p>
+  </div>
+
+  <p id="leave" hidden><a id="unsub" href="#">Unsubscribe</a> <span class="small">(stops every email and deletes your address)</span></p>
+  <p class="small">This page is reached from the link in your emails; don&rsquo;t share it. Questions: <a href="mailto:hello@pehchanthetraveller.com">hello@pehchanthetraveller.com</a>.</p>
+</main>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var id = q.get("id") || "", t = q.get("t") || "";
+  var planEl = document.getElementById("plan"), detail = document.getElementById("detail");
+  var ask = document.getElementById("ask"), req = document.getElementById("req");
+  var statusEl = document.getElementById("status");
+  function say(text, isErr) { statusEl.textContent = text; statusEl.className = isErr ? "err" : ""; }
+  function day(iso) { return iso ? iso.slice(0, 10) : ""; }
+  function setPlan(name, rest) {
+    planEl.textContent = "Your plan: ";
+    var b = document.createElement("b"); b.textContent = name; planEl.appendChild(b);
+    detail.textContent = rest || "";
+  }
+  function show(a) {
+    ask.hidden = true;
+    if (a.status !== "active") {
+      setPlan("not confirmed yet", "Press Confirm in the email we sent you first; nothing is sent until then.");
+      return;
+    }
+    document.getElementById("unsub").href = "/api/unsubscribe?id=" + encodeURIComponent(id) + "&t=" + encodeURIComponent(t);
+    document.getElementById("leave").hidden = false;
+    if (a.effectivePlan === "pro") {
+      setPlan("Pro", "An email after every sweep" + (a.proUntil ? ", until " + day(a.proUntil) + "." : "."));
+    } else if (a.proRequestedAt) {
+      setPlan("Free", "One email a day. You asked for Pro on " + day(a.proRequestedAt) + "; it will be switched on shortly.");
+    } else {
+      setPlan("Free", "One email a day, after the first sweep of the UTC day (about 05:47 IST).");
+      ask.hidden = false;
+    }
+  }
+  function call(method, body) {
+    return fetch("/api/account" + (method === "GET" ? "?id=" + encodeURIComponent(id) + "&t=" + encodeURIComponent(t) : ""), {
+      method: method,
+      headers: body ? { "content-type": "application/json" } : {},
+      body: body ? JSON.stringify(body) : undefined
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (b) { return { status: r.status, body: b }; });
+    });
+  }
+  function fail(x) {
+    if (x.status === 404) { planEl.textContent = "This link isn’t valid"; detail.textContent = "Use the Manage link in your most recent email."; }
+    else if (x.status === 503) { planEl.textContent = "Subscriptions are paused"; detail.textContent = "Your link stays valid: try again later."; }
+    else say("Something went wrong. Please try again in a minute.", true);
+  }
+  if (!id || !t) { fail({ status: 404 }); return; }
+  call("GET").then(function (x) { if (x.status === 200) show(x.body); else fail(x); })
+    .catch(function () { say("Couldn’t reach the server. Please try again in a minute.", true); });
+
+  req.addEventListener("click", function () {
+    req.disabled = true;
+    say("Sending…", false);
+    call("POST", { id: id, t: t, action: "request-pro" }).then(function (x) {
+      if (x.status === 200) { show(x.body); say("Request received. You’ll get the daily digest until Pro is switched on.", false); }
+      else if (x.status === 409 && x.body.error === "already_pro") { say("You already have Pro.", false); }
+      else if (x.status === 409) { say("Confirm your address first, using the email we sent you.", true); }
+      else fail(x);
+    }).catch(function () {
+      say("Couldn’t reach the server. Please try again in a minute.", true);
+    }).then(function () { req.disabled = false; });
+  });
+})();
+</script>
+</body>
+</html>

@@ -61,6 +61,16 @@ check(/Questions or a deletion request: email <a href="mailto:hello@pehchanthetr
 check(subPage.length > 0 && !/<script[^>]*\ssrc=|<link[^>]*rel=["']?stylesheet|@import|url\(\s*["']?https?:/i.test(subPage), "subscribe/index.html is self-contained (no external script, stylesheet, import or font URL)");
 const vercelJson = JSON.parse(readFileSync("vercel.json", "utf8"));
 check(/\bcp -r [^&]*\bsubscribe\b[^&]* public\//.test(vercelJson.buildCommand || ""), "vercel.json's buildCommand copies subscribe into public/");
+check(/name="wantsPro"/.test(subPage) && /wantsPro: form\.wantsPro\.checked/.test(subPage), "subscribe/index.html has the \"I'd also like Pro\" box and sends it");
+
+// 4c. Manage page (Vercel): self-contained, talks to /api/account, never leaks its token link.
+const manPage = existsSync("manage/index.html") ? readFileSync("manage/index.html", "utf8") : "";
+check(/fetch\("\/api\/account"/.test(manPage) && /action: "request-pro"/.test(manPage), "manage/index.html reads /api/account and posts the request-pro action");
+check(/<meta name="referrer" content="no-referrer"/.test(manPage) && /<meta name="robots" content="noindex"/.test(manPage), "manage/index.html sends no Referer and is not indexed (its URL carries a token)");
+check(!/\.innerHTML\s*=/.test(manPage), "manage/index.html writes server data with textContent only, never innerHTML");
+check(manPage.length > 0 && !/<script[^>]*\ssrc=|<link[^>]*rel=["']?stylesheet|@import|url\(\s*["']?https?:/i.test(manPage), "manage/index.html is self-contained (no external script, stylesheet, import or font URL)");
+check(/\bcp -r [^&]*\bmanage\b[^&]* public\//.test(vercelJson.buildCommand || ""), "vercel.json's buildCommand copies manage into public/");
+check(existsSync("api/account.js"), "api/account.js exists (the manage page's endpoint)");
 const subLinks = [...page.matchAll(/href="([^"]*subscribe[^"]*)"/g)].map((m) => m[1]);
 check(subLinks.every((h) => h.startsWith("https://travel-problem-radar.vercel.app/subscribe/")), `index.html links to the subscribe page only by the absolute Vercel URL${subLinks.length ? " (" + subLinks.join(", ") + ")" : " (no link yet)"}`);
 
