@@ -3,9 +3,10 @@
 // Nothing here puts an address, an id or a token in a reply or a log line.
 import { randomBytes as cryptoRandomBytes } from "node:crypto";
 import { DEFAULT_FROM, buildConfirmEmail, sendOne } from "./email.js";
-import { BodyTooLargeError, allowMethods, readFields, sendJson } from "./http.js";
+import { BodyTooLargeError, allowMethods, esc, readFields, sendJson, sendPage } from "./http.js";
 import {
-  CONFIRM_RESEND_HOURS, countEvents, getSubscriber, newPending, normaliseEmail, putSubscriber, recordEvent, subscriberId, utcDay,
+  CONFIRM_RESEND_HOURS, PENDING_TTL_DAYS, countEvents, deleteSubscriber, getSubscriber, newPending, normaliseEmail, putSubscriber,
+  recordEvent, subscriberId, tokenOk, utcDay,
 } from "./subscribers.js";
 
 // The sweep writes the number of active plus pending records here after each run (T10), so a
@@ -114,5 +115,80 @@ export function makeSubscribeHandler({ env, storage, fetchFn, now, randomBytes =
       log("subscribe", "error: " + ((e && e.name) || "Error"));
       return sendJson(res, 500, { error: "could not process the request; try again later" });
     }
+  };
+}
+
+// ---- confirm and unsubscribe links (T06, T07)
+
+const PAUSED = { title: "Subscriptions are paused", body: "<p>Subscriptions are paused right now. Your link stays valid: try it again later.</p>" };
+const INVALID = { title: "This link isn't valid", body: `<p>It may have expired. <a href="/subscribe/">Sign up again</a>.</p>` };
+
+// The id and token from the query string (GET), or from the form (POST) unless `queryOnly`: a
+// mail app's one-click unsubscribe POSTs to the link itself, with only a fixed body. Anything not a string is "".
+async function linkParams(req, { queryOnly }) {
+  if (req.method === "POST" && !queryOnly) {
+    const f = await readFields(req, { limit: 2048 });
+    return { id: typeof f.id === "string" ? f.id : "", t: typeof f.t === "string" ? f.t : "" };
+  }
+  let q = req.query;
+  if (!q || typeof q !== "object") q = Object.fromEntries(new URL(req.url || "/", "http://x").searchParams);
+  return { id: typeof q.id === "string" ? q.id : "", t: typeof q.t === "string" ? q.t : "" };
+}
+
+const hiddenForm = (action, id, t, label) =>
+  `<form method="post" action="${action}"><input type="hidden" name="id" value="${esc(id)}"><input type="hidden" name="t" value="${esc(t)}"><p><button type="submit">${esc(label)}</button></p></form>`;
+
+// Shared by confirm and unsubscribe. Unknown id, bad token and missing fields are all the same
+// answer (the invalid page), so the endpoint can't be used to test ids.
+async function handleLink({ req, res, env, storage, now, page, queryOnly = false, needsEnabled = true, invalid = { code: 404, page: INVALID } }) {
+  if (!allowMethods(req, res, ["GET", "POST"])) return;
+  if (needsEnabled && env.SUBSCRIPTIONS_ENABLED !== "1") return sendPage(res, 503, PAUSED);
+  let params;
+  try {
+    params = await linkParams(req, { queryOnly });
+  } catch (e) {
+    if (e instanceof BodyTooLargeError) return sendJson(res, 413, { error: "request too large" });
+    throw e;
+  }
+  try {
+    const record = await getSubscriber(storage, params.id);
+    if (!record || !tokenOk(record, params.t)) return sendPage(res, invalid.code, invalid.page);
+    return await page({ record, params, post: req.method === "POST", now: now() });
+  } catch (e) {
+    return sendPage(res, 500, { title: "Something went wrong", body: "<p>Please try the link again in a minute.</p>" });
+  }
+}
+
+export function makeConfirmHandler({ env, storage, now, randomBytes = cryptoRandomBytes, log = console.log }) {
+  return async function confirm(req, res) {
+    return handleLink({
+      req, res, env, storage, now,
+      page: async ({ record, params, post, now: t }) => {
+        // A pending record that was never confirmed within 7 days is deleted, and only for the
+        // holder of its token, so nobody can delete a record by guessing an address's id.
+        if (record.status === "pending" && t - Date.parse(record.createdAt) > PENDING_TTL_DAYS * 24 * 3600 * 1000) {
+          await deleteSubscriber(storage, record.id);
+          await recordEvent(storage, "expired", { now: t, randomBytes });
+          return sendPage(res, 404, INVALID);
+        }
+        const done = () => sendPage(res, 200, {
+          title: "You're subscribed",
+          body: `<p>You'll get the daily digest after the first sweep of the UTC day (about 05:47 IST).</p><p><a href="/live/">Open the live board</a></p>`,
+        });
+        if (record.status === "active") {
+          return post ? done() : sendPage(res, 200, { title: "You're already subscribed", body: `<p>Nothing more to do. <a href="/live/">Open the live board</a></p>` });
+        }
+        if (record.status !== "pending") return sendPage(res, 404, INVALID);
+        if (!post) {
+          return sendPage(res, 200, {
+            title: "Confirm your subscription",
+            body: `<p>One click to start getting the Travel Problem Radar digest by email.</p>${hiddenForm("/api/confirm", params.id, params.t, "Confirm")}`,
+          });
+        }
+        await putSubscriber(storage, { ...record, status: "active", confirmedAt: new Date(t).toISOString() });
+        await recordEvent(storage, "confirmed", { now: t, randomBytes, plan: record.plan === "pro" ? "pro" : "free" });
+        return done();
+      },
+    });
   };
 }

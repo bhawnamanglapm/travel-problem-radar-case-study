@@ -9,7 +9,7 @@ import {
 } from "../api/_lib/subscribers.js";
 import { BodyTooLargeError, allowMethods, bearerOk, esc, parseForm, readBody, readFields, sendJson, sendPage } from "../api/_lib/http.js";
 import { DEFAULT_FROM, buildConfirmEmail, buildDigestEmail, sendBatch, sendOne, withSubscriberFooter } from "../api/_lib/email.js";
-import { KEY_SUBSCRIBER_COUNT, makeSubscribeHandler, siteUrl } from "../api/_lib/subscription-handlers.js";
+import { KEY_SUBSCRIBER_COUNT, makeSubscribeHandler, siteUrl, makeConfirmHandler } from "../api/_lib/subscription-handlers.js";
 import { check, finish, memStorage, mockRes } from "./test-helpers.mjs";
 
 // A repeatable random source: each call returns bytes that count up from a seed.
@@ -471,6 +471,97 @@ const iso = (ms) => new Date(ms).toISOString();
     await w.post({ email: "x2@example.com", website: "bot" }), // honeypot
   ];
   check(replies.every((x) => x.body === OK && x.code === 200 && JSON.stringify(x.headers) === JSON.stringify(replies[0].headers)), "subscribe: new, pending-recent and honeypot replies are byte-identical, headers included");
+}
+
+// ---- T06: GET and POST /api/confirm
+{
+  const DAY = 24 * 3600 * 1000;
+  const setup = async ({ enabled = "1", status = "pending", createdAt = T0, email = "c.person@example.com", t = T0 } = {}) => {
+    const st = memStorage();
+    let rec = newPending(email, { now: createdAt, randomBytes: seeded(40) });
+    if (status === "active") rec = { ...rec, status: "active", confirmedAt: iso(createdAt) };
+    await putSubscriber(st, rec);
+    let clock = t;
+    const handler = makeConfirmHandler({ env: { SUBSCRIPTIONS_ENABLED: enabled }, storage: st, now: () => clock, randomBytes: seeded(9) });
+    const call = async (method, { id = rec.id, t: tok = rec.token, form } = {}) => {
+      const res = mockRes();
+      const qs = new URLSearchParams(Object.entries({ id, t: tok }).filter(([, v]) => v !== null)).toString();
+      const req = { method, url: "/api/confirm?" + (method === "GET" ? qs : ""), headers: { "content-type": "application/x-www-form-urlencoded" } };
+      if (method === "POST") req[Symbol.asyncIterator] = async function* () { yield Buffer.from(form !== undefined ? form : qs); };
+      await handler(req, res);
+      return res;
+    };
+    return { st, rec, call, tick: (ms) => { clock += ms; }, stored: () => JSON.parse(st.m.get("radar:sub:" + rec.id)) };
+  };
+  const evCount = (st, type) => [...st.m.keys()].filter((k) => k.startsWith("radar:event:") && k.includes(`-${type}-`)).length;
+
+  let c = await setup();
+  let r = await c.call("GET");
+  check(r.code === 200 && r.body.includes('action="/api/confirm"') && r.body.includes("Confirm") && r.body.includes(`value="${c.rec.id}"`) && r.body.includes(`value="${c.rec.token}"`), "confirm GET: a page with a form that POSTs the id and token");
+  check(c.stored().status === "pending" && evCount(c.st, "confirmed") === 0, "confirm GET: the record is unchanged");
+  check(r.headers["cache-control"] === "no-store" && r.headers["x-robots-tag"] === "noindex" && r.headers["referrer-policy"] === "no-referrer", "confirm: pages carry the no-store, noindex and no-referrer headers");
+  check(!r.body.includes("@") && !r.body.includes("c.person"), "confirm GET: the page holds no address");
+
+  r = await c.call("POST");
+  const after = c.stored();
+  check(r.code === 200 && r.body.includes("You&#39;re subscribed") && r.body.includes("05:47 IST") && r.body.includes('href="/live/"'), "confirm POST: the success page with the first-digest time and a link to /live/");
+  check(after.status === "active" && after.confirmedAt === iso(T0) && after.token === c.rec.token && after.email === c.rec.email, "confirm POST: active, confirmedAt set, token not rotated");
+  check(evCount(c.st, "confirmed") === 1 && !r.body.includes("@"), "confirm POST: a confirmed event written; the page holds no address");
+  const eventsBefore = c.st.m.size;
+  const r2 = await c.call("POST");
+  check(r2.code === 200 && r2.body === r.body && c.st.m.size === eventsBefore && c.stored().confirmedAt === iso(T0), "confirm POST twice: the second is a no-op with the same success page");
+  r = await c.call("GET");
+  check(r.code === 200 && r.body.includes("already subscribed") && !r.body.includes("<form"), "confirm GET after confirming: \"You're already subscribed\"");
+
+  // wrong or missing credentials: identical 404s, record unchanged
+  c = await setup();
+  const bads = [];
+  bads.push(await c.call("GET", { t: "wrong-token" }));
+  bads.push(await c.call("POST", { t: "wrong-token" }));
+  bads.push(await c.call("GET", { t: c.rec.token.slice(0, 10) })); // different length
+  bads.push(await c.call("GET", { t: null }));
+  bads.push(await c.call("POST", { t: null }));
+  bads.push(await c.call("GET", { id: "f".repeat(64) })); // unknown id
+  bads.push(await c.call("GET", { id: "nope" }));
+  bads.push(await c.call("GET", { id: null, t: null }));
+  bads.push(await c.call("POST", { form: "id=" + c.rec.id + "&t=" })); // empty token
+  check(bads.every((x) => x.code === 404 && x.body === bads[0].body) && bads[0].body.includes("isn&#39;t valid"), "confirm: wrong token, other length, missing t, unknown or malformed id all give the identical 404 page");
+  check(c.stored().status === "pending" && evCount(c.st, "confirmed") === 0, "confirm: the record is unchanged by all of them");
+
+  // expiry
+  c = await setup();
+  c.tick(7 * DAY - 1000);
+  r = await c.call("GET");
+  check(r.code === 200 && c.st.m.has("radar:sub:" + c.rec.id), "confirm: a pending record just under 7 days old is still valid");
+  c.tick(2000);
+  r = await c.call("GET", { t: "wrong-token" });
+  check(r.code === 404 && c.st.m.has("radar:sub:" + c.rec.id) && evCount(c.st, "expired") === 0, "confirm: an expired record is not deleted by a wrong token");
+  r = await c.call("GET");
+  check(r.code === 404 && r.body === bads[0].body && !c.st.m.has("radar:sub:" + c.rec.id) && evCount(c.st, "expired") === 1, "confirm: an expired pending record is deleted on its own link, with an expired event and the same 404");
+  c = await setup();
+  c.tick(8 * DAY);
+  r = await c.call("POST");
+  check(r.code === 404 && !c.st.m.has("radar:sub:" + c.rec.id), "confirm POST: an expired record cannot be confirmed");
+  c = await setup({ status: "active" });
+  c.tick(30 * DAY);
+  r = await c.call("GET");
+  check(r.code === 200 && c.st.m.has("radar:sub:" + c.rec.id), "confirm: an old active record is never expired");
+
+  // switch, methods, size
+  c = await setup({ enabled: "" });
+  r = await c.call("POST");
+  check(r.code === 503 && r.body.includes("paused") && c.stored().status === "pending", "confirm: switch off gives a 503 \"paused\" page and changes nothing");
+  c = await setup();
+  r = await c.call("PUT");
+  check(r.code === 405 && r.headers.allow === "GET, POST", "confirm: other methods get 405");
+  r = await c.call("POST", { form: "id=" + "x".repeat(5000) });
+  check(r.code === 413, "confirm POST: an oversized body gets 413");
+  c = await setup();
+  r = await c.call("GET", { id: '"><script>alert(1)</script>', t: '"><b>' });
+  check(r.code === 404 && !r.body.includes("<script>alert"), "confirm: hostile query values never reach the page");
+  c.st.set = async () => { throw new Error("blob down for c.person@example.com"); };
+  r = await c.call("POST");
+  check(r.code === 500 && !r.body.includes("@") && r.body.includes("try the link again"), "confirm: a storage failure gives a plain 500 page without detail");
 }
 
 finish("subscription tests");

@@ -12,8 +12,8 @@ working in a real inbox; that is T12's staged launch.
 | [T02](T02-subscriber-records.md) Subscriber records module | done | f0de053 | 96 pass (+23 new) | See T02 notes below |
 | [T03](T03-http-helpers.md) HTTP helpers | done | 536cc33 | 117 pass (+21 new) | See T03 notes below |
 | [T04](T04-email-builders.md) Email builders + batch send | done | 87bbdcb | 155 pass (+38 new) | See T04 notes below |
-| [T05](T05-api-subscribe.md) `POST /api/subscribe` | done | see T06 row | 200 pass (+45 new) | See T05 notes below |
-| [T06](T06-api-confirm.md) `/api/confirm` | todo | | | |
+| [T05](T05-api-subscribe.md) `POST /api/subscribe` | done | 0f718c3 | 200 pass (+45 new) | See T05 notes below |
+| [T06](T06-api-confirm.md) `/api/confirm` | done | PENDING_HASH | 221 pass (+21 new) | See T06 notes below |
 | [T07](T07-api-unsubscribe.md) `/api/unsubscribe` | todo | | | |
 | [T08](T08-subscribe-page.md) `/subscribe/` page, build, checks | todo | | | |
 | [T09](T09-delivery-engine.md) Delivery engine | todo | | | |
@@ -93,4 +93,13 @@ working in a real inbox; that is T12's staged launch.
 - **Verify items not confirmed:** the Hobby plan's function-count limit (a Vercel docs search this session did not
   answer it; check the Vercel dashboard or limits page when deploying a preview: Phase 1 takes the project from
   2 to 5 functions). The visitor-IP header was not looked up, since the per-IP limit is T13.
+
+### T06
+- `makeConfirmHandler` and `api/confirm.js`. Shared helper `handleLink` in `subscription-handlers.js` does the
+  method check, switch check, parameter reading and the id/token lookup; T07 reuses it.
+- The expired-pending delete (older than 7 days) happens only when the token matches. Otherwise anyone who could
+  compute an address's id (it is a hash of the address) could delete that person's pending record. A wrong token
+  on an expired record gets the same 404 as any wrong token (tested).
+- Page titles go through `esc()`, so an apostrophe appears as `&#39;` in the HTML (it displays correctly).
+- Not done, as the task says: no welcome email.
 
