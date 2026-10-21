@@ -4,7 +4,7 @@
 // sending anyone the same digest twice. Never throws; the result and the log hold counts only.
 import { buildDigestEmail, sendBatch, withSubscriberFooter } from "./email.js";
 import { KEY_INDEX, sweepKey } from "./radar.js";
-import { KEY_SUBSCRIBER_COUNT, managePath, senderOk, siteUrl } from "./subscription-handlers.js";
+import { IPHIT_KEEP_HOURS, KEY_IPHIT_PREFIX, KEY_SUBSCRIBER_COUNT, managePath, senderOk, siteUrl, utcHour } from "./subscription-handlers.js";
 import { PENDING_TTL_DAYS, deleteSubscriber, effectivePlan, listSubscribers, recordEvent, utcDay } from "./subscribers.js";
 
 export const KEY_DELIVERIES_PREFIX = "radar:deliveries:";
@@ -139,6 +139,14 @@ export async function deliverToSubscribers({ env, storage, fetchFn, now, randomB
       const cutoff = utcDay(t - KEEP_DELIVERY_DAYS * DAY_MS);
       for (const day of await storage.list(KEY_DELIVERIES_PREFIX)) {
         if (/^\d{8}$/.test(day) && day < cutoff) await storage.del(KEY_DELIVERIES_PREFIX + day);
+      }
+    } catch (e) { /* tidying is best effort */ }
+
+    // Old per-IP sign-up counters (T13 part B): keys start with the UTC hour, YYYYMMDDHH.
+    try {
+      const cutoff = utcHour(t - IPHIT_KEEP_HOURS * 3600 * 1000);
+      for (const suffix of await storage.list(KEY_IPHIT_PREFIX)) {
+        if (/^\d{10}-/.test(suffix) && suffix.slice(0, 10) < cutoff) await storage.del(KEY_IPHIT_PREFIX + suffix);
       }
     } catch (e) { /* tidying is best effort */ }
 

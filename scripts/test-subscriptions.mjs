@@ -11,7 +11,8 @@ import {
 import { BodyTooLargeError, allowMethods, bearerOk, esc, parseForm, readBody, readFields, sendJson, sendPage } from "../api/_lib/http.js";
 import { DEFAULT_FROM, buildConfirmEmail, buildDigestEmail, sendBatch, sendOne, withSubscriberFooter } from "../api/_lib/email.js";
 import {
-  KEY_SUBSCRIBER_COUNT, WEBHOOK_TOLERANCE_S, makeConfirmHandler, makeResendWebhookHandler, makeSubscribeHandler, makeUnsubscribeHandler, siteUrl, verifySvix,
+  KEY_IPHIT_PREFIX, KEY_SUBSCRIBER_COUNT, WEBHOOK_TOLERANCE_S, clientIp, makeConfirmHandler, makeResendWebhookHandler, makeSubscribeHandler, makeUnsubscribeHandler,
+  siteUrl, utcHour, verifySvix,
 } from "../api/_lib/subscription-handlers.js";
 import { deliverToSubscribers } from "../api/_lib/subscriber-delivery.js";
 import { makeDataHandler } from "../api/_lib/handlers.js";
@@ -1459,6 +1460,84 @@ const iso = (ms) => new Date(ms).toISOString();
 
   check(replies.length > 15 && replies.every((t) => !t.includes("@")), `webhook: no reply contains an address (${replies.length} replies checked)`);
   check(allLogs.length > 0 && allLogs.every((l) => !l.includes("@")), "webhook: no log line contains an address");
+}
+
+// ---- T13 part B: per-IP sign-up limit (Blob counters; the firewall rule is configuration)
+{
+  const ENV = { SUBSCRIPTIONS_ENABLED: "1", RESEND_API_KEY: "re_k", EMAIL_FROM: "Radar <hello@pehchanthetraveller.com>", SITE_URL: "https://site.example", MAX_SUBSCRIBERS: "5000", MAX_CONFIRMS_PER_DAY: "1000" };
+  const HOUR = 3600 * 1000;
+  const OK = '{"ok":true,"message":"If that address can be subscribed, a confirmation link is on its way."}';
+  const world = (envOver = {}) => {
+    const st = memStorage();
+    st.m.set("radar:subscriberCount", "0");
+    const sent = [];
+    let clock = T0;
+    const fetchFn = async (url, init) => { const body = JSON.parse(init.body); sent.push(...body); return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ data: body.map((_, i) => ({ id: "m" + i })) }) }; };
+    const handler = makeSubscribeHandler({ env: { ...ENV, ...envOver }, storage: st, fetchFn, now: () => clock, randomBytes: seeded(9), log: () => {} });
+    const post = async (email, headers = {}) => {
+      const res = mockRes();
+      await handler({ method: "POST", headers: { "content-type": "application/json", ...headers }, body: { email } }, res);
+      return res;
+    };
+    const subs = () => [...st.m.keys()].filter((k) => k.startsWith("radar:sub:")).length;
+    const hits = () => [...st.m.keys()].filter((k) => k.startsWith(KEY_IPHIT_PREFIX));
+    return { st, sent, post, subs, hits, tick: (ms) => { clock += ms; }, now: () => clock };
+  };
+  const IP = { "x-forwarded-for": "203.0.113.7" };
+
+  check(clientIp({ "x-vercel-forwarded-for": "198.51.100.1", "x-forwarded-for": "203.0.113.7" }) === "198.51.100.1", "clientIp: prefers x-vercel-forwarded-for");
+  check(clientIp({ "x-forwarded-for": "203.0.113.7, 10.0.0.1" }) === "203.0.113.7" && clientIp({ "x-real-ip": "2001:db8::1" }) === "2001:db8::1", "clientIp: the first x-forwarded-for value, else x-real-ip (IPv6 too)");
+  check(clientIp({}) === null && clientIp({ "x-forwarded-for": "<script>" }) === null, "clientIp: none, or not an IP, gives null");
+  check(utcHour(T0) === "2026102108", "utcHour: YYYYMMDDHH in UTC");
+
+  let w = world();
+  const codes = [];
+  for (let i = 1; i <= 5; i++) codes.push((await w.post(`p${i}@example.com`, IP)).body);
+  check(codes.every((b) => b === OK) && w.subs() === 5 && w.sent.length === 5 && w.hits().length === 5, "per-IP: 5 sign-ups from one IP in an hour are processed (5 records, 5 confirmation emails)");
+  const storedBefore = w.st.m.size;
+  let r = await w.post("p6@example.com", IP);
+  check(r.code === 200 && r.body === OK, "per-IP: the 6th attempt gets the identical OK reply");
+  check(w.subs() === 5 && w.sent.length === 5 && w.st.m.size === storedBefore, "per-IP: the 6th attempt stores nothing (no record, no event, no hit) and sends nothing");
+  r = await w.post("other@example.com", { "x-forwarded-for": "198.51.100.9" });
+  check(r.body === OK && w.subs() === 6, "per-IP: another IP is still allowed");
+  w.tick(HOUR);
+  r = await w.post("p7@example.com", IP);
+  check(r.body === OK && w.subs() === 7, "per-IP: the same IP is allowed again in the next UTC hour");
+  check(w.hits().every((k) => !k.includes("203.0.113.7") && !k.includes("198.51.100.9") && /^radar:iphit:\d{10}-[0-9a-f]{16}-[0-9a-f]{6}$/.test(k)) &&
+    [...w.st.m.values()].every((v) => !String(v).includes("203.0.113")), "per-IP: no raw IP in any stored key or value; keys are radar:iphit:<hour>-<hash16>-<hex6>");
+
+  w = world();
+  for (let i = 1; i <= 8; i++) await w.post(`n${i}@example.com`);
+  check(w.subs() === 8 && w.hits().length === 0, "per-IP: no IP header (local runs) means no limit and no hit files");
+
+  w = world({ MAX_SIGNUPS_PER_IP_HOUR: "2" });
+  for (let i = 1; i <= 3; i++) await w.post(`m${i}@example.com`, IP);
+  check(w.subs() === 2, "per-IP: MAX_SIGNUPS_PER_IP_HOUR sets the limit");
+  w = world({ MAX_SIGNUPS_PER_IP_HOUR: "lots" });
+  for (let i = 1; i <= 6; i++) await w.post(`q${i}@example.com`, IP);
+  check(w.subs() === 5, "per-IP: an unreadable MAX_SIGNUPS_PER_IP_HOUR falls back to 5");
+
+  w = world();
+  const list0 = w.st.list;
+  w.st.list = async (p) => { if (p.startsWith(KEY_IPHIT_PREFIX)) throw new Error("blob down"); return list0(p); };
+  r = await w.post("fail@example.com", IP);
+  check(r.body === OK && w.subs() === 0 && w.sent.length === 0, "per-IP: a count that can't be read counts as reached (OK reply, nothing stored or sent)");
+
+  // The sweep deletes counters older than 2 hours and keeps the rest.
+  w = world();
+  const hours = [0, 1, 2, 3, 26].map((h) => utcHour(T0 - h * HOUR));
+  for (const h of hours) w.st.m.set(`${KEY_IPHIT_PREFIX}${h}-${"a".repeat(16)}-abcdef`, "{}");
+  w.st.m.set(KEY_IPHIT_PREFIX + "junk", "{}");
+  await deliverToSubscribers({ env: ENV, storage: w.st, fetchFn: async () => ({ ok: true, status: 200, headers: { get: () => null }, json: async () => ({ data: [] }) }), now: () => T0, randomBytes: seeded(5), scheduled: true, log: () => {}, sweep: { id: "s1", at: iso(T0), perCat: {}, problems: [] } });
+  const left = w.hits().map((k) => k.slice(KEY_IPHIT_PREFIX.length, KEY_IPHIT_PREFIX.length + 10));
+  check(left.includes(hours[0]) && left.includes(hours[1]) && left.includes(hours[2]) && !left.includes(hours[3]) && !left.includes(hours[4]) && w.st.m.has(KEY_IPHIT_PREFIX + "junk"),
+    `sweep: deletes per-IP counters older than 2 hours, keeps newer ones and anything it doesn't recognise (${left.length} left)`);
+
+  // /api/data never serves them.
+  const dh = makeDataHandler({ storage: w.st });
+  const res = mockRes();
+  await dh({ method: "GET", url: "/api/data?key=" + encodeURIComponent(w.hits()[0]), headers: {} }, res);
+  check(res.code === 400, "per-IP: /api/data refuses radar:iphit: keys");
 }
 
 finish("subscription tests");

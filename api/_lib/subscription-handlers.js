@@ -1,7 +1,7 @@
 // HTTP handlers for the subscriber endpoints (docs/subscriptions/tasks/T05 to T07), built from
 // injected dependencies like handlers.js, so the offline tests can call them directly.
 // Nothing here puts an address, an id or a token in a reply or a log line.
-import { createHmac, randomBytes as cryptoRandomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes as cryptoRandomBytes, timingSafeEqual } from "node:crypto";
 import { DEFAULT_FROM, buildConfirmEmail, buildProRequestEmail, sendEmail, sendOne } from "./email.js";
 import { BodyTooLargeError, allowMethods, esc, readFields, sendJson, sendPage } from "./http.js";
 import {
@@ -13,6 +13,15 @@ import {
 // sign-up reads one small file instead of listing every subscriber.
 export const KEY_SUBSCRIBER_COUNT = "radar:subscriberCount";
 export const DEFAULT_MAX_CONFIRMS_PER_DAY = 10;
+
+// Per-IP sign-up attempts (T13 part B): one file per accepted attempt,
+// radar:iphit:<YYYYMMDDHH>-<16 hex of a hash of the IP>-<6 hex>, counted with list. No raw IP is
+// stored; the sweep deletes files older than IPHIT_KEEP_HOURS. The Vercel firewall rule in front
+// (DEPLOYMENT.md) stops floods before they cost Blob operations; this gives the exact hourly limit.
+export const KEY_IPHIT_PREFIX = "radar:iphit:";
+export const DEFAULT_MAX_SIGNUPS_PER_IP_HOUR = 5;
+export const IPHIT_KEEP_HOURS = 2;
+export const utcHour = (now) => new Date(now).toISOString().slice(0, 13).replace(/[-T]/g, ""); // YYYYMMDDHH
 
 const OK_REPLY = { ok: true, message: "If that address can be subscribed, a confirmation link is on its way." };
 const HOUR_MS = 3600 * 1000;
@@ -28,6 +37,22 @@ const maxConfirmsPerDay = (v) => {
   if (raw === "0") return 0;
   return positiveInt(raw) ?? DEFAULT_MAX_CONFIRMS_PER_DAY;
 };
+
+// The client's IP as Vercel reports it. Vercel overwrites x-forwarded-for, so a client can't set
+// it (docs: "Request headers"); x-vercel-forwarded-for is the same value and survives another
+// proxy in front. Null when there is none (local runs, tests) or it doesn't look like an IP.
+export function clientIp(headers = {}) {
+  for (const name of ["x-vercel-forwarded-for", "x-forwarded-for", "x-real-ip"]) {
+    const v = headers[name];
+    const first = String(Array.isArray(v) ? v[0] : v ?? "").split(",")[0].trim();
+    if (first && /^[0-9a-f:.]{2,45}$/i.test(first)) return first;
+  }
+  return null;
+}
+
+// The list prefix for this IP's attempts in this UTC hour.
+export const ipHitPrefix = (ip, now) =>
+  `${KEY_IPHIT_PREFIX}${utcHour(now)}-${createHash("sha256").update("radar-ip:" + ip).digest("hex").slice(0, 16)}-`;
 
 // The count as a number. A missing file is 0 (no sweep has written one yet); a file that can't
 // be read or understood is null, which callers treat as "full".
@@ -94,6 +119,19 @@ export function makeSubscribeHandler({ env, storage, fetchFn, now, randomBytes =
 
     try {
       const t = now();
+      // T13 part B: more than the limit from one IP this hour gets the usual reply and nothing is
+      // stored or sent. A count we can't read counts as reached, like the confirm cap below.
+      const ip = clientIp(req.headers);
+      if (ip) {
+        const prefix = ipHitPrefix(ip, t);
+        const maxPerIp = positiveInt(env.MAX_SIGNUPS_PER_IP_HOUR) ?? DEFAULT_MAX_SIGNUPS_PER_IP_HOUR;
+        let hits;
+        try { hits = (await storage.list(prefix)).length; } catch (e) { hits = Infinity; }
+        if (hits >= maxPerIp) return reply();
+        try {
+          await storage.set(prefix + Buffer.from(randomBytes(3)).toString("hex"), JSON.stringify({ at: new Date(t).toISOString() }));
+        } catch (e) { /* best effort: a lost hit only makes the limit a little looser */ }
+      }
       const maxSubs = positiveInt(env.MAX_SUBSCRIBERS);
       const maxConfirms = maxConfirmsPerDay(env.MAX_CONFIRMS_PER_DAY);
 
