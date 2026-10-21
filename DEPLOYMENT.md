@@ -15,6 +15,11 @@ The 5-hour schedule runs on **GitHub Actions**, because Vercel's Hobby plan allo
 >
 > **Schedule (changed 21 Oct 2026):** every 5 hours from GitHub Actions, with Vercel's daily cron kept as a backstop.
 > The GitHub schedule starts once the `CRON_SECRET` repository secret is added (4.7).
+>
+> **Subscriber email (switched on 21 Oct 2026):** `/subscribe/` is open in production, sending from
+> `hello@pehchanthetraveller.com` (a domain verified in Resend). The list holds the owner's own test addresses. The
+> launch checks in [T12](docs/subscriptions/tasks/T12-docs-and-launch.md) are not all done; see
+> [Subscriber email](#subscriber-email-optional).
 
 ---
 
@@ -206,6 +211,11 @@ Open **Settings → Environment Variables** and add:
 | `SLACK_WEBHOOK_URL` | A Slack incoming-webhook URL | **Production only** | No. Posts each sweep to Slack; see [Posting to Slack](#posting-to-slack-optional) |
 | `RESEND_API_KEY` | A Resend API key with sending access | **Production only** | No. With `EMAIL_TO`, emails each sweep; see [Sending email](#sending-email-optional) |
 | `EMAIL_TO` | The email address your Resend account was created with | **Production only** | Only with `RESEND_API_KEY` |
+| `EMAIL_FROM` | A sender on a domain verified in Resend, for example `Travel Problem Radar <hello@yourdomain.com>` | **Production only** | Only for subscribers, or to email anyone but the Resend account's own address |
+| `SUBSCRIPTIONS_ENABLED` | `1` | **Production only** | No. Turns subscriber sign-up and delivery on; see [Subscriber email](#subscriber-email-optional) |
+| `MAX_SUBSCRIBERS` | A whole number, for example `5000` | **Production only** | Only with `SUBSCRIPTIONS_ENABLED`. Unset means the list takes nobody new |
+| `MAX_CONFIRMS_PER_DAY` | A whole number | **Production only** | No. Defaults to 10 confirmation emails a day |
+| `SITE_URL` | `https://` plus your production domain, no trailing slash | **Production only** | No. Defaults to the Vercel production domain |
 
 Generate the secret with either:
 
@@ -431,7 +441,7 @@ Do not commit the `.vercel/` folder that `vercel link` creates. It is already in
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "buildCommand": "rm -rf public && mkdir public && cp -r index.html demo live public/ && rm -rf public/demo/src public/live/src",
+  "buildCommand": "rm -rf public && mkdir public && cp -r index.html demo live subscribe manage public/ && rm -rf public/demo/src public/live/src",
   "outputDirectory": "public",
   "crons": [{ "path": "/api/sweep", "schedule": "30 1 * * *" }],
   "functions": {
@@ -443,7 +453,7 @@ Do not commit the `.vercel/` folder that `vercel link` creates. It is already in
 | Key | What it does |
 |---|---|
 | `framework: null` | No framework preset; Vercel treats this as a plain static site plus functions |
-| `buildCommand` | Copies `index.html`, `demo/` and `live/` into `public/`, then removes the JSX sources. It does **not** run `npm run build` |
+| `buildCommand` | Copies `index.html`, `demo/`, `live/`, `subscribe/` and `manage/` into `public/`, then removes the JSX sources. It does **not** run `npm run build`. A new page folder must be added here, or Vercel won't serve it (`npm run check` tests for `subscribe` and `manage`) |
 | `outputDirectory` | Serves `public/` as the static site |
 | `crons` | The daily backstop: calls `/api/sweep` at 01:30 UTC (07:00 IST), within the hour on Hobby |
 | `functions["api/sweep.js"].maxDuration` | Lets the sweep run for up to 300 s, the Hobby maximum |
@@ -479,10 +489,14 @@ needed at runtime.
 | `ANTHROPIC_API_KEY` | You | `/api/sweep` | Sent to the Anthropic API in a header; never returned in a response |
 | `RADAR_MODEL` | You (optional) | `/api/sweep` | Claude model ID. Default `claude-sonnet-5-5` (`api/_lib/handlers.js`). Must support `effort` (Claude 4.6 or later) |
 | `SLACK_WEBHOOK_URL` | You (optional) | `/api/sweep` | Slack incoming webhook. Treat it as a secret: anyone who has it can post to the channel |
-| `RESEND_API_KEY` | You (optional) | `/api/sweep` | Resend API key, sent in a header; never returned in a response. Email is sent only when it and `EMAIL_TO` are set |
-| `EMAIL_TO` | You (optional) | `/api/sweep` | Recipients, separated by commas, at most 50. With the default sender, only the Resend account's own address works. Kept out of the repository and out of every reply |
-| `EMAIL_FROM` | You (optional) | `/api/sweep` | Not needed. Defaults to `Travel Problem Radar <onboarding@resend.dev>`, Resend's shared sender. Set it only if you later verify a domain in Resend |
-| `VERCEL_PROJECT_PRODUCTION_URL` | Vercel, automatically | `/api/sweep` | Builds the "Open the live board" link in the Slack message. If it is missing, the link is left out |
+| `RESEND_API_KEY` | You (optional) | `/api/sweep`, the subscriber endpoints | Resend API key, sent in a header; never returned in a response. Owner email is sent only when it and `EMAIL_TO` are set |
+| `EMAIL_TO` | You (optional) | `/api/sweep`, `/api/confirm`, `/api/account` | Recipients, separated by commas, at most 50. With the default sender, only the Resend account's own address works. Also gets the "Pro request" email. Kept out of the repository and out of every reply |
+| `EMAIL_FROM` | You (optional; required for subscribers) | `/api/sweep`, the subscriber endpoints | Defaults to `Travel Problem Radar <onboarding@resend.dev>`, Resend's shared sender, which is enough for the owner's own digest. Subscriber email refuses that default and any `@resend.dev` sender: it needs a sender on a domain verified in Resend |
+| `SUBSCRIPTIONS_ENABLED` | You (optional) | The subscriber endpoints, `/api/sweep` | `1` turns sign-up and subscriber delivery on together. Anything else, or unset, means off |
+| `MAX_SUBSCRIBERS` | You (with subscriptions) | `/api/subscribe` | The cap on records (pending and active). Unset or not a positive whole number means **closed**: the sign-up reply looks the same but nothing is stored. The count is the one the last saved sweep wrote |
+| `MAX_CONFIRMS_PER_DAY` | You (optional) | `/api/subscribe` | Confirmation emails per UTC day, across all addresses. Default 10; `0` stops confirmation emails |
+| `SITE_URL` | You (optional) | The subscriber endpoints, `/api/sweep` | Base of the links in subscriber emails. If unset, `https://` plus `VERCEL_PROJECT_PRODUCTION_URL`. With neither, subscriber email is off |
+| `VERCEL_PROJECT_PRODUCTION_URL` | Vercel, automatically | `/api/sweep`, the subscriber endpoints | Builds the "Open the live board" link in the Slack message, and the subscriber links when `SITE_URL` is unset. If it is missing, the Slack link is left out |
 | `BLOB_STORE_ID` or `BLOB_READ_WRITE_TOKEN` | Vercel, when the store is connected | `api/_lib/storage.js` | Do not set by hand unless running outside Vercel |
 
 ### What is stored
@@ -495,6 +509,12 @@ not a letter or digit with `-`.
 | `radar:history` | `radar/radar-history.json` | Index of saved sweeps (id, time, counts), last 60 | Yes |
 | `radar:sweep:<id>` | `radar/radar-sweep-<id>.json` | One sweep's items | Yes |
 | `radar:seenIds` | `radar/radar-seenIds.json` | Up to 800 item IDs already seen, used for the New flag | No |
+| `radar:sub:<id>` | `radar/radar-sub-<id>.json` | One subscriber: address, status, plan, token, dates. `<id>` is the SHA-256 of the lowercased address | No |
+| `radar:event:<YYYYMMDD>-<time>-<type>-<random>` | `radar/radar-event-….json` | One sign-up, confirmation, unsubscribe or Pro event: type, time and plan, **no address or id**. Kept until `prune-events` deletes it | No |
+| `radar:deliveries:<YYYYMMDD>` | `radar/radar-deliveries-<YYYYMMDD>.json` | Record ids already sent that day's Free digest. Deleted by the sweep after 7 days | No |
+| `radar:subscriberCount` | `radar/radar-subscriberCount.json` | Pending plus active records at the last saved sweep; the sign-up cap reads it | No |
+
+`/api/data` allows only `radar:history` and `radar:sweep:<id>`; the tests check that every subscriber key is refused.
 
 ### Caching
 
@@ -643,7 +663,74 @@ How it behaves:
   `failed: http <status> <Resend error name>`, `failed: timeout` or `failed: network error`. It never includes the
   key, the addresses or Resend's error message, because the GitHub Actions job prints the reply in a log that anyone
   can read in a public repository. Resend's dashboard shows the full error under **Logs**.
-- Status: covered by the offline tests (`npm test`); **not yet tried against a real Resend account**.
+- Status: in use with a real Resend account since 21 Oct 2026, sending from the verified domain
+  `pehchanthetraveller.com`. Subscriber confirmation emails have arrived, at first in the spam folder.
+
+### Subscriber email (optional)
+
+Anyone can sign up for the digest by email at `/subscribe/`. This is separate from the owner's email above, which is
+unchanged. Code: `api/subscribe.js`, `api/confirm.js`, `api/unsubscribe.js` and `api/account.js`, with the logic in
+`api/_lib/subscription-handlers.js`, `api/_lib/subscribers.js` and `api/_lib/subscriber-delivery.js`. Design notes:
+[docs/subscriptions/email-signup.md](docs/subscriptions/email-signup.md).
+
+**What a subscriber goes through**
+
+1. `/subscribe/` posts the address to `POST /api/subscribe`. Every accepted request gets the same reply ("If that
+   address can be subscribed, a confirmation link is on its way"), so the endpoint never tells anyone whether an
+   address is on the list. A filled-in hidden field (a trap for bots) gets the same reply and does nothing.
+2. A confirmation email links to `/api/confirm?id=…&t=…`. Opening it shows a **Confirm** button; only pressing it
+   (a `POST`) confirms, so a mail scanner that opens links can't sign anyone up. An address not confirmed within 7
+   days is deleted by the next sweep. A second sign-up for the same pending address within 24 hours sends nothing.
+3. **Free:** one email a day, after the first saved sweep of the UTC day (normally 00:17 UTC, about 05:47 IST),
+   holding everything saved in the last 24 hours. **Pro:** an email after every saved **scheduled** sweep (about 5 a
+   day); manual runs send Pro nothing. Pro is switched on by hand for now: see "Handling Pro requests" below.
+4. Every email has an Unsubscribe link and a "Manage subscription" link (`/manage/`), plus `List-Unsubscribe` headers
+   so mail apps can offer one-click unsubscribe. Unsubscribing deletes the record, and works even while subscriptions
+   are switched off.
+
+**What it needs**
+
+- A domain verified in Resend (**Domains → Add Domain**, then its DNS records), and `EMAIL_FROM` set to a sender on
+  it. The shared `onboarding@resend.dev` sender can't reach other people, so the code refuses it for subscribers.
+- `RESEND_API_KEY` (as for the owner's email).
+- `MAX_SUBSCRIBERS`. Without it the list is closed.
+- `SUBSCRIPTIONS_ENABLED=1`.
+- Optional: `SITE_URL` and `MAX_CONFIRMS_PER_DAY` (see the [environment variables](#environment-variables)).
+
+All for **Production only**. Redeploy after adding them. If any is missing, `/api/subscribe` answers
+`503 subscriptions are not open yet` and the sweep reply says `"subscribers": "not configured"`.
+
+**The daily quota.** On Resend's free plan (100 emails a day, October 2026), each recipient counts as one email. The
+budget, from [pricing.md](docs/subscriptions/pricing.md), is
+
+```
+5 (owner) + Free subscribers + 5 × Pro subscribers + confirmation emails ≤ 100 a day
+```
+
+so about 90 Free subscribers fit. `MAX_SUBSCRIBERS` is 5000 in production (decision D7), well above that: past about
+90, the sweep stops at the quota and the rest are deferred to the next sweep, so a paid Resend plan is needed before
+then. The owner's digest is always sent first, so a used-up quota stops subscriber mail, not the owner's.
+
+**How it shows in the sweep reply.** After a saved sweep the reply (and the `subscribers` log line) has a
+`subscribers` field with counts only, never an address, because GitHub Actions prints it in a public log:
+
+```json
+"subscribers": {
+  "pro": { "due": 1, "sent": 1, "failed": 0, "deferred": 0 },
+  "free": { "due": 1, "sent": 1, "failed": 0, "deferred": 0, "alreadySent": 0 },
+  "pending": 0, "expired": 0, "unreadable": 0, "stopped": null
+}
+```
+
+- `pro` is `{ "skipped": "manual run" }` for a manual run.
+- `free.alreadySent` counts subscribers who already had today's digest; later sweeps that day send them nothing.
+- `deferred` is anyone not reached this time, because the 240-second deadline passed or sending stopped. They are
+  tried again at the next sweep, and nobody gets the same day's Free digest twice.
+- `stopped` says why sending stopped early: `quota`, `deadline`, or a Resend error such as `http 401`.
+
+**Turning it off.** Remove `SUBSCRIPTIONS_ENABLED` (or set it to anything but `1`) and redeploy. Sign-up then answers
+`503`, confirm and manage links show "Subscriptions are paused", and the sweep sends no subscriber email. Records are
+kept, and unsubscribe links still work. Set it back to `1` and redeploy to resume.
 
 ### Managing subscribers
 
@@ -720,6 +807,7 @@ sweep** and choose **Enable workflow**.
 - **`ANTHROPIC_API_KEY`:** create a new key in the Anthropic Console, update the variable, redeploy, then revoke the
   old key.
 - **`RESEND_API_KEY`:** create a new key in Resend, update the variable, redeploy, then delete the old key.
+  Subscriber digests and confirmation emails use the same key.
 
 ### Starting the history over
 
@@ -767,6 +855,17 @@ covers a missed 00:17 run.
 | `email: failed: http 401 …`, or `http 403` with `restricted_api_key` or `suspended_api_key` | The key is wrong, deleted or disabled | Create a new key; update the variable; redeploy |
 | `email: failed: http 422 …` or `http 400 validation_error` | `EMAIL_TO` (or `EMAIL_FROM`, if set) is malformed | Recipients as plain addresses separated by commas; a sender as `Name <address@domain>` |
 | `email: failed: http 429 daily_quota_exceeded` (or `monthly_quota_exceeded`) | The plan's sending quota is used up; each recipient counts. Unlikely with one recipient | Fewer recipients or a paid plan. The daily quota resets at midnight UTC |
+| `/subscribe/` says "Subscriptions aren't open yet" (`503`) | `SUBSCRIPTIONS_ENABLED` isn't `1`, or `RESEND_API_KEY`, a verified-domain `EMAIL_FROM` or a site URL is missing for this deployment | Set them for Production; redeploy (see [Subscriber email](#subscriber-email-optional)) |
+| `"subscribers": "not configured"` in the sweep reply | Same as the row above | Same fix |
+| Sign-up says the link is on its way, but no confirmation email comes | In order: the spam folder; `MAX_SUBSCRIBERS` unset (the list is closed) or reached; `MAX_CONFIRMS_PER_DAY` used up today; a second sign-up within 24 hours of the first; the address is already confirmed. The reply is the same in every case on purpose | Check spam first. Then the `subscribe confirm-email` log line in Vercel (kept about 30 minutes), `stats` for today's confirmation emails, and Resend's **Logs** |
+| Subscriber emails land in spam | A new sending domain has no reputation yet. SPF, DKIM and DMARC are set for `pehchanthetraveller.com` | Mark the emails "not spam"; it usually improves with time. Nothing to change in the code |
+| `subscribers.stopped: "quota"`, with `deferred` counts | Resend's daily quota ran out. The owner's email went first | The rest go at the next sweep. If it happens often, see the quota formula in [Subscriber email](#subscriber-email-optional) |
+| `subscribers.stopped: "deadline"`, with `deferred` counts | The sweep reached 240 seconds before sending finished | The rest go at the next sweep; nothing is sent twice |
+| `free.due: 0` with `alreadySent` above 0 | Today's Free digest has already gone to those subscribers | Expected; the next one goes after the first sweep of the next UTC day |
+| `pro: { "skipped": "manual run" }` | Pro email goes only with scheduled sweeps (decision D4) | Expected |
+| A Pro subscriber got no Pro email | Pro was granted after the last scheduled sweep, or `proUntil` has passed (`list` shows `pro (lapsed)`) | Wait for the next scheduled sweep, or grant again |
+| A confirm or manage link says "This link isn't valid" | The record was deleted (unsubscribed, or pending for more than 7 days), or the mail app cut the link short | Sign up again, or use the links in the most recent email |
+| `/subscribe/`, `/manage/` or `/live/` opened on GitHub Pages | Pages has no `/api/`, so these pages send the visit on to the Vercel copy | Nothing to fix; link to `https://travel-problem-radar.vercel.app/subscribe/` |
 
 ---
 
