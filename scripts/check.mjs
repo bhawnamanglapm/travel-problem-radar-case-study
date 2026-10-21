@@ -78,6 +78,7 @@ check(demo.includes(slashFix), "demo/index.html adds the trailing slash (/demo w
 // T13: the Resend webhook, the firewall rule's 429, and Hobby's 12-function limit (no framework).
 check(existsSync("api/resend-webhook.js"), "api/resend-webhook.js exists (bounces and complaints from Resend)");
 check(/x\.status === 429/.test(subPage), "subscribe/index.html shows a message on 429 (the firewall rate limit)");
+check(/Check your spam or junk folder/.test(readFileSync("api/_lib/subscription-handlers.js", "utf8")), "the sign-up reply tells people to check spam or junk (the new domain's confirmation email is often filtered)");
 const fns = readdirSync("api").filter((f) => f.endsWith(".js"));
 check(fns.length <= 12, `at most 12 functions in api/, Hobby's limit (${fns.length}: ${fns.join(", ")})`);
 for (const f of ["subscribe/index.html", "manage/index.html", "live/index.html"]) {

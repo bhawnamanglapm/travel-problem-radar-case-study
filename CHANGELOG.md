@@ -5,6 +5,9 @@ grouped by date.
 
 ## 2026-10-22
 
+- The sign-up reply now adds "Not in your inbox within a few minutes? Check your spam or junk folder." Gmail and
+  Outlook file the confirmation email as spam although SPF, DKIM and DMARC pass; mail-tester points to the domain
+  being under two weeks old.
 - The admin script's `stats` shows `bounced` and `complained` per day and in the totals: the addresses the Resend
   webhook deleted.
 - Fixed: `/live` and `/demo` typed without the trailing slash showed a blank page, because the script loaded from

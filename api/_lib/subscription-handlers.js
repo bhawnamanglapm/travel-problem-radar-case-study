@@ -23,7 +23,7 @@ export const DEFAULT_MAX_SIGNUPS_PER_IP_HOUR = 5;
 export const IPHIT_KEEP_HOURS = 2;
 export const utcHour = (now) => new Date(now).toISOString().slice(0, 13).replace(/[-T]/g, ""); // YYYYMMDDHH
 
-const OK_REPLY = { ok: true, message: "If that address can be subscribed, a confirmation link is on its way." };
+const OK_REPLY = { ok: true, message: "If that address can be subscribed, a confirmation link is on its way. Not in your inbox within a few minutes? Check your spam or junk folder." };
 const HOUR_MS = 3600 * 1000;
 
 const positiveInt = (v) => {

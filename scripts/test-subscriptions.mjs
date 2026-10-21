@@ -344,7 +344,7 @@ const iso = (ms) => new Date(ms).toISOString();
     };
     return { st, sent, logs, post, tick: (ms) => { clock += ms; }, setResend: (c) => { resendStatus = c; }, env };
   };
-  const OK = '{"ok":true,"message":"If that address can be subscribed, a confirmation link is on its way."}';
+  const OK = '{"ok":true,"message":"If that address can be subscribed, a confirmation link is on its way. Not in your inbox within a few minutes? Check your spam or junk folder."}';
   const subKeys = (w) => [...w.st.m.keys()].filter((k) => k.startsWith("radar:sub:"));
   const evKeys = (w, type) => [...w.st.m.keys()].filter((k) => k.startsWith("radar:event:") && k.includes(`-${type}-`));
   const DAY = 24 * 3600 * 1000;
@@ -1470,7 +1470,7 @@ const iso = (ms) => new Date(ms).toISOString();
 {
   const ENV = { SUBSCRIPTIONS_ENABLED: "1", RESEND_API_KEY: "re_k", EMAIL_FROM: "Radar <hello@pehchanthetraveller.com>", SITE_URL: "https://site.example", MAX_SUBSCRIBERS: "5000", MAX_CONFIRMS_PER_DAY: "1000" };
   const HOUR = 3600 * 1000;
-  const OK = '{"ok":true,"message":"If that address can be subscribed, a confirmation link is on its way."}';
+  const OK = '{"ok":true,"message":"If that address can be subscribed, a confirmation link is on its way. Not in your inbox within a few minutes? Check your spam or junk folder."}';
   const world = (envOver = {}) => {
     const st = memStorage();
     st.m.set("radar:subscriberCount", "0");
