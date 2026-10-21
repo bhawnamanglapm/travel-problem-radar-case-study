@@ -10,6 +10,8 @@ import {
 import { BodyTooLargeError, allowMethods, bearerOk, esc, parseForm, readBody, readFields, sendJson, sendPage } from "../api/_lib/http.js";
 import { DEFAULT_FROM, buildConfirmEmail, buildDigestEmail, sendBatch, sendOne, withSubscriberFooter } from "../api/_lib/email.js";
 import { KEY_SUBSCRIBER_COUNT, makeSubscribeHandler, siteUrl, makeConfirmHandler, makeUnsubscribeHandler } from "../api/_lib/subscription-handlers.js";
+import { deliverToSubscribers } from "../api/_lib/subscriber-delivery.js";
+import { makeDataHandler } from "../api/_lib/handlers.js";
 import { check, finish, memStorage, mockRes } from "./test-helpers.mjs";
 
 // A repeatable random source: each call returns bytes that count up from a seed.
@@ -640,6 +642,242 @@ const iso = (ms) => new Date(ms).toISOString();
   const link = new URL(mail.headers["List-Unsubscribe"].slice(1, -1));
   r = await u.call("POST", { id: link.searchParams.get("id"), t: link.searchParams.get("t"), body: "List-Unsubscribe=One-Click" });
   check(!u.has() && r.code === 200, "unsubscribe: the List-Unsubscribe link built by withSubscriberFooter works as a one-click POST");
+}
+
+// ---- T09: delivery engine
+{
+  const HOUR = 3600 * 1000;
+  const DAY = 24 * HOUR;
+  const ENV = { SUBSCRIPTIONS_ENABLED: "1", RESEND_API_KEY: "re_k", EMAIL_FROM: "Radar <hello@pehchanthetraveller.com>", SITE_URL: "https://site.example" };
+  const prob = (id, over = {}) => ({ id, cat: "traveler_pain", title: "Item " + id, summary: "", source: "S", link: "https://example.com/" + id, region: "EU", date: "2026-10-20", severity: "Medium", opportunity: "", isNew: false, ...over });
+
+  const world = ({ t0 = T0, env = {} } = {}) => {
+    const st = memStorage();
+    const logs = [];
+    const mails = []; // every message Resend accepted: { to, subject, text, headers }
+    let clock = t0;
+    const bad = new Set(); // addresses Resend rejects
+    let callNo = 0;
+    let script = () => null; // (callNo, body) => { status, body } | null for a normal reply
+    let tickPerCall = 0;
+    const fetchFn = async (url, init) => {
+      callNo++;
+      clock += tickPerCall;
+      const body = JSON.parse(init.body);
+      const forced = script(callNo, body);
+      const h = { get: () => null };
+      if (forced) return { ok: forced.status < 300, status: forced.status, headers: h, json: async () => forced.body || {} };
+      if (body.some((m) => bad.has(m.to[0]))) return { ok: false, status: 422, headers: h, json: async () => ({ name: "validation_error" }) };
+      mails.push(...body);
+      return { ok: true, status: 200, headers: h, json: async () => ({ data: body.map((_, i) => ({ id: "m" + i })) }) };
+    };
+    const deps = (over = {}) => ({ env: { ...ENV, ...env }, storage: st, fetchFn, now: () => clock, randomBytes: seeded(3), log: (...a) => logs.push(a.join(" ")), ...over });
+    const addSub = async (n, { plan = "free", status = "active", proUntil = null, proSource = null, createdAt = t0 } = {}) => {
+      const rec = { ...newPending(`s${n}@example.com`, { now: createdAt, randomBytes: seeded(100 + n) }), token: "tok" + n, status, plan, proUntil, proSource };
+      await putSubscriber(st, rec);
+      return rec;
+    };
+    const addSweep = async (id, at, problems, manual = false) => {
+      const hist = JSON.parse(st.m.get("radar:history") || "[]");
+      hist.push({ id, at: iso(at), total: problems.length, newCount: problems.filter((p) => p.isNew).length, ...(manual ? { manual: true } : {}) });
+      st.m.set("radar:history", JSON.stringify(hist));
+      st.m.set("radar:sweep:" + id, JSON.stringify({ at: iso(at), problems }));
+      return { id, at: iso(at), problems, perCat: {}, newCount: problems.filter((p) => p.isNew).length };
+    };
+    const run = (sweep, { scheduled = true, deadlineAt, over = {} } = {}) => deliverToSubscribers({ ...deps(over), sweep, scheduled, deadlineAt });
+    return { st, logs, mails, bad, addSub, addSweep, run, deps, tick: (ms) => { clock += ms; }, setClock: (v) => { clock = v; }, setScript: (f) => { script = f; }, setTickPerCall: (v) => { tickPerCall = v; }, now: () => clock };
+  };
+  const deliveries = (w, day = "20261021") => JSON.parse(w.st.m.get("radar:deliveries:" + day) || "null");
+  const count = (w, to) => w.mails.filter((m) => m.to[0] === to).length;
+
+  // 1. not configured
+  for (const [label, env] of [["switch off", { SUBSCRIPTIONS_ENABLED: "" }], ["no API key", { RESEND_API_KEY: "" }], ["no sender", { EMAIL_FROM: "" }], ["shared sender", { EMAIL_FROM: "R <onboarding@resend.dev>" }], ["no site url", { SITE_URL: "" }]]) {
+    const w = world({ env });
+    await w.addSub(1);
+    const sw = await w.addSweep("1792570150123", T0, [prob("a")]);
+    let touched = 0;
+    for (const m of ["get", "set", "del", "list"]) { const f = w.st[m]; w.st[m] = async (...a) => { touched++; return f(...a); }; }
+    const out = await w.run(sw);
+    check(out === "not configured" && touched === 0 && w.mails.length === 0, `delivery: ${label} gives "not configured" and touches nothing`);
+  }
+
+  // 2. 2 Pro + 3 Free over two sweeps in one day
+  let w = world();
+  await w.addSub(1, { plan: "pro", proSource: "owner" });
+  await w.addSub(2, { plan: "pro", proSource: "owner", proUntil: iso(T0 + 30 * DAY) });
+  for (const n of [3, 4, 5]) await w.addSub(n);
+  const p1 = [prob("a", { isNew: true, severity: "High" }), prob("b")];
+  let sw = await w.addSweep("1792570150123", T0, p1);
+  let out = await w.run(sw);
+  check(w.mails.length === 5 && out.pro.sent === 2 && out.free.sent === 3 && out.free.due === 3 && out.stopped === null, "delivery: 2 Pro + 3 Free, first sweep of the day: 5 emails");
+  check(out.pro.failed === 0 && out.pro.deferred === 0 && out.free.alreadySent === 0 && out.pending === 0 && out.expired === 0, "delivery: the summary has the task's shape");
+  check(w.mails.filter((m) => /Pro update/.test(m.text)).length === 2 && w.mails.filter((m) => /daily digest/.test(m.text)).length === 3, "delivery: Pro and Free get their own heading");
+  check(w.mails.filter((m) => /^Travel Problem Radar daily · /.test(m.subject)).length === 3, "delivery: the Free subject is the daily one");
+  check(JSON.stringify(deliveries(w)) === JSON.stringify({ free: [...deliveries(w).free] }) && deliveries(w).free.length === 3, "delivery: the three Free ids are recorded for today");
+  check(JSON.parse(w.st.m.get("radar:subscriberCount")).count === 5, "delivery: radar:subscriberCount written (active + pending)");
+  w.tick(5 * HOUR);
+  const sw2 = await w.addSweep("1792588150123", w.now(), [prob("c", { isNew: true })]);
+  out = await w.run(sw2);
+  check(w.mails.length === 7 && out.pro.sent === 2 && out.free.due === 0 && out.free.alreadySent === 3, "delivery: the second sweep of the day: Pro only (2 more emails)");
+  check(count(w, "s3@example.com") === 1 && count(w, "s1@example.com") === 2, "delivery: Free once a day, Pro once per sweep");
+  const logged = [...w.logs, JSON.stringify(out)].join("\n");
+  check(!/@|[0-9a-f]{64}|tok\d/.test(logged), "delivery: no address, id or token in the result or the log");
+  check(w.logs.some((l) => l.startsWith("subscribers {")), "delivery: one `subscribers` line is logged per run");
+
+  // 9. per-recipient email
+  const m3 = w.mails.find((m) => m.to[0] === "s3@example.com");
+  const rec3 = JSON.parse(w.st.m.get("radar:sub:" + subscriberId("s3@example.com")));
+  check(m3.to.length === 1 && m3.text.includes(`https://site.example/api/unsubscribe?id=${rec3.id}&t=tok3`) && m3.headers["List-Unsubscribe"] === `<https://site.example/api/unsubscribe?id=${rec3.id}&t=tok3>`, "delivery: each email has one recipient and its own unsubscribe link with the right id and token");
+  check(m3.text.includes("Live board: https://site.example/live/"), "delivery: the digest links to the live board");
+
+  // 3. manual run
+  w = world();
+  await w.addSub(1, { plan: "pro", proSource: "owner" });
+  await w.addSub(2);
+  sw = await w.addSweep("1792570150123", T0, [prob("a")], true);
+  out = await w.run(sw, { scheduled: false });
+  check(out.pro.skipped === "manual run" && out.free.sent === 1 && count(w, "s1@example.com") === 0 && count(w, "s2@example.com") === 1, "delivery: a manual run skips Pro; Free is still sent if not yet sent today");
+  out = await w.run(await w.addSweep("1792571150123", T0 + 60000, [prob("b")], true), { scheduled: false });
+  check(out.free.due === 0 && w.mails.length === 1, "delivery: a second manual run sends nobody a second Free digest");
+
+  // 4. next UTC day
+  w = world({ t0: Date.UTC(2026, 9, 21, 20, 17, 0) });
+  await w.addSub(1);
+  await w.run(await w.addSweep("1792570150123", w.now(), [prob("a")]));
+  w.setClock(Date.UTC(2026, 9, 22, 0, 17, 0));
+  out = await w.run(await w.addSweep("1792570150124", w.now(), [prob("b")]));
+  check(w.mails.length === 2 && out.free.sent === 1 && deliveries(w, "20261022").free.length === 1, "delivery: next UTC day, Free is sent again and recorded under the new date");
+
+  // someone confirms at 12:00
+  w = world({ t0: Date.UTC(2026, 9, 21, 0, 17, 0) });
+  await w.addSub(1);
+  await w.run(await w.addSweep("1792570150123", w.now(), [prob("a")]));
+  await w.addSub(2, { createdAt: Date.UTC(2026, 9, 21, 12, 0, 0) });
+  w.setClock(Date.UTC(2026, 9, 21, 15, 17, 0));
+  out = await w.run(await w.addSweep("1792588150123", w.now(), [prob("b")]));
+  check(out.free.due === 1 && out.free.sent === 1 && count(w, "s2@example.com") === 1 && count(w, "s1@example.com") === 1, "delivery: someone who confirmed at 12:00 gets that day's digest at the next saved sweep, and nobody gets two");
+
+  // 5. deadline
+  w = world();
+  await w.addSub(1, { plan: "pro", proSource: "owner" });
+  for (const n of [2, 3]) await w.addSub(n);
+  w.setTickPerCall(10);
+  sw = await w.addSweep("1792570150123", T0, [prob("a")]);
+  out = await w.run(sw, { deadlineAt: T0 + 5 });
+  check(out.pro.sent === 1 && out.free.sent === 0 && out.free.deferred === 2 && out.stopped === "deadline" && w.mails.length === 1, "delivery: deadline reached after the Pro chunk: Free all deferred, stopped: deadline");
+  check(deliveries(w) === null, "delivery: nothing deferred is recorded as sent");
+  w.setTickPerCall(0);
+  w.tick(5 * HOUR);
+  out = await w.run(await w.addSweep("1792588150123", w.now(), [prob("b")]));
+  check(out.free.sent === 2 && count(w, "s2@example.com") === 1 && count(w, "s3@example.com") === 1, "delivery: the next sweep sends the deferred Free digests, once each");
+
+  // 6. quota stop in the middle of the Free list
+  w = world();
+  for (let n = 1; n <= 150; n++) await w.addSub(n);
+  w.setScript((no) => (no === 2 ? { status: 429, body: { name: "daily_quota_exceeded" } } : null));
+  out = await w.run(await w.addSweep("1792570150123", T0, [prob("a")]));
+  check(out.free.sent === 100 && out.free.deferred === 50 && out.stopped === "quota" && deliveries(w).free.length === 100, "delivery: quota stop mid-list: the sent ones are recorded, the rest deferred");
+  w.setScript(() => null);
+  w.tick(5 * HOUR);
+  const before6 = w.mails.length;
+  out = await w.run(await w.addSweep("1792588150123", w.now(), [prob("b")]));
+  check(out.free.due === 50 && out.free.sent === 50 && w.mails.length === before6 + 50 && deliveries(w).free.length === 150, "delivery: the next sweep sends only the 50 who were missed");
+  w = world();
+  await w.addSub(1, { plan: "pro", proSource: "owner" });
+  await w.addSub(2);
+  w.setScript(() => ({ status: 429, body: { name: "monthly_quota_exceeded" } }));
+  out = await w.run(await w.addSweep("1792570150123", T0, [prob("a")]));
+  check(out.stopped === "quota" && out.pro.sent === 0 && out.free.deferred === 1 && w.mails.length === 0, "delivery: a quota stop in the Pro group stops the Free group too");
+
+  // 7. one recipient in a failed chunk
+  w = world();
+  for (const n of [1, 2, 3]) await w.addSub(n);
+  w.bad.add("s2@example.com");
+  out = await w.run(await w.addSweep("1792570150123", T0, [prob("a")]));
+  check(out.free.sent === 2 && out.free.failed === 1 && out.free.deferred === 0 && deliveries(w).free.length === 2, "delivery: a rejected recipient is counted failed and left out of the deliveries file");
+  w.bad.clear();
+  w.tick(5 * HOUR);
+  out = await w.run(await w.addSweep("1792588150123", w.now(), [prob("b")]));
+  check(out.free.due === 1 && out.free.sent === 1 && count(w, "s2@example.com") === 1 && count(w, "s1@example.com") === 1, "delivery: the failed one is retried at the next sweep; the others are not resent");
+
+  // 8. roll-up
+  w = world();
+  await w.addSub(1);
+  await w.addSweep("1792500000001", T0 - 25 * HOUR, [prob("old", { isNew: true, severity: "High", title: "Too old" })]);
+  await w.addSweep("1792510000002", T0 - 10 * HOUR, [prob("x", { isNew: true, title: "X first copy" }), prob("y", { severity: "Low" })]);
+  await w.addSweep("1792520000003", T0 - 5 * HOUR, [prob("x", { isNew: false, title: "X newest copy" }), prob("z", { severity: "High" })], true);
+  sw = await w.addSweep("1792530000004", T0, [prob("y", { severity: "Low" }), prob("w", { isNew: true, severity: "Low" })]);
+  await w.run(sw);
+  const text = w.mails[0].text;
+  const titleOrder = ["Item w", "X newest copy", "Item z", "Item y"].map((s) => text.indexOf(s));
+  check(!text.includes("Too old") && text.includes("Item z") && text.includes("Item w") && text.includes("Item y") && text.includes("X newest copy") && !text.includes("X first copy"), "delivery roll-up: a sweep older than 24 h is left out, overlaps are merged to the newest copy");
+  check(/\[Medium\] NEW X newest copy/.test(text) && !/NEW Item z/.test(text) && /NEW Item w/.test(text), "delivery roll-up: New if any sweep said New");
+  check(titleOrder.every((i) => i >= 0) && text.indexOf("Item w") < text.indexOf("Item z") && text.indexOf("X newest copy") < text.indexOf("Item z") && text.indexOf("Item z") < text.indexOf("Item y"), "delivery roll-up: New first, then severity");
+  check(!/Failed this run/.test(text) && w.mails[0].subject === "Travel Problem Radar daily · 2026-10-21 · 4 problems, 2 new", "delivery roll-up: no 'Failed this run' line; the subject counts the merged list");
+  // if history is unreadable the current sweep still goes out
+  w = world();
+  await w.addSub(1);
+  w.st.m.set("radar:history", "{not json");
+  out = await w.run({ id: "1792530000004", at: iso(T0), problems: [prob("q", { title: "Only current" })], perCat: {} });
+  check(out.free.sent === 1 && w.mails[0].text.includes("Only current"), "delivery roll-up: an unreadable history falls back to this sweep's problems");
+
+  // 10. expiry and pending
+  w = world();
+  await w.addSub(1);
+  await w.addSub(2, { status: "pending", createdAt: T0 - 8 * DAY });
+  await w.addSub(3, { status: "pending", createdAt: T0 - 6 * DAY });
+  out = await w.run(await w.addSweep("1792570150123", T0, [prob("a")]));
+  check(out.expired === 1 && out.pending === 1 && !w.st.m.has("radar:sub:" + subscriberId("s2@example.com")) && w.st.m.has("radar:sub:" + subscriberId("s3@example.com")), "delivery: a pending record over 7 days is deleted and counted; a 6-day one is kept");
+  check([...w.st.m.keys()].filter((k) => k.startsWith("radar:event:") && k.includes("-expired-")).length === 1 && JSON.parse(w.st.m.get("radar:subscriberCount")).count === 2 && w.mails.length === 1, "delivery: one expired event; the count is active + remaining pending; pending get no digest");
+
+  // 11. never throws
+  w = world();
+  await w.addSub(1);
+  w.st.list = async () => { throw new Error("blob down for s1@example.com " + subscriberId("s1@example.com")); };
+  out = await w.run(await w.addSweep("1792570150123", T0, [prob("a")]));
+  check(typeof out.error === "string" && !/@|[0-9a-f]{40}/.test(out.error) && w.mails.length === 0, "delivery: a failing list() gives { error } without an address or id, and does not throw");
+  w = world();
+  await w.addSub(1);
+  w.st.set = async () => { throw new Error("write failed"); };
+  out = await w.run(await w.addSweep("1792570150123", T0, [prob("a")]));
+  check(out.free.sent === 1 && out.countSaveFailed === true && out.deliveriesSaveFailed === true, "delivery: failed writes are flagged in the result, and the send still happened");
+  w = world();
+  await w.addSub(1);
+  w.setScript(() => { throw new Error("socket closed"); });
+  out = await w.run(await w.addSweep("1792570150123", T0, [prob("a")]));
+  check(out.free.failed === 1 && out.free.sent === 0 && deliveries(w) === null, "delivery: a network error counts failed and records nothing");
+
+  // 12. Pro that has lapsed goes to the Free group
+  w = world();
+  await w.addSub(1, { plan: "pro", proSource: "owner", proUntil: iso(T0 - 1000) });
+  out = await w.run(await w.addSweep("1792570150123", T0, [prob("a")]));
+  check(out.pro.due === 0 && out.free.sent === 1 && /daily digest/.test(w.mails[0].text), "delivery: a Pro whose proUntil has passed is in the Free group");
+
+  // old delivery files
+  w = world();
+  await w.addSub(1);
+  for (const d of ["20261010", "20261013", "20261014", "20261020"]) w.st.m.set("radar:deliveries:" + d, JSON.stringify({ free: [] }));
+  await w.run(await w.addSweep("1792570150123", T0, [prob("a")]));
+  check(!w.st.m.has("radar:deliveries:20261010") && !w.st.m.has("radar:deliveries:20261013") && w.st.m.has("radar:deliveries:20261014") && w.st.m.has("radar:deliveries:20261020") && w.st.m.has("radar:deliveries:20261021"), "delivery: delivery files older than 7 days are deleted");
+
+  // unreadable records and a record with no token
+  w = world();
+  await w.addSub(1);
+  w.st.m.set("radar:sub:" + "d".repeat(64), "{broken");
+  const noTok = await w.addSub(2);
+  await putSubscriber(w.st, { ...noTok, token: "" });
+  out = await w.run(await w.addSweep("1792570150123", T0, [prob("a")]));
+  check(out.free.sent === 1 && out.unreadable === 2, "delivery: an unreadable record and a record with no token are skipped and counted");
+
+  // the data endpoint does not serve the new prefixes
+  const dataHandler = makeDataHandler({ storage: w.st });
+  let allBlocked = true;
+  for (const key of ["radar:sub:" + "a".repeat(64), "radar:event:20261021-080910123-subscribed-aabbcc", "radar:deliveries:20261021", "radar:subscriberCount"]) {
+    const res = mockRes();
+    await dataHandler({ method: "GET", url: "/api/data?key=" + encodeURIComponent(key) }, res);
+    if (res.code !== 400) allBlocked = false;
+  }
+  check(allBlocked, "/api/data refuses the subscriber, event, deliveries and count keys");
 }
 
 finish("subscription tests");

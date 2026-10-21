@@ -49,7 +49,7 @@ export function siteUrl(env) {
   return v && /^[a-z0-9.-]+(:\d+)?$/i.test(v) ? `https://${v}` : "";
 }
 
-const senderOk = (from) => Boolean(from) && from !== DEFAULT_FROM && !/@resend\.dev\b/i.test(from);
+export const senderOk = (from) => Boolean(from) && from !== DEFAULT_FROM && !/@resend\.dev\b/i.test(from);
 
 export function makeSubscribeHandler({ env, storage, fetchFn, now, randomBytes = cryptoRandomBytes, log = console.log }) {
   return async function subscribe(req, res) {

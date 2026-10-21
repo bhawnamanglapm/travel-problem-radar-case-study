@@ -15,8 +15,8 @@ working in a real inbox; that is T12's staged launch.
 | [T05](T05-api-subscribe.md) `POST /api/subscribe` | done | 0f718c3 | 200 pass (+45 new) | See T05 notes below |
 | [T06](T06-api-confirm.md) `/api/confirm` | done | 15c4478 | 221 pass (+21 new) | See T06 notes below |
 | [T07](T07-api-unsubscribe.md) `/api/unsubscribe` | done | 5dfa7be | 238 pass (+17 new) | See T07 notes below |
-| [T08](T08-subscribe-page.md) `/subscribe/` page, build, checks | done | PENDING_HASH | 238 pass + 7 new `npm run check` checks | See T08 notes below |
-| [T09](T09-delivery-engine.md) Delivery engine | todo | | | |
+| [T08](T08-subscribe-page.md) `/subscribe/` page, build, checks | done | 147fd24 | 238 pass + 7 new `npm run check` checks | See T08 notes below |
+| [T09](T09-delivery-engine.md) Delivery engine | done | PENDING_HASH | 281 pass (+43 new) | See T09 notes below |
 | [T10](T10-sweep-integration.md) Wire delivery into the sweep | todo | | | |
 | [T11](T11-admin-script-and-metrics.md) Admin script + metrics | todo | | | |
 
@@ -132,4 +132,28 @@ working in a real inbox; that is T12's staged launch.
 - **Not verified:** the by-hand acceptance items (the page on a preview deployment at `/subscribe/` and
   `/subscribe`, phone width, the honeypot being skipped by keyboard and screen readers, the form without
   JavaScript). Those need a real browser and a deployment. The inline script was only checked to parse.
+
+### T09
+- `api/_lib/subscriber-delivery.js`: `deliverToSubscribers` (never throws; returns `"not configured"`, the counts
+  object, or `{ error }`) and `buildRollup`. Every acceptance item and test line in the task has a test, plus: the
+  roll-up falls back to this sweep when history is unreadable, old delivery files are deleted, an unreadable record
+  or one with no token is skipped and counted (`unreadable`), and `/api/data` refuses the new key prefixes.
+- Uses decisions D2 (roll-up), D4 (scheduled only) and D5 (Pro gets every saved scheduled sweep) as recommended. D5's
+  "skip when nothing is new" option is not built.
+- **Choices beyond the task text:**
+  - `radar:subscriberCount` is written as `{count, at}`, which T05 already reads.
+  - A failed save of the count or of the deliveries file is reported in the result (`countSaveFailed`,
+    `deliveriesSaveFailed`) and the run carries on. A failed deliveries save means that Free chunk could be sent
+    again at the next sweep, so the owner should look at that flag.
+  - The deliveries file is only written for a chunk that sent at least one email.
+  - Any stop (quota, auth failure, deadline) in the Pro group also defers the Free group.
+  - `expired` events are recorded with no plan. `pending` in the result is the count of pending records kept.
+  - The roll-up reads at most 12 earlier sweeps from the last 24 hours.
+- **Retries and idempotency:** Resend's idempotency key is `<sweep id>-pro-<n>` and `<YYYYMMDD>-free-<sweep id>-<n>`.
+  If the same sweep were delivered twice with a different recipient set under the same key, Resend would refuse
+  the second call (not tested against the real service); that call would count as failed and be retried at the next
+  sweep.
+- **Verify items:** Resend's rate limit (10 requests a second, from its docs) is far above one call per 100
+  recipients. **Not verified:** the Hobby plan's Blob operation allowance for about 5 sweeps a day at the cap (needs
+  the plan's published limits or a real run); the roll-up reads and deliveries writes are small.
 
