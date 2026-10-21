@@ -16,9 +16,11 @@ const NOTE = "Gathered by an AI model with web search. Items are not verified; c
 
 // The third argument is for the subscriber emails: `heading` replaces the title, and `subjectLead`
 // (for example "daily") makes the subject "Travel Problem Radar daily · <date> · ...". With no third
-// argument the output is exactly the owner's digest.
-export function buildDigestEmail({ at, problems, perCat = {}, manual = false }, liveUrl = "", { heading, subjectLead } = {}) {
-  const failed = CATS.filter((c) => /^failed/.test(perCat[c.key] || "")).map((c) => c.label);
+// argument the output is exactly the owner's digest. `cats` (a Pro subscriber's choice, T14) limits
+// the sections and the "Failed this run" line to those categories; the caller filters `problems`.
+export function buildDigestEmail({ at, problems, perCat = {}, manual = false }, liveUrl = "", { heading, subjectLead, cats = null } = {}) {
+  const shown = cats ? CATS.filter((c) => cats.includes(c.key)) : CATS;
+  const failed = shown.filter((c) => /^failed/.test(perCat[c.key] || "")).map((c) => c.label);
   const newCount = problems.filter((p) => p.isNew).length;
   const highCount = problems.filter((p) => p.severity === "High").length;
   const title = heading || (manual ? "Travel Problem Radar: digest (manual run)" : "Travel Problem Radar: digest");
@@ -34,6 +36,11 @@ export function buildDigestEmail({ at, problems, perCat = {}, manual = false }, 
     `<h1 style="font-size:18px;margin:0 0 4px">${esc(title)}</h1>`,
     `<p style="margin:0 0 12px;${MUTED}">Swept ${esc(when(at))} · ${esc(counts)}</p>`,
   ];
+  if (cats) {
+    const chosen = `Your categories: ${shown.map((c) => c.label).join(", ")}`;
+    text.push(chosen);
+    html.push(`<p style="margin:0 0 12px">${esc(chosen)}</p>`);
+  }
   if (failed.length) {
     text.push(`Failed this run: ${failed.join(", ")}`);
     html.push(`<p style="margin:0 0 12px">Failed this run: ${esc(failed.join(", "))}</p>`);
@@ -42,7 +49,7 @@ export function buildDigestEmail({ at, problems, perCat = {}, manual = false }, 
     text.push(`Live board: ${liveUrl}`);
     html.push(`<p style="margin:0 0 12px"><a href="${esc(liveUrl)}">Open the live board</a></p>`);
   }
-  CATS.forEach((c) => {
+  shown.forEach((c) => {
     const items = problems.filter((p) => p.cat === c.key);
     if (!items.length) return;
     text.push("", `${c.label.toUpperCase()} (${items.length})`);
