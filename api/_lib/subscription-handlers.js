@@ -2,7 +2,7 @@
 // injected dependencies like handlers.js, so the offline tests can call them directly.
 // Nothing here puts an address, an id or a token in a reply or a log line.
 import { randomBytes as cryptoRandomBytes } from "node:crypto";
-import { DEFAULT_FROM, buildConfirmEmail, sendOne } from "./email.js";
+import { DEFAULT_FROM, buildConfirmEmail, buildProRequestEmail, sendEmail, sendOne } from "./email.js";
 import { BodyTooLargeError, allowMethods, esc, readFields, sendJson, sendPage } from "./http.js";
 import {
   CONFIRM_RESEND_HOURS, PENDING_TTL_DAYS, countEvents, deleteSubscriber, effectivePlan, getSubscriber, newPending, normaliseEmail, putSubscriber,
@@ -51,6 +51,23 @@ export function siteUrl(env) {
 
 export const senderOk = (from) => Boolean(from) && from !== DEFAULT_FROM && !/@resend\.dev\b/i.test(from);
 
+// A ticked checkbox ("on"), the page script's "1", or JSON true.
+const isYes = (v) => v === true || v === "1" || v === "on";
+
+// Where a subscriber sees their plan and asks for Pro (T17 adds checkout to the same page).
+export const managePath = (id, t) => `/manage/?id=${encodeURIComponent(id)}&t=${encodeURIComponent(t)}`;
+
+// Tells the owner (EMAIL_TO) that someone asked for Pro. Names nobody. Never throws, and a
+// failed send never fails the request that caused it.
+async function notifyOwnerProRequest({ env, fetchFn, at, source, log }) {
+  try {
+    const r = await sendEmail({ apiKey: env.RESEND_API_KEY, from: env.EMAIL_FROM, to: env.EMAIL_TO }, buildProRequestEmail({ at: new Date(at).toISOString(), source }), { fetchFn });
+    if (r !== "sent") log("pro-request owner-email", r);
+  } catch (e) {
+    log("pro-request owner-email", "error: " + ((e && e.name) || "Error"));
+  }
+}
+
 export function makeSubscribeHandler({ env, storage, fetchFn, now, randomBytes = cryptoRandomBytes, log = console.log }) {
   return async function subscribe(req, res) {
     if (!allowMethods(req, res, ["POST"])) return;
@@ -72,6 +89,7 @@ export function makeSubscribeHandler({ env, storage, fetchFn, now, randomBytes =
 
     if (fields.website) return reply(); // the honeypot
     const email = normaliseEmail(fields.email);
+    const wantsPro = isYes(fields.wantsPro); // counts only once the address is confirmed
     if (!email) return sendJson(res, 400, { error: "enter a valid email address" });
 
     try {
@@ -100,6 +118,7 @@ export function makeSubscribeHandler({ env, storage, fetchFn, now, randomBytes =
       } else {
         record = { ...record, confirmSentAt: new Date(t).toISOString() };
       }
+      if (wantsPro && !record.proRequestedAt) record = { ...record, proRequestedAt: new Date(t).toISOString() };
       await putSubscriber(storage, record);
       if (!existing) await recordEvent(storage, "subscribed", { now: t, randomBytes, plan: "free" });
       await recordEvent(storage, "confirmsent", { now: t, randomBytes, plan: "free" });
@@ -128,7 +147,7 @@ const INVALID = { title: "This link isn't valid", body: `<p>It may have expired.
 async function linkParams(req, { queryOnly }) {
   if (req.method === "POST" && !queryOnly) {
     const f = await readFields(req, { limit: 2048 });
-    return { id: typeof f.id === "string" ? f.id : "", t: typeof f.t === "string" ? f.t : "" };
+    return { id: typeof f.id === "string" ? f.id : "", t: typeof f.t === "string" ? f.t : "", fields: f };
   }
   let q = req.query;
   if (!q || typeof q !== "object") q = Object.fromEntries(new URL(req.url || "/", "http://x").searchParams);
@@ -159,7 +178,7 @@ async function handleLink({ req, res, env, storage, now, page, queryOnly = false
   }
 }
 
-export function makeConfirmHandler({ env, storage, now, randomBytes = cryptoRandomBytes, log = console.log }) {
+export function makeConfirmHandler({ env, storage, fetchFn = fetch, now, randomBytes = cryptoRandomBytes, log = console.log }) {
   return async function confirm(req, res) {
     return handleLink({
       req, res, env, storage, now,
@@ -171,12 +190,16 @@ export function makeConfirmHandler({ env, storage, now, randomBytes = cryptoRand
           await recordEvent(storage, "expired", { now: t, randomBytes });
           return sendPage(res, 404, INVALID);
         }
-        const done = () => sendPage(res, 200, {
+        const done = (rec) => sendPage(res, 200, {
           title: "You're subscribed",
-          body: `<p>You'll get the daily digest after the first sweep of the UTC day (about 05:47 IST).</p><p><a href="/live/">Open the live board</a></p>`,
+          body: `<p>You'll get the daily digest after the first sweep of the UTC day (about 05:47 IST).</p>`
+            + (effectivePlan(rec, t) === "pro" ? ""
+              : rec.proRequestedAt ? `<p>You asked for Pro (an email after every sweep). You'll be switched over shortly; until then you get the daily digest.</p>`
+              : `<p>Want an email after every sweep instead? <a href="${esc(managePath(params.id, params.t))}">Request Pro</a></p>`)
+            + `<p><a href="/live/">Open the live board</a></p>`,
         });
         if (record.status === "active") {
-          return post ? done() : sendPage(res, 200, { title: "You're already subscribed", body: `<p>Nothing more to do. <a href="/live/">Open the live board</a></p>` });
+          return post ? done(record) : sendPage(res, 200, { title: "You're already subscribed", body: `<p>Nothing more to do. <a href="${esc(managePath(params.id, params.t))}">Manage your subscription</a> · <a href="/live/">Open the live board</a></p>` });
         }
         if (record.status !== "pending") return sendPage(res, 404, INVALID);
         if (!post) {
@@ -185,9 +208,15 @@ export function makeConfirmHandler({ env, storage, now, randomBytes = cryptoRand
             body: `<p>One click to start getting the Travel Problem Radar digest by email.</p>${hiddenForm("/api/confirm", params.id, params.t, "Confirm")}`,
           });
         }
-        await putSubscriber(storage, { ...record, status: "active", confirmedAt: new Date(t).toISOString() });
+        const active = { ...record, status: "active", confirmedAt: new Date(t).toISOString() };
+        await putSubscriber(storage, active);
         await recordEvent(storage, "confirmed", { now: t, randomBytes, plan: record.plan === "pro" ? "pro" : "free" });
-        return done();
+        // A Pro request ticked at sign-up counts from here, once the address is proven.
+        if (active.proRequestedAt && effectivePlan(active, t) !== "pro") {
+          await recordEvent(storage, "prorequested", { now: t, randomBytes, plan: "free" });
+          await notifyOwnerProRequest({ env, fetchFn, at: t, source: "signup", log });
+        }
+        return done(active);
       },
     });
   };
@@ -212,7 +241,7 @@ export function makeUnsubscribeHandler({ env, storage, now, randomBytes = crypto
         if (record.proSource === "razorpay" && effectivePlan(record, t) === "pro") {
           return sendPage(res, 200, {
             title: "Cancel your Pro plan first",
-            body: `<p>Your Pro plan is paid, so it has to be cancelled on the <a href="/subscribe/">manage page</a> before the address is deleted.</p>`,
+            body: `<p>Your Pro plan is paid, so it has to be cancelled on the <a href="${esc(managePath(params.id, params.t))}">manage page</a> before the address is deleted.</p>`,
           });
         }
         await deleteSubscriber(storage, record.id);
@@ -220,5 +249,55 @@ export function makeUnsubscribeHandler({ env, storage, now, randomBytes = crypto
         return sendPage(res, 200, { title: "You're unsubscribed", body: "<p>Your address has been deleted. Nothing more will be sent.</p>" });
       },
     });
+  };
+}
+
+// ---- the manage page's data (/manage/, linked from every digest)
+
+// What the manage page may show: the plan, never the address.
+const accountView = (record, t) => ({
+  status: record.status,
+  plan: record.plan === "pro" ? "pro" : "free",
+  effectivePlan: effectivePlan(record, t),
+  proUntil: record.proUntil || null,
+  proSource: record.proSource || null,
+  proRequestedAt: record.proRequestedAt || null,
+});
+
+// GET ?id&t: the plan. POST {id, t, action: "request-pro"}: ask for Pro. Until payments exist
+// (T17, T18) the owner grants it with the admin script; this records the request and tells them.
+export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomBytes = cryptoRandomBytes, log = console.log }) {
+  return async function account(req, res) {
+    if (!allowMethods(req, res, ["GET", "POST"])) return;
+    if (env.SUBSCRIPTIONS_ENABLED !== "1") return sendJson(res, 503, { error: "subscriptions are paused" });
+    let params;
+    let action = "";
+    try {
+      params = await linkParams(req, { queryOnly: false });
+      if (params.fields && typeof params.fields.action === "string") action = params.fields.action;
+    } catch (e) {
+      if (e instanceof BodyTooLargeError) return sendJson(res, 413, { error: "request too large" });
+      throw e;
+    }
+    try {
+      const record = await getSubscriber(storage, params.id);
+      // Unknown id and wrong token are the same answer, so ids can't be tested.
+      if (!record || !tokenOk(record, params.t)) return sendJson(res, 404, { error: "this link isn't valid" });
+      const t = now();
+      if (req.method === "GET") return sendJson(res, 200, accountView(record, t));
+
+      if (action !== "request-pro") return sendJson(res, 400, { error: "unknown action" });
+      if (record.status !== "active") return sendJson(res, 409, { error: "not_confirmed" });
+      if (effectivePlan(record, t) === "pro") return sendJson(res, 409, { error: "already_pro" });
+      if (record.proRequestedAt) return sendJson(res, 200, { ok: true, ...accountView(record, t) }); // a repeat click
+      const updated = { ...record, proRequestedAt: new Date(t).toISOString() };
+      await putSubscriber(storage, updated);
+      await recordEvent(storage, "prorequested", { now: t, randomBytes, plan: "free" });
+      await notifyOwnerProRequest({ env, fetchFn, at: t, source: "manage", log });
+      return sendJson(res, 200, { ok: true, ...accountView(updated, t) });
+    } catch (e) {
+      log("account", "error: " + ((e && e.name) || "Error"));
+      return sendJson(res, 500, { error: "could not process the request; try again later" });
+    }
   };
 }

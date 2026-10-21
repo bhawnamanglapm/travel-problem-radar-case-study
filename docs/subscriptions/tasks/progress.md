@@ -19,6 +19,7 @@ working in a real inbox; that is T12's staged launch.
 | [T09](T09-delivery-engine.md) Delivery engine | done | ef7831b | 281 pass (+43 new) | See T09 notes below |
 | [T10](T10-sweep-integration.md) Wire delivery into the sweep | done | 0d3b008 | 300 pass (+19 new) | See T10 notes below |
 | [T11](T11-admin-script-and-metrics.md) Admin script + metrics | done | d344d34 | 340 pass (+37 new; 303 before T11) | See T11 notes below |
+| Request Pro (owner-approved, before payments) | in progress | | 371 pass (+31 new) + 7 new `npm run check` checks | See "Request Pro" notes below |
 
 ## Notes per task
 
@@ -205,3 +206,21 @@ working in a real inbox; that is T12's staged launch.
   the script's error message when there is no usable credential is shown by running it with none). Nothing here has
   been run against the real store. Whether the deploy's file list excludes `scripts/` needs a real deploy to confirm
   (acceptance item 5): `.vercelignore` lists it.
+
+### Request Pro (branch `feat/pro-request`, not in the original task list)
+- Asked for by the owner during the T12 launch: let a subscriber ask for Pro, the owner grants it, and payments slot
+  in at the same point later (T17/T18).
+- Two places to ask: the "I'd also like Pro" box on `/subscribe/` (stored as `proRequestedAt` on the pending record;
+  the event and the owner email happen only at Confirm), and a "Request Pro" button on the new `/manage/` page.
+- `/api/account` (the sixth function): `GET` returns the plan without the address or token; `POST`
+  `action: "request-pro"` gives `409 not_confirmed` / `409 already_pro`, `200` with nothing sent on a repeat, and
+  otherwise stores the date, records a `prorequested` event and emails `EMAIL_TO` (subject "Travel Problem Radar: Pro
+  request", naming nobody). A failed owner email is logged and still returns `200`.
+- Every digest's footer now links to `/manage/?id&t` ("Manage subscription"). The confirm page links there too, and
+  the "Cancel your Pro plan first" unsubscribe page points there instead of `/subscribe/`.
+- Admin script: `list --plan requested`, a `proRequestedAt` column, `stats` "N waiting for Pro" and a `pro asked`
+  column per day.
+- **Choice beyond the plan:** `grant-pro` clears `proRequestedAt`, so a later lapse or `revoke-pro` doesn't put the
+  person straight back on the waiting list; the `prorequested` event keeps the history.
+- **Not verified:** none of this has run on the real deployment yet. The function count (6) against the Hobby limit
+  has not been re-checked.

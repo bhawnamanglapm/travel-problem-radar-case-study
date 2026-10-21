@@ -13,6 +13,13 @@
 A subscriber needs one place to see their plan, upgrade, cancel and unsubscribe. The footer of every email (T04)
 already links to `manageUrl`; until now that link points at the unsubscribe page.
 
+> **Already built (before T15, with the "Request Pro" feature):** `/manage/`, `GET`/`POST /api/account`
+> (`makeAccountHandler`), the `manage` build copy and checks, and the footer's `manageUrl` pointing at
+> `/manage/?id&t`. `GET` returns `{status, plan, effectivePlan, proUntil, proSource, proRequestedAt}`; `POST` takes
+> `action: "request-pro"` and emails the owner, who grants Pro with the admin script. What is left here: add
+> `cancelAtPeriodEnd` and `cats` to the reply, and when `razorpayConfigured`, show "Upgrade to Pro" (checkout) in
+> place of "Request Pro". Keep "Request Pro" as the fallback when payments aren't configured.
+
 ## What to build
 
 ### 1. `GET /api/account?id&t` (JSON) and the `/manage/` page

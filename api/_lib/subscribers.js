@@ -12,7 +12,7 @@ export const CONFIRM_RESEND_HOURS = 24;
 
 // Letters only, so an event's key round-trips through storage.js's path().
 export const EVENT_TYPES = ["subscribed", "confirmsent", "confirmed", "unsubscribed", "expired",
-  "bounced", "complained", "progranted", "prorevoked"];
+  "bounced", "complained", "progranted", "prorevoked", "prorequested"];
 
 const ID_RE = /^[0-9a-f]{64}$/;
 
@@ -108,6 +108,7 @@ export function newPending(email, { now, randomBytes }) {
     createdAt: at,
     confirmSentAt: at,
     confirmedAt: null,
+    proRequestedAt: null, // set when the subscriber asks for Pro; the owner grants it (until payments exist)
     cats: null,
     rzp: null,
   };

@@ -635,7 +635,7 @@ const iso = (ms) => new Date(ms).toISOString();
   check(!u.has() && JSON.parse(events(u.st, "unsubscribed")[0][1]).plan === "pro", "unsubscribe: owner-granted Pro unsubscribes like Free, and the event says pro");
   u = await setup({ plan: "pro", proSource: "razorpay", proUntil: iso(T0 + 30 * 24 * 3600 * 1000) });
   r = await u.call("POST");
-  check(r.code === 200 && u.has() && r.body.includes("Cancel your Pro plan first") && r.body.includes('href="/subscribe/"') && events(u.st, "unsubscribed").length === 0, "unsubscribe: a still-paid Razorpay Pro is kept, with a page pointing to the manage page");
+  check(r.code === 200 && u.has() && r.body.includes("Cancel your Pro plan first") && r.body.includes('href="/manage/?id=') && events(u.st, "unsubscribed").length === 0, "unsubscribe: a still-paid Razorpay Pro is kept, with a page pointing to the manage page");
   u = await setup({ plan: "pro", proSource: "razorpay", proUntil: iso(T0 - 1000) });
   await u.call("POST");
   check(!u.has(), "unsubscribe: a lapsed Razorpay Pro unsubscribes like Free");
@@ -1179,6 +1179,131 @@ const iso = (ms) => new Date(ms).toISOString();
   // the script is kept out of the deployment
   const { readFileSync } = await import("node:fs");
   check(readFileSync(new URL("../.vercelignore", import.meta.url), "utf8").split(/\r?\n/).includes("scripts"), ".vercelignore keeps scripts/ (and so this tool) out of the deployment");
+}
+
+// ---- Pro requests: the sign-up box, the confirm step, /api/account (the manage page) and the admin script
+{
+  const { makeAccountHandler, managePath } = await import("../api/_lib/subscription-handlers.js");
+  const { buildProRequestEmail } = await import("../api/_lib/email.js");
+  const admin = await import("./subscribers.mjs");
+  const ENV = { SUBSCRIPTIONS_ENABLED: "1", RESEND_API_KEY: "re_k", EMAIL_FROM: "Radar <hello@pehchanthetraveller.com>", EMAIL_TO: "owner@example.com", SITE_URL: "https://site.example", MAX_SUBSCRIBERS: "5000" };
+  const world = (envOver = {}, { resendStatus = 200 } = {}) => {
+    const st = memStorage();
+    const mails = []; // every Resend call: { url, body }
+    const logs = [];
+    const fetchFn = async (url, init) => {
+      mails.push({ url: String(url), body: JSON.parse(init.body) });
+      const ok = resendStatus === 200;
+      return { ok, status: resendStatus, headers: { get: () => null }, json: async () => (ok ? { data: [{ id: "m" }], id: "m" } : { name: "internal_server_error" }) };
+    };
+    const deps = { env: { ...ENV, ...envOver }, storage: st, fetchFn, now: () => T0, randomBytes: seeded(5), log: (...a) => logs.push(a.join(" ")) };
+    const sub = makeSubscribeHandler(deps), conf = makeConfirmHandler(deps), acct = makeAccountHandler(deps);
+    const call = async (h, req) => { const res = mockRes(); await h({ headers: { "content-type": "application/json" }, ...req }, res); return res; };
+    return {
+      st, mails, logs,
+      owner: () => mails.filter((m) => m.url === "https://api.resend.com/emails" && m.body.subject === "Travel Problem Radar: Pro request"),
+      subscribe: (fields) => call(sub, { method: "POST", body: fields }),
+      confirm: (rec) => call(conf, { method: "POST", body: { id: rec.id, t: rec.token } }),
+      get: (id, t) => call(acct, { method: "GET", query: { id, t } }),
+      post: (body) => call(acct, { method: "POST", body }),
+    };
+  };
+  const recOf = (w, email) => getSubscriber(w.st, subscriberId(email));
+  const evCount = (w, type) => [...w.st.m.keys()].filter((k) => k.startsWith("radar:event:") && k.includes(`-${type}-`)).length;
+  const active = async (w, email, over = {}) => {
+    const r = { ...newPending(email, { now: T0 - 3600_000, randomBytes: seeded(90) }), status: "active", confirmedAt: iso(T0 - 1800_000), ...over };
+    await putSubscriber(w.st, r);
+    return r;
+  };
+
+  // the sign-up box: stored on the pending record, counted only at confirm
+  let w = world();
+  const withBox = await w.subscribe({ email: "keen@example.com", wantsPro: "1" });
+  const without = await w.subscribe({ email: "plain@example.com" });
+  check(withBox.code === 200 && withBox.body === without.body, "pro request: the sign-up reply is byte-identical with or without the Pro box");
+  let keen = await recOf(w, "keen@example.com");
+  const plain = await recOf(w, "plain@example.com");
+  check(keen.status === "pending" && keen.proRequestedAt === iso(T0) && plain.proRequestedAt === null, "pro request: the box sets proRequestedAt on the pending record; no box leaves it null");
+  check(evCount(w, "prorequested") === 0 && w.owner().length === 0, "pro request: nothing is counted and the owner isn't told until the address is confirmed");
+  const ticked = await world().subscribe({ email: "x@example.com", wantsPro: "on" });
+  check(ticked.code === 200, "pro request: a no-JavaScript form's \"on\" is accepted too");
+
+  let r = await w.confirm(keen);
+  keen = await recOf(w, "keen@example.com");
+  check(r.code === 200 && keen.status === "active" && /You asked for Pro/.test(r.body) && evCount(w, "prorequested") === 1, "pro request: confirming a ticked sign-up activates it, records one prorequested event and says so on the page");
+  const om = w.owner();
+  check(om.length === 1 && JSON.stringify(om[0].body.to) === '["owner@example.com"]' && /ticked/.test(om[0].body.text), "pro request: the owner gets one email at EMAIL_TO saying it came from the sign-up box");
+  check(!JSON.stringify(om[0].body).includes("keen@example.com") && !JSON.stringify(om[0].body).includes(keen.token), "pro request: the owner email names nobody and holds no token");
+  r = await w.confirm(plain);
+  check(r.code === 200 && r.body.includes(`href="${esc(managePath(plain.id, plain.token))}"`) && w.owner().length === 1, "pro request: confirming without the box links to the manage page and tells the owner nothing");
+
+  // GET /api/account
+  r = await w.get(plain.id, plain.token);
+  let a = r.json();
+  check(r.code === 200 && a.status === "active" && a.effectivePlan === "free" && a.proRequestedAt === null && r.headers["cache-control"] === "no-store", "account GET: the plan, not cached");
+  check(!r.body.includes("@") && !r.body.includes(plain.token) && !("email" in a), "account GET: no address and no token in the reply");
+  const bad = await w.get(plain.id, "wrong-token");
+  const unknown = await w.get("f".repeat(64), plain.token);
+  check(bad.code === 404 && unknown.code === 404 && bad.body === unknown.body, "account GET: a wrong token and an unknown id get the same 404");
+  check((await world({ SUBSCRIPTIONS_ENABLED: "" }).get(plain.id, plain.token)).code === 503, "account: switch off gives 503");
+  const put = await world().post({ id: plain.id, t: plain.token, action: "request-pro" });
+  check(put.code === 404, "account POST: a record that isn't there gets 404");
+
+  // POST request-pro
+  r = await w.post({ id: plain.id, t: plain.token, action: "request-pro" });
+  a = r.json();
+  check(r.code === 200 && a.ok === true && a.proRequestedAt === iso(T0) && (await recOf(w, "plain@example.com")).proRequestedAt === iso(T0), "request-pro: 200, and proRequestedAt is stored");
+  check(evCount(w, "prorequested") === 2 && w.owner().length === 2 && /manage page/.test(w.owner()[1].body.text), "request-pro: one more prorequested event and one owner email saying it came from the manage page");
+  r = await w.post({ id: plain.id, t: plain.token, action: "request-pro" });
+  check(r.code === 200 && evCount(w, "prorequested") === 2 && w.owner().length === 2, "request-pro: a repeat click is 200 and sends nothing more");
+  check((await w.post({ id: plain.id, t: plain.token, action: "nope" })).code === 400, "account POST: an unknown action is 400");
+  check((await w.post({ id: plain.id, t: "wrong", action: "request-pro" })).code === 404, "account POST: a wrong token is 404");
+  const pend = { ...newPending("wait@example.com", { now: T0, randomBytes: seeded(91) }) };
+  await putSubscriber(w.st, pend);
+  r = await w.post({ id: pend.id, t: pend.token, action: "request-pro" });
+  check(r.code === 409 && r.json().error === "not_confirmed" && (await recOf(w, "wait@example.com")).proRequestedAt === null, "request-pro: a pending address gets 409 not_confirmed and nothing is stored");
+  const pro = await active(w, "pro@example.com", { plan: "pro", proSource: "owner" });
+  r = await w.post({ id: pro.id, t: pro.token, action: "request-pro" });
+  check(r.code === 409 && r.json().error === "already_pro", "request-pro: a Pro subscriber gets 409 already_pro");
+  const lapsed = await active(w, "lapsed@example.com", { plan: "pro", proSource: "owner", proUntil: iso(T0 - 1000) });
+  r = await w.post({ id: lapsed.id, t: lapsed.token, action: "request-pro" });
+  check(r.code === 200 && r.json().effectivePlan === "free", "request-pro: a lapsed Pro (end date passed) can ask again");
+
+  // a failed owner email never fails the request
+  const wf = world({}, { resendStatus: 500 });
+  const f1 = await active(wf, "f1@example.com");
+  r = await wf.post({ id: f1.id, t: f1.token, action: "request-pro" });
+  check(r.code === 200 && (await recOf(wf, "f1@example.com")).proRequestedAt === iso(T0) && wf.logs.some((l) => /^pro-request owner-email failed: http 500/.test(l)), "request-pro: an owner email that fails still gives 200, and the log says why");
+  check(wf.logs.every((l) => !l.includes("f1@example.com") && !l.includes(f1.token)), "request-pro: the log holds no address or token");
+  const wn = world({ EMAIL_TO: "" });
+  const n1 = await active(wn, "n1@example.com");
+  check((await wn.post({ id: n1.id, t: n1.token, action: "request-pro" })).code === 200 && wn.mails.length === 0, "request-pro: with no EMAIL_TO the request is still stored, and nothing is sent");
+
+  // the email builder and the digest footer
+  const pm = buildProRequestEmail({ at: iso(T0), source: "manage" });
+  check(pm.subject === "Travel Problem Radar: Pro request" && /list --plan requested/.test(pm.text) && /grant-pro <email> --yes/.test(pm.text) && /grant-pro &lt;email&gt; --yes/.test(pm.html), "owner email: names the two admin commands, escaped in the HTML");
+  const wd = world();
+  const d1 = await active(wd, "d1@example.com");
+  const batches = [];
+  await deliverToSubscribers({
+    env: ENV, storage: wd.st, now: () => T0, randomBytes: seeded(3), scheduled: true, log: () => {},
+    fetchFn: async (url, init) => { batches.push(JSON.parse(init.body)); return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ data: [{ id: "m" }] }) }; },
+    sweep: { id: "s1", at: iso(T0), perCat: {}, problems: [{ id: "p1", title: "Problem 1", summary: "s", source: "Src", link: "https://example.com/1", region: "Global", date: "Oct 2026", severity: "High", opportunity: "o" }] },
+  });
+  const mlink = `https://site.example/manage/?id=${d1.id}&t=${encodeURIComponent(d1.token)}`;
+  check(batches.length === 1 && batches[0][0].text.includes("Manage subscription: " + mlink) && batches[0][0].html.includes(esc(mlink)), "digest footer: every subscriber email links to their manage page");
+
+  // the admin script: the waiting list, the stats line, and grant-pro clearing the request
+  const run = async (argv) => { const out = []; const code = await admin.main(argv, { storage: w.st, now: T0, rb: seeded(70), out: (s) => out.push(s), err: (s) => out.push(s) }); return { code, out: out.join("\n") }; };
+  r = await run(["list", "--plan", "requested"]);
+  check(r.code === 0 && r.out.includes("keen@example.com") && r.out.includes("plain@example.com") && r.out.includes("lapsed@example.com") && !r.out.includes("wait@example.com") && !r.out.includes("pro@example.com\t") && /3 shown/.test(r.out), "admin list --plan requested: the active Free subscribers who asked, and nobody else");
+  check(/proRequestedAt/.test((await run(["list"])).out), "admin list: has a proRequestedAt column");
+  r = await run(["stats", "--days", "1"]);
+  check(r.code === 0 && /3 waiting for Pro/.test(r.out) && /pro asked/.test(r.out) && /3 Pro requests/.test(r.out), "admin stats: how many are waiting, and the day's Pro requests");
+  r = await run(["grant-pro", "keen@example.com", "--yes"]);
+  keen = await recOf(w, "keen@example.com");
+  check(r.code === 0 && keen.plan === "pro" && keen.proRequestedAt === null && !(await run(["list", "--plan", "requested"])).out.includes("keen@example.com"), "admin grant-pro: Pro on, and the request leaves the waiting list");
+  check((await w.get(keen.id, keen.token)).json().effectivePlan === "pro", "account GET: shows Pro once the owner grants it");
 }
 
 finish("subscription tests");

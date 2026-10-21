@@ -139,6 +139,29 @@ export function buildConfirmEmail({ confirmUrl, siteUrl = "" }) {
   };
 }
 
+// To the owner (EMAIL_TO) when a subscriber asks for Pro. It names nobody: the address stays in
+// storage, and the owner looks it up with the admin script.
+export function buildProRequestEmail({ at, source }) {
+  const subject = "Travel Problem Radar: Pro request";
+  const how = source === "signup" ? "ticked \"I'd also like Pro\" when signing up, and has now confirmed" : "pressed \"Request Pro\" on the manage page";
+  const lines = [
+    `${when(at)}: a subscriber ${how}.`,
+    "See who is waiting:  node --env-file=.env.local scripts/subscribers.mjs list --plan requested",
+    "Then switch them on:  node --env-file=.env.local scripts/subscribers.mjs grant-pro <email> --yes",
+  ];
+  return {
+    subject,
+    text: [subject, "", ...lines].join("\n"),
+    html: [
+      `<div style="${FONT};max-width:640px">`,
+      `<h1 style="font-size:18px;margin:0 0 8px">${esc(subject)}</h1>`,
+      `<p style="margin:0 0 10px">${esc(lines[0])}</p>`,
+      ...lines.slice(1).map((l) => `<p style="margin:0 0 6px;font-family:ui-monospace,monospace;font-size:12px">${esc(l)}</p>`),
+      `</div>`,
+    ].join("\n"),
+  };
+}
+
 // ---- batch sending (https://resend.com/docs/api-reference/emails/send-batch-emails)
 
 export const BATCH_SIZE = 100; // Resend's documented maximum per call

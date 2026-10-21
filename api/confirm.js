@@ -2,4 +2,4 @@
 import { makeConfirmHandler } from "./_lib/subscription-handlers.js";
 import { blobStorage } from "./_lib/storage.js";
 
-export default makeConfirmHandler({ env: process.env, storage: blobStorage(), now: Date.now });
+export default makeConfirmHandler({ env: process.env, storage: blobStorage(), fetchFn: fetch, now: Date.now });
