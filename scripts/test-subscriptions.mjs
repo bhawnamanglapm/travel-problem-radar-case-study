@@ -47,6 +47,19 @@ const iso = (ms) => new Date(ms).toISOString();
   let threw = false;
   try { await blob.list("radar"); } catch (e) { threw = true; }
   check(threw && calls.length === 3, "list without a trailing ':' throws before calling the service");
+  let allRefused = true;
+  for (const bad of ["sub:", "radar:", "radar", "radar:sub", ""]) {
+    try { await blob.list(bad); allRefused = false; } catch (e) { /* refused, as it should be */ }
+  }
+  check(allRefused && calls.length === 3, "list refuses a prefix not under radar: or not ending in ':' or '-', before calling the service");
+
+  // The prefix countEvents uses ends in "-", and a real day's events must be counted through blobStorage, not only the memory store.
+  const evFiles = ["radar/radar-event-20261021-080910123-confirmsent-aabbcc.json", "radar/radar-event-20261021-090910123-confirmsent-ddeeff.json",
+    "radar/radar-event-20261021-080910123-confirmed-112233.json", "radar/radar-event-20261022-080910123-confirmsent-445566.json"];
+  const evBlob = blobStorage({ list: async ({ prefix }) => ({ blobs: evFiles.filter((p) => p.startsWith(prefix)).map((pathname) => ({ pathname })), hasMore: false }) });
+  check(JSON.stringify(await evBlob.list("radar:event:20261021-")) === '["080910123-confirmed-112233","080910123-confirmsent-aabbcc","090910123-confirmsent-ddeeff"]', "blob list: a day's prefix ending in '-' works");
+  check((await countEvents(evBlob, { day: "20261021", type: "confirmsent" })) === 2 && (await countEvents(evBlob, { day: "20261022", type: "confirmsent" })) === 1,
+    "countEvents works through blobStorage (it listed with a '-' prefix that blobStorage used to refuse, which made every sign-up's confirm cap fail closed)");
 }
 
 // ---- T02: subscriber records
