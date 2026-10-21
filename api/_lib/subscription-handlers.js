@@ -2,7 +2,7 @@
 // injected dependencies like handlers.js, so the offline tests can call them directly.
 // Nothing here puts an address, an id or a token in a reply or a log line.
 import { createHash, createHmac, randomBytes as cryptoRandomBytes, timingSafeEqual } from "node:crypto";
-import { DEFAULT_FROM, buildConfirmEmail, buildProRequestEmail, sendEmail, sendOne } from "./email.js";
+import { DEFAULT_FROM, buildAlreadySubscribedEmail, buildConfirmEmail, buildProRequestEmail, sendEmail, sendOne } from "./email.js";
 import { BodyTooLargeError, allowMethods, esc, readFields, sendJson, sendPage } from "./http.js";
 import {
   CONFIRM_RESEND_HOURS, PENDING_TTL_DAYS, countEvents, deleteSubscriber, effectivePlan, findSubscriber, getSubscriber, newPending, normaliseCats, normaliseEmail, putSubscriber,
@@ -24,7 +24,20 @@ export const IPHIT_KEEP_HOURS = 2;
 export const utcHour = (now) => new Date(now).toISOString().slice(0, 13).replace(/[-T]/g, ""); // YYYYMMDDHH
 
 const OK_REPLY = { ok: true, message: "If that address can be subscribed, a confirmation link is on its way. Not in your inbox within a few minutes? Check your spam or junk folder." };
+// An address that is already subscribed is told so (the owner's choice, 2026-10-22, accepting that
+// the reply shows whether an address subscribes). The inbox gets a notice with its manage link at
+// most once every NOTICE_HOURS.
+const ALREADY_EMAILED = { ok: true, already: true, message: "This address is already subscribed. We've emailed it a link to manage the subscription." };
+const ALREADY = { ok: true, already: true, message: "This address is already subscribed. Use the Manage link in any digest email to change it." };
+const PENDING_REPLY = { ok: true, message: "A confirmation link was already sent to this address in the last 24 hours. Check your inbox and spam or junk folder." };
+export const NOTICE_HOURS = 24;
 const HOUR_MS = 3600 * 1000;
+
+// Emails sign-up has sent today: confirmations and already-subscribed notices share MAX_CONFIRMS_PER_DAY.
+async function signupEmailsToday(storage, t) {
+  const day = utcDay(t);
+  return (await countEvents(storage, { day, type: "confirmsent" })) + (await countEvents(storage, { day, type: "noticesent" }));
+}
 
 const positiveInt = (v) => {
   const n = Number(String(v ?? "").trim());
@@ -136,8 +149,35 @@ export function makeSubscribeHandler({ env, storage, fetchFn, now, randomBytes =
       const maxConfirms = maxConfirmsPerDay(env.MAX_CONFIRMS_PER_DAY);
 
       const existing = await findSubscriber(storage, email);
-      if (existing && existing.status !== "pending") return reply(); // active (row 7), or anything unexpected
-      if (existing && t - Date.parse(existing.confirmSentAt) < CONFIRM_RESEND_HOURS * HOUR_MS) return reply(); // row 8
+      if (existing && existing.status === "active") { // row 7
+        // A notice at most once every NOTICE_HOURS, and only under the day's cap.
+        if (existing.noticeSentAt && t - Date.parse(existing.noticeSentAt) < NOTICE_HOURS * HOUR_MS) return sendJson(res, 200, ALREADY);
+        let sentToday;
+        try { sentToday = await signupEmailsToday(storage, t); } catch (e) { sentToday = Infinity; }
+        if (sentToday >= maxConfirms) return sendJson(res, 200, ALREADY);
+        const mail = buildAlreadySubscribedEmail({
+          manageUrl: site + managePath(existing.id, existing.token),
+          unsubscribeUrl: `${site}/api/unsubscribe?id=${existing.id}&t=${existing.token}`,
+          siteUrl: site,
+        });
+        const result = await sendOne({ apiKey: env.RESEND_API_KEY, from: env.EMAIL_FROM }, { to: existing.email, ...mail }, {
+          fetchFn,
+          idempotencyKey: `notice-${existing.id.slice(0, 24)}-${t}`,
+        });
+        if (result !== "sent") {
+          log("subscribe notice-email", result);
+          return sendJson(res, 200, ALREADY);
+        }
+        try {
+          await putSubscriber(storage, { ...existing, noticeSentAt: new Date(t).toISOString() });
+          await recordEvent(storage, "noticesent", { now: t, randomBytes, plan: effectivePlan(existing, t) });
+        } catch (e) {
+          log("subscribe notice-record", "error: " + ((e && e.name) || "Error")); // the email went; say so
+        }
+        return sendJson(res, 200, ALREADY_EMAILED);
+      }
+      if (existing && existing.status !== "pending") return reply(); // anything unexpected
+      if (existing && t - Date.parse(existing.confirmSentAt) < CONFIRM_RESEND_HOURS * HOUR_MS) return sendJson(res, 200, PENDING_REPLY); // row 8
 
       if (!existing) {
         // Rows 10: a full list, or one we can't measure, takes no new address.
@@ -147,7 +187,7 @@ export function makeSubscribeHandler({ env, storage, fetchFn, now, randomBytes =
       // Row 11 (and the same cap on a re-send, which spends quota the same way). A count we
       // can't read counts as reached.
       let sentToday;
-      try { sentToday = await countEvents(storage, { day: utcDay(t), type: "confirmsent" }); } catch (e) { sentToday = Infinity; }
+      try { sentToday = await signupEmailsToday(storage, t); } catch (e) { sentToday = Infinity; }
       if (sentToday >= maxConfirms) return reply();
 
       let record = existing;

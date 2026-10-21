@@ -146,6 +146,29 @@ export function buildConfirmEmail({ confirmUrl, siteUrl = "" }) {
   };
 }
 
+// To an address that is already subscribed, when someone signs it up again (at most once a day).
+export function buildAlreadySubscribedEmail({ manageUrl, unsubscribeUrl, siteUrl = "" }) {
+  if (!LINK_OK.test(manageUrl || "") || !LINK_OK.test(unsubscribeUrl || "")) throw new Error("buildAlreadySubscribedEmail: bad link");
+  const subject = "You're already subscribed to Travel Problem Radar";
+  const intro = "Someone, probably you, just tried to sign this address up for the Travel Problem Radar digest. It is already subscribed, so nothing has changed.";
+  const how = "To see or change your subscription, or to ask for Pro, use the manage link.";
+  const ignore = "If this wasn't you, ignore this email; your subscription stays as it is.";
+  return {
+    subject,
+    text: [subject, "", intro, "", how, `Manage subscription: ${manageUrl}`, `Unsubscribe: ${unsubscribeUrl}`, "", ignore, ...(siteUrl ? ["", siteUrl] : [])].join("\n"),
+    html: [
+      `<div style="${FONT};max-width:640px">`,
+      `<h1 style="font-size:18px;margin:0 0 8px">${esc(subject)}</h1>`,
+      `<p style="margin:0 0 14px">${esc(intro)}</p>`,
+      `<p style="margin:0 0 14px">${esc(how)}</p>`,
+      `<p style="margin:0 0 14px"><a href="${esc(manageUrl)}" style="display:inline-block;padding:10px 18px;background:#1a1a1a;color:#ffffff;text-decoration:none;border-radius:6px">Manage subscription</a></p>`,
+      `<p style="margin:0 0 14px">${esc(ignore)}</p>`,
+      `<p style="margin:0;font-size:12px;${MUTED}"><a href="${esc(unsubscribeUrl)}" style="${MUTED}">Unsubscribe</a></p>`,
+      `</div>`,
+    ].join("\n"),
+  };
+}
+
 // To the owner (EMAIL_TO) when a subscriber asks for Pro. It names nobody: the address stays in
 // storage, and the owner looks it up with the admin script.
 export function buildProRequestEmail({ at, source }) {

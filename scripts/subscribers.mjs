@@ -94,8 +94,8 @@ export async function computeStats(storage, { now, days = 30 }) {
   const first = utcDay(now - (days - 1) * DAY_MS);
   const dayList = [];
   for (let i = days - 1; i >= 0; i--) dayList.push(utcDay(now - i * DAY_MS));
-  const perDay = new Map(dayList.map((d) => [d, { day: d, subscribed: 0, confirmsent: 0, confirmed: 0, unsubscribedFree: 0, unsubscribedPro: 0, expired: 0, bounced: 0, complained: 0, prorequested: 0, freeDelivered: 0 }]));
-  const totals = { subscribed: 0, confirmsent: 0, confirmed: 0, unsubscribed: 0, expired: 0, bounced: 0, complained: 0, prorequested: 0 };
+  const perDay = new Map(dayList.map((d) => [d, { day: d, subscribed: 0, confirmsent: 0, noticesent: 0, confirmed: 0, unsubscribedFree: 0, unsubscribedPro: 0, expired: 0, bounced: 0, complained: 0, prorequested: 0, freeDelivered: 0 }]));
+  const totals = { subscribed: 0, confirmsent: 0, noticesent: 0, confirmed: 0, unsubscribed: 0, expired: 0, bounced: 0, complained: 0, prorequested: 0 };
 
   for (const suffix of await storage.list(KEY_EVENT_PREFIX)) {
     const m = EVENT_RE.exec(suffix);
@@ -133,14 +133,14 @@ export function formatStats(s) {
     `Now: ${s.now.pending} pending, ${s.now.free} Free, ${s.now.pro} Pro (${s.now.proExpiring7d} of them ending within 7 days), ${s.now.proRequested} waiting for Pro${s.now.unreadable ? `, ${s.now.unreadable} unreadable` : ""}`,
     "",
     `Last ${s.days} days (UTC):`,
-    "day       subscribed  confirmsent  confirmed  unsub(free)  unsub(pro)  expired  bounced  complained  pro asked  free sent",
+    "day       subscribed  confirmsent  notices  confirmed  unsub(free)  unsub(pro)  expired  bounced  complained  pro asked  free sent",
   ];
   for (const r of s.perDay) {
-    if (!(r.subscribed || r.confirmsent || r.confirmed || r.unsubscribedFree || r.unsubscribedPro || r.expired || r.bounced || r.complained || r.prorequested || r.freeDelivered)) continue;
-    lines.push(`${r.day}  ${pad(r.subscribed, 10)}  ${pad(r.confirmsent, 11)}  ${pad(r.confirmed, 9)}  ${pad(r.unsubscribedFree, 11)}  ${pad(r.unsubscribedPro, 10)}  ${pad(r.expired, 7)}  ${pad(r.bounced, 7)}  ${pad(r.complained, 10)}  ${pad(r.prorequested, 9)}  ${pad(r.freeDelivered, 9)}`);
+    if (!(r.subscribed || r.confirmsent || r.noticesent || r.confirmed || r.unsubscribedFree || r.unsubscribedPro || r.expired || r.bounced || r.complained || r.prorequested || r.freeDelivered)) continue;
+    lines.push(`${r.day}  ${pad(r.subscribed, 10)}  ${pad(r.confirmsent, 11)}  ${pad(r.noticesent, 7)}  ${pad(r.confirmed, 9)}  ${pad(r.unsubscribedFree, 11)}  ${pad(r.unsubscribedPro, 10)}  ${pad(r.expired, 7)}  ${pad(r.bounced, 7)}  ${pad(r.complained, 10)}  ${pad(r.prorequested, 9)}  ${pad(r.freeDelivered, 9)}`);
   }
   const t = s.totals;
-  lines.push("", `Total: ${t.subscribed} subscribed, ${t.confirmsent} confirmation emails, ${t.confirmed} confirmed, ${t.unsubscribed} unsubscribed, ${t.expired} expired, ${t.bounced} bounced, ${t.complained} complained, ${t.prorequested} Pro requests`);
+  lines.push("", `Total: ${t.subscribed} subscribed, ${t.confirmsent} confirmation emails, ${t.noticesent} already-subscribed notices, ${t.confirmed} confirmed, ${t.unsubscribed} unsubscribed, ${t.expired} expired, ${t.bounced} bounced, ${t.complained} complained, ${t.prorequested} Pro requests`);
   lines.push(s.confirmRate === null
     ? "Confirm rate: n/a (nobody subscribed in this period)"
     : `Confirm rate: ${(s.confirmRate * 100).toFixed(1)}% (${t.confirmed} confirmed / ${t.subscribed} subscribed, counted by when each event happened, so people who subscribed earlier can raise it)`);

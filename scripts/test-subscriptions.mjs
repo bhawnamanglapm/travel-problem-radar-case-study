@@ -406,7 +406,10 @@ const iso = (ms) => new Date(ms).toISOString();
   w.st.m.set(subs[0], JSON.stringify({ ...rec, status: "active", confirmedAt: iso(T0) }));
   const before = w.st.m.size;
   r = await w.post({ email: "NEW.PERSON@example.com" });
-  check(r.body === newBody && w.sent.length === 1 && w.st.m.size === before, "subscribe row 7: an active address (any case) gets the identical reply; nothing is sent or stored");
+  check(r.code === 200 && r.json().already === true && /already subscribed\. We've emailed it/.test(r.json().message) && subKeys(w).length === 1 && w.st.m.size === before + 1,
+    "subscribe row 7: an active address (any case) is told it is already subscribed; no new record, one noticesent event");
+  check(w.sent.length === 2 && w.sent[1].to[0] === "new.person@example.com" && /already subscribed/.test(w.sent[1].subject) && !/confirm\?id=/.test(w.sent[1].text),
+    "subscribe row 7: the inbox gets one already-subscribed notice, not a confirmation link");
 
   // rows 8 and 9: pending
   w = world({}, { count: 0 });
@@ -415,7 +418,7 @@ const iso = (ms) => new Date(ms).toISOString();
   const tok = JSON.parse(w.st.m.get(pk)).token;
   w.tick(23 * 3600 * 1000);
   r = await w.post({ email: "p@example.com" });
-  check(r.body === OK && w.sent.length === 1, "subscribe row 8: pending, confirmation sent 23 h ago: identical reply, no new email");
+  check(r.code === 200 && /already sent to this address in the last 24 hours/.test(r.json().message) && !r.json().already && w.sent.length === 1, "subscribe row 8: pending, confirmation sent 23 h ago: says a link was already sent; no new email");
   w.tick(2 * 3600 * 1000);
   r = await w.post({ email: "P@example.com" });
   const after9 = JSON.parse(w.st.m.get(pk));
@@ -497,10 +500,9 @@ const iso = (ms) => new Date(ms).toISOString();
   w = world({}, { count: 0 });
   const replies = [
     await w.post({ email: "x1@example.com" }), // new
-    await w.post({ email: "x1@example.com" }), // pending, recent
     await w.post({ email: "x2@example.com", website: "bot" }), // honeypot
   ];
-  check(replies.every((x) => x.body === OK && x.code === 200 && JSON.stringify(x.headers) === JSON.stringify(replies[0].headers)), "subscribe: new, pending-recent and honeypot replies are byte-identical, headers included");
+  check(replies.every((x) => x.body === OK && x.code === 200 && JSON.stringify(x.headers) === JSON.stringify(replies[0].headers)), "subscribe: new and honeypot replies are byte-identical, headers included");
 }
 
 // ---- T06: GET and POST /api/confirm
@@ -1743,6 +1745,112 @@ const iso = (ms) => new Date(ms).toISOString();
   check(a.code === 0 && /active/.test(a.all), "admin show: finds a pre-change record");
   a = await run(["delete", "M.E@gmail.com", "--yes"]);
   check(a.code === 0 && !(await getSubscriber(st, legacy.id)), "admin delete: removes a pre-change record by the id it was found under");
+}
+
+// ---- Already subscribed: the reply says so, and the inbox gets a notice with its manage link
+{
+  const { buildAlreadySubscribedEmail } = await import("../api/_lib/email.js");
+  const { NOTICE_HOURS } = await import("../api/_lib/subscription-handlers.js");
+  const admin = await import("./subscribers.mjs");
+  const ENV = { SUBSCRIPTIONS_ENABLED: "1", RESEND_API_KEY: "re_k", EMAIL_FROM: "Radar <hello@pehchanthetraveller.com>", SITE_URL: "https://site.example/", MAX_SUBSCRIBERS: "5000" };
+  const HOUR = 3600_000;
+  const world = async (envOver = {}, { status = "active" } = {}) => {
+    const st = memStorage();
+    st.m.set("radar:subscriberCount", "1");
+    const rec = { ...newPending("me@gmail.com", { now: T0 - 48 * HOUR, randomBytes: seeded(11) }), token: "tok-secret-1", status, confirmedAt: status === "active" ? iso(T0 - 47 * HOUR) : null };
+    if (status === "pending") rec.confirmSentAt = iso(T0 - HOUR);
+    await putSubscriber(st, rec);
+    const sent = []; const logs = [];
+    let clock = T0; let code = 200;
+    const fetchFn = async (url, init) => {
+      const body = JSON.parse(init.body);
+      if (code === 200) sent.push(...body);
+      return { ok: code === 200, status: code, headers: { get: () => null }, json: async () => (code === 200 ? { data: body.map((_, i) => ({ id: "m" + i })) } : { name: "internal_server_error" }) };
+    };
+    const handler = makeSubscribeHandler({ env: { ...ENV, ...envOver }, storage: st, fetchFn, now: () => clock, randomBytes: seeded(7), log: (...a) => logs.push(a.join(" ")) });
+    let ipN = 0;
+    const post = async (fields, ip) => { const res = mockRes(); await handler({ method: "POST", headers: { "content-type": "application/json", "x-forwarded-for": ip || "203.0.113." + ++ipN }, body: fields }, res); return res; };
+    const evs = (type) => [...st.m.entries()].filter(([k]) => k.startsWith("radar:event:") && k.includes(`-${type}-`));
+    const now = () => getSubscriber(st, rec.id);
+    return { st, rec, sent, logs, post, evs, now, tick: (ms) => { clock += ms; }, setResend: (c) => { code = c; } };
+  };
+  const EMAILED = "This address is already subscribed. We've emailed it a link to manage the subscription.";
+  const NOT_EMAILED = "This address is already subscribed. Use the Manage link in any digest email to change it.";
+
+  // the email on its own
+  const m = buildAlreadySubscribedEmail({ manageUrl: "https://s.example/manage/?id=a&t=b", unsubscribeUrl: "https://s.example/api/unsubscribe?id=a&t=b", siteUrl: "https://s.example" });
+  check(m.subject === "You're already subscribed to Travel Problem Radar" && m.text.includes("Manage subscription: https://s.example/manage/?id=a&t=b") && m.text.includes("Unsubscribe: https://s.example/api/unsubscribe?id=a&t=b") && /If this wasn't you, ignore this email/.test(m.text) && m.html.includes('href="https://s.example/manage/?id=a&amp;t=b"'),
+    "buildAlreadySubscribedEmail: subject, manage and unsubscribe links, and an ignore line");
+  let threw = 0;
+  for (const bad of [{ manageUrl: "javascript:x", unsubscribeUrl: "https://s.example/u" }, { manageUrl: "https://s.example/m", unsubscribeUrl: "" }]) { try { buildAlreadySubscribedEmail(bad); } catch (e) { threw++; } }
+  check(threw === 2, "buildAlreadySubscribedEmail: refuses a missing or non-http link");
+
+  // a variant of a confirmed address
+  let w = await world();
+  let r = await w.post({ email: "M.E+radar@gmail.com" });
+  let body = r.json();
+  check(r.code === 200 && body.ok === true && body.already === true && body.message === EMAILED, "already subscribed: a variant of a confirmed address is told so, and that an email went");
+  check(w.sent.length === 1 && w.sent[0].to[0] === "me@gmail.com" && w.sent[0].subject === "You're already subscribed to Travel Problem Radar" &&
+    w.sent[0].text.includes(`https://site.example/manage/?id=${w.rec.id}&t=tok-secret-1`) && w.sent[0].text.includes(`https://site.example/api/unsubscribe?id=${w.rec.id}&t=tok-secret-1`),
+    "already subscribed: one notice to the stored address, with its manage and unsubscribe links");
+  check(!r.body.includes("tok-secret") && !r.body.includes(w.rec.id) && !r.body.includes("@"), "already subscribed: the reply holds no token, id or address");
+  const after = await w.now();
+  check(after.noticeSentAt === iso(T0) && after.token === "tok-secret-1" && after.status === "active" && [...w.st.m.keys()].filter((k) => k.startsWith("radar:sub:")).length === 1,
+    "already subscribed: noticeSentAt is stored; the record is otherwise unchanged and still the only one");
+  const ev = w.evs("noticesent");
+  check(ev.length === 1 && JSON.parse(ev[0][1]).plan === "free" && !/@|[0-9a-f]{64}/.test(ev[0][0] + ev[0][1]), "already subscribed: one noticesent event with the plan and no address or id");
+  check(!w.logs.some((l) => /@|tok-secret|[0-9a-f]{64}/.test(l)), "already subscribed: no log line holds the address, token or id");
+
+  // once a day
+  w.tick(HOUR);
+  r = await w.post({ email: "me@gmail.com" });
+  check(r.json().message === NOT_EMAILED && r.json().already === true && w.sent.length === 1 && w.evs("noticesent").length === 1, "already subscribed: a second try within 24 h sends nothing and says to use a digest's Manage link");
+  w.tick((NOTICE_HOURS - 1) * HOUR);
+  r = await w.post({ email: "me@gmail.com" });
+  check(r.json().message === EMAILED && w.sent.length === 2 && w.evs("noticesent").length === 2, "already subscribed: 24 h after the last notice, another one is sent");
+
+  // the daily cap covers notices, and notices count towards it
+  w = await world({ MAX_CONFIRMS_PER_DAY: "2" });
+  for (let i = 0; i < 2; i++) await recordEvent(w.st, "confirmsent", { now: T0 - 60_000, randomBytes: seeded(200 + i), plan: "free" });
+  r = await w.post({ email: "me@gmail.com" });
+  check(r.json().message === NOT_EMAILED && w.sent.length === 0 && !(await w.now()).noticeSentAt, "already subscribed: with the day's cap reached, no notice is sent or stored");
+  w = await world({ MAX_CONFIRMS_PER_DAY: "1" });
+  await w.post({ email: "me@gmail.com" });
+  r = await w.post({ email: "someone.new@example.com" });
+  check(w.sent.length === 1 && r.json().message === JSON.parse('{"m":"If that address can be subscribed, a confirmation link is on its way. Not in your inbox within a few minutes? Check your spam or junk folder."}').m,
+    "already subscribed: a notice counts towards MAX_CONFIRMS_PER_DAY, so the next new address gets no confirmation that day");
+
+  // a failed send
+  w = await world();
+  w.setResend(500);
+  r = await w.post({ email: "me@gmail.com" });
+  check(r.code === 200 && r.json().message === NOT_EMAILED && !(await w.now()).noticeSentAt && w.evs("noticesent").length === 0, "already subscribed: a failed send stores nothing and says to use a digest's Manage link");
+  check(w.logs.some((l) => /^subscribe notice-email failed/.test(l)) && !w.logs.some((l) => /@|tok-secret/.test(l)), "already subscribed: the failure is logged without the address or token");
+  w.setResend(200);
+  r = await w.post({ email: "me@gmail.com" });
+  check(r.json().message === EMAILED && w.sent.length === 1, "already subscribed: after a failed send, the next try sends");
+
+  // the cases that still get the generic reply
+  w = await world();
+  r = await w.post({ email: "me@gmail.com", website: "bot" });
+  check(!r.json().already && /confirmation link is on its way/.test(r.json().message) && w.sent.length === 0, "already subscribed: the honeypot still gets the generic reply");
+  w = await world({ MAX_SIGNUPS_PER_IP_HOUR: "1" });
+  await w.post({ email: "a@example.com" }, "198.51.100.9");
+  r = await w.post({ email: "me@gmail.com" }, "198.51.100.9");
+  check(!r.json().already && /confirmation link is on its way/.test(r.json().message) && !w.sent.some((x) => x.to[0] === "me@gmail.com"), "already subscribed: over the per-IP limit, the generic reply and no notice");
+
+  // a pending address
+  w = await world({}, { status: "pending" });
+  r = await w.post({ email: "m.e@gmail.com" });
+  check(r.json().message === "A confirmation link was already sent to this address in the last 24 hours. Check your inbox and spam or junk folder." && !r.json().already && w.sent.length === 0,
+    "pending: a confirmation sent within 24 h is mentioned; nothing is sent");
+
+  // stats
+  w = await world();
+  await w.post({ email: "me@gmail.com" });
+  const out = [];
+  await admin.main(["stats", "--days", "1"], { storage: w.st, now: T0, rb: seeded(70), out: (s) => out.push(s), err: (s) => out.push(s) });
+  check(/1 already-subscribed notices/.test(out.join("\n")) && / notices /.test(out.join("\n")), "stats: already-subscribed notices per day and in the totals");
 }
 
 finish("subscription tests");
