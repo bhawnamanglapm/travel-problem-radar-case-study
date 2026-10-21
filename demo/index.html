@@ -2,6 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
+<script>
+  // Without the trailing slash, radar.js resolves to /radar.js (a 404) and nothing renders.
+  if (!/(\/|\.html)$/.test(location.pathname)) location.replace(location.pathname + "/" + location.search + location.hash);
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Travel Problem Radar — Demo</title>
 <meta name="description" content="Demo of Travel Problem Radar. Replays a saved sample of 8 travel-industry problems; no live search." />
