@@ -112,12 +112,15 @@ async function readJSON(storage, key) {
 
 // The server twin of runSweep() in the component: scan all four categories, merge,
 // flag what is new, keep the last 60 sweeps. Saves nothing if every category failed.
-export async function runDailySweep({ storage, scan, now = () => Date.now(), minGapHours = 20, log = () => {} }) {
+// The 20-hour gap stops the timer sweeping twice (Vercel can deliver a cron call more than
+// once). A manual run skips the gap and is left out of it, so it never cancels the next
+// scheduled sweep.
+export async function runDailySweep({ storage, scan, now = () => Date.now(), minGapHours = 20, manual = false, log = () => {} }) {
   const hist0 = await readJSON(storage, KEY_INDEX);
   let hist = Array.isArray(hist0) ? hist0 : [];
-  const last = hist[hist.length - 1];
-  if (last && now() - new Date(last.at).getTime() < minGapHours * 3600 * 1000) {
-    return { status: "skipped", reason: `last sweep ${last.at} is under ${minGapHours} h old` };
+  const last = hist.filter((e) => !e.manual).pop();
+  if (!manual && last && now() - new Date(last.at).getTime() < minGapHours * 3600 * 1000) {
+    return { status: "skipped", reason: `last scheduled sweep ${last.at} is under ${minGapHours} h old` };
   }
 
   const seen0 = await readJSON(storage, KEY_SEEN);
@@ -154,6 +157,7 @@ export async function runDailySweep({ storage, scan, now = () => Date.now(), min
     newCount: merged.filter((p) => p.isNew).length,
     highCount: merged.filter((p) => p.severity === "High").length,
   };
+  if (manual) entry.manual = true;
 
   hist = [...hist, entry];
   if (hist.length > MAX_SWEEPS) {

@@ -24,7 +24,8 @@ from the browser without a key, which only works inside Claude's app. That is wh
 
 ```
 Vercel timer, once a day (01:30 UTC)
-  -> /api/sweep   (refuses calls without the secret; skips if a sweep ran in the last 20 hours)
+  -> /api/sweep   (refuses calls without the secret; the timer skips if it swept in the last 20 hours;
+                   a manual call with the secret always runs)
        4 Claude calls with web search, one per category, same prompts as the component
        merge, de-duplicate, flag "New", keep the last 60 sweeps -> private Vercel Blob store
        then, if SLACK_WEBHOOK_URL is set, post the digest (or a failure notice) to Slack

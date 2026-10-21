@@ -7,12 +7,12 @@ import { CATS } from "./radar.js";
 const esc = (s = "") => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const when = (at) => at.slice(0, 16).replace("T", " ") + " UTC";
 
-export function buildDigest({ at, problems, perCat = {} }, liveUrl = "") {
+export function buildDigest({ at, problems, perCat = {}, manual = false }, liveUrl = "") {
   const failed = CATS.filter((c) => /^failed/.test(perCat[c.key] || "")).map((c) => esc(c.label));
   const newCount = problems.filter((p) => p.isNew).length;
   const highCount = problems.filter((p) => p.severity === "High").length;
   const lines = [
-    "*Travel Problem Radar: daily digest*",
+    manual ? "*Travel Problem Radar: digest (manual run)*" : "*Travel Problem Radar: daily digest*",
     `Swept ${when(at)} · ${problems.length} problems · ${newCount} new · ${highCount} high severity`,
   ];
   if (failed.length) lines.push(`Failed this run: ${failed.join(", ")}`);

@@ -35,7 +35,7 @@ The case study and the sample demo are also served by **GitHub Pages** from `mai
                          ┌──────────────────── Vercel project ─────────────────────┐
 Vercel Cron, daily       │                                                          │
 01:30 UTC (07:00 IST) ──▶│  /api/sweep  (api/sweep.js, up to 300 s)                 │
-  Authorization:         │     checks CRON_SECRET, skips if last sweep < 20 h old   │
+  Authorization:         │     checks CRON_SECRET; timer skips if swept < 20 h ago  │
   Bearer $CRON_SECRET    │     4 × Anthropic Messages API + web search ─────────────┼──▶ api.anthropic.com
                          │     merge, de-duplicate, flag New, keep 60 sweeps        │
                          │     after saving: digest to Slack (optional) ────────────┼──▶ hooks.slack.com
@@ -67,7 +67,7 @@ Two things that are easy to miss:
   `npm run build` and committed. The Vercel build step only copies files into `public/`. CI fails if a committed
   bundle is out of date.
 - **Visitors never trigger an AI call.** Only the timer (or you, with the secret) can run a sweep, so cost is one sweep
-  a day whatever the traffic.
+  a day whatever the traffic, plus any sweeps you run by hand.
 
 ---
 
@@ -112,7 +112,7 @@ If `git diff` shows changes, commit the rebuilt bundles before deploying.
 
 | Item | Per sweep | Per 30 days |
 |---|---|---|
-| API calls | 4 (one per category) | 120 |
+| API calls | 4 (one per category) | 120, plus 4 for each manual run |
 | Web searches | At most 12 (3 per call), billed at $10 per 1,000 | At most 360, about **$3.60** |
 | Output tokens | At most 4,000 (1,000 per call) | At most 120,000 |
 | Input tokens | Search results count as input, so this varies | Logged by every sweep (see [section 9](#9-operating-the-daily-sweep)) |
@@ -261,7 +261,7 @@ Vercel's docs don't say whether these manual runs send `CRON_SECRET` the way sch
 
 There is no way to run the sweep *during* a deploy: the function only exists once the deployment is Ready. To run it
 automatically after every production deploy, call the same URL from a GitHub Actions job triggered by
-`deployment_status`. The 20-hour guard below still applies, so most of those runs will answer `skipped`.
+`deployment_status`. That call counts as a manual run (5.5), so every production deploy would cost a full sweep.
 
 > **Check storage first.** The sweep makes its four API calls before it writes anything. If the Blob store is not
 > connected, those calls are paid for and the run then fails at the save step. Make sure
@@ -271,8 +271,8 @@ automatically after every production deploy, call the same URL from a GitHub Act
 
 | HTTP | Body | Meaning | What to do |
 |---|---|---|---|
-| 200 | `{"model":…,"status":"saved","id":…,"total":N,"newCount":N,"perCat":{…},"usage":{…}}` | Saved. `perCat` shows items per category, `usage` the real token and search counts | Open `/live/` |
-| 200 | `{"status":"skipped","reason":"last sweep … is under 20 h old"}` | A sweep already ran in the last 20 hours | Nothing; this is the cost guard |
+| 200 | `{"model":…,"trigger":"manual","status":"saved","id":…,"total":N,"newCount":N,"perCat":{…},"usage":{…}}` | Saved. `perCat` shows items per category, `usage` the real token and search counts | Open `/live/` |
+| 200 | `{"trigger":"scheduled","status":"skipped","reason":"last scheduled sweep … is under 20 h old"}` | The timer called again within 20 hours of its last sweep. Manual calls never get this | Nothing; this stops duplicate timer calls |
 | 502 | `{"status":"empty","perCat":{…}}` | All four categories failed; nothing was saved | Read `perCat` and see [Troubleshooting](#10-troubleshooting) |
 | 500 | `{"error":"ANTHROPIC_API_KEY is not set; …"}` | Key missing in this deployment | Add it (4.3) and redeploy (4.5) |
 | 500 | `{"error":"sweep failed: …"}` | Storage or another unexpected error | Read the message; usually storage (see Troubleshooting) |
@@ -281,8 +281,9 @@ automatically after every production deploy, call the same URL from a GitHub Act
 If some categories fail and others succeed, the run still saves (status `saved`), and `perCat` marks the failed
 ones as `failed: …`.
 
-Every run that is not skipped also returns a `slack` field. It is `not configured` when `SLACK_WEBHOOK_URL` is
-unset, and otherwise `sent` or `failed: …`. A run you start by hand posts to Slack just like a scheduled one.
+`trigger` says how the server classed the call: `scheduled` for Vercel's timer, `manual` for anything else. Every
+run that is not skipped also returns a `slack` field. It is `not configured` when `SLACK_WEBHOOK_URL` is unset,
+and otherwise `sent` or `failed: …`. A run you start by hand posts to Slack too, titled "digest (manual run)".
 
 ### 5.3 Check the page
 
@@ -293,14 +294,23 @@ Open `/live/`. The board should show the saved items and the history should list
 The README's "What's next" asks for the time taken against the 300-second limit and the token and search counts.
 `usage` in the response gives the counts; the function's duration is in the runtime logs (section 9).
 
-### 5.5 Timing of the first scheduled run
+### 5.5 Manual runs and the daily timer
 
-The sweep skips itself if the last saved sweep is under 20 hours old. The cron fires between 01:00 and 01:59 UTC,
-so:
+The server tells the two kinds of call apart by the headers Vercel's timer sends (a `vercel-cron/1.0` user agent and
+an `x-vercel-cron-schedule` header):
 
-- A manual sweep **before 05:00 UTC** (10:30 IST) never blocks the next day's scheduled run.
-- A manual sweep **later than that** may cause the next scheduled run to answer `skipped`. Daily runs then resume the
-  day after. Nothing breaks; that day simply has no new sweep.
+| Call | 20-hour rule | Counts toward the timer's 20 hours |
+|---|---|---|
+| **Scheduled:** Vercel's timer | Skipped if the timer swept less than 20 hours ago, so a duplicate delivery costs nothing | Yes |
+| **Manual:** any other call with the secret, such as the `curl` in 5.1 | Never skipped: it always sweeps | No, so it never cancels the next scheduled sweep |
+
+Manual runs are marked `"manual": true` in the history. Keep in mind:
+
+- **Each manual run costs a full sweep.** Anyone who has `CRON_SECRET` can run as many as they like, so keep the
+  secret private and keep the Anthropic spend limit in place: that limit is the cap.
+- **A manual run uses up New flags.** Items it finds are no longer flagged New in the next scheduled digest.
+- **Vercel's own run options may count as scheduled.** `vercel crons run` and the dashboard's run option may send
+  the timer's headers. If one answers `skipped`, use the `curl` command in 5.1 instead.
 
 ---
 
@@ -459,7 +469,7 @@ After each sweep, the server can post to one Slack channel through an incoming w
 |---|---|
 | Saved | The digest: counts, any failed categories, a link to the live board, then every item by category, with severity, a NEW tag, the title linked to its source, summary, source, region, date and opportunity |
 | Every category failed, or an error stopped the run | A short notice that nothing was saved, with the reason for each category or the error |
-| Skipped (a sweep ran in the last 20 hours) | Nothing |
+| Skipped (a repeat timer call within 20 hours) | Nothing |
 
 To turn it on:
 
@@ -472,8 +482,8 @@ To turn it on:
    curl -sS -X POST -H 'content-type: application/json' -d '{"text":"Travel Problem Radar: test"}' "$SLACK_WEBHOOK_URL"
    ```
 3. Add it in Vercel as `SLACK_WEBHOOK_URL`, for **Production only**, marked **Sensitive**, then redeploy.
-4. The next sweep that runs posts the digest. A manual call within 20 hours of the last saved sweep answers
-   `skipped` and posts nothing.
+4. To see it straight away, run a sweep by hand (5.1). It posts a digest titled "digest (manual run)". Scheduled
+   sweeps post the "daily digest".
 
 How it behaves:
 
@@ -529,7 +539,7 @@ answers `skipped`, so it costs nothing. A missed run is picked up the next day.
 | `perCat` entries `failed: http 401` | Invalid or revoked API key | Replace the key; redeploy |
 | `perCat` entries `failed: http 429` or `http 529` | Rate limit or API overload | Usually temporary; the next day's run will try again |
 | `perCat` entries `failed: empty` or `failed: no json` | The model's reply had no JSON array: the output may have run out of tokens, or the turn paused before the answer | See Known issue 2 below |
-| `200 skipped` when you expected a run | A sweep was saved less than 20 hours ago | Expected. Wait, or see 5.5 |
+| `200 skipped` when you expected a run | The call carried the timer's headers (`trigger: scheduled`) and the timer swept less than 20 hours ago. This can happen with `vercel crons run` or the dashboard | Run it with the `curl` command in 5.1, which always sweeps (see 5.5) |
 | Function times out (`FUNCTION_INVOCATION_TIMEOUT`) | The run took more than 300 s | Rare with 3 searches per call. On Pro, raise `maxDuration` (up to 800) |
 | Deploy fails: "Hobby accounts are limited to daily cron jobs" | The schedule runs more than once a day | Use a daily schedule, or move to Pro |
 | CI fails: "A bundle is stale" | Bundles not rebuilt after a source change | `npm run build`, commit `demo/radar.js` and `live/radar-live.js` |

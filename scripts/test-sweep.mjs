@@ -86,6 +86,20 @@ const sweepOpts = (storage, byCat, now) => ({
   check(JSON.parse(st.m.get("radar:history")).length === 2, "history now has 2 sweeps");
 }
 
+// ---- manual runs skip the 20-hour gap and don't count toward it
+{
+  const st = memStorage();
+  const t0 = Date.UTC(2026, 9, 18, 1, 30);
+  const one = { traveler_pain: [item(1)], gov_policy: [], web_app: [], industry: [] };
+  await runDailySweep(sweepOpts(st, one, () => t0));
+  const m = await runDailySweep({ ...sweepOpts(st, one, () => t0 + 10 * 3600 * 1000), manual: true });
+  check(m.status === "saved" && JSON.parse(st.m.get("radar:history"))[1].manual === true, "manual run 10 h after a scheduled one still sweeps, marked manual");
+  const next = await runDailySweep(sweepOpts(st, one, () => t0 + 21 * 3600 * 1000));
+  check(next.status === "saved", "next scheduled run goes ahead: only scheduled sweeps count toward the gap");
+  const dup = await runDailySweep(sweepOpts(st, one, () => t0 + 22 * 3600 * 1000));
+  check(dup.status === "skipped", "a repeat scheduled run within 20 h is still skipped");
+}
+
 // ---- partial and total failure
 {
   const st = memStorage();
@@ -146,16 +160,25 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   check(ok.res.code === 200 && ok.res.json().status === "saved" && !ok.res.body.includes("abc123"), "valid call saves, response never echoes secrets");
   const bad = await run({ authorization: "Bearer abc123" }, env, memStorage(), { traveler_pain: "http", gov_policy: "http", web_app: "http", industry: "http" });
   check(bad.res.code === 502, "all categories failed: 502 so the cron run shows as failed");
+
+  const cron = { authorization: "Bearer abc123", "user-agent": "vercel-cron/1.0", "x-vercel-cron-schedule": "30 1 * * *" };
+  const st = memStorage();
+  const first = await run(cron, env, st);
+  const cronAgain = await run(cron, env, st);
+  const manualAgain = await run({ authorization: "Bearer abc123" }, env, st);
+  check(first.res.json().trigger === "scheduled" && cronAgain.res.json().status === "skipped", "timer call within 20 h of the last one is skipped");
+  check(manualAgain.res.code === 200 && manualAgain.res.json().status === "saved" && manualAgain.res.json().trigger === "manual",
+    "manual call with the secret sweeps even within 20 h");
 }
 
 // ---- Slack delivery after the sweep
 {
-  const hook = "https://hooks.slack.com/services/T0/B0/hooksecret";
+  const hook = "https://webhook.example/not-a-real-secret"; // fake: real webhooks live only in Vercel
   const env = { CRON_SECRET: "abc123", ANTHROPIC_API_KEY: "k", SLACK_WEBHOOK_URL: hook, VERCEL_PROJECT_PRODUCTION_URL: "radar.example.com" };
   const some = { traveler_pain: [item(1, { severity: "High", title: "Fees <rise> & more" })], gov_policy: "http", web_app: [item(2)], industry: [] };
   const allFail = { traveler_pain: "http", gov_policy: "http", web_app: "http", industry: "http" };
   // Anthropic calls go to fakeFetch; calls to the webhook are recorded and answered with slackStatus.
-  const run = async ({ byCat = some, e = env, st = memStorage(), slackStatus = 200, slackThrows = false } = {}) => {
+  const run = async ({ byCat = some, e = env, st = memStorage(), slackStatus = 200, slackThrows = false, headers = { authorization: "Bearer abc123" } } = {}) => {
     const posts = [];
     const api = fakeFetch(byCat);
     const fetchFn = async (url, init) => {
@@ -165,7 +188,7 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
       return { ok: slackStatus < 300, status: slackStatus };
     };
     const h = makeSweepHandler({ env: e, storage: st, fetchFn, now: () => 1_800_000_000_000, log: () => {} });
-    const res = mockRes(); await h({ headers: { authorization: "Bearer abc123" } }, res);
+    const res = mockRes(); await h({ headers }, res);
     return { res, posts };
   };
 
@@ -176,7 +199,7 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
     "digest links each title to its source, escapes Slack control characters, marks New");
   check(text.includes("Failed this run: Gov &amp; policy") && text.includes("<https://radar.example.com/live/|Open the live board>"),
     "digest names failed categories and links the live board");
-  check(ok.posts[0].unfurl_links === false && !ok.res.body.includes("hooksecret") && !("problems" in ok.res.json()),
+  check(ok.posts[0].unfurl_links === false && !ok.res.body.includes("not-a-real-secret") && !("problems" in ok.res.json()),
     "no link previews; response has neither the webhook URL nor the items");
 
   const off = await run({ e: { CRON_SECRET: "abc123", ANTHROPIC_API_KEY: "k" } });
@@ -185,7 +208,7 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   const down = await run({ slackStatus: 404 });
   check(down.res.code === 200 && down.res.json().status === "saved" && down.res.json().slack === "failed: http 404", "Slack error does not fail a saved sweep");
   const unreachable = await run({ slackThrows: true });
-  check(unreachable.res.json().slack === "failed: network error" && !unreachable.res.body.includes("hooksecret"),
+  check(unreachable.res.json().slack === "failed: network error" && !unreachable.res.body.includes("not-a-real-secret"),
     "Slack unreachable: reported without the webhook URL");
 
   const none = await run({ byCat: allFail });
@@ -193,10 +216,12 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   check(none.res.code === 502 && none.posts.length === 1 && /sweep failed/.test(notice) && notice.includes("Traveler pain: failed: http 529"),
     "all categories failed: failure notice posted, still 502");
 
+  const cron = { authorization: "Bearer abc123", "user-agent": "vercel-cron/1.0" };
   const st = memStorage();
-  await run({ st });
-  const again = await run({ st });
-  check(again.res.json().status === "skipped" && again.posts.length === 0, "skipped run posts nothing");
+  const sched = await run({ st, headers: cron });
+  const again = await run({ st, headers: cron });
+  check(again.res.json().status === "skipped" && again.posts.length === 0, "skipped timer call posts nothing");
+  check(/daily digest/.test(sched.posts[0].text) && /digest \(manual run\)/.test(text), "digest title says whether the timer or a manual run produced it");
 
   const broken = { get: async () => null, set: async () => { throw new Error("Vercel Blob: No blob credentials found"); }, del: async () => {} };
   const err = await run({ st: broken });

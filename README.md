@@ -74,8 +74,8 @@ Full log with dates: [docs/decisions.md](docs/decisions.md).
 
 | Check | Result | How |
 |---|---|---|
-| Daily sweep: merge, de-duplicate, "New" flags, 20-hour gap, 60-sweep cap, partial and total failure, secret check, Slack post, read-only data feed | 38 of 38 pass | `npm test`, with the Anthropic API and storage stubbed |
-| Sample data shape, page links, bundles up to date, server prompt matches the component | 17 of 17 pass | `npm run check` |
+| Daily sweep: merge, de-duplicate, "New" flags, 20-hour gap for the timer, manual runs, 60-sweep cap, partial and total failure, secret check, Slack post, read-only data feed | 44 of 44 pass | `npm test`, with the Anthropic API and storage stubbed |
+| Sample data shape, page links, bundles up to date, server prompt matches the component, no secrets in the repo | 19 of 19 pass | `npm run check` |
 | Demo: replay, filters, search, report, history, "New" flag, phone width, no AI or API calls | 19 checks pass | Headless browser, 18 Oct 2026 |
 | Live page with the data feed stubbed: cards, filters, history, report, empty state, read-only, phone width | 16 checks pass | Headless browser, 18 Oct 2026 |
 | Sample source links load | 7 of 8 | isdown.app blocks automated requests; article contents were not re-checked |
@@ -113,7 +113,7 @@ changed:
 | Every category fails | Nothing is saved, and the run reports an error so the failure is visible | `npm test` |
 | The model returns text that isn't clean JSON | Code fences are stripped; a reply cut off mid-list keeps the complete items; an empty or unreadable reply fails that category | `npm test`; `extractProblems()` |
 | A link that isn't a web address | Dropped from the item | Code: `normalize()` in `api/_lib/radar.js` |
-| Someone calls the sweep to run up costs | Refused without the secret (401); a second run within 20 hours is skipped | `npm test`; preview deployment returned 401 |
+| Someone calls the sweep to run up costs | Refused without the secret (401); a repeat timer call within 20 hours is skipped. A manual call with the secret always runs, so if the secret leaks the Anthropic spend limit is the cap | `npm test`; preview deployment returned 401 |
 | Someone reads other stored data | The data feed serves only history and sweep keys and refuses writes | `npm test` |
 | Storage grows forever | Only the last 60 sweeps are kept | `npm test` |
 | A reader treats AI findings as fact | The live page says: "Gathered once a day by an AI model with web search. Check each source link; items are not verified." The demo says it replays a saved sample. | `live/index.html`; demo banner |

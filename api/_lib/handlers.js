@@ -25,24 +25,28 @@ export function makeSweepHandler({ env, storage, fetchFn, now, log = console.log
     if (!bearerOk(req.headers.authorization, env.CRON_SECRET)) return send(res, 401, { error: "unauthorized" });
     if (!env.ANTHROPIC_API_KEY) return send(res, 500, { error: "ANTHROPIC_API_KEY is not set; nothing was run or saved" });
     const model = env.RADAR_MODEL || DEFAULT_MODEL;
+    // Vercel's timer sends this user agent and header. Any other call with the secret is a
+    // manual run, which always sweeps (see runDailySweep).
+    const scheduled = /^vercel-cron\//.test(req.headers["user-agent"] || "") || Boolean(req.headers["x-vercel-cron-schedule"]);
+    const trigger = scheduled ? "scheduled" : "manual";
     const scan = (cat) => scanCategory(cat, { fetchFn, apiKey: env.ANTHROPIC_API_KEY, model });
     const slack = (text) => postToSlack(env.SLACK_WEBHOOK_URL, text, { fetchFn });
     const liveUrl = env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${env.VERCEL_PROJECT_PRODUCTION_URL}/live/` : "";
     let out;
     try {
-      out = await runDailySweep({ storage, scan, now, log: (x) => log("sweep", JSON.stringify({ model, ...x })) });
+      out = await runDailySweep({ storage, scan, now, manual: !scheduled, log: (x) => log("sweep", JSON.stringify({ model, trigger, ...x })) });
     } catch (e) {
       const error = "sweep failed: " + String((e && e.message) || e);
       const sent = await slack(buildFailureNotice({ at: new Date(now()).toISOString(), error }));
       return send(res, 500, { error, slack: sent });
     }
     // Slack hears about every sweep that ran: the digest if it saved, a notice if it didn't.
-    // A skipped run (a sweep in the last 20 h) posts nothing. Slack errors never fail the sweep.
+    // A skipped timer call posts nothing. Slack errors never fail the sweep.
     const { problems, ...summary } = out;
-    if (out.status === "saved") summary.slack = await slack(buildDigest(out, liveUrl));
+    if (out.status === "saved") summary.slack = await slack(buildDigest({ ...out, manual: !scheduled }, liveUrl));
     if (out.status === "empty") summary.slack = await slack(buildFailureNotice({ at: new Date(now()).toISOString(), perCat: out.perCat }));
     if (summary.slack) log("slack", summary.slack);
-    return send(res, out.status === "saved" || out.status === "skipped" ? 200 : 502, { model, ...summary });
+    return send(res, out.status === "saved" || out.status === "skipped" ? 200 : 502, { model, trigger, ...summary });
   };
 }
 
