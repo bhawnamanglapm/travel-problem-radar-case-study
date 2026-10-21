@@ -12,7 +12,7 @@ in the [README](../README.md).
 | Who triggers it | You, with a button | You, with a button (replay only) | A GitHub Actions schedule (plus Vercel's daily cron as a backstop); visitors can't trigger it |
 | AI or API calls | Yes, through Claude's app | None | About 5 sweeps a day, whatever the traffic |
 | History is saved in | Claude's artifact storage | This browser's localStorage | A private Vercel Blob store |
-| Digest | A scheduled task in Claude posts it to Slack | The "Sample digest" view | The page itself; optionally posted to Slack after each sweep (no email) |
+| Digest | A scheduled task in Claude posts it to Slack | The "Sample digest" view | The page itself; optionally posted to Slack and emailed through Resend after each sweep |
 | Status | Owner-reported working | Verified | Deployed; first production sweep saved 1 of 4 categories (token limit, since fixed and tested locally) |
 
 All three use the same component, [`travel-problem-radar.jsx`](../travel-problem-radar.jsx). With no props it
@@ -29,7 +29,7 @@ GitHub Actions, every 5 hours (00:17, 05:17, 10:17, 15:17, 20:17 UTC)
                    the last 2 hours; a manual call with the secret always runs)
        4 Claude calls with web search, one per category, same prompts as the component
        merge, de-duplicate, flag "New", keep the last 60 sweeps -> private Vercel Blob store
-       then, if SLACK_WEBHOOK_URL is set, post the digest (or a failure notice) to Slack
+       then post the digest (or a failure notice) to Slack and by email, for each one that is set up
 Visitor -> /live/ -> /api/data (read-only, cached) -> same dashboard, no sweep button
 ```
 
@@ -46,11 +46,12 @@ Visitor -> /live/ -> /api/data (read-only, cached) -> same dashboard, no sweep b
 3. Set a monthly spend limit in the Anthropic Console. That is the real cost cap.
 4. Optional: `RADAR_MODEL` to choose the model (default `claude-sonnet-5-5`).
 5. Optional: `SLACK_WEBHOOK_URL` (a Slack incoming webhook) to post each sweep's digest to a channel.
+6. Optional: `RESEND_API_KEY`, `EMAIL_FROM` and `EMAIL_TO` to email each sweep's digest through Resend.
 
 Full deployment steps are in [DEPLOYMENT.md](../DEPLOYMENT.md).
 
-Slack posting from Vercel is covered by the offline tests but has not yet been tried against a real Slack
-workspace. It is separate from the Slack digest set up in Claude's app. Email is not supported.
+Slack posting and email from Vercel are covered by the offline tests but have not yet been tried against a real
+Slack workspace or Resend account. They are separate from the Slack digest set up in Claude's app.
 
 ## Files
 
@@ -61,13 +62,13 @@ workspace. It is separate from the Slack digest set up in Claude's app. Email is
 | `live/` | The live page; `live/radar-live.js` is built from the component |
 | `api/sweep.js` | Scheduled job: runs the 4 searches and saves the result (needs a secret to call) |
 | `api/data.js` | Read-only feed the live page uses (allow-listed keys only) |
-| `api/_lib/` | Shared sweep logic, request handlers, storage and the optional Slack post |
+| `api/_lib/` | Shared sweep logic, request handlers, storage, and the optional Slack post and email |
 | `vercel.json` | Daily backstop cron (01:30 UTC), 300 s limit, build that publishes `index.html`, `demo/`, `live/` |
 | `travel-problem-radar.jsx` | The dashboard component (live in Claude's app, demo on the web) |
 | `sampleData.json` | 8 saved items, two per category, each with a source link |
 | `scripts/check.mjs` | Offline checks: sample data, page links, bundles, prompt drift |
 | `.github/workflows/sweep.yml` | Calls `/api/sweep` every 5 hours, and on demand from the Actions tab |
-| `scripts/test-sweep.mjs` | Offline tests for the sweep, the Slack post and the data feed (no network, no key) |
+| `scripts/test-sweep.mjs` | Offline tests for the sweep, the Slack post, the email and the data feed (no network, no key) |
 
 ## Rebuild the demo and live page
 

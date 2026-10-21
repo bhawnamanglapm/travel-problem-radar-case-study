@@ -250,6 +250,82 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   check(err.res.code === 500 && err.posts.length === 1 && /No blob credentials/.test(err.posts[0].text), "sweep error: failure notice posted, still 500");
 }
 
+// ---- Email delivery through Resend
+{
+  const RESEND = "https://api.resend.com/emails";
+  const hook = "https://webhook.example/not-a-real-secret";
+  // fake: the real key and addresses live only in Vercel
+  const mail = { RESEND_API_KEY: "re_test_fake", EMAIL_FROM: "Radar <radar@example.com>", EMAIL_TO: "a@example.com, b@example.com" };
+  const env = { CRON_SECRET: "abc123", ANTHROPIC_API_KEY: "k", VERCEL_PROJECT_PRODUCTION_URL: "radar.example.com", ...mail };
+  const some = { traveler_pain: [item(1, { severity: "High", title: "Fees <rise> & more", link: "https://example.com/a\"b" })], gov_policy: "http", web_app: [item(2)], industry: [] };
+  const allFail = { traveler_pain: "http", gov_policy: "http", web_app: "http", industry: "http" };
+  // Anthropic calls go to fakeFetch; Resend and Slack calls are recorded and answered as asked.
+  const run = async ({ byCat = some, e = env, st = memStorage(), resend = { status: 200 }, slackStatus = 200, headers = { authorization: "Bearer abc123" } } = {}) => {
+    const sent = [], posts = [];
+    const api = fakeFetch(byCat);
+    const fetchFn = async (url, init) => {
+      if (url === hook) { posts.push(JSON.parse(init.body)); return { ok: slackStatus < 300, status: slackStatus }; }
+      if (url !== RESEND) return api(url, init);
+      sent.push({ headers: init.headers, body: JSON.parse(init.body) });
+      if (resend.throws) throw new Error("getaddrinfo ENOTFOUND api.resend.com");
+      return { ok: resend.status < 300, status: resend.status, json: async () => resend.body || { id: "e1" } };
+    };
+    const h = makeSweepHandler({ env: e, storage: st, fetchFn, now: () => 1_800_000_000_000, log: () => {} });
+    const res = mockRes(); await h({ headers }, res);
+    return { res, sent, posts };
+  };
+
+  const ok = await run();
+  const req = ok.sent[0] || { headers: {}, body: {} };
+  check(ok.res.code === 200 && ok.res.json().email === "sent" && ok.sent.length === 1, "saved sweep: one email sent through Resend");
+  check(req.headers.authorization === "Bearer re_test_fake" && !!req.headers["user-agent"] && req.body.from === mail.EMAIL_FROM
+    && JSON.stringify(req.body.to) === JSON.stringify(["a@example.com", "b@example.com"]),
+    "Resend request: bearer key, user agent, sender, recipients split from EMAIL_TO");
+  check(req.body.subject === "Travel Problem Radar · 2027-01-15 08:00 UTC · 2 problems, 2 new (manual run)",
+    `subject has the time, the counts and the trigger (${req.body.subject})`);
+  check(req.body.html.includes("<a href=\"https://example.com/a&quot;b\">Fees &lt;rise&gt; &amp; more</a>") && !/<rise>/.test(req.body.html),
+    "HTML part escapes titles and links");
+  check(req.body.text.includes("Fees <rise> & more") && req.body.text.includes("Failed this run: Gov & policy")
+    && req.body.text.includes("Live board: https://radar.example.com/live/") && /not verified/.test(req.body.text),
+    "plain-text part has the items, failed categories, live board link and the not-verified note");
+  check(!ok.res.body.includes("re_test_fake") && !ok.res.body.includes("example.com>") && !ok.res.body.includes("a@example.com"),
+    "reply has neither the key nor any address");
+
+  const off = await run({ e: { CRON_SECRET: "abc123", ANTHROPIC_API_KEY: "k" } });
+  check(off.res.code === 200 && off.sent.length === 0 && off.res.json().email === "not configured", "no email settings: sweep saves, nothing sent");
+  const partial = await run({ e: { CRON_SECRET: "abc123", ANTHROPIC_API_KEY: "k", RESEND_API_KEY: "re_test_fake" } });
+  check(partial.sent.length === 0 && partial.res.json().email === "not configured: EMAIL_FROM, EMAIL_TO missing", "partial email settings: says which are missing");
+  const many = await run({ e: { ...env, EMAIL_TO: Array.from({ length: 51 }, (_, i) => `u${i}@example.com`).join(",") } });
+  check(many.sent.length === 0 && /more than 50/.test(many.res.json().email), "more than 50 recipients: refused before calling Resend");
+
+  const refused = await run({ resend: { status: 403, body: { statusCode: 403, name: "validation_error", message: "You can only send testing emails to your own email address (owner@example.com)." } } });
+  check(refused.res.code === 200 && refused.res.json().status === "saved" && refused.res.json().email === "failed: http 403 validation_error",
+    "Resend error does not fail a saved sweep; reply gives the status and error name");
+  check(!refused.res.body.includes("owner@example.com") && !refused.res.body.includes("testing emails"), "Resend's message, which can hold addresses, stays out of the reply");
+  const unreachable = await run({ resend: { throws: true } });
+  check(unreachable.res.json().email === "failed: network error", "Resend unreachable: reported as a network error");
+
+  const both = await run({ e: { ...env, SLACK_WEBHOOK_URL: hook }, slackStatus: 404 });
+  check(both.res.json().slack === "failed: http 404" && both.res.json().email === "sent" && both.posts.length === 1 && both.sent.length === 1,
+    "Slack and email are sent independently: one failing doesn't stop the other");
+
+  const none = await run({ byCat: allFail });
+  const n = (none.sent[0] || { body: {} }).body;
+  check(none.res.code === 502 && none.sent.length === 1 && /sweep failed/.test(n.subject) && n.text.includes("Traveler pain: failed: http 529"),
+    "all categories failed: failure email sent, still 502");
+
+  const cron = { authorization: "Bearer abc123", "user-agent": "vercel-cron/1.0" };
+  const st = memStorage();
+  const sched = await run({ st, headers: cron });
+  const again = await run({ st, headers: cron });
+  check(again.res.json().status === "skipped" && again.sent.length === 0, "skipped timer call sends no email");
+  check(!/manual run/.test(sched.sent[0].body.subject) && /^Travel Problem Radar: digest$/m.test(sched.sent[0].body.text), "scheduled digest is not marked manual");
+
+  const broken = { get: async () => null, set: async () => { throw new Error("Vercel Blob: No blob credentials found"); }, del: async () => {} };
+  const err = await run({ st: broken });
+  check(err.res.code === 500 && err.res.json().email === "sent" && /No blob credentials/.test(err.sent[0].body.text), "sweep error: failure email sent, still 500");
+}
+
 // ---- /api/data
 {
   const st = memStorage();

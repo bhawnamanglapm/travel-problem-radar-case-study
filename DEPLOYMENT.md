@@ -47,6 +47,7 @@ Vercel Cron: daily,      │                                                    
                          │     4 × Anthropic Messages API + web search ─────────────┼──▶ api.anthropic.com
                          │     merge, de-duplicate, flag New, keep 60 sweeps        │
                          │     after saving: digest to Slack (optional) ────────────┼──▶ hooks.slack.com
+                         │     and by email via Resend (optional) ──────────────────┼──▶ api.resend.com
                          │     writes ─────────────────────────────┐                │
                          │                                         ▼                │
                          │                              Private Vercel Blob store   │
@@ -69,6 +70,7 @@ Visitor ──▶ /live/  ──▶  │  /api/data?key=…  (api/data.js, read-
 | Backstop timer | `crons` in `vercel.json` | Calls `/api/sweep` once a day; usually skipped (5.5) |
 | Storage | Vercel Blob (private store), via `api/_lib/storage.js` | Not public; read only through `/api/data` |
 | Slack digest (optional) | `api/_lib/slack.js`, called by the sweep | Posted to one Slack channel when `SLACK_WEBHOOK_URL` is set |
+| Email digest (optional) | `api/_lib/email.js`, called by the sweep | Sent through Resend when `RESEND_API_KEY`, `EMAIL_FROM` and `EMAIL_TO` are set |
 
 Two things that are easy to miss:
 
@@ -89,6 +91,7 @@ Two things that are easy to miss:
 | An Anthropic Console account with billing set up | The sweep calls the Claude API | https://platform.claude.com |
 | An Anthropic API key | Stored as a Vercel secret | Create one just for this project, so it can be revoked on its own |
 | Web search allowed for your Anthropic organization | Every sweep call uses the web-search tool | On by default. If an admin turned it off in Console settings (Settings → Capabilities), every call fails with a 400 |
+| A Resend account with a verified domain (optional) | To email each sweep | See [Sending email](#sending-email-optional) |
 | Node.js 18 or later on your machine | To rebuild bundles and run the offline checks | CI uses Node 22 |
 
 Before any deploy, run the offline checks locally. They need no network and no API key:
@@ -200,6 +203,9 @@ Open **Settings → Environment Variables** and add:
 | `ANTHROPIC_API_KEY` | Your Anthropic API key | **Production only** | Yes |
 | `RADAR_MODEL` | A Claude model ID, for example `claude-sonnet-4-6` | Production | No. Defaults to `claude-sonnet-5-5`; see [Known issues](#known-issues-to-fix-before-or-after-the-first-sweep) |
 | `SLACK_WEBHOOK_URL` | A Slack incoming-webhook URL | **Production only** | No. Posts each sweep to Slack; see [Posting to Slack](#posting-to-slack-optional) |
+| `RESEND_API_KEY` | A Resend API key with sending access | **Production only** | No. With the next two, emails each sweep; see [Sending email](#sending-email-optional) |
+| `EMAIL_FROM` | A sender on a domain verified in Resend, for example `Travel Problem Radar <radar@yourdomain.com>` | **Production only** | Only with `RESEND_API_KEY` |
+| `EMAIL_TO` | Recipients, separated by commas (at most 50) | **Production only** | Only with `RESEND_API_KEY` |
 
 Generate the secret with either:
 
@@ -208,7 +214,8 @@ openssl rand -hex 32
 node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 ```
 
-Tick **Sensitive** for both secrets, so the dashboard never shows them again. Save a copy of `CRON_SECRET` in your
+Tick **Sensitive** for both secrets, and for `SLACK_WEBHOOK_URL` and `RESEND_API_KEY` if you add them, so the
+dashboard never shows them again. Save a copy of `CRON_SECRET` in your
 password manager: you need it for the GitHub Actions schedule (4.7) and to run a sweep by hand.
 
 Why production only: Vercel sends `CRON_SECRET` to the cron job automatically, and cron jobs run only on the
@@ -337,8 +344,11 @@ If some categories fail and others succeed, the run still saves (status `saved`)
 ones as `failed: …`.
 
 `trigger` says how the server classed the call: `scheduled` for the GitHub Actions schedule or Vercel's timer,
-`manual` for anything else, including **Run workflow**. Every run that is not skipped also returns a `slack` field. It is `not configured` when `SLACK_WEBHOOK_URL` is unset,
-and otherwise `sent` or `failed: …`. A run you start by hand posts to Slack too, titled "digest (manual run)".
+`manual` for anything else, including **Run workflow**.
+
+Every run that is not skipped also returns `slack` and `email` fields. Each is `not configured` when its variables
+are unset, and otherwise `sent` or `failed: …` (see [Posting to Slack](#posting-to-slack-optional) and
+[Sending email](#sending-email-optional)). A run you start by hand is sent too, marked "manual run".
 
 ### 5.3 Check the page
 
@@ -389,6 +399,9 @@ vercel env add CRON_SECRET production
 vercel env add ANTHROPIC_API_KEY production
 vercel env add RADAR_MODEL production         # optional
 vercel env add SLACK_WEBHOOK_URL production   # optional, see "Posting to Slack"
+vercel env add RESEND_API_KEY production      # optional, with the next two; see "Sending email"
+vercel env add EMAIL_FROM production
+vercel env add EMAIL_TO production
 
 gh secret set CRON_SECRET                     # same value, for the 5-hour schedule (GitHub CLI; prompts for it)
 
@@ -458,6 +471,9 @@ needed at runtime.
 | `ANTHROPIC_API_KEY` | You | `/api/sweep` | Sent to the Anthropic API in a header; never returned in a response |
 | `RADAR_MODEL` | You (optional) | `/api/sweep` | Claude model ID. Default `claude-sonnet-5-5` (`api/_lib/handlers.js`). Must support `effort` (Claude 4.6 or later) |
 | `SLACK_WEBHOOK_URL` | You (optional) | `/api/sweep` | Slack incoming webhook. Treat it as a secret: anyone who has it can post to the channel |
+| `RESEND_API_KEY` | You (optional) | `/api/sweep` | Resend API key, sent in a header; never returned in a response. Email is sent only when all three email variables are set |
+| `EMAIL_FROM` | You (optional) | `/api/sweep` | Sender, `Name <address@domain>`, on a domain verified in Resend |
+| `EMAIL_TO` | You (optional) | `/api/sweep` | Recipients, separated by commas, at most 50. Kept out of the repository and out of every reply |
 | `VERCEL_PROJECT_PRODUCTION_URL` | Vercel, automatically | `/api/sweep` | Builds the "Open the live board" link in the Slack message. If it is missing, the link is left out |
 | `BLOB_STORE_ID` or `BLOB_READ_WRITE_TOKEN` | Vercel, when the store is connected | `api/_lib/storage.js` | Do not set by hand unless running outside Vercel |
 
@@ -574,6 +590,44 @@ How it behaves:
 - Status: covered by the offline tests (`npm test`); **not yet tried against a real Slack workspace**. The Slack
   digest in Claude's app is a separate setup and is not affected.
 
+### Sending email (optional)
+
+The same messages can also go by email through [Resend](https://resend.com) (`api/_lib/email.js`): the digest after
+every saved sweep, a short notice when nothing was saved, and nothing for a skipped call. Each email has an HTML part
+and a plain-text part. The subject carries the sweep time and counts, for example
+`Travel Problem Radar · 2026-10-21 05:17 UTC · 18 problems, 4 new`, so mail apps don't thread a day's digests
+together.
+
+To turn it on:
+
+1. Create a Resend account and **verify a sending domain**: **Domains → Add Domain**, then add the DNS records it
+   shows at your DNS provider. Until a domain is verified, Resend only sends from `onboarding@resend.dev`, and only
+   to the address you signed up with.
+2. Create an API key under **API Keys** with **Sending access**, limited to that domain. Such a key can send email
+   and do nothing else in the account.
+3. Add three variables in Vercel, for **Production only**, with `RESEND_API_KEY` marked **Sensitive**:
+   - `RESEND_API_KEY`: the key.
+   - `EMAIL_FROM`: a sender on the verified domain, for example `Travel Problem Radar <radar@yourdomain.com>`.
+   - `EMAIL_TO`: the recipients, separated by commas, at most 50.
+4. Redeploy, then run a sweep by hand (5.1). The reply's `email` field should say `sent`.
+
+**Free-plan limits** (Resend, October 2026): 100 emails a day and 3,000 a month, and **each recipient counts as one
+email**. Five sweeps a day to 15 recipients is 75 emails a day and about 2,250 a month, which leaves room for manual
+runs. Above about 15 recipients, use a mailing-list address in `EMAIL_TO` or a paid plan.
+
+How it behaves:
+
+- Slack and email are sent at the same time, after the sweep is saved. Either can fail without affecting the other
+  or the sweep.
+- The call to Resend gives up after 10 seconds.
+- Every recipient is on the To line, so they all see each other's addresses. If that matters, send to a mailing-list
+  address instead.
+- The reply's `email` field gives only the outcome: `sent`, `not configured` (or which variables are missing),
+  `failed: http <status> <Resend error name>`, `failed: timeout` or `failed: network error`. It never includes the
+  key, the addresses or Resend's error message, because the GitHub Actions job prints the reply in a log that anyone
+  can read in a public repository. Resend's dashboard shows the full error under **Logs**.
+- Status: covered by the offline tests (`npm test`); **not yet tried against a real Resend account**.
+
 ### Changing the schedule
 
 The 5-hour schedule is the `cron` line in `.github/workflows/sweep.yml`, in UTC. Edit it and push to `main`. If you
@@ -604,6 +658,7 @@ sweep** and choose **Enable workflow**.
   new value to its cron automatically. Until both match, GitHub runs answer `401` and fail.
 - **`ANTHROPIC_API_KEY`:** create a new key in the Anthropic Console, update the variable, redeploy, then revoke the
   old key.
+- **`RESEND_API_KEY`:** create a new key in Resend, update the variable, redeploy, then delete the old key.
 
 ### Starting the history over
 
@@ -646,6 +701,11 @@ covers a missed 00:17 run.
 | No Slack message after a sweep | Check `slack` in the reply or the `slack` log line. `not configured` means the variable is missing for Production or the deploy predates it. Skipped runs never post | Add `SLACK_WEBHOOK_URL` for Production; redeploy |
 | `slack: failed: http 403`, `404` or `410` | The webhook was revoked, its channel was deleted or archived, or the Slack app was removed | Create a new webhook; update the variable; redeploy |
 | `slack: failed: timeout` or `network error` | Slack was slow or unreachable. The sweep itself was saved | Nothing to fix; the next sweep posts as usual |
+| No email after a sweep | Check `email` in the reply or the `email` log line. `not configured` means none of the email variables reach this deployment; `not configured: … missing` names the ones that don't | Add them for Production; redeploy |
+| `email: failed: http 403 validation_error` | The `EMAIL_FROM` domain isn't verified in Resend, or the sender is `onboarding@resend.dev` and a recipient isn't the account owner | Verify the domain and use it in `EMAIL_FROM`. Resend's **Logs** give the exact reason |
+| `email: failed: http 401 …`, or `http 403` with `restricted_api_key` or `suspended_api_key` | The key is wrong, deleted or disabled | Create a new key; update the variable; redeploy |
+| `email: failed: http 422 …` or `http 400 validation_error` | `EMAIL_FROM` or `EMAIL_TO` is malformed | Sender as `Name <address@domain>`; recipients as plain addresses separated by commas |
+| `email: failed: http 429 daily_quota_exceeded` (or `monthly_quota_exceeded`) | The plan's sending quota is used up; each recipient counts | Fewer recipients, a mailing-list address, or a paid plan. The daily quota resets at midnight UTC |
 
 ---
 

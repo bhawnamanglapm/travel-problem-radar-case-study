@@ -3,6 +3,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { runDailySweep, scanCategory } from "./radar.js";
 import { buildDigest, buildFailureNotice, postToSlack } from "./slack.js";
+import { buildDigestEmail, buildFailureEmail, sendEmail } from "./email.js";
 
 const DEFAULT_MODEL = "claude-sonnet-5-5";
 
@@ -32,22 +33,36 @@ export function makeSweepHandler({ env, storage, fetchFn, now, log = console.log
       || req.headers["x-sweep-trigger"] === "scheduled";
     const trigger = scheduled ? "scheduled" : "manual";
     const scan = (cat) => scanCategory(cat, { fetchFn, apiKey: env.ANTHROPIC_API_KEY, model });
-    const slack = (text) => postToSlack(env.SLACK_WEBHOOK_URL, text, { fetchFn });
     const liveUrl = env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${env.VERCEL_PROJECT_PRODUCTION_URL}/live/` : "";
+    // Slack and email go out together. Each reports its own outcome and neither ever throws.
+    const deliver = async (slackText, mail) => {
+      const [slack, email] = await Promise.all([
+        postToSlack(env.SLACK_WEBHOOK_URL, slackText, { fetchFn }),
+        sendEmail({ apiKey: env.RESEND_API_KEY, from: env.EMAIL_FROM, to: env.EMAIL_TO }, mail, { fetchFn }),
+      ]);
+      log("slack", slack);
+      log("email", email);
+      return { slack, email };
+    };
     let out;
     try {
       out = await runDailySweep({ storage, scan, now, manual: !scheduled, log: (x) => log("sweep", JSON.stringify({ model, trigger, ...x })) });
     } catch (e) {
       const error = "sweep failed: " + String((e && e.message) || e);
-      const sent = await slack(buildFailureNotice({ at: new Date(now()).toISOString(), error }));
-      return send(res, 500, { error, slack: sent });
+      const at = new Date(now()).toISOString();
+      return send(res, 500, { error, ...(await deliver(buildFailureNotice({ at, error }), buildFailureEmail({ at, error }))) });
     }
-    // Slack hears about every sweep that ran: the digest if it saved, a notice if it didn't.
-    // A skipped timer call posts nothing. Slack errors never fail the sweep.
+    // Slack and email hear about every sweep that ran: the digest if it saved, a notice if it
+    // didn't. A skipped timer call sends nothing. Delivery errors never fail the sweep.
     const { problems, ...summary } = out;
-    if (out.status === "saved") summary.slack = await slack(buildDigest({ ...out, manual: !scheduled }, liveUrl));
-    if (out.status === "empty") summary.slack = await slack(buildFailureNotice({ at: new Date(now()).toISOString(), perCat: out.perCat }));
-    if (summary.slack) log("slack", summary.slack);
+    if (out.status === "saved") {
+      const digest = { ...out, manual: !scheduled };
+      Object.assign(summary, await deliver(buildDigest(digest, liveUrl), buildDigestEmail(digest, liveUrl)));
+    }
+    if (out.status === "empty") {
+      const failed = { at: new Date(now()).toISOString(), perCat: out.perCat };
+      Object.assign(summary, await deliver(buildFailureNotice(failed), buildFailureEmail(failed)));
+    }
     return send(res, out.status === "saved" || out.status === "skipped" ? 200 : 502, { model, trigger, ...summary });
   };
 }

@@ -61,11 +61,12 @@ check(!!jsxPrompt && !!srvPrompt && squash(jsxPrompt) === squash(srvPrompt), "se
 const catText = (t) => [...t.matchAll(/label: "([^"]+)",\s*(?:color: "[^"]+",\s*)?desc:\s*"([^"]+)"/g)].map((m) => m[1] + "|" + m[2]).join("\n");
 check(catText(jsx).split("\n").length === 4 && catText(jsx) === catText(srv), "server categories match the artifact's categories");
 
-// 6. No secrets in the repository: it is public. Keys and webhooks live only in Vercel's
-// environment variables; this catches the common formats if one is pasted into a tracked file.
+// 6. No secrets in the repository: it is public. Keys and webhooks (Anthropic, Resend, Slack,
+// Blob) live only in Vercel's environment variables; this catches the common formats if one is
+// pasted into a tracked file.
 let tracked = [];
 try { tracked = execFileSync("git", ["ls-files"], { encoding: "utf8" }).split("\n").filter(Boolean); } catch (e) {}
-const SECRET = /sk-ant-[A-Za-z0-9_-]{10,}|hooks\.slack\.com\/services\/T[A-Za-z0-9]+|vercel_blob_rw_[A-Za-z0-9]+|xox[abprs]-[A-Za-z0-9-]{10,}|BEGIN [A-Z ]*PRIVATE KEY/;
+const SECRET = /sk-ant-[A-Za-z0-9_-]{10,}|\bre_[A-Za-z0-9]{6,}_[A-Za-z0-9]{16,}|hooks\.slack\.com\/services\/T[A-Za-z0-9]+|vercel_blob_rw_[A-Za-z0-9]+|xox[abprs]-[A-Za-z0-9-]{10,}|BEGIN [A-Z ]*PRIVATE KEY/;
 const leaks = tracked.filter((f) => !/\.(png|jpe?g|gif|ico|zip)$/i.test(f) && existsSync(f) && SECRET.test(readFileSync(f, "utf8")));
 check(tracked.length > 0 && leaks.length === 0,
       `no API keys, Slack webhooks, Blob tokens or private keys in tracked files${leaks.length ? " (found in " + leaks.join(", ") + ")" : ""}`);
