@@ -1,7 +1,7 @@
 // HTTP handlers for the subscriber endpoints (docs/subscriptions/tasks/T05 to T07), built from
 // injected dependencies like handlers.js, so the offline tests can call them directly.
 // Nothing here puts an address, an id or a token in a reply or a log line.
-import { randomBytes as cryptoRandomBytes } from "node:crypto";
+import { createHash, createHmac, randomBytes as cryptoRandomBytes, timingSafeEqual } from "node:crypto";
 import { DEFAULT_FROM, buildConfirmEmail, buildProRequestEmail, sendEmail, sendOne } from "./email.js";
 import { BodyTooLargeError, allowMethods, esc, readFields, sendJson, sendPage } from "./http.js";
 import {
@@ -13,6 +13,15 @@ import {
 // sign-up reads one small file instead of listing every subscriber.
 export const KEY_SUBSCRIBER_COUNT = "radar:subscriberCount";
 export const DEFAULT_MAX_CONFIRMS_PER_DAY = 10;
+
+// Per-IP sign-up attempts (T13 part B): one file per accepted attempt,
+// radar:iphit:<YYYYMMDDHH>-<16 hex of a hash of the IP>-<6 hex>, counted with list. No raw IP is
+// stored; the sweep deletes files older than IPHIT_KEEP_HOURS. The Vercel firewall rule in front
+// (DEPLOYMENT.md) stops floods before they cost Blob operations; this gives the exact hourly limit.
+export const KEY_IPHIT_PREFIX = "radar:iphit:";
+export const DEFAULT_MAX_SIGNUPS_PER_IP_HOUR = 5;
+export const IPHIT_KEEP_HOURS = 2;
+export const utcHour = (now) => new Date(now).toISOString().slice(0, 13).replace(/[-T]/g, ""); // YYYYMMDDHH
 
 const OK_REPLY = { ok: true, message: "If that address can be subscribed, a confirmation link is on its way." };
 const HOUR_MS = 3600 * 1000;
@@ -28,6 +37,22 @@ const maxConfirmsPerDay = (v) => {
   if (raw === "0") return 0;
   return positiveInt(raw) ?? DEFAULT_MAX_CONFIRMS_PER_DAY;
 };
+
+// The client's IP as Vercel reports it. Vercel overwrites x-forwarded-for, so a client can't set
+// it (docs: "Request headers"); x-vercel-forwarded-for is the same value and survives another
+// proxy in front. Null when there is none (local runs, tests) or it doesn't look like an IP.
+export function clientIp(headers = {}) {
+  for (const name of ["x-vercel-forwarded-for", "x-forwarded-for", "x-real-ip"]) {
+    const v = headers[name];
+    const first = String(Array.isArray(v) ? v[0] : v ?? "").split(",")[0].trim();
+    if (first && /^[0-9a-f:.]{2,45}$/i.test(first)) return first;
+  }
+  return null;
+}
+
+// The list prefix for this IP's attempts in this UTC hour.
+export const ipHitPrefix = (ip, now) =>
+  `${KEY_IPHIT_PREFIX}${utcHour(now)}-${createHash("sha256").update("radar-ip:" + ip).digest("hex").slice(0, 16)}-`;
 
 // The count as a number. A missing file is 0 (no sweep has written one yet); a file that can't
 // be read or understood is null, which callers treat as "full".
@@ -94,6 +119,19 @@ export function makeSubscribeHandler({ env, storage, fetchFn, now, randomBytes =
 
     try {
       const t = now();
+      // T13 part B: more than the limit from one IP this hour gets the usual reply and nothing is
+      // stored or sent. A count we can't read counts as reached, like the confirm cap below.
+      const ip = clientIp(req.headers);
+      if (ip) {
+        const prefix = ipHitPrefix(ip, t);
+        const maxPerIp = positiveInt(env.MAX_SIGNUPS_PER_IP_HOUR) ?? DEFAULT_MAX_SIGNUPS_PER_IP_HOUR;
+        let hits;
+        try { hits = (await storage.list(prefix)).length; } catch (e) { hits = Infinity; }
+        if (hits >= maxPerIp) return reply();
+        try {
+          await storage.set(prefix + Buffer.from(randomBytes(3)).toString("hex"), JSON.stringify({ at: new Date(t).toISOString() }));
+        } catch (e) { /* best effort: a lost hit only makes the limit a little looser */ }
+      }
       const maxSubs = positiveInt(env.MAX_SUBSCRIBERS);
       const maxConfirms = maxConfirmsPerDay(env.MAX_CONFIRMS_PER_DAY);
 
@@ -298,6 +336,98 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
     } catch (e) {
       log("account", "error: " + ((e && e.name) || "Error"));
       return sendJson(res, 500, { error: "could not process the request; try again later" });
+    }
+  };
+}
+
+// ---- bounces and complaints from Resend (T13 part A)
+
+export const WEBHOOK_TOLERANCE_S = 300;
+const WEBHOOK_MAX_BYTES = 64 * 1024;
+const WEBHOOK_MAX_RECIPIENTS = 50;
+
+// Resend signs webhooks the Svix way: HMAC-SHA256 over "<svix-id>.<svix-timestamp>.<raw body>",
+// keyed with the base64 part of the secret after "whsec_", sent base64 in svix-signature as a
+// space-separated list of "v1,<sig>". True only for a matching v1 signature on a timestamp
+// within WEBHOOK_TOLERANCE_S of now (ms). Never throws.
+export function verifySvix({ secret, id, timestamp, signature, raw, now }) {
+  try {
+    if (!secret || !id || !timestamp || !signature || typeof raw !== "string") return false;
+    if (!/^\d{1,12}$/.test(timestamp)) return false;
+    if (Math.abs(Math.floor(now / 1000) - Number(timestamp)) > WEBHOOK_TOLERANCE_S) return false;
+    const key = Buffer.from(String(secret).replace(/^whsec_/, ""), "base64");
+    if (!key.length) return false;
+    const expected = createHmac("sha256", key).update(`${id}.${timestamp}.${raw}`).digest();
+    return String(signature).split(" ").some((part) => {
+      const [version, sig] = part.split(",");
+      if (version !== "v1" || !sig) return false;
+      const given = Buffer.from(sig, "base64");
+      return given.length === expected.length && timingSafeEqual(given, expected);
+    });
+  } catch (e) { return false; }
+}
+
+const jsonResponse = (code, body) => new Response(JSON.stringify(body), {
+  status: code, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+});
+
+// The action a verified event asks for: "bounced" for a hard bounce, "complained" for a spam
+// report, null for anything else (soft and undetermined bounces, other event types).
+function webhookAction(event) {
+  if (!event || typeof event !== "object") return null;
+  if (event.type === "email.complained") return "complained";
+  if (event.type === "email.bounced" && event.data && event.data.bounce && event.data.bounce.type === "Permanent") return "bounced";
+  return null;
+}
+
+// POST /api/resend-webhook, as a Web-standard handler: (Request) => Response. It reads the body
+// with request.text() because the signature covers the exact bytes. A hard bounce or complaint
+// deletes that subscriber's record and records an event with no address. Works while
+// subscriptions are switched off, like unsubscribe: removing an address is always allowed.
+export function makeResendWebhookHandler({ env, storage, now, randomBytes = cryptoRandomBytes, log = console.log }) {
+  return async function resendWebhook(request) {
+    if (request.method !== "POST") return new Response(null, { status: 405, headers: { allow: "POST" } });
+    const secret = String(env.RESEND_WEBHOOK_SECRET || "").trim();
+    if (!secret) {
+      log("resend-webhook", "not configured");
+      return jsonResponse(503, { error: "not configured" });
+    }
+    const declared = Number(request.headers.get("content-length"));
+    if (declared > WEBHOOK_MAX_BYTES) return jsonResponse(413, { error: "request too large" });
+    const raw = await request.text();
+    if (Buffer.byteLength(raw) > WEBHOOK_MAX_BYTES) return jsonResponse(413, { error: "request too large" });
+
+    const t = now();
+    const ok = verifySvix({
+      secret, raw, now: t,
+      id: request.headers.get("svix-id"),
+      timestamp: request.headers.get("svix-timestamp"),
+      signature: request.headers.get("svix-signature"),
+    });
+    if (!ok) return jsonResponse(401, { error: "invalid signature" });
+
+    let event;
+    try { event = JSON.parse(raw); } catch (e) { return jsonResponse(400, { error: "malformed body" }); }
+    const action = webhookAction(event);
+    if (!action) return jsonResponse(200, { ok: true, ignored: true });
+
+    const to = Array.isArray(event.data && event.data.to) ? event.data.to.slice(0, WEBHOOK_MAX_RECIPIENTS) : [];
+    try {
+      let removed = 0;
+      for (const addr of to) {
+        const email = normaliseEmail(addr);
+        if (!email) continue;
+        const record = await getSubscriber(storage, subscriberId(email));
+        if (!record) continue; // not a subscriber, e.g. the owner's own EMAIL_TO
+        await deleteSubscriber(storage, record.id);
+        await recordEvent(storage, action, { now: t, randomBytes, plan: effectivePlan(record, t) });
+        removed++;
+      }
+      log("resend-webhook", `${action}: removed ${removed}`);
+      return jsonResponse(200, { ok: true });
+    } catch (e) {
+      log("resend-webhook", "error: " + ((e && e.name) || "Error"));
+      return jsonResponse(500, { error: "could not process the event; try again later" });
     }
   };
 }

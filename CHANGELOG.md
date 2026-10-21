@@ -5,6 +5,10 @@ grouped by date.
 
 ## 2026-10-22
 
+- **Bounces, spam complaints and a per-IP sign-up limit** (T13): a signed Resend webhook (`/api/resend-webhook`)
+  deletes an address that hard-bounces or marks the digest as spam, and `/api/subscribe` takes at most 5 sign-ups per
+  connection per hour (`MAX_SIGNUPS_PER_IP_HOUR`), with a Vercel Firewall rate limit in front. Tested offline (355
+  subscriber tests); the webhook secret and the firewall rule are owner steps after merge.
 - **Subscriber email is switched on in production** (built in T01 to T11, merged as #6): `/subscribe/` with double
   opt-in by a Confirm button, one-click unsubscribe, a Free daily roll-up of the last 24 hours, a Pro email after
   every scheduled sweep, sending that resumes without duplicates after a cut-off, and an owner admin script
