@@ -71,6 +71,10 @@ check(!/\.innerHTML\s*=/.test(manPage), "manage/index.html writes server data wi
 check(manPage.length > 0 && !/<script[^>]*\ssrc=|<link[^>]*rel=["']?stylesheet|@import|url\(\s*["']?https?:/i.test(manPage), "manage/index.html is self-contained (no external script, stylesheet, import or font URL)");
 check(/\bcp -r [^&]*\bmanage\b[^&]* public\//.test(vercelJson.buildCommand || ""), "vercel.json's buildCommand copies manage into public/");
 check(existsSync("api/account.js"), "api/account.js exists (the manage page's endpoint)");
+// /live and /demo without the trailing slash load their script from the site root (a 404): each page adds the slash.
+const slashFix = 'if (!/(\\/|\\.html)$/.test(location.pathname)) location.replace(location.pathname + "/" + location.search + location.hash);';
+check(livePage.includes(slashFix), "live/index.html adds the trailing slash (/live would load /radar-live.js, a 404)");
+check(demo.includes(slashFix), "demo/index.html adds the trailing slash (/demo would load /radar.js, a 404)");
 // T13: the Resend webhook, the firewall rule's 429, and Hobby's 12-function limit (no framework).
 check(existsSync("api/resend-webhook.js"), "api/resend-webhook.js exists (bounces and complaints from Resend)");
 check(/x\.status === 429/.test(subPage), "subscribe/index.html shows a message on 429 (the firewall rate limit)");
