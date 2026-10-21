@@ -9,7 +9,7 @@ import {
 } from "../api/_lib/subscribers.js";
 import { BodyTooLargeError, allowMethods, bearerOk, esc, parseForm, readBody, readFields, sendJson, sendPage } from "../api/_lib/http.js";
 import { DEFAULT_FROM, buildConfirmEmail, buildDigestEmail, sendBatch, sendOne, withSubscriberFooter } from "../api/_lib/email.js";
-import { KEY_SUBSCRIBER_COUNT, makeSubscribeHandler, siteUrl, makeConfirmHandler } from "../api/_lib/subscription-handlers.js";
+import { KEY_SUBSCRIBER_COUNT, makeSubscribeHandler, siteUrl, makeConfirmHandler, makeUnsubscribeHandler } from "../api/_lib/subscription-handlers.js";
 import { check, finish, memStorage, mockRes } from "./test-helpers.mjs";
 
 // A repeatable random source: each call returns bytes that count up from a seed.
@@ -562,6 +562,84 @@ const iso = (ms) => new Date(ms).toISOString();
   c.st.set = async () => { throw new Error("blob down for c.person@example.com"); };
   r = await c.call("POST");
   check(r.code === 500 && !r.body.includes("@") && r.body.includes("try the link again"), "confirm: a storage failure gives a plain 500 page without detail");
+}
+
+// ---- T07: GET and POST /api/unsubscribe
+{
+  const setup = async ({ enabled = "1", status = "active", plan = "free", proSource = null, proUntil = null, email = "u.person@example.com" } = {}) => {
+    const st = memStorage();
+    const rec = { ...newPending(email, { now: T0, randomBytes: seeded(60) }), status, plan, proSource, proUntil };
+    await putSubscriber(st, rec);
+    const handler = makeUnsubscribeHandler({ env: { SUBSCRIPTIONS_ENABLED: enabled }, storage: st, now: () => T0 + 1000, randomBytes: seeded(5) });
+    // The id and token always travel in the query string, on GET and POST alike.
+    const call = async (method, { id = rec.id, t = rec.token, body = "" } = {}) => {
+      const res = mockRes();
+      const qs = new URLSearchParams(Object.entries({ id, t }).filter(([, v]) => v !== null)).toString();
+      const req = { method, url: "/api/unsubscribe?" + qs, headers: { "content-type": "application/x-www-form-urlencoded" } };
+      if (method === "POST") req[Symbol.asyncIterator] = async function* () { if (body) yield Buffer.from(body); };
+      await handler(req, res);
+      return res;
+    };
+    return { st, rec, call, has: () => st.m.has("radar:sub:" + rec.id) };
+  };
+  const events = (st, type) => [...st.m.entries()].filter(([k]) => k.startsWith("radar:event:") && k.includes(`-${type}-`));
+
+  let u = await setup();
+  let r = await u.call("GET");
+  check(r.code === 200 && r.body.includes("Unsubscribe from Travel Problem Radar?") && r.body.includes('method="post"') && r.body.includes("/api/unsubscribe?id=") && u.has(), "unsubscribe GET: a confirm page with a POST form, record still there");
+  check(!r.body.includes("@") && r.headers["cache-control"] === "no-store" && r.headers["referrer-policy"] === "no-referrer", "unsubscribe GET: no address on the page; no-store and no-referrer");
+  r = await u.call("POST", { body: "List-Unsubscribe=One-Click" });
+  check(r.code === 200 && r.body.includes("unsubscribed") && !u.has(), "unsubscribe POST one-click (id and token in the query, fixed body): record deleted, 200");
+  const ev = events(u.st, "unsubscribed");
+  check(ev.length === 1 && JSON.parse(ev[0][1]).plan === "free" && !/@|[0-9a-f]{64}/.test(ev[0][0] + ev[0][1]), "unsubscribe: the event holds the plan, not the address or id");
+  check([...u.st.m.keys()].every((k) => !k.startsWith("radar:sub:")) && ![...u.st.m.values()].some((v) => v.includes("u.person")), "unsubscribe: nothing about the address is left in storage");
+  const again = await u.call("POST", { body: "List-Unsubscribe=One-Click" });
+  check(again.code === 200 && again.body.includes("not subscribed") && events(u.st, "unsubscribed").length === 1, "unsubscribe POST again: 200 \"not subscribed\", no second event");
+
+  u = await setup();
+  r = await u.call("POST");
+  check(r.code === 200 && !u.has(), "unsubscribe POST from the page form (no one-click body): deleted");
+  u = await setup({ status: "pending" });
+  await u.call("POST");
+  check(!u.has(), "unsubscribe: a pending record is deleted too");
+
+  u = await setup();
+  const wrong = [await u.call("GET", { t: "nope" }), await u.call("POST", { t: "nope" }), await u.call("POST", { t: null }), await u.call("POST", { id: "e".repeat(64) }), await u.call("GET", { id: "bad", t: null })];
+  check(wrong.every((x) => x.code === 200 && x.body === wrong[0].body) && wrong[0].body.includes("not subscribed") && u.has(), "unsubscribe: wrong token, missing token, unknown id: 200 \"not subscribed\" (identical), record kept");
+
+  u = await setup({ enabled: "" });
+  r = await u.call("POST");
+  check(r.code === 200 && !u.has(), "unsubscribe: works with SUBSCRIPTIONS_ENABLED unset");
+  u = await setup();
+  r = await u.call("DELETE");
+  check(r.code === 405, "unsubscribe: other methods get 405");
+
+  // Pro
+  u = await setup({ plan: "pro", proSource: "owner" });
+  await u.call("POST");
+  check(!u.has() && JSON.parse(events(u.st, "unsubscribed")[0][1]).plan === "pro", "unsubscribe: owner-granted Pro unsubscribes like Free, and the event says pro");
+  u = await setup({ plan: "pro", proSource: "razorpay", proUntil: iso(T0 + 30 * 24 * 3600 * 1000) });
+  r = await u.call("POST");
+  check(r.code === 200 && u.has() && r.body.includes("Cancel your Pro plan first") && r.body.includes('href="/subscribe/"') && events(u.st, "unsubscribed").length === 0, "unsubscribe: a still-paid Razorpay Pro is kept, with a page pointing to the manage page");
+  u = await setup({ plan: "pro", proSource: "razorpay", proUntil: iso(T0 - 1000) });
+  await u.call("POST");
+  check(!u.has(), "unsubscribe: a lapsed Razorpay Pro unsubscribes like Free");
+  u = await setup({ plan: "pro", proSource: "razorpay", proUntil: iso(T0 + 30 * 24 * 3600 * 1000) });
+  r = await u.call("GET");
+  check(r.body.includes("Unsubscribe from Travel Problem Radar?") && u.has(), "unsubscribe GET: a paid Pro sees the normal page; the explanation comes on POST");
+
+  // storage failure
+  u = await setup();
+  u.st.del = async () => { throw new Error("blob down for u.person@example.com"); };
+  r = await u.call("POST");
+  check(r.code === 500 && !r.body.includes("@"), "unsubscribe: a storage failure gives a plain 500 page without detail");
+
+  // the links T04 puts in the emails resolve here
+  u = await setup();
+  const mail = withSubscriberFooter({ subject: "s", text: "t", html: "<div>h</div>" }, { unsubscribeUrl: `https://site.example/api/unsubscribe?id=${u.rec.id}&t=${u.rec.token}` });
+  const link = new URL(mail.headers["List-Unsubscribe"].slice(1, -1));
+  r = await u.call("POST", { id: link.searchParams.get("id"), t: link.searchParams.get("t"), body: "List-Unsubscribe=One-Click" });
+  check(!u.has() && r.code === 200, "unsubscribe: the List-Unsubscribe link built by withSubscriberFooter works as a one-click POST");
 }
 
 finish("subscription tests");

@@ -5,7 +5,7 @@ import { randomBytes as cryptoRandomBytes } from "node:crypto";
 import { DEFAULT_FROM, buildConfirmEmail, sendOne } from "./email.js";
 import { BodyTooLargeError, allowMethods, esc, readFields, sendJson, sendPage } from "./http.js";
 import {
-  CONFIRM_RESEND_HOURS, PENDING_TTL_DAYS, countEvents, deleteSubscriber, getSubscriber, newPending, normaliseEmail, putSubscriber,
+  CONFIRM_RESEND_HOURS, PENDING_TTL_DAYS, countEvents, deleteSubscriber, effectivePlan, getSubscriber, newPending, normaliseEmail, putSubscriber,
   recordEvent, subscriberId, tokenOk, utcDay,
 } from "./subscribers.js";
 
@@ -188,6 +188,36 @@ export function makeConfirmHandler({ env, storage, now, randomBytes = cryptoRand
         await putSubscriber(storage, { ...record, status: "active", confirmedAt: new Date(t).toISOString() });
         await recordEvent(storage, "confirmed", { now: t, randomBytes, plan: record.plan === "pro" ? "pro" : "free" });
         return done();
+      },
+    });
+  };
+}
+
+export function makeUnsubscribeHandler({ env, storage, now, randomBytes = cryptoRandomBytes, log = console.log }) {
+  return async function unsubscribe(req, res) {
+    return handleLink({
+      req, res, env, storage, now,
+      queryOnly: true,
+      needsEnabled: false, // leaving must always work
+      // 200, not 404: a repeat click or a second one-click delivery isn't an error, and it changes nothing.
+      invalid: { code: 200, page: { title: "You're not subscribed", body: "<p>This address isn't on the list, so nothing more will be sent.</p>" } },
+      page: async ({ record, params, post, now: t }) => {
+        if (!post) {
+          const action = `/api/unsubscribe?id=${encodeURIComponent(params.id)}&t=${encodeURIComponent(params.t)}`;
+          return sendPage(res, 200, {
+            title: "Unsubscribe from Travel Problem Radar?",
+            body: `<p>You'll stop getting the digest, and your address will be deleted.</p><form method="post" action="${esc(action)}"><p><button type="submit">Unsubscribe</button></p></form>`,
+          });
+        }
+        if (record.proSource === "razorpay" && effectivePlan(record, t) === "pro") {
+          return sendPage(res, 200, {
+            title: "Cancel your Pro plan first",
+            body: `<p>Your Pro plan is paid, so it has to be cancelled on the <a href="/subscribe/">manage page</a> before the address is deleted.</p>`,
+          });
+        }
+        await deleteSubscriber(storage, record.id);
+        await recordEvent(storage, "unsubscribed", { now: t, randomBytes, plan: record.plan === "pro" ? "pro" : "free" });
+        return sendPage(res, 200, { title: "You're unsubscribed", body: "<p>Your address has been deleted. Nothing more will be sent.</p>" });
       },
     });
   };

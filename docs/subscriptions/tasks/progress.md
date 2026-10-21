@@ -13,8 +13,8 @@ working in a real inbox; that is T12's staged launch.
 | [T03](T03-http-helpers.md) HTTP helpers | done | 536cc33 | 117 pass (+21 new) | See T03 notes below |
 | [T04](T04-email-builders.md) Email builders + batch send | done | 87bbdcb | 155 pass (+38 new) | See T04 notes below |
 | [T05](T05-api-subscribe.md) `POST /api/subscribe` | done | 0f718c3 | 200 pass (+45 new) | See T05 notes below |
-| [T06](T06-api-confirm.md) `/api/confirm` | done | PENDING_HASH | 221 pass (+21 new) | See T06 notes below |
-| [T07](T07-api-unsubscribe.md) `/api/unsubscribe` | todo | | | |
+| [T06](T06-api-confirm.md) `/api/confirm` | done | 15c4478 | 221 pass (+21 new) | See T06 notes below |
+| [T07](T07-api-unsubscribe.md) `/api/unsubscribe` | done | PENDING_HASH | 238 pass (+17 new) | See T07 notes below |
 | [T08](T08-subscribe-page.md) `/subscribe/` page, build, checks | todo | | | |
 | [T09](T09-delivery-engine.md) Delivery engine | todo | | | |
 | [T10](T10-sweep-integration.md) Wire delivery into the sweep | todo | | | |
@@ -102,4 +102,18 @@ working in a real inbox; that is T12's staged launch.
   on an expired record gets the same 404 as any wrong token (tested).
 - Page titles go through `esc()`, so an apostrophe appears as `&#39;` in the HTML (it displays correctly).
 - Not done, as the task says: no welcome email.
+
+### T07
+- `makeUnsubscribeHandler` and `api/unsubscribe.js`, on the same `handleLink` helper as T06 with three options:
+  id and token are read from the query string on POST too (a mail app's one-click POST has only a fixed body, which
+  is never read); it ignores `SUBSCRIPTIONS_ENABLED`; and an unknown id or wrong token gives `200` "You're not
+  subscribed" instead of 404.
+- A still-paid `proSource: "razorpay"` record is kept on POST, with a page pointing to `/subscribe/` (T19 will
+  provide the manage page). The explanation shows on POST only; GET shows the normal page.
+- One test builds the link with `withSubscriberFooter` (T04) and POSTs it, so the two tasks agree.
+- **Verify item (Gmail/Yahoo one-click rules), only partly checked:** a web search (no official Google or Yahoo
+  page came back) gave the header pair (`List-Unsubscribe: <https URL>` and `List-Unsubscribe-Post:
+  List-Unsubscribe=One-Click`), an HTTPS URL, and a non-interactive POST. **Not confirmed:** what response and
+  redirect behaviour they require. The endpoint answers the POST directly with `200` and no redirect, which is the
+  safest reading. Check against Google's sender guidelines and RFC 8058 before launch (T12).
 
