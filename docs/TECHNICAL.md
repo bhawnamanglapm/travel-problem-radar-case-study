@@ -12,7 +12,7 @@ in the [README](../README.md).
 | Who triggers it | You, with a button | You, with a button (replay only) | A GitHub Actions schedule (plus Vercel's daily cron as a backstop); visitors can't trigger it |
 | AI or API calls | Yes, through Claude's app | None | About 5 sweeps a day, whatever the traffic |
 | History is saved in | Claude's artifact storage | This browser's localStorage | A private Vercel Blob store |
-| Digest | A scheduled task in Claude posts it to Slack | The "Sample digest" view | The page itself; optionally posted to Slack and emailed through Resend after each sweep |
+| Digest | A scheduled task in Claude posts it to Slack | The "Sample digest" view | The page itself; optionally posted to Slack and emailed to the owner after each sweep; anyone can subscribe by email at `/subscribe/` (Free: one a day; Pro: every scheduled sweep) |
 | Status | Owner-reported working | Verified | Deployed; first production sweep saved 1 of 4 categories (token limit, since fixed and tested locally) |
 
 All three use the same component, [`travel-problem-radar.jsx`](../travel-problem-radar.jsx). With no props it
@@ -30,7 +30,10 @@ GitHub Actions, every 5 hours (00:17, 05:17, 10:17, 15:17, 20:17 UTC)
        4 Claude calls with web search, one per category, same prompts as the component
        merge, de-duplicate, flag "New", keep the last 60 sweeps -> private Vercel Blob store
        then post the digest (or a failure notice) to Slack and by email, for each one that is set up
+       then, if subscriptions are on, email subscribers: Pro every scheduled sweep, Free once a UTC day
 Visitor -> /live/ -> /api/data (read-only, cached) -> same dashboard, no sweep button
+Visitor -> /subscribe/ -> /api/subscribe -> confirmation email -> /api/confirm (Confirm button) -> active
+Subscriber -> links in each email -> /manage/ (/api/account: plan, Request Pro) or /api/unsubscribe (deletes)
 ```
 
 - Visitors only read the saved result and never trigger an AI call, so cost is about 5 sweeps a day (roughly $1 a day at the measured ~$0.21 a sweep).
@@ -48,11 +51,14 @@ Visitor -> /live/ -> /api/data (read-only, cached) -> same dashboard, no sweep b
 5. Optional: `SLACK_WEBHOOK_URL` (a Slack incoming webhook) to post each sweep's digest to a channel.
 6. Optional: `RESEND_API_KEY` and `EMAIL_TO` to email each sweep's digest through Resend. No domain is needed:
    it sends from Resend's shared address, which delivers only to the Resend account's own email.
+7. Optional: subscriber email. Needs a domain verified in Resend, `EMAIL_FROM` on it, `MAX_SUBSCRIBERS` and
+   `SUBSCRIPTIONS_ENABLED=1`. See [DEPLOYMENT.md, "Subscriber email"](../DEPLOYMENT.md#subscriber-email-optional).
 
 Full deployment steps are in [DEPLOYMENT.md](../DEPLOYMENT.md).
 
-Slack posting and email from Vercel are covered by the offline tests but have not yet been tried against a real
-Slack workspace or Resend account. They are separate from the Slack digest set up in Claude's app.
+Slack posting from Vercel is covered by the offline tests but has not yet been tried against a real Slack workspace.
+Email has been sent through a real Resend account since 21 Oct 2026, from the verified domain
+`pehchanthetraveller.com`. Both are separate from the Slack digest set up in Claude's app.
 
 ## Files
 
@@ -61,16 +67,26 @@ Slack workspace or Resend account. They are separate from the Slack digest set u
 | `index.html` | The case-study page (served by GitHub Pages) |
 | `demo/` | The demo page; `demo/radar.js` is built from the component and the sample |
 | `live/` | The live page; `live/radar-live.js` is built from the component |
-| `api/sweep.js` | Scheduled job: runs the 4 searches and saves the result (needs a secret to call) |
+| `subscribe/` | The sign-up page (one self-contained file); posts to `/api/subscribe` |
+| `manage/` | A subscriber's own page, reached from the link in each email: plan, Request Pro, unsubscribe |
+| `api/sweep.js` | Scheduled job: runs the 4 searches, saves the result, then sends the owner's and subscribers' email (needs a secret to call) |
 | `api/data.js` | Read-only feed the live page uses (allow-listed keys only) |
-| `api/_lib/` | Shared sweep logic, request handlers, storage, and the optional Slack post and email |
-| `vercel.json` | Daily backstop cron (01:30 UTC), 300 s limit, build that publishes `index.html`, `demo/`, `live/` |
+| `api/subscribe.js`, `api/confirm.js`, `api/unsubscribe.js`, `api/account.js` | Sign-up, the Confirm button, unsubscribe (also one-click from mail apps), and the manage page's data and Request Pro |
+| `api/_lib/radar.js`, `handlers.js` | Sweep logic and the sweep and data handlers |
+| `api/_lib/storage.js` | The private Blob store: `get`, `set`, `del`, `list`; reads skip Blob's CDN cache except for `/api/data` |
+| `api/_lib/slack.js`, `email.js` | The Slack post; every email (owner digest, subscriber digest, confirmation, Pro request) and Resend sending |
+| `api/_lib/http.js` | Shared request helpers: allowed methods, body reading with a size limit, JSON and HTML replies |
+| `api/_lib/subscribers.js` | Subscriber records, tokens, plans and event records |
+| `api/_lib/subscription-handlers.js` | The four subscriber endpoints |
+| `api/_lib/subscriber-delivery.js` | After a saved sweep: Pro and Free sends, the 24-hour roll-up, resuming a cut-off send |
+| `vercel.json` | Daily backstop cron (01:30 UTC), 300 s limit, build that publishes `index.html`, `demo/`, `live/`, `subscribe/`, `manage/` |
 | `travel-problem-radar.jsx` | The dashboard component (live in Claude's app, demo on the web) |
 | `sampleData.json` | 8 saved items, two per category, each with a source link |
-| `scripts/check.mjs` | Offline checks: sample data, page links, bundles, prompt drift |
+| `scripts/check.mjs` | Offline checks: sample data, page links, bundles, the subscribe and manage pages, prompt drift, secrets |
+| `scripts/subscribers.mjs` | Owner admin tool, run on your own machine: `stats`, `list`, `show`, `grant-pro`, `revoke-pro`, `delete`, `prune-events`. Not deployed |
 | `.github/workflows/sweep.yml` | Calls `/api/sweep` every 5 hours, and on demand from the Actions tab |
 | `scripts/test-sweep.mjs` | Offline tests for the sweep, the Slack post, the email and the data feed (no network, no key) |
-| `scripts/test-subscriptions.mjs` | Offline tests for the subscriber features (storage listing so far; more as each task lands) |
+| `scripts/test-subscriptions.mjs` | Offline tests for the subscriber features: storage, records, emails, every endpoint, delivery, the sweep wiring and the admin script (fake Resend, no network) |
 | `scripts/test-helpers.mjs` | Shared by both test files: PASS/FAIL printer, in-memory store, fake response |
 
 ## Rebuild the demo and live page
@@ -81,7 +97,7 @@ Needs Node.js 18 or later.
 npm install
 npm run build   # rebuilds demo/radar.js and live/radar-live.js from the component
 npm run check
-npm test        # sweep and data-feed tests, no key needed
+npm test        # sweep, data-feed and subscriber tests, no key needed
 ```
 
 Commit both bundles after rebuilding; GitHub Pages serves them as is, and CI fails if either is stale.
