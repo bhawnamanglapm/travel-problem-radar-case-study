@@ -17,6 +17,7 @@ each item with a product idea a PM could build.
 | **Try the demo** | https://bhawnamanglapm.github.io/travel-problem-radar-case-study/demo/ (replays a saved sample; no AI calls) |
 | **Sample digest** | https://bhawnamanglapm.github.io/travel-problem-radar-case-study/demo/#report |
 | **Live page** | https://travel-problem-radar.vercel.app/live/. Deployed; a sweep runs every 5 hours. The first production sweep (Oct 2026) saved items from only 1 of 4 categories; the cause, an output token limit, is fixed and a local run returned all four. |
+| **Get it by email** | https://travel-problem-radar.vercel.app/subscribe/. Free: one digest a day. Pro, an email after every sweep, is free while it's being tested: tick the box when you sign up, or use "Request Pro" on the manage page your emails link to. |
 | **More** | [Technical reference](docs/TECHNICAL.md) · [PRD](docs/PRD.md) · [Decision log](docs/decisions.md) · [Subscription plan (draft)](docs/subscriptions/architecture.md) · [Changelog](CHANGELOG.md) |
 
 ---
