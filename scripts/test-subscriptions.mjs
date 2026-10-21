@@ -1,7 +1,7 @@
 // Offline tests for the subscriber features (docs/subscriptions/tasks). No network, no API
 // key: Blob storage and Resend are faked.
 //   node scripts/test-subscriptions.mjs
-import { randomBytes } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { blobStorage } from "../api/_lib/storage.js";
 import {
@@ -10,7 +10,9 @@ import {
 } from "../api/_lib/subscribers.js";
 import { BodyTooLargeError, allowMethods, bearerOk, esc, parseForm, readBody, readFields, sendJson, sendPage } from "../api/_lib/http.js";
 import { DEFAULT_FROM, buildConfirmEmail, buildDigestEmail, sendBatch, sendOne, withSubscriberFooter } from "../api/_lib/email.js";
-import { KEY_SUBSCRIBER_COUNT, makeSubscribeHandler, siteUrl, makeConfirmHandler, makeUnsubscribeHandler } from "../api/_lib/subscription-handlers.js";
+import {
+  KEY_SUBSCRIBER_COUNT, WEBHOOK_TOLERANCE_S, makeConfirmHandler, makeResendWebhookHandler, makeSubscribeHandler, makeUnsubscribeHandler, siteUrl, verifySvix,
+} from "../api/_lib/subscription-handlers.js";
 import { deliverToSubscribers } from "../api/_lib/subscriber-delivery.js";
 import { makeDataHandler } from "../api/_lib/handlers.js";
 import { check, finish, memStorage, mockRes } from "./test-helpers.mjs";
@@ -62,7 +64,7 @@ const iso = (ms) => new Date(ms).toISOString();
   check(fresh === '{"a":1}' && gets[0].p === "radar/radar-sub-x.json" && gets[0].opts.useCache === false && gets[0].opts.access === "private", "blob get: skips the CDN cache by default (useCache: false)");
   check(gets[1].opts.useCache === true, "blob get: { cached: true } keeps the CDN cache (for /api/data only)");
   check(/blobStorage\(undefined, \{ cached: true \}\)/.test(readFileSync(new URL("../api/data.js", import.meta.url), "utf8")) &&
-    ["account", "confirm", "subscribe", "sweep", "unsubscribe"].every((f) => !/cached/.test(readFileSync(new URL(`../api/${f}.js`, import.meta.url), "utf8"))),
+    ["account", "confirm", "resend-webhook", "subscribe", "sweep", "unsubscribe"].every((f) => !/cached/.test(readFileSync(new URL(`../api/${f}.js`, import.meta.url), "utf8"))),
     "only /api/data uses cached reads; every endpoint that writes reads fresh");
 
   // The prefix countEvents uses ends in "-", and a real day's events must be counted through blobStorage, not only the memory store.
@@ -1315,6 +1317,148 @@ const iso = (ms) => new Date(ms).toISOString();
   keen = await recOf(w, "keen@example.com");
   check(r.code === 0 && keen.plan === "pro" && keen.proRequestedAt === null && !(await run(["list", "--plan", "requested"])).out.includes("keen@example.com"), "admin grant-pro: Pro on, and the request leaves the waiting list");
   check((await w.get(keen.id, keen.token)).json().effectivePlan === "pro", "account GET: shows Pro once the owner grants it");
+}
+
+// ---- T13 part A: POST /api/resend-webhook (bounces and complaints)
+{
+  const KEY = Buffer.from("test-webhook-key-0123456789abcdef");
+  const SECRET = "whsec_" + KEY.toString("base64");
+  const NOW = T0;
+  const TS = String(Math.floor(NOW / 1000));
+  const sign = (id, ts, raw, key = KEY) => "v1," + createHmac("sha256", key).update(`${id}.${ts}.${raw}`).digest("base64");
+
+  // verifySvix on its own
+  const raw0 = '{"type":"email.complained"}';
+  const good = { secret: SECRET, id: "msg_1", timestamp: TS, signature: sign("msg_1", TS, raw0), raw: raw0, now: NOW };
+  check(verifySvix(good), "verifySvix: a valid v1 signature is accepted");
+  check(verifySvix({ ...good, signature: "v1,AAAA " + good.signature }), "verifySvix: a match anywhere in a space-separated list is accepted");
+  check(!verifySvix({ ...good, raw: raw0.replace("complained", "bounced") }), "verifySvix: a changed body is refused");
+  check(!verifySvix({ ...good, signature: sign("msg_1", TS, raw0, Buffer.from("another-key")) }), "verifySvix: a signature made with another secret is refused");
+  check(!verifySvix({ ...good, id: "msg_2" }), "verifySvix: a changed svix-id is refused");
+  const old = String(Number(TS) - WEBHOOK_TOLERANCE_S - 1);
+  const ahead = String(Number(TS) + WEBHOOK_TOLERANCE_S + 1);
+  check(!verifySvix({ ...good, timestamp: old, signature: sign("msg_1", old, raw0) }) && !verifySvix({ ...good, timestamp: ahead, signature: sign("msg_1", ahead, raw0) }),
+    "verifySvix: a correctly signed message more than 5 minutes old or ahead is refused (replay)");
+  const edge = String(Number(TS) - WEBHOOK_TOLERANCE_S);
+  check(verifySvix({ ...good, timestamp: edge, signature: sign("msg_1", edge, raw0) }), "verifySvix: exactly 5 minutes old is still accepted");
+  check(!verifySvix({ ...good, signature: good.signature.replace("v1,", "v2,") }) && !verifySvix({ ...good, timestamp: "12.5" }) && !verifySvix({ ...good, secret: "" }) &&
+    !verifySvix({ ...good, id: null }) && !verifySvix({ ...good, signature: null }) && !verifySvix({ ...good, signature: "v1," }),
+    "verifySvix: other versions, a non-integer timestamp, and missing parts are refused");
+
+  // the handler
+  const world = (envOver = {}) => {
+    const st = memStorage();
+    const logs = [];
+    const handler = makeResendWebhookHandler({ env: { RESEND_WEBHOOK_SECRET: SECRET, ...envOver }, storage: st, now: () => NOW, randomBytes: seeded(40), log: (...a) => logs.push(a.join(" ")) });
+    let n = 0;
+    const send = async (event, { id = "msg_" + ++n, ts = TS, sig, method = "POST", raw, headers = {} } = {}) => {
+      const body = raw ?? JSON.stringify(event);
+      const h = { "content-type": "application/json", "svix-id": id, "svix-timestamp": ts, "svix-signature": sig ?? sign(id, ts, body), ...headers };
+      const res = await handler(new Request("https://site.example/api/resend-webhook", method === "GET" ? { method, headers: h } : { method, headers: h, body }));
+      const text = await res.text();
+      return { code: res.status, text, json: () => JSON.parse(text), headers: res.headers };
+    };
+    const add = async (email, over = {}) => { const r = { ...newPending(email, { now: NOW, randomBytes: seeded(email.length) }), status: "active", ...over }; await putSubscriber(st, r); return r; };
+    const evs = (type) => [...st.m.keys()].filter((k) => k.startsWith("radar:event:") && k.includes(`-${type}-`));
+    return { st, logs, send, add, evs };
+  };
+  const bounce = (to, type = "Permanent") => ({ type: "email.bounced", created_at: iso(NOW), data: { email_id: "e1", from: "Radar <hello@pehchanthetraveller.com>", to: [to], subject: "x", bounce: { message: "m", subType: "General", type } } });
+  const complaint = (to) => ({ type: "email.complained", created_at: iso(NOW), data: { email_id: "e2", to: [to], subject: "x" } });
+  const replies = [];
+  const allLogs = [];
+  const keep = (r) => { replies.push(r.text); return r; };
+
+  let w = world();
+  const hard = await w.add("hard@example.com", { plan: "pro", proSource: "owner" });
+  let r = keep(await w.send(bounce("Hard@Example.com")));
+  check(r.code === 200 && r.json().ok === true && !(await getSubscriber(w.st, hard.id)), "webhook: a Permanent bounce deletes the record (address matched case-insensitively)");
+  const bouncedEv = w.evs("bounced");
+  check(bouncedEv.length === 1 && JSON.parse(w.st.m.get(bouncedEv[0])).plan === "pro" && !w.st.m.get(bouncedEv[0]).includes("@"), "webhook: one 'bounced' event, with the plan and no address");
+  allLogs.push(...w.logs);
+
+  w = world();
+  const spam = await w.add("spam@example.com");
+  r = keep(await w.send(complaint("spam@example.com")));
+  check(r.code === 200 && !(await getSubscriber(w.st, spam.id)) && w.evs("complained").length === 1, "webhook: a complaint deletes the record and records one 'complained' event");
+  allLogs.push(...w.logs);
+
+  w = world();
+  const pend = await w.add("pending@example.com", { status: "pending" });
+  r = keep(await w.send(bounce("pending@example.com")));
+  check(r.code === 200 && !(await getSubscriber(w.st, pend.id)), "webhook: a hard bounce on a pending (unconfirmed) record deletes it too");
+
+  w = world();
+  const soft = await w.add("soft@example.com");
+  for (const type of ["Transient", "Undetermined", null]) {
+    r = keep(await w.send(bounce("soft@example.com", type)));
+    check(r.code === 200 && r.json().ignored === true && Boolean(await getSubscriber(w.st, soft.id)) && w.evs("bounced").length === 0, `webhook: a ${type || "typeless"} bounce is ignored and the record kept`);
+  }
+  r = keep(await w.send({ type: "email.delivered", data: { to: ["soft@example.com"] } }));
+  check(r.code === 200 && r.json().ignored === true && Boolean(await getSubscriber(w.st, soft.id)), "webhook: other event types are ignored");
+
+  w = world();
+  r = keep(await w.send(bounce("stranger@example.com")));
+  check(r.code === 200 && r.json().ok === true && w.evs("bounced").length === 0, "webhook: an unknown address (e.g. the owner's EMAIL_TO) gets 200 and records nothing");
+  r = keep(await w.send({ type: "email.bounced", data: { to: "not-a-list", bounce: { type: "Permanent" } } }));
+  const r2 = keep(await w.send({ type: "email.complained", data: { to: ["not an address", 42, null] } }));
+  check(r.code === 200 && r2.code === 200, "webhook: a missing or malformed recipient list gets 200 and does nothing");
+  allLogs.push(...w.logs);
+
+  w = world();
+  const two = [await w.add("one@example.com"), await w.add("two@example.com")];
+  r = keep(await w.send({ ...complaint("one@example.com"), data: { to: ["one@example.com", "two@example.com"] } }));
+  check(r.code === 200 && !(await getSubscriber(w.st, two[0].id)) && !(await getSubscriber(w.st, two[1].id)) && w.evs("complained").length === 2, "webhook: every recipient in data.to is handled");
+
+  // Replay inside the window: the same signed message again changes nothing more.
+  w = world();
+  await w.add("again@example.com");
+  const rawEv = JSON.stringify(complaint("again@example.com"));
+  r = keep(await w.send(null, { id: "msg_same", raw: rawEv }));
+  const again = keep(await w.send(null, { id: "msg_same", raw: rawEv }));
+  check(r.code === 200 && again.code === 200 && w.evs("complained").length === 1, "webhook: a replay inside 5 minutes is harmless (record already gone, no second event)");
+
+  // Refusals: nothing is read or written for an unsigned or badly signed request.
+  w = world();
+  const victim = await w.add("victim@example.com");
+  let reads = 0;
+  const get0 = w.st.get;
+  w.st.get = async (k) => { reads++; return get0(k); };
+  const forged = JSON.stringify(complaint("victim@example.com"));
+  const results = [
+    ["no signature headers", await w.send(null, { raw: forged, headers: { "svix-id": "", "svix-timestamp": "", "svix-signature": "" } })],
+    ["a changed body", await w.send(null, { raw: forged, sig: sign("m", TS, forged.replace("victim", "victin")), id: "m" })],
+    ["a wrong secret", await w.send(null, { raw: forged, sig: sign("m", TS, forged, Buffer.from("guess")), id: "m" })],
+    ["an old timestamp", await w.send(null, { raw: forged, ts: old, id: "m", sig: sign("m", old, forged) })],
+  ];
+  for (const [label, res] of results) { keep(res); check(res.code === 401 && res.json().error === "invalid signature", `webhook: ${label} gets 401`); }
+  w.st.get = get0;
+  check(reads === 0 && Boolean(await getSubscriber(w.st, victim.id)), "webhook: refused requests read nothing and the record stays");
+
+  w = world({ RESEND_WEBHOOK_SECRET: "" });
+  r = keep(await w.send(complaint("x@example.com")));
+  check(r.code === 503 && w.logs.includes("resend-webhook not configured"), "webhook: no RESEND_WEBHOOK_SECRET gives 503 and logs 'not configured'");
+  w = world({ SUBSCRIPTIONS_ENABLED: "" });
+  const off = await w.add("off@example.com");
+  r = keep(await w.send(complaint("off@example.com")));
+  check(r.code === 200 && !(await getSubscriber(w.st, off.id)), "webhook: works while subscriptions are switched off (removal is always allowed)");
+  w = world();
+  r = keep(await w.send(null, { method: "GET", raw: "" }));
+  check(r.code === 405 && r.headers.get("allow") === "POST", "webhook: GET gets 405 with Allow: POST");
+  const big = JSON.stringify({ type: "email.complained", data: { to: [], pad: "x".repeat(70 * 1024) } });
+  r = keep(await w.send(null, { raw: big }));
+  check(r.code === 413, "webhook: a body over 64 KB gets 413");
+  r = keep(await w.send(null, { raw: "{not json" }));
+  check(r.code === 400, "webhook: a correctly signed but malformed body gets 400");
+
+  w = world();
+  await w.add("fail@example.com");
+  w.st.del = async () => { throw new Error("blob down"); };
+  r = keep(await w.send(complaint("fail@example.com")));
+  check(r.code === 500 && !r.text.includes("blob down") && w.logs.some((l) => l === "resend-webhook error: Error"), "webhook: a storage failure gives 500 (so Resend retries) with a generic message");
+  allLogs.push(...w.logs);
+
+  check(replies.length > 15 && replies.every((t) => !t.includes("@")), `webhook: no reply contains an address (${replies.length} replies checked)`);
+  check(allLogs.length > 0 && allLogs.every((l) => !l.includes("@")), "webhook: no log line contains an address");
 }
 
 finish("subscription tests");
