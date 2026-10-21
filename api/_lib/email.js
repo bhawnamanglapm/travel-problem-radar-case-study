@@ -1,7 +1,11 @@
 // Email delivery for the scheduled sweep, through Resend (https://resend.com): the digest after
 // a saved sweep, or a short notice when nothing could be saved. Optional; it runs only when
-// RESEND_API_KEY, EMAIL_FROM and EMAIL_TO are set. Each message has an HTML and a plain-text part.
+// RESEND_API_KEY and EMAIL_TO are set. Each message has an HTML and a plain-text part.
 import { CATS } from "./radar.js";
+
+// Resend's shared sender, so no domain of our own is needed. Resend delivers mail from it only
+// to the address the Resend account was created with; EMAIL_FROM on a verified domain lifts that.
+export const DEFAULT_FROM = "Travel Problem Radar <onboarding@resend.dev>";
 
 const esc = (s = "") => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
   .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -81,10 +85,10 @@ export function buildFailureEmail({ at, perCat = {}, error = "" }) {
 // Never throws. The result goes into /api/sweep's reply, which the GitHub Actions job prints to
 // a public log, so it carries the HTTP status and Resend's error name only: never the key, the
 // addresses or Resend's message (that is in the Resend dashboard's logs).
-export async function sendEmail({ apiKey, from, to }, { subject, html, text }, { fetchFn = fetch, timeoutMs = 10000 } = {}) {
-  const missing = [["RESEND_API_KEY", apiKey], ["EMAIL_FROM", from], ["EMAIL_TO", to]].filter(([, v]) => !v).map(([k]) => k);
-  if (missing.length === 3) return "not configured";
-  if (missing.length) return `not configured: ${missing.join(", ")} missing`;
+export async function sendEmail({ apiKey, from = "", to }, { subject, html, text }, { fetchFn = fetch, timeoutMs = 10000 } = {}) {
+  if (!apiKey && !to) return "not configured";
+  if (!apiKey || !to) return `not configured: ${apiKey ? "EMAIL_TO" : "RESEND_API_KEY"} missing`;
+  from = from || DEFAULT_FROM;
   const recipients = String(to).split(",").map((s) => s.trim()).filter(Boolean);
   if (recipients.length > 50) return "failed: EMAIL_TO has more than 50 addresses";
   try {

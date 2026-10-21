@@ -70,7 +70,7 @@ Visitor ──▶ /live/  ──▶  │  /api/data?key=…  (api/data.js, read-
 | Backstop timer | `crons` in `vercel.json` | Calls `/api/sweep` once a day; usually skipped (5.5) |
 | Storage | Vercel Blob (private store), via `api/_lib/storage.js` | Not public; read only through `/api/data` |
 | Slack digest (optional) | `api/_lib/slack.js`, called by the sweep | Posted to one Slack channel when `SLACK_WEBHOOK_URL` is set |
-| Email digest (optional) | `api/_lib/email.js`, called by the sweep | Sent through Resend when `RESEND_API_KEY`, `EMAIL_FROM` and `EMAIL_TO` are set |
+| Email digest (optional) | `api/_lib/email.js`, called by the sweep | Sent through Resend when `RESEND_API_KEY` and `EMAIL_TO` are set |
 
 Two things that are easy to miss:
 
@@ -91,7 +91,7 @@ Two things that are easy to miss:
 | An Anthropic Console account with billing set up | The sweep calls the Claude API | https://platform.claude.com |
 | An Anthropic API key | Stored as a Vercel secret | Create one just for this project, so it can be revoked on its own |
 | Web search allowed for your Anthropic organization | Every sweep call uses the web-search tool | On by default. If an admin turned it off in Console settings (Settings → Capabilities), every call fails with a 400 |
-| A Resend account with a verified domain (optional) | To email each sweep | See [Sending email](#sending-email-optional) |
+| A Resend account (optional) | To email each sweep. No domain of your own is needed | See [Sending email](#sending-email-optional) |
 | Node.js 18 or later on your machine | To rebuild bundles and run the offline checks | CI uses Node 22 |
 
 Before any deploy, run the offline checks locally. They need no network and no API key:
@@ -203,9 +203,8 @@ Open **Settings → Environment Variables** and add:
 | `ANTHROPIC_API_KEY` | Your Anthropic API key | **Production only** | Yes |
 | `RADAR_MODEL` | A Claude model ID, for example `claude-sonnet-4-6` | Production | No. Defaults to `claude-sonnet-5-5`; see [Known issues](#known-issues-to-fix-before-or-after-the-first-sweep) |
 | `SLACK_WEBHOOK_URL` | A Slack incoming-webhook URL | **Production only** | No. Posts each sweep to Slack; see [Posting to Slack](#posting-to-slack-optional) |
-| `RESEND_API_KEY` | A Resend API key with sending access | **Production only** | No. With the next two, emails each sweep; see [Sending email](#sending-email-optional) |
-| `EMAIL_FROM` | A sender on a domain verified in Resend, for example `Travel Problem Radar <radar@yourdomain.com>` | **Production only** | Only with `RESEND_API_KEY` |
-| `EMAIL_TO` | Recipients, separated by commas (at most 50) | **Production only** | Only with `RESEND_API_KEY` |
+| `RESEND_API_KEY` | A Resend API key with sending access | **Production only** | No. With `EMAIL_TO`, emails each sweep; see [Sending email](#sending-email-optional) |
+| `EMAIL_TO` | The email address your Resend account was created with | **Production only** | Only with `RESEND_API_KEY` |
 
 Generate the secret with either:
 
@@ -399,8 +398,7 @@ vercel env add CRON_SECRET production
 vercel env add ANTHROPIC_API_KEY production
 vercel env add RADAR_MODEL production         # optional
 vercel env add SLACK_WEBHOOK_URL production   # optional, see "Posting to Slack"
-vercel env add RESEND_API_KEY production      # optional, with the next two; see "Sending email"
-vercel env add EMAIL_FROM production
+vercel env add RESEND_API_KEY production      # optional, with EMAIL_TO; see "Sending email"
 vercel env add EMAIL_TO production
 
 gh secret set CRON_SECRET                     # same value, for the 5-hour schedule (GitHub CLI; prompts for it)
@@ -471,9 +469,9 @@ needed at runtime.
 | `ANTHROPIC_API_KEY` | You | `/api/sweep` | Sent to the Anthropic API in a header; never returned in a response |
 | `RADAR_MODEL` | You (optional) | `/api/sweep` | Claude model ID. Default `claude-sonnet-5-5` (`api/_lib/handlers.js`). Must support `effort` (Claude 4.6 or later) |
 | `SLACK_WEBHOOK_URL` | You (optional) | `/api/sweep` | Slack incoming webhook. Treat it as a secret: anyone who has it can post to the channel |
-| `RESEND_API_KEY` | You (optional) | `/api/sweep` | Resend API key, sent in a header; never returned in a response. Email is sent only when all three email variables are set |
-| `EMAIL_FROM` | You (optional) | `/api/sweep` | Sender, `Name <address@domain>`, on a domain verified in Resend |
-| `EMAIL_TO` | You (optional) | `/api/sweep` | Recipients, separated by commas, at most 50. Kept out of the repository and out of every reply |
+| `RESEND_API_KEY` | You (optional) | `/api/sweep` | Resend API key, sent in a header; never returned in a response. Email is sent only when it and `EMAIL_TO` are set |
+| `EMAIL_TO` | You (optional) | `/api/sweep` | Recipients, separated by commas, at most 50. With the default sender, only the Resend account's own address works. Kept out of the repository and out of every reply |
+| `EMAIL_FROM` | You (optional) | `/api/sweep` | Not needed. Defaults to `Travel Problem Radar <onboarding@resend.dev>`, Resend's shared sender. Set it only if you later verify a domain in Resend |
 | `VERCEL_PROJECT_PRODUCTION_URL` | Vercel, automatically | `/api/sweep` | Builds the "Open the live board" link in the Slack message. If it is missing, the link is left out |
 | `BLOB_STORE_ID` or `BLOB_READ_WRITE_TOKEN` | Vercel, when the store is connected | `api/_lib/storage.js` | Do not set by hand unless running outside Vercel |
 
@@ -598,30 +596,36 @@ and a plain-text part. The subject carries the sweep time and counts, for exampl
 `Travel Problem Radar · 2026-10-21 05:17 UTC · 18 problems, 4 new`, so mail apps don't thread a day's digests
 together.
 
+**No domain is needed.** Mail is sent from Resend's shared address, `Travel Problem Radar <onboarding@resend.dev>`.
+The catch: Resend delivers mail from that address **only to the email the Resend account was created with**. Any
+other recipient is refused with `403 validation_error`. So create the Resend account with the inbox that should get
+the digest.
+
 To turn it on:
 
-1. Create a Resend account and **verify a sending domain**: **Domains → Add Domain**, then add the DNS records it
-   shows at your DNS provider. Until a domain is verified, Resend only sends from `onboarding@resend.dev`, and only
-   to the address you signed up with.
-2. Create an API key under **API Keys** with **Sending access**, limited to that domain. Such a key can send email
-   and do nothing else in the account.
-3. Add three variables in Vercel, for **Production only**, with `RESEND_API_KEY` marked **Sensitive**:
+1. Create a Resend account at https://resend.com, signing up with the address that should receive the digest.
+2. Create an API key under **API Keys** with **Sending access**. Such a key can send email and do nothing else in the
+   account.
+3. Add two variables in Vercel, for **Production only**, with `RESEND_API_KEY` marked **Sensitive**:
    - `RESEND_API_KEY`: the key.
-   - `EMAIL_FROM`: a sender on the verified domain, for example `Travel Problem Radar <radar@yourdomain.com>`.
-   - `EMAIL_TO`: the recipients, separated by commas, at most 50.
-4. Redeploy, then run a sweep by hand (5.1). The reply's `email` field should say `sent`.
+   - `EMAIL_TO`: the address you signed up to Resend with.
+4. Redeploy, then run a sweep by hand (5.1). The reply's `email` field should say `sent`. If the email doesn't show
+   up in the inbox, check the spam folder.
 
-**Free-plan limits** (Resend, October 2026): 100 emails a day and 3,000 a month, and **each recipient counts as one
-email**. Five sweeps a day to 15 recipients is 75 emails a day and about 2,250 a month, which leaves room for manual
-runs. Above about 15 recipients, use a mailing-list address in `EMAIL_TO` or a paid plan.
+To send to other people later, verify a domain in Resend (**Domains → Add Domain**, plus its DNS records), set
+`EMAIL_FROM` to a sender on it, for example `Travel Problem Radar <radar@yourdomain.com>`, and list the recipients
+in `EMAIL_TO`, separated by commas (at most 50).
+
+**Free-plan limits** (Resend, October 2026): 100 emails a day and 3,000 a month, and each recipient counts as one
+email. One recipient at five sweeps a day is 5 a day and about 150 a month, well inside both.
 
 How it behaves:
 
 - Slack and email are sent at the same time, after the sweep is saved. Either can fail without affecting the other
   or the sweep.
 - The call to Resend gives up after 10 seconds.
-- Every recipient is on the To line, so they all see each other's addresses. If that matters, send to a mailing-list
-  address instead.
+- With more than one recipient (only possible with your own domain), everyone is on the To line and sees the other
+  addresses.
 - The reply's `email` field gives only the outcome: `sent`, `not configured` (or which variables are missing),
   `failed: http <status> <Resend error name>`, `failed: timeout` or `failed: network error`. It never includes the
   key, the addresses or Resend's error message, because the GitHub Actions job prints the reply in a log that anyone
@@ -702,10 +706,10 @@ covers a missed 00:17 run.
 | `slack: failed: http 403`, `404` or `410` | The webhook was revoked, its channel was deleted or archived, or the Slack app was removed | Create a new webhook; update the variable; redeploy |
 | `slack: failed: timeout` or `network error` | Slack was slow or unreachable. The sweep itself was saved | Nothing to fix; the next sweep posts as usual |
 | No email after a sweep | Check `email` in the reply or the `email` log line. `not configured` means none of the email variables reach this deployment; `not configured: … missing` names the ones that don't | Add them for Production; redeploy |
-| `email: failed: http 403 validation_error` | The `EMAIL_FROM` domain isn't verified in Resend, or the sender is `onboarding@resend.dev` and a recipient isn't the account owner | Verify the domain and use it in `EMAIL_FROM`. Resend's **Logs** give the exact reason |
+| `email: failed: http 403 validation_error` | With the default sender: `EMAIL_TO` holds an address other than the one the Resend account was created with. With your own `EMAIL_FROM`: its domain isn't verified | Set `EMAIL_TO` to the account's own address, or verify a domain (see [Sending email](#sending-email-optional)). Resend's **Logs** give the exact reason |
 | `email: failed: http 401 …`, or `http 403` with `restricted_api_key` or `suspended_api_key` | The key is wrong, deleted or disabled | Create a new key; update the variable; redeploy |
-| `email: failed: http 422 …` or `http 400 validation_error` | `EMAIL_FROM` or `EMAIL_TO` is malformed | Sender as `Name <address@domain>`; recipients as plain addresses separated by commas |
-| `email: failed: http 429 daily_quota_exceeded` (or `monthly_quota_exceeded`) | The plan's sending quota is used up; each recipient counts | Fewer recipients, a mailing-list address, or a paid plan. The daily quota resets at midnight UTC |
+| `email: failed: http 422 …` or `http 400 validation_error` | `EMAIL_TO` (or `EMAIL_FROM`, if set) is malformed | Recipients as plain addresses separated by commas; a sender as `Name <address@domain>` |
+| `email: failed: http 429 daily_quota_exceeded` (or `monthly_quota_exceeded`) | The plan's sending quota is used up; each recipient counts. Unlikely with one recipient | Fewer recipients or a paid plan. The daily quota resets at midnight UTC |
 
 ---
 

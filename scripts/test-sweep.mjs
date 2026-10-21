@@ -255,7 +255,7 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   const RESEND = "https://api.resend.com/emails";
   const hook = "https://webhook.example/not-a-real-secret";
   // fake: the real key and addresses live only in Vercel
-  const mail = { RESEND_API_KEY: "re_test_fake", EMAIL_FROM: "Radar <radar@example.com>", EMAIL_TO: "a@example.com, b@example.com" };
+  const mail = { RESEND_API_KEY: "re_test_fake", EMAIL_TO: "a@example.com, b@example.com" };
   const env = { CRON_SECRET: "abc123", ANTHROPIC_API_KEY: "k", VERCEL_PROJECT_PRODUCTION_URL: "radar.example.com", ...mail };
   const some = { traveler_pain: [item(1, { severity: "High", title: "Fees <rise> & more", link: "https://example.com/a\"b" })], gov_policy: "http", web_app: [item(2)], industry: [] };
   const allFail = { traveler_pain: "http", gov_policy: "http", web_app: "http", industry: "http" };
@@ -278,9 +278,12 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   const ok = await run();
   const req = ok.sent[0] || { headers: {}, body: {} };
   check(ok.res.code === 200 && ok.res.json().email === "sent" && ok.sent.length === 1, "saved sweep: one email sent through Resend");
-  check(req.headers.authorization === "Bearer re_test_fake" && !!req.headers["user-agent"] && req.body.from === mail.EMAIL_FROM
+  check(req.headers.authorization === "Bearer re_test_fake" && !!req.headers["user-agent"]
     && JSON.stringify(req.body.to) === JSON.stringify(["a@example.com", "b@example.com"]),
-    "Resend request: bearer key, user agent, sender, recipients split from EMAIL_TO");
+    "Resend request: bearer key, user agent, recipients split from EMAIL_TO");
+  check(req.body.from === "Travel Problem Radar <onboarding@resend.dev>", "no EMAIL_FROM: sends from Resend's shared address, no domain needed");
+  const own = await run({ e: { ...env, EMAIL_FROM: "Radar <radar@example.com>" } });
+  check(own.sent[0].body.from === "Radar <radar@example.com>", "EMAIL_FROM, when set, is the sender");
   check(req.body.subject === "Travel Problem Radar · 2027-01-15 08:00 UTC · 2 problems, 2 new (manual run)",
     `subject has the time, the counts and the trigger (${req.body.subject})`);
   check(req.body.html.includes("<a href=\"https://example.com/a&quot;b\">Fees &lt;rise&gt; &amp; more</a>") && !/<rise>/.test(req.body.html),
@@ -288,13 +291,15 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   check(req.body.text.includes("Fees <rise> & more") && req.body.text.includes("Failed this run: Gov & policy")
     && req.body.text.includes("Live board: https://radar.example.com/live/") && /not verified/.test(req.body.text),
     "plain-text part has the items, failed categories, live board link and the not-verified note");
-  check(!ok.res.body.includes("re_test_fake") && !ok.res.body.includes("example.com>") && !ok.res.body.includes("a@example.com"),
+  check(!ok.res.body.includes("re_test_fake") && !ok.res.body.includes("a@example.com") && !ok.res.body.includes("b@example.com"),
     "reply has neither the key nor any address");
 
   const off = await run({ e: { CRON_SECRET: "abc123", ANTHROPIC_API_KEY: "k" } });
   check(off.res.code === 200 && off.sent.length === 0 && off.res.json().email === "not configured", "no email settings: sweep saves, nothing sent");
   const partial = await run({ e: { CRON_SECRET: "abc123", ANTHROPIC_API_KEY: "k", RESEND_API_KEY: "re_test_fake" } });
-  check(partial.sent.length === 0 && partial.res.json().email === "not configured: EMAIL_FROM, EMAIL_TO missing", "partial email settings: says which are missing");
+  check(partial.sent.length === 0 && partial.res.json().email === "not configured: EMAIL_TO missing", "key without recipients: says what is missing");
+  const nokey = await run({ e: { CRON_SECRET: "abc123", ANTHROPIC_API_KEY: "k", EMAIL_TO: "a@example.com" } });
+  check(nokey.sent.length === 0 && nokey.res.json().email === "not configured: RESEND_API_KEY missing", "recipients without a key: says what is missing");
   const many = await run({ e: { ...env, EMAIL_TO: Array.from({ length: 51 }, (_, i) => `u${i}@example.com`).join(",") } });
   check(many.sent.length === 0 && /more than 50/.test(many.res.json().email), "more than 50 recipients: refused before calling Resend");
 

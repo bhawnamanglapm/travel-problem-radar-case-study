@@ -46,7 +46,8 @@ Visitor -> /live/ -> /api/data (read-only, cached) -> same dashboard, no sweep b
 3. Set a monthly spend limit in the Anthropic Console. That is the real cost cap.
 4. Optional: `RADAR_MODEL` to choose the model (default `claude-sonnet-5-5`).
 5. Optional: `SLACK_WEBHOOK_URL` (a Slack incoming webhook) to post each sweep's digest to a channel.
-6. Optional: `RESEND_API_KEY`, `EMAIL_FROM` and `EMAIL_TO` to email each sweep's digest through Resend.
+6. Optional: `RESEND_API_KEY` and `EMAIL_TO` to email each sweep's digest through Resend. No domain is needed:
+   it sends from Resend's shared address, which delivers only to the Resend account's own email.
 
 Full deployment steps are in [DEPLOYMENT.md](../DEPLOYMENT.md).
 
