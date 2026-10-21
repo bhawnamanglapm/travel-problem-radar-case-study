@@ -16,8 +16,8 @@ working in a real inbox; that is T12's staged launch.
 | [T06](T06-api-confirm.md) `/api/confirm` | done | 15c4478 | 221 pass (+21 new) | See T06 notes below |
 | [T07](T07-api-unsubscribe.md) `/api/unsubscribe` | done | 5dfa7be | 238 pass (+17 new) | See T07 notes below |
 | [T08](T08-subscribe-page.md) `/subscribe/` page, build, checks | done | 147fd24 | 238 pass + 7 new `npm run check` checks | See T08 notes below |
-| [T09](T09-delivery-engine.md) Delivery engine | done | PENDING_HASH | 281 pass (+43 new) | See T09 notes below |
-| [T10](T10-sweep-integration.md) Wire delivery into the sweep | todo | | | |
+| [T09](T09-delivery-engine.md) Delivery engine | done | ef7831b | 281 pass (+43 new) | See T09 notes below |
+| [T10](T10-sweep-integration.md) Wire delivery into the sweep | done | TBD10 | 300 pass (+19 new) | See T10 notes below |
 | [T11](T11-admin-script-and-metrics.md) Admin script + metrics | todo | | | |
 
 ## Notes per task
@@ -157,3 +157,21 @@ working in a real inbox; that is T12's staged launch.
   recipients. **Not verified:** the Hobby plan's Blob operation allowance for about 5 sweeps a day at the cap (needs
   the plan's published limits or a real run); the roll-up reads and deliveries writes are small.
 
+### T10
+- `makeSweepHandler` takes `randomBytes` (default `node:crypto`'s; `api/sweep.js` passes it) and takes `startedAt`
+  from `now()` at the top of the call. In the saved branch, after the owner's Slack and email, it sets
+  `summary.subscribers = await deliverToSubscribers({... deadlineAt: startedAt + SUBSCRIBER_DEADLINE_MS })`
+  (`SUBSCRIBER_DEADLINE_MS = 240_000`, exported). A throw from it is caught and becomes `{error: "subscriber delivery
+  failed"}`; the answer stays 200 saved. Skipped, `empty` and error answers are unchanged and have no `subscribers` field.
+- The 68 original checks pass unchanged. 19 new checks in `scripts/test-subscriptions.mjs` run the real sweep handler
+  with one fake `fetch` for Anthropic, Resend single and Resend batch: order of calls (owner, then Pro batch, then Free
+  batch), the owner's quota error alongside `stopped: "quota"` with one batch request only, the 240 s deadline
+  (everything deferred, nothing sent, still 200), a storage failure and a Resend network error during delivery,
+  manual runs (Pro skipped), the switch off, and no address or token in the reply or the log.
+- `/api/data` refusals of the four key prefixes are already tested in the T09 block; the T10 block adds a check that
+  the keys a sweep actually wrote are refused too.
+- `DEPLOYMENT.md`: the section 1 diagram has the "then: digests to subscribers (optional)" line, and 5.2 describes the
+  `subscribers` field.
+- **Not verified:** the 240 s deadline against a real run's timing (the 4 Anthropic calls run in parallel; the
+  owner's measured duration is the 5.4 step in DEPLOYMENT.md). The sweep's total time with 5000 subscribers (50 batch
+  requests) has not been measured against the 300 s limit.

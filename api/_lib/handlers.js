@@ -3,12 +3,18 @@
 import { runDailySweep, scanCategory } from "./radar.js";
 import { buildDigest, buildFailureNotice, postToSlack } from "./slack.js";
 import { buildDigestEmail, buildFailureEmail, sendEmail } from "./email.js";
+import { randomBytes as cryptoRandomBytes } from "node:crypto";
 import { bearerOk, sendJson } from "./http.js";
+import { deliverToSubscribers } from "./subscriber-delivery.js";
 
 const DEFAULT_MODEL = "claude-sonnet-5-5";
+// No subscriber send starts after this long into the run: 60 s short of the 300 s function limit in
+// vercel.json, which leaves time to save state and reply.
+export const SUBSCRIBER_DEADLINE_MS = 240_000;
 
-export function makeSweepHandler({ env, storage, fetchFn, now, log = console.log }) {
+export function makeSweepHandler({ env, storage, fetchFn, now, randomBytes = cryptoRandomBytes, log = console.log }) {
   return async function sweep(req, res) {
+    const startedAt = now();
     if (!bearerOk(req.headers.authorization, env.CRON_SECRET)) return sendJson(res, 401, { error: "unauthorized" });
     if (!env.ANTHROPIC_API_KEY) return sendJson(res, 500, { error: "ANTHROPIC_API_KEY is not set; nothing was run or saved" });
     const model = env.RADAR_MODEL || DEFAULT_MODEL;
@@ -44,6 +50,15 @@ export function makeSweepHandler({ env, storage, fetchFn, now, log = console.log
     if (out.status === "saved") {
       const digest = { ...out, manual: !scheduled };
       Object.assign(summary, await deliver(buildDigest(digest, liveUrl), buildDigestEmail(digest, liveUrl)));
+      // Subscribers come after the owner, so if the Resend quota runs out it is their send that stops,
+      // not the owner's digest. The reply holds counts only: it is printed in a public log.
+      try {
+        summary.subscribers = await deliverToSubscribers({
+          env, storage, fetchFn, now, randomBytes, log, sweep: out, scheduled, deadlineAt: startedAt + SUBSCRIBER_DEADLINE_MS,
+        });
+      } catch (e) {
+        summary.subscribers = { error: "subscriber delivery failed" };
+      }
     }
     if (out.status === "empty") {
       const failed = { at: new Date(now()).toISOString(), perCat: out.perCat };

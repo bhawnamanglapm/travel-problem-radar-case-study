@@ -48,6 +48,7 @@ Vercel Cron: daily,      │                                                    
                          │     merge, de-duplicate, flag New, keep 60 sweeps        │
                          │     after saving: digest to Slack (optional) ────────────┼──▶ hooks.slack.com
                          │     and by email via Resend (optional) ──────────────────┼──▶ api.resend.com
+                         │     then: digests to subscribers (optional) ─────────────┼──▶ api.resend.com
                          │     writes ─────────────────────────────┐                │
                          │                                         ▼                │
                          │                              Private Vercel Blob store   │
@@ -348,6 +349,15 @@ ones as `failed: …`.
 Every run that is not skipped also returns `slack` and `email` fields. Each is `not configured` when its variables
 are unset, and otherwise `sent` or `failed: …` (see [Posting to Slack](#posting-to-slack-optional) and
 [Sending email](#sending-email-optional)). A run you start by hand is sent too, marked "manual run".
+
+A **saved** run also returns a `subscribers` field, after the owner's `slack` and `email` (so if the Resend quota runs
+out, it is the subscribers' send that stops, not yours). It is `not configured` while `SUBSCRIPTIONS_ENABLED` is not
+`1` or the Resend sender is not set up, and otherwise an object of counts only, never an address:
+`{"pro":{"due":N,"sent":N,"failed":N,"deferred":N},"free":{"due":N,"sent":N,"failed":N,"deferred":N,"alreadySent":N},"pending":N,"expired":N,"unreadable":N,"stopped":null}`.
+`deferred` means not attempted this run (the 240-second subscriber deadline, or a quota stop); a later sweep picks
+those up. `stopped` is `quota`, `deadline` or an `http …` reason. A manual run reports `"pro":{"skipped":"manual run"}`.
+A failure while delivering shows as `{"error":"…"}`; it never changes the 200 answer or what was saved. Skipped,
+`empty` and error answers have no `subscribers` field.
 
 ### 5.3 Check the page
 

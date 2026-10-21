@@ -880,4 +880,135 @@ const iso = (ms) => new Date(ms).toISOString();
   check(allBlocked, "/api/data refuses the subscriber, event, deliveries and count keys");
 }
 
+// ---- T10: delivery wired into the sweep
+{
+  const { makeSweepHandler, SUBSCRIBER_DEADLINE_MS } = await import("../api/_lib/handlers.js");
+  const { CATS } = await import("../api/_lib/radar.js");
+  const ENV = {
+    CRON_SECRET: "abc123", ANTHROPIC_API_KEY: "k", RESEND_API_KEY: "re_k", EMAIL_TO: "owner@example.com",
+    EMAIL_FROM: "Radar <hello@pehchanthetraveller.com>", SUBSCRIPTIONS_ENABLED: "1", SITE_URL: "https://site.example",
+  };
+  const PROBS = [{ title: "Problem 1", summary: "s", source: "Src", link: "https://example.com/1", region: "Global", date: "Oct 2026", severity: "High", opportunity: "o" }];
+  const answer = JSON.stringify(PROBS);
+  const SCHEDULED = { authorization: "Bearer abc123", "x-sweep-trigger": "scheduled" };
+
+  // One fetch for every service the sweep talks to: Anthropic, Resend single (owner) and Resend batch (subscribers).
+  const world = ({ env = {}, resend = {}, tickPerAnthropicCall = 0, byCat = null } = {}) => {
+    const st = memStorage();
+    const calls = []; // { kind, body }
+    const logs = [];
+    let clock = Date.UTC(2026, 9, 21, 8, 9, 10);
+    const fetchFn = async (url, init) => {
+      const h = { get: () => null };
+      if (String(url).includes("anthropic")) {
+        calls.push({ kind: "anthropic" });
+        clock += tickPerAnthropicCall;
+        const prompt = JSON.parse(init.body).messages[0].content;
+        const cat = CATS.find((c) => prompt.includes(`"${c.label}"`));
+        const text = byCat ? byCat(cat.key) : (cat.key === "traveler_pain" ? answer : "[]");
+        return { ok: true, status: 200, headers: h, json: async () => ({ content: [{ type: "text", text }], usage: { input_tokens: 1, output_tokens: 1, server_tool_use: { web_search_requests: 1 } } }) };
+      }
+      const body = JSON.parse(init.body);
+      const kind = String(url).endsWith("/emails/batch") ? "batch" : "owner";
+      calls.push({ kind, body });
+      const forced = resend[kind];
+      if (forced === "throw") throw new Error("socket hang up for sub@example.com");
+      if (forced) return { ok: false, status: forced.status, headers: h, json: async () => forced.body || {} };
+      return { ok: true, status: 200, headers: h, json: async () => ({ data: Array.isArray(body) ? body.map((_, i) => ({ id: "m" + i })) : { id: "o" }, id: "o" }) };
+    };
+    const handler = makeSweepHandler({ env: { ...ENV, ...env }, storage: st, fetchFn, now: () => clock, randomBytes: seeded(9), log: (...a) => logs.push(a.join(" ")) });
+    const call = async (headers = SCHEDULED) => { const res = mockRes(); await handler({ headers }, res); return res; };
+    const addSub = async (n, plan) => {
+      const rec = { ...newPending(`s${n}@example.com`, { now: clock, randomBytes: seeded(100 + n) }), token: "tok" + n, status: "active", plan, proSource: plan === "pro" ? "owner" : null };
+      await putSubscriber(st, rec);
+      return rec;
+    };
+    return { st, calls, logs, call, addSub, kinds: () => calls.filter((c) => c.kind !== "anthropic").map((c) => c.kind) };
+  };
+
+  // 1. saved scheduled sweep, 1 Pro + 1 Free: the owner first, then one batch per audience
+  let w = world();
+  await w.addSub(1, "pro");
+  await w.addSub(2, "free");
+  let res = await w.call();
+  let body = res.json();
+  check(res.code === 200 && body.status === "saved" && body.email === "sent", "sweep: a saved scheduled sweep still answers 200 saved with the owner's email sent");
+  check(w.kinds().join() === "owner,batch,batch", `sweep: Resend sees the owner's email first, then the Pro batch and the Free batch (${w.kinds().join()})`);
+  const proBatch = w.calls.filter((c) => c.kind === "batch")[0].body;
+  check(proBatch.length === 1 && proBatch[0].to[0] === "s1@example.com" && /Pro update/.test(proBatch[0].text), "sweep: the Pro batch has the Pro subscriber");
+  check(body.subscribers && body.subscribers.pro.sent === 1 && body.subscribers.free.sent === 1 && body.subscribers.stopped === null, "sweep: the reply's subscribers field has the counts");
+  check(!res.body.includes("@") && !/tok1|tok2/.test(res.body), "sweep: the reply holds no address or token");
+  check(w.logs.every((l) => !/s[12]@example\.com|tok[12]/.test(l)), "sweep: the log holds no subscriber address or token");
+
+  // 2. manual run: Free once a day, Pro only for scheduled sweeps -> pro skipped
+  w = world();
+  await w.addSub(1, "pro");
+  res = await w.call({ authorization: "Bearer abc123" });
+  check(res.code === 200 && res.json().trigger === "manual" && res.json().subscribers.pro.skipped === "manual run" && res.json().subscribers.free.sent === 0, "sweep: a manual run sends Pro nothing (scheduled only) and reports it");
+
+  // 3. subscriptions off: not configured, the sweep is untouched
+  w = world({ env: { SUBSCRIPTIONS_ENABLED: "" } });
+  await w.addSub(1, "pro");
+  res = await w.call();
+  check(res.code === 200 && res.json().subscribers === "not configured" && w.kinds().join() === "owner", "sweep: switch off gives subscribers: \"not configured\" and sends only the owner's email");
+
+  // 4. the owner's Resend call is out of quota: owner reply shows it, the subscriber send stops without looping
+  w = world({ resend: { owner: { status: 429, body: { name: "daily_quota_exceeded" } }, batch: { status: 429, body: { name: "daily_quota_exceeded" } } } });
+  await w.addSub(1, "pro");
+  await w.addSub(2, "free");
+  res = await w.call();
+  body = res.json();
+  check(res.code === 200 && body.status === "saved" && /^failed: http 429 daily_quota_exceeded/.test(body.email), "sweep: owner email over quota shows failed: http 429 and the sweep is still saved");
+  check(body.subscribers.stopped === "quota" && body.subscribers.pro.sent === 0 && w.kinds().filter((k) => k === "batch").length === 1, "sweep: the subscriber send stops on quota after one request, with no loop and no Free attempt");
+
+  // 5. the deadline: the clock is past start + 240 s before delivery -> everything deferred, sweep still 200
+  w = world({ tickPerAnthropicCall: 70_000 });
+  await w.addSub(1, "pro");
+  await w.addSub(2, "free");
+  res = await w.call();
+  body = res.json();
+  check(SUBSCRIBER_DEADLINE_MS === 240_000, "sweep: the subscriber deadline is 240 s");
+  check(res.code === 200 && body.status === "saved" && w.kinds().filter((k) => k === "batch").length === 0, "sweep: past the deadline, no subscriber batch is sent");
+  check(body.subscribers.pro.deferred === 1 && body.subscribers.pro.sent === 0 && body.subscribers.free.deferred === 1, "sweep: past the deadline, everything is reported as deferred");
+
+  // 6. a delivery that throws never fails the sweep
+  w = world();
+  await w.addSub(1, "pro");
+  const realList = w.st.list;
+  w.st.list = async (...a) => { throw new Error("blob down for s1@example.com"); };
+  res = await w.call();
+  check(res.code === 200 && res.json().status === "saved" && res.json().subscribers.error && !res.body.includes("@"), "sweep: a storage failure while delivering still gives 200 saved, with an error field and no address");
+  w.st.list = realList;
+
+  // 7. a network error from Resend for subscribers
+  w = world({ resend: { batch: "throw" } });
+  await w.addSub(1, "pro");
+  res = await w.call();
+  check(res.code === 200 && res.json().subscribers.pro.sent === 0 && res.json().subscribers.pro.failed + res.json().subscribers.pro.deferred === 1 && !res.body.includes("@") && w.logs.every((l) => !l.includes("sub@example.com")), "sweep: a Resend network error for subscribers is counted, not thrown, and leaks nothing");
+
+  // 8. skipped / empty / error replies carry no subscribers field
+  w = world();
+  await w.addSub(1, "pro");
+  await w.call();
+  const again = await w.call(); // a second scheduled call within 2 h
+  check(again.code === 200 && again.json().status === "skipped" && !("subscribers" in again.json()), "sweep: a skipped reply has no subscribers field");
+  const e = world({ byCat: () => "not json" });
+  e.st.m.clear();
+  const emptyRes = await e.call();
+  check(emptyRes.code === 502 && !("subscribers" in emptyRes.json()), "sweep: an empty (502) reply has no subscribers field");
+  const noKey = world({ env: { ANTHROPIC_API_KEY: "" } });
+  const nk = await noKey.call();
+  check(nk.code === 500 && !("subscribers" in nk.json()) && noKey.kinds().length === 0, "sweep: a missing API key gives 500 without subscribers and no Resend call");
+
+  // 9. subscriber data is not readable through /api/data (the T09 block checks the same keys; this one uses the keys a sweep just wrote)
+  w = world();
+  await w.addSub(1, "free");
+  await w.call();
+  const dh = makeDataHandler({ storage: w.st });
+  const keys = [...w.st.m.keys()].filter((k) => /^radar:(sub|deliveries|subscriberCount)/.test(k));
+  let refused = 0;
+  for (const k of keys) { const r = mockRes(); await dh({ method: "GET", url: "/api/data?key=" + encodeURIComponent(k), headers: {} }, r); if (r.code === 400) refused++; }
+  check(keys.length >= 3 && refused === keys.length, `sweep: every subscriber key a sweep wrote is refused by /api/data (${refused}/${keys.length})`);
+}
+
 finish("subscription tests");
