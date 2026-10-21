@@ -2,7 +2,7 @@
 // the Blob store; it is not part of the deployment (.vercelignore skips scripts/) and adds no endpoint.
 //
 //   node --env-file=.env.local scripts/subscribers.mjs stats [--days 30]
-//   node --env-file=.env.local scripts/subscribers.mjs list [--plan pro|free|pending]
+//   node --env-file=.env.local scripts/subscribers.mjs list [--plan pro|free|pending|requested]
 //   node --env-file=.env.local scripts/subscribers.mjs show <email>
 //   node --env-file=.env.local scripts/subscribers.mjs grant-pro <email> [--until 2027-01-31] [--yes]
 //   node --env-file=.env.local scripts/subscribers.mjs revoke-pro <email> [--yes]
@@ -77,22 +77,25 @@ export function untilToIso(s) {
 // Counts now, from the records, and per UTC day, from event records and delivery files. No addresses.
 export async function computeStats(storage, { now, days = 30 }) {
   const { records, skipped } = await listSubscribers(storage);
-  const cur = { pending: 0, free: 0, pro: 0, proExpiring7d: 0, unreadable: skipped };
+  const cur = { pending: 0, free: 0, pro: 0, proExpiring7d: 0, proRequested: 0, unreadable: skipped };
   for (const r of records) {
     if (r.status === "pending") cur.pending++;
     else if (r.status === "active") {
       if (effectivePlan(r, now) === "pro") {
         cur.pro++;
         if (r.proUntil != null && Date.parse(r.proUntil) <= now + 7 * DAY_MS) cur.proExpiring7d++;
-      } else cur.free++;
+      } else {
+        cur.free++;
+        if (r.proRequestedAt) cur.proRequested++; // asked for Pro, not granted yet
+      }
     } else cur.unreadable++;
   }
 
   const first = utcDay(now - (days - 1) * DAY_MS);
   const dayList = [];
   for (let i = days - 1; i >= 0; i--) dayList.push(utcDay(now - i * DAY_MS));
-  const perDay = new Map(dayList.map((d) => [d, { day: d, subscribed: 0, confirmsent: 0, confirmed: 0, unsubscribedFree: 0, unsubscribedPro: 0, expired: 0, freeDelivered: 0 }]));
-  const totals = { subscribed: 0, confirmsent: 0, confirmed: 0, unsubscribed: 0, expired: 0 };
+  const perDay = new Map(dayList.map((d) => [d, { day: d, subscribed: 0, confirmsent: 0, confirmed: 0, unsubscribedFree: 0, unsubscribedPro: 0, expired: 0, prorequested: 0, freeDelivered: 0 }]));
+  const totals = { subscribed: 0, confirmsent: 0, confirmed: 0, unsubscribed: 0, expired: 0, prorequested: 0 };
 
   for (const suffix of await storage.list(KEY_EVENT_PREFIX)) {
     const m = EVENT_RE.exec(suffix);
@@ -127,17 +130,17 @@ export async function computeStats(storage, { now, days = 30 }) {
 export function formatStats(s) {
   const pad = (v, n) => String(v).padStart(n);
   const lines = [
-    `Now: ${s.now.pending} pending, ${s.now.free} Free, ${s.now.pro} Pro (${s.now.proExpiring7d} of them ending within 7 days)${s.now.unreadable ? `, ${s.now.unreadable} unreadable` : ""}`,
+    `Now: ${s.now.pending} pending, ${s.now.free} Free, ${s.now.pro} Pro (${s.now.proExpiring7d} of them ending within 7 days), ${s.now.proRequested} waiting for Pro${s.now.unreadable ? `, ${s.now.unreadable} unreadable` : ""}`,
     "",
     `Last ${s.days} days (UTC):`,
-    "day       subscribed  confirmsent  confirmed  unsub(free)  unsub(pro)  expired  free sent",
+    "day       subscribed  confirmsent  confirmed  unsub(free)  unsub(pro)  expired  pro asked  free sent",
   ];
   for (const r of s.perDay) {
-    if (!(r.subscribed || r.confirmsent || r.confirmed || r.unsubscribedFree || r.unsubscribedPro || r.expired || r.freeDelivered)) continue;
-    lines.push(`${r.day}  ${pad(r.subscribed, 10)}  ${pad(r.confirmsent, 11)}  ${pad(r.confirmed, 9)}  ${pad(r.unsubscribedFree, 11)}  ${pad(r.unsubscribedPro, 10)}  ${pad(r.expired, 7)}  ${pad(r.freeDelivered, 9)}`);
+    if (!(r.subscribed || r.confirmsent || r.confirmed || r.unsubscribedFree || r.unsubscribedPro || r.expired || r.prorequested || r.freeDelivered)) continue;
+    lines.push(`${r.day}  ${pad(r.subscribed, 10)}  ${pad(r.confirmsent, 11)}  ${pad(r.confirmed, 9)}  ${pad(r.unsubscribedFree, 11)}  ${pad(r.unsubscribedPro, 10)}  ${pad(r.expired, 7)}  ${pad(r.prorequested, 9)}  ${pad(r.freeDelivered, 9)}`);
   }
   const t = s.totals;
-  lines.push("", `Total: ${t.subscribed} subscribed, ${t.confirmsent} confirmation emails, ${t.confirmed} confirmed, ${t.unsubscribed} unsubscribed, ${t.expired} expired`);
+  lines.push("", `Total: ${t.subscribed} subscribed, ${t.confirmsent} confirmation emails, ${t.confirmed} confirmed, ${t.unsubscribed} unsubscribed, ${t.expired} expired, ${t.prorequested} Pro requests`);
   lines.push(s.confirmRate === null
     ? "Confirm rate: n/a (nobody subscribed in this period)"
     : `Confirm rate: ${(s.confirmRate * 100).toFixed(1)}% (${t.confirmed} confirmed / ${t.subscribed} subscribed, counted by when each event happened, so people who subscribed earlier can raise it)`);
@@ -147,23 +150,24 @@ export function formatStats(s) {
 // ---- reads of single records (the owner's terminal only)
 
 export async function listRows(storage, { now, plan = null }) {
-  if (plan !== null && !["pro", "free", "pending"].includes(plan)) throw new UsageError("--plan must be pro, free or pending");
+  if (plan !== null && !["pro", "free", "pending", "requested"].includes(plan)) throw new UsageError("--plan must be pro, free, pending or requested");
   const { records, skipped } = await listSubscribers(storage);
   const rows = records.filter((r) => {
     if (plan === "pending") return r.status === "pending";
     if (plan === "pro") return r.status === "active" && effectivePlan(r, now) === "pro";
     if (plan === "free") return r.status === "active" && effectivePlan(r, now) === "free";
+    if (plan === "requested") return r.status === "active" && effectivePlan(r, now) === "free" && Boolean(r.proRequestedAt);
     return true;
   }).map((r) => ({
     email: r.email, status: r.status, plan: r.plan, lapsed: r.status === "active" && r.plan === "pro" && effectivePlan(r, now) === "free",
-    proUntil: r.proUntil || null, confirmedAt: r.confirmedAt || null,
+    proUntil: r.proUntil || null, confirmedAt: r.confirmedAt || null, proRequestedAt: r.proRequestedAt || null,
   }));
   return { rows, skipped };
 }
 
 export function formatRows({ rows, skipped }) {
-  const lines = rows.map((r) => [r.email, r.status, r.plan + (r.lapsed ? " (lapsed)" : ""), r.proUntil || "-", r.confirmedAt || "-"].join("\t"));
-  return ["email\tstatus\tplan\tproUntil\tconfirmedAt", ...lines, `${rows.length} shown${skipped ? `, ${skipped} unreadable` : ""}`].join("\n");
+  const lines = rows.map((r) => [r.email, r.status, r.plan + (r.lapsed ? " (lapsed)" : ""), r.proUntil || "-", r.confirmedAt || "-", r.proRequestedAt || "-"].join("\t"));
+  return ["email\tstatus\tplan\tproUntil\tconfirmedAt\tproRequestedAt", ...lines, `${rows.length} shown${skipped ? `, ${skipped} unreadable` : ""}`].join("\n");
 }
 
 export async function showRecord(storage, email) {
@@ -184,7 +188,8 @@ export async function grantPro(storage, email, { until = null, apply, now, rando
   const lapsed = proUntil !== null && Date.parse(proUntil) <= now;
   const summary = `plan ${r.plan} -> pro, proSource ${r.proSource || "none"} -> owner, proUntil ${r.proUntil || "none"} -> ${proUntil || "none (no end date)"}${lapsed ? " (already past: the sweep will treat them as Free)" : ""}`;
   if (!apply) return { code: 1, message: `would change: ${summary}. Nothing changed; add --yes to apply.`, changed: false };
-  await putSubscriber(storage, { ...r, plan: "pro", proSource: "owner", proUntil });
+  // The request is answered, so it leaves the waiting list (the prorequested event keeps the history).
+  await putSubscriber(storage, { ...r, plan: "pro", proSource: "owner", proUntil, proRequestedAt: null });
   await recordEvent(storage, "progranted", { now, randomBytes: rb, plan: "pro" });
   return { code: 0, message: `done: ${summary}`, changed: true };
 }
