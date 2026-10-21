@@ -18,7 +18,7 @@ working in a real inbox; that is T12's staged launch.
 | [T08](T08-subscribe-page.md) `/subscribe/` page, build, checks | done | 147fd24 | 238 pass + 7 new `npm run check` checks | See T08 notes below |
 | [T09](T09-delivery-engine.md) Delivery engine | done | ef7831b | 281 pass (+43 new) | See T09 notes below |
 | [T10](T10-sweep-integration.md) Wire delivery into the sweep | done | 0d3b008 | 300 pass (+19 new) | See T10 notes below |
-| [T11](T11-admin-script-and-metrics.md) Admin script + metrics | done | TBD11 | 340 pass (+37 new; 303 before T11) | See T11 notes below |
+| [T11](T11-admin-script-and-metrics.md) Admin script + metrics | done | d344d34 | 340 pass (+37 new; 303 before T11) | See T11 notes below |
 
 ## Notes per task
 
