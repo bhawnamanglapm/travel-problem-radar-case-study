@@ -51,6 +51,18 @@ check(/<script src="radar-live.js"><\/script>/.test(livePage), "live/index.html 
 const liveBundle = existsSync("live/radar-live.js") ? readFileSync("live/radar-live.js", "utf8") : "";
 check(liveBundle.includes("/api/data"), "live/radar-live.js is built and reads /api/data");
 
+// 4b. Subscribe page (Vercel): self-contained, posts to the API, and is copied into the deployment.
+const subPage = existsSync("subscribe/index.html") ? readFileSync("subscribe/index.html", "utf8") : "";
+check(/fetch\("\/api\/subscribe"/.test(subPage) && /action="\/api\/subscribe"/.test(subPage), "subscribe/index.html posts to /api/subscribe (script and no-JavaScript form)");
+check(/name="email"/.test(subPage) && /name="website"/.test(subPage), "subscribe/index.html has the email field and the website honeypot field");
+check(/We store your email address and the dates you subscribed and confirmed/.test(subPage) && /Unsubscribing deletes it/.test(subPage), "subscribe/index.html has the privacy note");
+check(/Gathered by an AI model with web search\. Items are not verified/.test(subPage), "subscribe/index.html has the AI notice");
+check(subPage.length > 0 && !/<script[^>]*\ssrc=|<link[^>]*rel=["']?stylesheet|@import|url\(\s*["']?https?:/i.test(subPage), "subscribe/index.html is self-contained (no external script, stylesheet, import or font URL)");
+const vercelJson = JSON.parse(readFileSync("vercel.json", "utf8"));
+check(/\bcp -r [^&]*\bsubscribe\b[^&]* public\//.test(vercelJson.buildCommand || ""), "vercel.json's buildCommand copies subscribe into public/");
+const subLinks = [...page.matchAll(/href="([^"]*subscribe[^"]*)"/g)].map((m) => m[1]);
+check(subLinks.every((h) => h.startsWith("https://travel-problem-radar.vercel.app/subscribe/")), `index.html links to the subscribe page only by the absolute Vercel URL${subLinks.length ? " (" + subLinks.join(", ") + ")" : " (no link yet)"}`);
+
 // 5. The server copy of the prompt and categories must match the Claude artifact.
 const jsx = readFileSync("travel-problem-radar.jsx", "utf8");
 const srv = readFileSync("api/_lib/radar.js", "utf8");

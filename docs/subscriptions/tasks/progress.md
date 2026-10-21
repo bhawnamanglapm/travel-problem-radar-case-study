@@ -14,8 +14,8 @@ working in a real inbox; that is T12's staged launch.
 | [T04](T04-email-builders.md) Email builders + batch send | done | 87bbdcb | 155 pass (+38 new) | See T04 notes below |
 | [T05](T05-api-subscribe.md) `POST /api/subscribe` | done | 0f718c3 | 200 pass (+45 new) | See T05 notes below |
 | [T06](T06-api-confirm.md) `/api/confirm` | done | 15c4478 | 221 pass (+21 new) | See T06 notes below |
-| [T07](T07-api-unsubscribe.md) `/api/unsubscribe` | done | PENDING_HASH | 238 pass (+17 new) | See T07 notes below |
-| [T08](T08-subscribe-page.md) `/subscribe/` page, build, checks | todo | | | |
+| [T07](T07-api-unsubscribe.md) `/api/unsubscribe` | done | 5dfa7be | 238 pass (+17 new) | See T07 notes below |
+| [T08](T08-subscribe-page.md) `/subscribe/` page, build, checks | done | PENDING_HASH | 238 pass + 7 new `npm run check` checks | See T08 notes below |
 | [T09](T09-delivery-engine.md) Delivery engine | todo | | | |
 | [T10](T10-sweep-integration.md) Wire delivery into the sweep | todo | | | |
 | [T11](T11-admin-script-and-metrics.md) Admin script + metrics | todo | | | |
@@ -116,4 +116,20 @@ working in a real inbox; that is T12's staged launch.
   List-Unsubscribe=One-Click`), an HTTPS URL, and a non-interactive POST. **Not confirmed:** what response and
   redirect behaviour they require. The endpoint answers the POST directly with `200` and no redirect, which is the
   safest reading. Check against Google's sender guidelines and RFC 8058 before launch (T12).
+
+### T08
+- `subscribe/index.html`: one self-contained file (inline CSS and script), dark palette matching `live/`. Both plans
+  in a two-row table, email field, off-screen honeypot `website` (with a label for screen-reader users),
+  `aria-live` status line, privacy note, AI notice. A `503` shows "Subscriptions aren't open yet."
+- Without JavaScript the form posts form-encoded data to `/api/subscribe`, which answers with JSON, so the visitor
+  sees raw JSON. Acceptable as the task says.
+- `vercel.json` `buildCommand` now copies `subscribe`. `scripts/check.mjs` has 7 new checks (posts to the API, both
+  field names, privacy note, AI notice, self-contained, build copies it, any link from `index.html` is the absolute
+  Vercel URL). `npm run check` passes.
+- **Links are held back for T12, as the task says:** `live/index.html`, `index.html` and `README.md` are unchanged.
+- **OWNER INPUT NEEDED, launch blocker:** the page has no contact address. It says "contact details will be added
+  here before sign-ups open." I did not invent one. Add the address before T12.
+- **Not verified:** the by-hand acceptance items (the page on a preview deployment at `/subscribe/` and
+  `/subscribe`, phone width, the honeypot being skipped by keyboard and screen readers, the form without
+  JavaScript). Those need a real browser and a deployment. The inline script was only checked to parse.
 

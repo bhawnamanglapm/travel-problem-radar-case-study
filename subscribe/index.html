@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Get the Travel Problem Radar digest</title>
+<meta name="description" content="Get the Travel Problem Radar digest by email: the travel-industry problems an AI model with web search found, once a day." />
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #0B0B0D; color: #F4F4F7; }
+  body { font: 16px/1.55 -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 0 16px; }
+  main { max-width: 640px; margin: 0 auto; padding: 40px 0 56px; }
+  h1 { font-size: 26px; line-height: 1.25; margin: 0 0 12px; }
+  p { margin: 0 0 14px; color: #C9C9D2; }
+  a { color: #C6FF3D; }
+  .nav { font: 12px/1.5 ui-monospace, 'JetBrains Mono', monospace; color: #93939F; margin: 0 0 28px; }
+  .nav a { color: #F4F4F7; }
+  .plans { width: 100%; border-collapse: collapse; margin: 20px 0 24px; font-size: 15px; }
+  .plans th, .plans td { text-align: left; vertical-align: top; padding: 12px 14px; border: 1px solid #2A2A34; }
+  .plans th { color: #C6FF3D; font-weight: 600; width: 5.5em; background: #131318; }
+  .plans td { color: #C9C9D2; }
+  form { margin: 0 0 8px; }
+  label.field { display: block; font-weight: 600; margin: 0 0 6px; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; }
+  input[type=email] { flex: 1 1 240px; min-width: 0; font: inherit; color: #F4F4F7; background: #131318;
+    border: 1px solid #3A3A46; border-radius: 6px; padding: 10px 12px; }
+  input[type=email]:focus { outline: 2px solid #C6FF3D; outline-offset: 1px; }
+  button { font: inherit; font-weight: 600; background: #C6FF3D; color: #0B0B0D; border: 0; border-radius: 6px;
+    padding: 10px 20px; cursor: pointer; }
+  button:hover { background: #d8ff6f; }
+  button[disabled] { opacity: .6; cursor: default; }
+  /* The trap field: off-screen rather than display:none, which some bots skip. */
+  .trap { position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+  #status { min-height: 1.6em; margin: 12px 0 0; color: #F4F4F7; }
+  #status.err { color: #FF8A80; }
+  .small { font-size: 13px; color: #93939F; }
+</style>
+</head>
+<body>
+<main>
+  <p class="nav"><a href="../">&larr; Case study</a> &middot; <a href="../live/">Live board</a></p>
+  <h1>Get the Travel Problem Radar digest</h1>
+  <p>An AI model with web search looks for travel-industry problems on a schedule. Get what it found by email instead of checking the board.</p>
+
+  <table class="plans">
+    <tr><th scope="row">Free</th><td>One email a day, after the first sweep of the UTC day (about 05:47 IST), with everything found in the last 24 hours.</td></tr>
+    <tr><th scope="row">Pro</th><td>An email after every sweep, about 5 a day. Pro isn&rsquo;t open for sign-up yet.</td></tr>
+  </table>
+
+  <form id="f" method="post" action="/api/subscribe">
+    <label class="field" for="email">Your email address</label>
+    <div class="row">
+      <input id="email" name="email" type="email" autocomplete="email" required maxlength="254" placeholder="you@example.com" />
+      <button id="go" type="submit">Subscribe</button>
+    </div>
+    <div class="trap">
+      <label for="website">Leave this field empty (it is a trap for automated sign-ups)</label>
+      <input id="website" name="website" type="text" tabindex="-1" autocomplete="off" />
+    </div>
+  </form>
+  <p id="status" role="status" aria-live="polite"></p>
+
+  <p class="small">We store your email address and the dates you subscribed and confirmed. We use it only to send this digest. Unsubscribing deletes it. You&rsquo;ll get one email to confirm before anything else is sent.</p>
+  <p class="small">Questions or a deletion request: contact details will be added here before sign-ups open.</p>
+  <p class="small">Gathered by an AI model with web search. Items are not verified; check each source link.</p>
+</main>
+<script>
+(function () {
+  var form = document.getElementById("f");
+  var statusEl = document.getElementById("status");
+  var btn = document.getElementById("go");
+  function say(text, isErr) {
+    statusEl.textContent = text;
+    statusEl.className = isErr ? "err" : "";
+  }
+  form.addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    btn.disabled = true;
+    say("Sending…", false);
+    fetch("/api/subscribe", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: form.email.value, website: form.website.value })
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (b) { return { status: r.status, body: b }; });
+    }).then(function (x) {
+      if (x.status === 503) say("Subscriptions aren’t open yet.", true);
+      else if (x.status === 200 && x.body.message) { say(x.body.message, false); form.email.value = ""; }
+      else if (x.body && x.body.error) say(x.body.error.charAt(0).toUpperCase() + x.body.error.slice(1) + ".", true);
+      else say("Something went wrong. Please try again in a minute.", true);
+    }).catch(function () {
+      say("Couldn’t reach the server. Please try again in a minute.", true);
+    }).then(function () { btn.disabled = false; });
+  });
+})();
+</script>
+</body>
+</html>
