@@ -243,12 +243,12 @@ working in a real inbox; that is T12's staged launch.
 |---|---|
 | 1. Deploy switched off | Not run as a separate step: production was configured before this check |
 | 2. Variables | Done. All set for Production (checked by name only): `EMAIL_FROM`, `MAX_SUBSCRIBERS`, `MAX_CONFIRMS_PER_DAY`, `SITE_URL`, `SUBSCRIPTIONS_ENABLED` and the rest |
-| 3. Confirmation email | Arrived from `EMAIL_FROM`, but **in spam**, so the check "not in spam" failed. SPF, DKIM (`resend._domainkey`) and DMARC (`p=none`) records exist for the domain |
+| 3. Confirmation email | Arrived from `EMAIL_FROM`, but **in spam**, so the check "not in spam" failed. SPF, DKIM (`resend._domainkey`) and DMARC (`p=none`) records exist for the domain. **Rechecked 2026-10-21 22:00 UTC:** Gmail's headers show SPF, DKIM (`d=pehchanthetraveller.com`) and DMARC all `pass`; Gmail still files it as spam ("similar to messages that were identified as spam in the past"). mail-tester scores it 9.1/10; nearly all the lost points are `FROM_FMBLA_NEWDOM14` ("From domain was registered in last 7-14 days"), so the likely cause is the domain's age, not the setup or the content. The sign-up reply now says to check spam or junk. Recheck with mail-tester in about two weeks |
 | 4. Confirm, `stats` | Done |
 | 5. Free digest | A manual sweep at 19:50 UTC replied `free.sent: 1`. Arrival not yet confirmed by the owner |
 | 6. Pro | `grant-pro` done for one address. Waiting for the next scheduled sweep (00:17 UTC on 2026-10-22) |
 | 7. Gmail Unsubscribe button | Not done |
-| 8. Other providers (Outlook) | Not done |
+| 8. Other providers (Outlook) | Started 2026-10-21: the confirmation landed in Outlook.com's **Junk**; the confirm page and the Confirm button worked. The digest in Outlook is not checked yet |
 | 9. Links | Done (#10). The Pages redirect above completes "links work from both GitHub Pages and Vercel" once merged |
 
 - **Seen while checking:** the scheduled GitHub runs at 10:15 and 15:22 UTC on 2026-10-21 failed with "Add
