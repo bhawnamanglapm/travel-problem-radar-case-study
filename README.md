@@ -17,7 +17,7 @@ each item with a product idea a PM could build.
 | **Try the demo** | https://bhawnamanglapm.github.io/travel-problem-radar-case-study/demo/ (replays a saved sample; no AI calls) |
 | **Sample digest** | https://bhawnamanglapm.github.io/travel-problem-radar-case-study/demo/#report |
 | **Live page** | https://travel-problem-radar.vercel.app/live/. Deployed; a sweep runs every 5 hours. The first production sweep (Oct 2026) saved items from only 1 of 4 categories; the cause, an output token limit, is fixed and a local run returned all four. |
-| **More** | [Technical reference](docs/TECHNICAL.md) · [PRD](docs/PRD.md) · [Decision log](docs/decisions.md) · [Changelog](CHANGELOG.md) |
+| **More** | [Technical reference](docs/TECHNICAL.md) · [PRD](docs/PRD.md) · [Decision log](docs/decisions.md) · [Subscription plan (draft)](docs/subscriptions/architecture.md) · [Changelog](CHANGELOG.md) |
 
 ---
 
@@ -155,6 +155,8 @@ records no delivery to a real Slack workspace or inbox yet.
 3. **Recognise the same event under a new headline**, so "New" means a new event and not just new wording.
 4. **Refresh the sample** (the items are from July 2026).
 5. **Ask PMs whether the opportunities are useful:** for example, how many items they would act on in a week.
+6. **Subscriptions (planned, nothing built):** free email sign-up first, then a paid plan through Razorpay only if
+   people sign up. Needs a verified domain. See [docs/subscriptions/](docs/subscriptions/architecture.md).
 
 ## How I built it
 

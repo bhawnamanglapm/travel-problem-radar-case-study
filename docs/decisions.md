@@ -20,6 +20,7 @@
 | 2026-10-18 | **Keep the component a single file and copy the prompt to the server, with a drift check.** | The file can still be pasted into Claude's app. | Two copies of the prompt; `npm run check` fails if they differ. | `5cb9004`, `8a65502` |
 | 2026-10-18 | **Serve committed bundles instead of building on Vercel.** | GitHub Pages and Vercel serve the same files, and CI fails if a bundle is stale. | Bundles must be rebuilt and committed by hand. | `236fe73`, `e40c0b2` |
 | 2026-10-19 | **No `evals/` until real sweeps exist; publish a draft scoring rubric instead.** | Results must come from runs, not estimates. | Quality claims wait for the first 20+ real items. | This change |
+| 2026-10-21 | **Plan subscriptions in documents before writing code: free email sign-up first, Razorpay for a paid plan later, and payments only if sign-up shows demand.** | The repo records no users besides the owner, sending to anyone else needs a verified domain, and charging money needs a paid Vercel plan. | Building sign-up and payments now was rejected: it would spend effort and money on an unproven audience. The documents are drafts, not commitments. | `docs/subscriptions/` |
 
 > **OWNER INPUT NEEDED:** add decisions made outside the code, such as why travel, why these four categories, why
 > Slack, and anything you tried and dropped.

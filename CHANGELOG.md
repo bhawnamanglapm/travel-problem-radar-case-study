@@ -3,6 +3,17 @@
 Built from the git history. Dates are commit dates. The project has no version numbers or releases, so entries are
 grouped by date.
 
+## 2026-10-21
+
+- Sweep now runs every 5 hours from GitHub Actions, with Vercel's daily cron kept as a backstop (`b691d54`).
+- Fixed categories coming back empty: the output token limit is raised to 16,000 because thinking counts toward it
+  (`f200a79`). A manual run with the secret always sweeps (`66f25c8`).
+- The server sweep can post the digest to Slack (`493ddbd`) and email it through Resend (`bb78fbb`, `64fae00`), or send a
+  short failure notice. Both are optional and covered by the offline tests only. Added `DEPLOYMENT.md`.
+- README brought up to date with the above (`6889060`).
+- Added draft subscription plans under `docs/subscriptions/`: system diagrams, pricing and rollout, free email sign-up
+  and paid Pro through Razorpay. Documents only; no code changed.
+
 ## 2026-10-19
 
 - Rewrote the README as a product case study; how-it-runs, files and rebuild steps moved to `docs/TECHNICAL.md`.
