@@ -502,8 +502,11 @@ not a letter or digit with `-`.
   sweep, the live page can show the previous sweep for about 5 minutes, sometimes a little longer while the CDN
   refreshes.
 - Error responses and `/api/sweep` use `no-store`.
-- Vercel Blob itself can take up to 60 seconds to serve a new version of an overwritten file. With sweeps hours
-  apart this does not matter.
+- Vercel Blob itself can take up to 60 seconds to serve a new version of an overwritten file from its CDN cache.
+  So every read skips that cache (`useCache: false`) except `/api/data`'s, which is read-only. Before this, a
+  record read back within a minute of a change could show the old version, and a read-change-write in that minute
+  (for example a "Request Pro" click just after `grant-pro`) could undo the change. Seen on 2026-10-21: `list` showed
+  Free for about a minute after `grant-pro` had written Pro.
 
 ---
 

@@ -2,6 +2,7 @@
 // key: Blob storage and Resend are faked.
 //   node scripts/test-subscriptions.mjs
 import { randomBytes } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { blobStorage } from "../api/_lib/storage.js";
 import {
   CONFIRM_RESEND_HOURS, PENDING_TTL_DAYS, countEvents, deleteSubscriber, effectivePlan, getSubscriber, listSubscribers,
@@ -52,6 +53,17 @@ const iso = (ms) => new Date(ms).toISOString();
     try { await blob.list(bad); allRefused = false; } catch (e) { /* refused, as it should be */ }
   }
   check(allRefused && calls.length === 3, "list refuses a prefix not under radar: or not ending in ':' or '-', before calling the service");
+
+  // get() reads past Blob's CDN cache unless the caller opts in (a stale read would undo a recent write).
+  const gets = [];
+  const fakeGet = { get: async (p, opts) => { gets.push({ p, opts }); return { statusCode: 200, stream: new Blob(["{\"a\":1}"]).stream() }; } };
+  const fresh = await blobStorage(fakeGet).get("radar:sub:x");
+  await blobStorage(fakeGet, { cached: true }).get("radar:index");
+  check(fresh === '{"a":1}' && gets[0].p === "radar/radar-sub-x.json" && gets[0].opts.useCache === false && gets[0].opts.access === "private", "blob get: skips the CDN cache by default (useCache: false)");
+  check(gets[1].opts.useCache === true, "blob get: { cached: true } keeps the CDN cache (for /api/data only)");
+  check(/blobStorage\(undefined, \{ cached: true \}\)/.test(readFileSync(new URL("../api/data.js", import.meta.url), "utf8")) &&
+    ["account", "confirm", "subscribe", "sweep", "unsubscribe"].every((f) => !/cached/.test(readFileSync(new URL(`../api/${f}.js`, import.meta.url), "utf8"))),
+    "only /api/data uses cached reads; every endpoint that writes reads fresh");
 
   // The prefix countEvents uses ends in "-", and a real day's events must be counted through blobStorage, not only the memory store.
   const evFiles = ["radar/radar-event-20261021-080910123-confirmsent-aabbcc.json", "radar/radar-event-20261021-090910123-confirmsent-ddeeff.json",
@@ -1177,7 +1189,6 @@ const iso = (ms) => new Date(ms).toISOString();
   check(r.code === 1 && /blob down/.test(r.err), "a storage failure is reported with exit 1, not a stack trace");
 
   // the script is kept out of the deployment
-  const { readFileSync } = await import("node:fs");
   check(readFileSync(new URL("../.vercelignore", import.meta.url), "utf8").split(/\r?\n/).includes("scripts"), ".vercelignore keeps scripts/ (and so this tool) out of the deployment");
 }
 
