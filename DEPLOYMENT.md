@@ -886,7 +886,7 @@ covers a missed 00:17 run.
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `/live` or `/demo` (no trailing slash) shows a blank page | Fixed on 22 Oct 2026: the page adds the slash itself. If it still happens, the deployment predates the fix, or a cached copy of the old page was served | Use `/live/` and `/demo/`; redeploy. See [Known issues](#known-issues-to-fix-before-or-after-the-first-sweep) |
+| `/live` or `/demo` (no trailing slash) shows a blank page | Fixed on 22 Oct 2026 and confirmed on production: the page adds the slash itself. If it still happens, the deployment predates the fix, or a cached copy of the old page was served | Use `/live/` and `/demo/`; redeploy. See [Known issues](#known-issues-to-fix-before-or-after-the-first-sweep) |
 | `/live/` shows the empty state | No sweep saved yet, or every sweep so far failed | Check `/api/data?key=radar:history`; run the first sweep (section 5) |
 | `/live/` shows yesterday's items right after a sweep | CDN cache on `/api/data` (5 minutes) | Wait a few minutes |
 | `/api/sweep` answers JSON `401 unauthorized` | Wrong secret, `CRON_SECRET` not set for this environment, or set but not redeployed | Check the value; redeploy |
@@ -933,10 +933,11 @@ covers a missed 00:17 run.
 
 ## Known issues to fix before or after the first sweep
 
-Found while writing this guide (21 Oct 2026). Issues 1 and 2 have fixes; each still needs one look on production.
-Remove each one from this list once that is done.
+Found while writing this guide (21 Oct 2026). Issue 1 is fixed and confirmed on production; it stays here, under
+its number, for the warning at its end. Issue 2 has a fix that still needs one look on production; remove it from
+this list once that is done.
 
-### 1. `/live` and `/demo` without a trailing slash render a blank page: fixed, to check on production
+### 1. `/live` and `/demo` without a trailing slash rendered a blank page: fixed, confirmed on production
 
 **Was confirmed on production.** `https://travel-problem-radar.vercel.app/live` answered 200 with the page, but the
 page loads `radar-live.js` by a relative path. Without the trailing slash that becomes `/radar-live.js`, which is a
@@ -951,8 +952,8 @@ without the trailing slash to the same path with it, keeping the query and hash:
 ```
 
 It leaves `/live/` and `/live/index.html` alone and sends `/live` to `/live/`. In `live/index.html` it runs after the
-GitHub Pages redirect. `scripts/check.mjs` checks both pages have it. **To check after deploy:** open `/live` and
-`/demo` on the Vercel URL; each should end up on the slash URL and render.
+GitHub Pages redirect. `scripts/check.mjs` checks both pages have it. **Confirmed on production (22 Oct 2026):**
+`/live` and `/demo` opened in a browser end up on `/live/` and `/demo/` and show the board.
 
 Do **not** fix this with `"trailingSlash": true` in `vercel.json`. That also redirects `/api/sweep` to
 `/api/sweep/`. Vercel cron jobs do not follow redirects, and neither does the GitHub workflow's `curl`, so scheduled

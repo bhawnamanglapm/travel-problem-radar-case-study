@@ -7,7 +7,7 @@
 | Size | M |
 | Depends on | T12 |
 | Trigger | Build part A once Resend's dashboard shows bounces or complaints; part B once sign-up abuse appears in the event counts |
-| Status | **Built** on 2026-10-22, both parts, before either trigger (owner's choice). Offline tests pass. The firewall rule is live (2026-10-22); the webhook secret is an owner step (see "Built" below) |
+| Status | **Built** on 2026-10-22, both parts, before either trigger (owner's choice). Offline tests pass. Both are live on production (2026-10-22); the webhook was tested there with Resend's test addresses (see "Built" below) |
 
 ## Why
 
@@ -65,5 +65,8 @@ the daily confirmation cap (T05) may not stop a determined bot.
   had no firewall rules before, so it takes Hobby's one rate-limit slot without replacing anything. Read back from
   the live config: `subscribe rate limit`, path equals `/api/subscribe` and method `POST`, 5 requests per 600 s,
   fixed window, keyed by IP, action `rate_limit` (429). Not triggered on purpose, to avoid flooding production.
-- **Owner steps after merge:** add the Resend webhook and `RESEND_WEBHOOK_SECRET`, then redeploy.
-  Checks: DEPLOYMENT.md, "Subscriber email (optional)".
+- **Webhook: live on production since 2026-10-22.** The owner added the Resend endpoint (`email.bounced`,
+  `email.complained`) and `RESEND_WEBHOOK_SECRET`, and redeployed. Checked there: an unsigned `POST` gets `401`;
+  signing up `bounced@resend.dev` and then `complained@resend.dev` each got a `200` in Resend's webhook log (1
+  attempt), the pending record was gone (`show` answers "not found"), and `stats` counts `bounced 1` and
+  `complained 1`. The bounce arrived about 3 seconds after the confirmation email was sent.

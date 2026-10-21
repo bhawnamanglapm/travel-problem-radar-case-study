@@ -23,7 +23,7 @@ working in a real inbox; that is T12's staged launch.
 | Fresh Blob reads (bug fix) | done | 61b2f79 (#9) | 374 pass (+3 new) | Reads skip Blob's CDN cache except `/api/data`'s |
 | [T12](T12-docs-and-launch.md) Docs | done | branch `fix/pages-redirect-and-launch-docs` | 374 pass; 39 `npm run check` checks | Docs 1 to 6; see "T12" below |
 | [T12](T12-docs-and-launch.md) Staged launch | in progress | | | Steps recorded under "T12" below |
-| [T13](T13-optional-hardening.md) Bounces, complaints, per-IP limit | done (offline) | branch `feat/t13-hardening` | 423 pass (355 subscriber + 68 sweep; +49 new) and 3 new `npm run check` checks | See "T13" below |
+| [T13](T13-optional-hardening.md) Bounces, complaints, per-IP limit | done, live on production (webhook and firewall rule) | merged as #12 | 423 pass (355 subscriber + 68 sweep; +49 new) and 3 new `npm run check` checks | See "T13" below |
 
 ## Notes per task
 
@@ -273,4 +273,7 @@ working in a real inbox; that is T12's staged launch.
 - **Firewall rule:** live on production since 2026-10-22, added with the Vercel CLI (the claude.ai Vercel connector
   answered 403 for this team). It was the project's first firewall rule. Its settings were read back from the live
   config and match DEPLOYMENT.md. It has not been triggered on purpose.
-- **Not done here (owner step):** the Resend webhook and its secret. Not yet seen working in production.
+- **Webhook:** live on production since 2026-10-22, after the owner added the Resend endpoint and the secret.
+  Tested there with `bounced@resend.dev` and `complained@resend.dev`: Resend's log shows `200` for both, both
+  pending records were deleted, and `stats` (which now has `bounced` and `complained` columns, #15) counts one of
+  each. Those two test sign-ups are in the 21 Oct (UTC) sign-up counts, so they lower that day's confirm rate.

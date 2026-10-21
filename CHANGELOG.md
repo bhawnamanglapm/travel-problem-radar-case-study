@@ -8,11 +8,11 @@ grouped by date.
 - The admin script's `stats` shows `bounced` and `complained` per day and in the totals: the addresses the Resend
   webhook deleted.
 - Fixed: `/live` and `/demo` typed without the trailing slash showed a blank page, because the script loaded from
-  the site root. Each page now adds the slash itself (Known issue 1 in `DEPLOYMENT.md`).
+  the site root. Each page now adds the slash itself (Known issue 1 in `DEPLOYMENT.md`); confirmed on production.
 - **Bounces, spam complaints and a per-IP sign-up limit** (T13): a signed Resend webhook (`/api/resend-webhook`)
   deletes an address that hard-bounces or marks the digest as spam, and `/api/subscribe` takes at most 5 sign-ups per
   connection per hour (`MAX_SIGNUPS_PER_IP_HOUR`), with a Vercel Firewall rate limit in front. Tested offline (355
-  subscriber tests). The firewall rule is live on production; the webhook secret is an owner step.
+  subscriber tests). Both are live on production; the webhook was tested there with Resend's test addresses.
 - **Subscriber email is switched on in production** (built in T01 to T11, merged as #6): `/subscribe/` with double
   opt-in by a Confirm button, one-click unsubscribe, a Free daily roll-up of the last 24 hours, a Pro email after
   every scheduled sweep, sending that resumes without duplicates after a cut-off, and an owner admin script
