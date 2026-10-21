@@ -1675,4 +1675,74 @@ const iso = (ms) => new Date(ms).toISOString();
   check(out2.stopped === "quota" && out2.pro.sent === 0 && out2.pro.deferred === 2, "pro cats: a quota stop in the first group defers the next group instead of trying it");
 }
 
+// ---- One inbox, one subscriber: canonicalEmail and findSubscriber
+{
+  const { canonicalEmail, findSubscriber, legacySubscriberId } = await import("../api/_lib/subscribers.js");
+  const admin = await import("./subscribers.mjs");
+  const cases = [
+    ["M.E+radar@Gmail.com", "me@gmail.com"], ["m.e@googlemail.com", "me@gmail.com"], ["me@gmail.com", "me@gmail.com"],
+    ["me+news@outlook.com", "me@outlook.com"], ["me+x@icloud.com", "me@icloud.com"], ["m.e+x@hotmail.com", "m.e@hotmail.com"],
+    ["first.last+x@example.com", "first.last+x@example.com"], ["+x@gmail.com", "+x@gmail.com"], ["not an email", null],
+  ];
+  const bad = cases.filter(([a, b]) => canonicalEmail(a) !== b);
+  check(bad.length === 0, `canonicalEmail: Gmail drops dots and +tag, googlemail is gmail, listed providers drop +tag, other domains and an empty result are kept${bad.length ? " (wrong: " + bad.map((c) => c[0]).join(", ") + ")" : ""}`);
+  check(subscriberId("me+radar@gmail.com") === subscriberId("M.E@googlemail.com") && subscriberId("me@gmail.com") === legacySubscriberId("me@gmail.com"),
+    "subscriberId: variants of one inbox share an id; an ordinary address keeps the id it had before");
+  check(newPending("M.E+radar@gmail.com", { now: T0, randomBytes: seeded(3) }).email === "m.e+radar@gmail.com", "newPending: stores the address as typed (normalised), so mail goes where it was asked");
+
+  // A record made before this change under a variant keeps its old id.
+  const st = memStorage();
+  const legacy = { ...newPending("m.e@gmail.com", { now: T0 - 86400_000, randomBytes: seeded(5) }), status: "active", confirmedAt: iso(T0) };
+  legacy.id = legacySubscriberId("m.e@gmail.com");
+  await putSubscriber(st, legacy);
+  check(legacy.id !== subscriberId("m.e@gmail.com") && (await findSubscriber(st, "M.E@gmail.com"))?.id === legacy.id, "findSubscriber: finds a record stored under its pre-change id");
+  check((await findSubscriber(st, "nobody@gmail.com")) === null && (await findSubscriber(st, "bad")) === null, "findSubscriber: null for an unknown or invalid address");
+
+  // Sign-up
+  const ENV = { SUBSCRIPTIONS_ENABLED: "1", RESEND_API_KEY: "re_k", EMAIL_FROM: "Radar <hello@pehchanthetraveller.com>", SITE_URL: "https://site.example/", MAX_SUBSCRIBERS: "5000" };
+  const signup = (store, clock = T0) => {
+    const sent = [];
+    const fetchFn = async (url, init) => { const body = JSON.parse(init.body); sent.push(...body); return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ data: body.map((_, i) => ({ id: "m" + i })) }) }; };
+    const handler = makeSubscribeHandler({ env: ENV, storage: store, fetchFn, now: () => clock, randomBytes: seeded(7), log: () => {} });
+    const post = async (email) => { const res = mockRes(); await handler({ method: "POST", headers: { "content-type": "application/json", "x-forwarded-for": "198.51.100." + sent.length }, body: { email } }, res); return res; };
+    return { sent, post };
+  };
+  const subCount = (store) => [...store.m.keys()].filter((k) => k.startsWith("radar:sub:")).length;
+  const s1 = memStorage();
+  s1.m.set("radar:subscriberCount", "0");
+  let u = signup(s1);
+  await u.post("me@gmail.com");
+  const first = JSON.parse(s1.m.get("radar:sub:" + subscriberId("me@gmail.com")));
+  await putSubscriber(s1, { ...first, status: "active", confirmedAt: iso(T0) });
+  u = signup(s1, T0 + 3600_000);
+  for (const v of ["m.e+radar@gmail.com", "ME@googlemail.com"]) await u.post(v);
+  check(subCount(s1) === 1 && !u.sent.some((m) => /confirm\?id=/.test(m.text)), "sign-up: variants of a confirmed Gmail address make no second record and no confirmation email");
+  const s2 = memStorage();
+  s2.m.set("radar:subscriberCount", "0");
+  u = signup(s2);
+  await u.post("me+a@outlook.com");
+  await u.post("me+b@outlook.com");
+  check(subCount(s2) === 1 && u.sent.length === 1, "sign-up: a +tag variant of a pending address inside 24 h makes no second record and no second email");
+  u = signup(st, T0 + 3600_000);
+  await u.post("m.e@gmail.com");
+  check(subCount(st) === 1 && !u.sent.some((m) => /confirm\?id=/.test(m.text)), "sign-up: a pre-change record is found, so signing up again makes no second record");
+
+  // Webhook: a bounce for the pre-change record removes it.
+  const KEY = Buffer.from("test-webhook-key-0123456789abcdef");
+  const TS = String(Math.floor(T0 / 1000));
+  const hook = makeResendWebhookHandler({ env: { RESEND_WEBHOOK_SECRET: "whsec_" + KEY.toString("base64") }, storage: st, now: () => T0, randomBytes: seeded(40), log: () => {} });
+  const raw = JSON.stringify({ type: "email.bounced", created_at: iso(T0), data: { email_id: "e1", to: ["M.E@gmail.com"], bounce: { type: "Permanent" } } });
+  const sig = "v1," + createHmac("sha256", KEY).update(`msg_x.${TS}.${raw}`).digest("base64");
+  const res = await hook(new Request("https://site.example/api/resend-webhook", { method: "POST", headers: { "content-type": "application/json", "svix-id": "msg_x", "svix-timestamp": TS, "svix-signature": sig }, body: raw }));
+  check(res.status === 200 && !(await getSubscriber(st, legacy.id)), "webhook: a bounce removes a record stored under its pre-change id");
+
+  // Admin: show and delete find a pre-change record; delete removes the id it found.
+  await putSubscriber(st, legacy);
+  const run = async (argv) => { const out = []; const code = await admin.main(argv, { storage: st, now: T0, rb: seeded(70), out: (s) => out.push(s), err: (s) => out.push(s) }); return { code, all: out.join("\n") }; };
+  let a = await run(["show", "m.e@gmail.com"]);
+  check(a.code === 0 && /active/.test(a.all), "admin show: finds a pre-change record");
+  a = await run(["delete", "M.E@gmail.com", "--yes"]);
+  check(a.code === 0 && !(await getSubscriber(st, legacy.id)), "admin delete: removes a pre-change record by the id it was found under");
+}
+
 finish("subscription tests");

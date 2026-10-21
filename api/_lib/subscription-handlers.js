@@ -5,8 +5,8 @@ import { createHash, createHmac, randomBytes as cryptoRandomBytes, timingSafeEqu
 import { DEFAULT_FROM, buildConfirmEmail, buildProRequestEmail, sendEmail, sendOne } from "./email.js";
 import { BodyTooLargeError, allowMethods, esc, readFields, sendJson, sendPage } from "./http.js";
 import {
-  CONFIRM_RESEND_HOURS, PENDING_TTL_DAYS, countEvents, deleteSubscriber, effectivePlan, getSubscriber, newPending, normaliseCats, normaliseEmail, putSubscriber,
-  recordEvent, subscriberId, tokenOk, utcDay,
+  CONFIRM_RESEND_HOURS, PENDING_TTL_DAYS, countEvents, deleteSubscriber, effectivePlan, findSubscriber, getSubscriber, newPending, normaliseCats, normaliseEmail, putSubscriber,
+  recordEvent, tokenOk, utcDay,
 } from "./subscribers.js";
 
 // The sweep writes the number of active plus pending records here after each run (T10), so a
@@ -135,7 +135,7 @@ export function makeSubscribeHandler({ env, storage, fetchFn, now, randomBytes =
       const maxSubs = positiveInt(env.MAX_SUBSCRIBERS);
       const maxConfirms = maxConfirmsPerDay(env.MAX_CONFIRMS_PER_DAY);
 
-      const existing = await getSubscriber(storage, subscriberId(email));
+      const existing = await findSubscriber(storage, email);
       if (existing && existing.status !== "pending") return reply(); // active (row 7), or anything unexpected
       if (existing && t - Date.parse(existing.confirmSentAt) < CONFIRM_RESEND_HOURS * HOUR_MS) return reply(); // row 8
 
@@ -431,7 +431,7 @@ export function makeResendWebhookHandler({ env, storage, now, randomBytes = cryp
       for (const addr of to) {
         const email = normaliseEmail(addr);
         if (!email) continue;
-        const record = await getSubscriber(storage, subscriberId(email));
+        const record = await findSubscriber(storage, email);
         if (!record) continue; // not a subscriber, e.g. the owner's own EMAIL_TO
         await deleteSubscriber(storage, record.id);
         await recordEvent(storage, action, { now: t, randomBytes, plan: effectivePlan(record, t) });

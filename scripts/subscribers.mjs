@@ -14,8 +14,8 @@
 import { randomBytes } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import {
-  KEY_EVENT_PREFIX, deleteSubscriber, effectivePlan, getSubscriber, listSubscribers, normaliseEmail,
-  putSubscriber, recordEvent, subscriberId, utcDay,
+  KEY_EVENT_PREFIX, deleteSubscriber, effectivePlan, findSubscriber, getSubscriber, listSubscribers, normaliseEmail,
+  putSubscriber, recordEvent, utcDay,
 } from "../api/_lib/subscribers.js";
 
 const DAY_MS = 24 * 3600 * 1000;
@@ -171,7 +171,7 @@ export function formatRows({ rows, skipped }) {
 }
 
 export async function showRecord(storage, email) {
-  const r = await getSubscriber(storage, subscriberId(email));
+  const r = await findSubscriber(storage, email);
   if (!r) return null;
   const { token, ...rest } = r; // never print the token
   return rest;
@@ -180,7 +180,7 @@ export async function showRecord(storage, email) {
 // ---- writes. Each returns { code: 0|1, message, changed } and writes only when apply is true.
 
 export async function grantPro(storage, email, { until = null, apply, now, randomBytes: rb = randomBytes }) {
-  const r = await getSubscriber(storage, subscriberId(email));
+  const r = await findSubscriber(storage, email);
   if (!r) return { code: 1, message: "not found: no subscriber with that address", changed: false };
   if (r.status !== "active") return { code: 1, message: `refused: the subscriber is ${r.status}, only an active (confirmed) subscriber can be given Pro`, changed: false };
   if (r.plan === "pro" && r.proSource === "razorpay") return { code: 1, message: "refused: this is a paid Razorpay Pro; change it in Razorpay, not here", changed: false };
@@ -195,7 +195,7 @@ export async function grantPro(storage, email, { until = null, apply, now, rando
 }
 
 export async function revokePro(storage, email, { apply, now, randomBytes: rb = randomBytes }) {
-  const r = await getSubscriber(storage, subscriberId(email));
+  const r = await findSubscriber(storage, email);
   if (!r) return { code: 1, message: "not found: no subscriber with that address", changed: false };
   if (r.proSource === "razorpay") return { code: 1, message: "refused: this is a paid Razorpay Pro; cancel it in Razorpay (Phase 2), not here", changed: false };
   if (r.plan !== "pro") return { code: 1, message: "nothing to do: the subscriber is already on the Free plan", changed: false };
@@ -207,11 +207,10 @@ export async function revokePro(storage, email, { apply, now, randomBytes: rb = 
 }
 
 export async function removeSubscriber(storage, email, { apply }) {
-  const id = subscriberId(email);
-  const r = await getSubscriber(storage, id);
+  const r = await findSubscriber(storage, email);
   if (!r) return { code: 1, message: "not found: no subscriber with that address", changed: false };
   if (!apply) return { code: 1, message: `would delete the ${r.status} ${r.plan} record. Nothing changed; add --yes to apply.`, changed: false };
-  await deleteSubscriber(storage, id);
+  await deleteSubscriber(storage, r.id);
   return { code: 0, message: `done: deleted the ${r.status} ${r.plan} record`, changed: true };
 }
 
