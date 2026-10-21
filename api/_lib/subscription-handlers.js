@@ -5,7 +5,7 @@ import { createHash, createHmac, randomBytes as cryptoRandomBytes, timingSafeEqu
 import { DEFAULT_FROM, buildConfirmEmail, buildProRequestEmail, sendEmail, sendOne } from "./email.js";
 import { BodyTooLargeError, allowMethods, esc, readFields, sendJson, sendPage } from "./http.js";
 import {
-  CONFIRM_RESEND_HOURS, PENDING_TTL_DAYS, countEvents, deleteSubscriber, effectivePlan, getSubscriber, newPending, normaliseEmail, putSubscriber,
+  CONFIRM_RESEND_HOURS, PENDING_TTL_DAYS, countEvents, deleteSubscriber, effectivePlan, getSubscriber, newPending, normaliseCats, normaliseEmail, putSubscriber,
   recordEvent, subscriberId, tokenOk, utcDay,
 } from "./subscribers.js";
 
@@ -300,19 +300,23 @@ const accountView = (record, t) => ({
   proUntil: record.proUntil || null,
   proSource: record.proSource || null,
   proRequestedAt: record.proRequestedAt || null,
+  cats: record.cats || null,
 });
 
 // GET ?id&t: the plan. POST {id, t, action: "request-pro"}: ask for Pro. Until payments exist
 // (T17, T18) the owner grants it with the admin script; this records the request and tells them.
+// POST {id, t, action: "set-cats", cats: [...]}: a Pro subscriber picks their categories (T14).
 export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomBytes = cryptoRandomBytes, log = console.log }) {
   return async function account(req, res) {
     if (!allowMethods(req, res, ["GET", "POST"])) return;
     if (env.SUBSCRIPTIONS_ENABLED !== "1") return sendJson(res, 503, { error: "subscriptions are paused" });
     let params;
     let action = "";
+    let cats;
     try {
       params = await linkParams(req, { queryOnly: false });
       if (params.fields && typeof params.fields.action === "string") action = params.fields.action;
+      if (params.fields) cats = params.fields.cats;
     } catch (e) {
       if (e instanceof BodyTooLargeError) return sendJson(res, 413, { error: "request too large" });
       throw e;
@@ -324,6 +328,16 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
       const t = now();
       if (req.method === "GET") return sendJson(res, 200, accountView(record, t));
 
+      if (action === "set-cats") {
+        if (record.status !== "active") return sendJson(res, 409, { error: "not_confirmed" });
+        // A lapsed Pro is Free here too; what they chose before stays stored for when they renew.
+        if (effectivePlan(record, t) !== "pro") return sendJson(res, 403, { error: "pro_only" });
+        const chosen = normaliseCats(cats);
+        if (!chosen.ok) return sendJson(res, 400, { error: "unknown category" });
+        const updated = { ...record, cats: chosen.cats };
+        await putSubscriber(storage, updated);
+        return sendJson(res, 200, { ok: true, ...accountView(updated, t) });
+      }
       if (action !== "request-pro") return sendJson(res, 400, { error: "unknown action" });
       if (record.status !== "active") return sendJson(res, 409, { error: "not_confirmed" });
       if (effectivePlan(record, t) === "pro") return sendJson(res, 409, { error: "already_pro" });
