@@ -5,6 +5,9 @@ grouped by date.
 
 ## 2026-10-22
 
+- **Pro subscribers choose their categories** (T14): a Categories card on `/manage/` saves the choice. Each Pro
+  email then carries only those categories, with its own counts, and a Pro whose categories had nothing in a sweep
+  gets no email for it. Free always gets all four. Tested offline (386 subscriber tests); not deployed yet.
 - The sign-up reply now adds "Not in your inbox within a few minutes? Check your spam or junk folder." Gmail and
   Outlook file the confirmation email as spam although SPF, DKIM and DMARC pass; mail-tester points to the domain
   being under two weeks old.

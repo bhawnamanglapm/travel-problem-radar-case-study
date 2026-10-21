@@ -24,7 +24,7 @@ sign-up first, payments only if people actually sign up.
 | Status | Exists today | Proposed | Proposed, Phase 2 |
 | Live board, demo, Copy report | Yes | Yes | Yes |
 | Email digest | No | One a day, from the first saved sweep of the UTC day | After every saved sweep (up to 5 a day) |
-| Choose categories | No | No | Yes |
+| Choose categories | No | No | Yes (built, T14) |
 | Post to your own Slack | No | No | Optional later (see risks) |
 | Price | Free | Free | **OWNER INPUT NEEDED** (monthly and yearly) |
 

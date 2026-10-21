@@ -108,7 +108,7 @@ last column says what changes if the owner picks otherwise. Record each final ch
 | D3 | When does the Free email go out? | After the first saved sweep of the UTC day (00:17 UTC, about 05:47 IST) | Matches the existing schedule; no new timer | T09 |
 | D4 | Do Pro subscribers get the owner's manual runs? | No, scheduled sweeps only | Manual runs are usually tests; each one would email paying users | T09 |
 | D5 | Does Pro get an email when a sweep finds nothing new? | Yes, every saved scheduled sweep (as asked) | Matches "whenever data is updated". Option: skip when `newCount` is 0, to cut noise and complaints | T09 |
-| D6 | Can subscribers choose categories? | Not in the first release; Pro only, later (T14) | Keeps Phase 1 small | T14 |
+| D6 | Can subscribers choose categories? | Not in the first release; Pro only, later (T14). The owner picked T14 on 2026-10-22, and it is built | Keeps Phase 1 small | T14 |
 | D7 | Cap on subscribers (`MAX_SUBSCRIBERS`) | No default: unset means sign-ups are closed. **Owner set `5000`** (above the free Resend quota; see T00) | The owner must set it from the quota formula in [pricing.md](../pricing.md) | T05 |
 | D8 | Domain and sender name | Domain `pehchanthetraveller.com` (verified in Resend, DMARC set). Sender `hello@pehchanthetraveller.com` | Required: the shared Resend sender cannot reach other people | T00 |
 | D9 | Confirm link: one click, or a page with a button? | A page with a **Confirm** button that posts | Mail security scanners open links in emails, which would confirm addresses nobody asked to subscribe | T06 |
