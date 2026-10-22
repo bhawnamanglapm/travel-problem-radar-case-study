@@ -308,7 +308,7 @@ working in a real inbox; that is T12's staged launch.
      email came.
   4. `stats` for 2026-10-22: 1 notice and 0 sign-ups, so no new record was made.
 - **Variant checked on production, later on 2026-10-22:** the owner signed up a Gmail variant of the same address
-  (dots and/or a `+tag`). The page replied "This address is already subscribed. Use the Manage link in any digest
+  with both a dot and a `+tag` added (the form `first.last+test@gmail.com`). The page replied "This address is already subscribed. Use the Manage link in any digest
   email to change it." (within 24 hours of the notice), and `stats` still showed 0 sign-ups and 1 notice. A variant
   that missed the record would have stored a new pending record and sent a confirmation, so it found the existing
   one.
