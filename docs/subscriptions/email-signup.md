@@ -22,20 +22,26 @@ Done for this project: `pehchanthetraveller.com` is verified with SPF, DKIM and 
 
 ## Flow
 
-1. **Subscribe.** `/subscribe/` is a self-contained page with an email field, a hidden trap field for bots, and an
-   "I'd also like Pro" box. It posts to `POST /api/subscribe`.
+1. **Subscribe.** `/signup/` ("Create your account") is the one sign-up form: an email field, a hidden trap field
+   for bots, and an "I'd also like Pro" box. It posts to `POST /api/subscribe`. `/subscribe/` is the plans page
+   (Free and Pro) and links to it; its "ask for Pro" link opens `/signup/?pro=1` with the box ticked.
    - The endpoint checks the address, stores a `pending` record with a random token and sends a confirmation email.
    - **One inbox, one subscriber.** The record id is made from the address as the inbox sees it
      (`canonicalEmail()`): Gmail ignores dots and anything after `+`, and `googlemail.com` is `gmail.com`; Outlook,
      Hotmail, Live, MSN, iCloud, Proton and Fastmail ignore anything after `+`. Other domains are left as typed. So
      `a.b+news@gmail.com` finds the record for `ab@gmail.com`.
-   - **An address that is already confirmed is told so** ("This address is already subscribed"), and the stored
-     address gets one email with its manage and unsubscribe links, at most once every 24 hours. Those emails share
-     `MAX_CONFIRMS_PER_DAY` with confirmation emails; with the cap reached, or within 24 hours of the last one, the
-     reply says to use the Manage link in any digest instead. This shows whether an address subscribes; the owner
-     chose that on 2026-10-22 (decision log).
+   - **An address that is already confirmed is told so.** With sign-in set up (`SESSION_SECRET`), the stored
+     address gets a **sign-in link** ("This address already has an account. We've emailed it a sign-in link"), on
+     the sign-in email limits: one every 5 minutes, `MAX_SIGNINS_PER_DAY` a day. Held back by either, the reply says
+     to sign in from the sign-in page or use the Manage link in any digest.
+   - Without `SESSION_SECRET`, it gets one email with its manage and unsubscribe links instead ("This address is
+     already subscribed"), at most once every 24 hours. Those emails share `MAX_CONFIRMS_PER_DAY` with confirmation
+     emails; with the cap reached, or within 24 hours of the last one, the reply says to use the Manage link in any
+     digest instead.
+   - Either way this shows whether an address subscribes; the owner chose that on 2026-10-22 (decision log).
    - **A pending address whose confirmation went out in the last 24 hours** is told that a link was already sent,
-     and nothing is sent.
+     and nothing is sent. Asking to sign in at `/signin/` with a pending address re-sends the confirmation on the
+     same limits (once every 24 hours, within `MAX_CONFIRMS_PER_DAY`), with the usual sign-in reply.
    - Every other accepted request gets the same reply ("If that address can be subscribed, a confirmation link is
      on its way"), so a full list, a closed list, the day's confirmation cap and the per-IP limit look alike.
    - A filled trap field gets that same reply and does nothing.

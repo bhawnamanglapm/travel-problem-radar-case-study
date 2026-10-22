@@ -5,6 +5,10 @@ grouped by date.
 
 ## 2026-10-22
 
+- Account-flow fixes (#2 to #5 in `docs/subscriptions/account-flows.md`): "Sign in" on the home page and the live
+  board (it reads "Account" there when signed in); one sign-up form, on `/signup/`, with the Pro box, and
+  `/subscribe/` as the plans page; signing up again with an existing account emails a sign-in link instead of the
+  manage link; asking to sign in with a never-confirmed address re-sends its confirmation.
 - Sign-up page: `/signup/` ("Create your account"), email only, no password. It posts to the same
   `/api/subscribe` as `/subscribe/`; pressing Confirm creates the account and signs that browser in, and the
   confirm page now says so. `/signin/` links to it.

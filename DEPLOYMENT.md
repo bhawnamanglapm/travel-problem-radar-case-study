@@ -686,11 +686,13 @@ unchanged. Code: `api/subscribe.js`, `api/confirm.js`, `api/unsubscribe.js`, `ap
 
 **What a subscriber goes through**
 
-1. `/subscribe/` posts the address to `POST /api/subscribe`. So does `/signup/` ("Create your account"), the same
-   form without the Pro box. One inbox holds one subscription: `a.b+x@gmail.com` and
-   `ab@gmail.com` are the same subscriber. An address that is already confirmed (or a variant of it) is told "This
-   address is already subscribed", and its inbox gets one email with its manage and unsubscribe links, at most once
-   every 24 hours. A pending address whose confirmation went out in the last 24 hours is told so. Every other
+1. `/signup/` ("Create your account") posts the address to `POST /api/subscribe`; it is the one sign-up form.
+   `/subscribe/`, which the home page, the live board and the README link as "Get it by email", is the plans page
+   and links to it. One inbox holds one subscription: `a.b+x@gmail.com` and
+   `ab@gmail.com` are the same subscriber. An address that is already confirmed (or a variant of it) is told it
+   already has an account, and its inbox gets a sign-in link (see [Signing in](#signing-in-t16)). Without
+   `SESSION_SECRET` it is told "This address is already subscribed" and gets one email with its manage and
+   unsubscribe links instead, at most once every 24 hours. A pending address whose confirmation went out in the last 24 hours is told so. Every other
    request gets the same reply ("If that address can be subscribed, a confirmation link is on its way"), so a
    closed or full list, the daily cap and the per-IP limit look alike. A filled-in hidden field (a trap for bots)
    gets that reply and does nothing.
@@ -767,7 +769,7 @@ minutes off is refused. Like unsubscribe, it works while `SUBSCRIPTIONS_ENABLED`
 3. Check that an unsigned call is refused:
    `curl -i -X POST https://travel-problem-radar.vercel.app/api/resend-webhook` should answer `401`. A `503` means
    the secret doesn't reach this deployment.
-4. Check a real bounce: sign up `bounced@resend.dev` (Resend's test address) on `/subscribe/`. Its confirmation
+4. Check a real bounce: sign up `bounced@resend.dev` (Resend's test address) on `/signup/`. Its confirmation
    bounces; afterwards `list` no longer shows it and `stats` shows a `bounced` event. `complained@resend.dev` does
    the same with a `complained` event. Each uses one of the day's `MAX_CONFIRMS_PER_DAY` confirmation emails.
    Resend's webhook log should show `200` replies.
@@ -816,7 +818,9 @@ yet: the live board stays open to everyone until T17.
 **How it works**
 
 1. `/signin/` posts the address to `POST /api/session`. Every address gets the same reply ("If that address has an
-   account, a sign-in link is on its way"); only a confirmed subscriber is emailed. The link holds a one-time code
+   account, a sign-in link is on its way"); only a confirmed subscriber is emailed a sign-in link. An address that
+   never pressed Confirm gets its confirmation link again instead, at most once every 24 hours and within
+   `MAX_CONFIRMS_PER_DAY`. Signing up again at `/signup/` with a confirmed address also sends a sign-in link. The link holds a one-time code
    that works for 15 minutes; the record keeps only its SHA-256.
 2. Opening the link shows a **Sign in** button (so a mail scanner that opens links signs nobody in). Pressing it uses
    up the code, sets the login cookie and goes to `/live/`.
@@ -831,7 +835,7 @@ again, the old cookie stops working. It holds no address and no plan (the plan i
 
 **Limits on sign-in emails.** At most one per address every 5 minutes, at most `MAX_SIGNINS_PER_DAY` a day (default
 50), and the sign-up limit of `MAX_SIGNUPS_PER_IP_HOUR` per connection, counted together with sign-ups. Over any of
-them the reply is the same and nothing is sent. Each sign-in email records a `signinsent` event; `stats` counts them.
+them nothing is sent. Each sign-in email, from `/signin/` or from signing up again, records a `signinsent` event; `stats` counts them.
 They come out of the same Resend daily quota as everything else.
 
 **Setting `SESSION_SECRET`.** Make it at random and send it straight to Vercel, so it is never shown or saved:
@@ -885,7 +889,7 @@ email goes only with scheduled sweeps. `stats` is where the Phase 2 numbers in
 [`docs/subscriptions/pricing.md`](docs/subscriptions/pricing.md) come from.
 
 **Handling Pro requests.** Until payments exist (T19 to T22), Pro is free and switched on by hand. A subscriber asks
-for it in one of two places: the "I'd also like Pro" box on `/subscribe/` (counted only once they press Confirm), or
+for it in one of two places: the "I'd also like Pro" box on `/signup/` (counted only once they press Confirm), or
 the "Request Pro" button on `/manage/`, which every digest links to as "Manage subscription" (the link carries their
 id and token; `/api/account` answers it and never returns the address). Each request sends one email to `EMAIL_TO`,
 subject "Travel Problem Radar: Pro request". It names nobody, so run `list --plan requested` to see who is waiting,
@@ -979,10 +983,10 @@ covers a missed 00:17 run.
 | `email: failed: http 401 …`, or `http 403` with `restricted_api_key` or `suspended_api_key` | The key is wrong, deleted or disabled | Create a new key; update the variable; redeploy |
 | `email: failed: http 422 …` or `http 400 validation_error` | `EMAIL_TO` (or `EMAIL_FROM`, if set) is malformed | Recipients as plain addresses separated by commas; a sender as `Name <address@domain>` |
 | `email: failed: http 429 daily_quota_exceeded` (or `monthly_quota_exceeded`) | The plan's sending quota is used up; each recipient counts. Unlikely with one recipient | Fewer recipients or a paid plan. The daily quota resets at midnight UTC |
-| `/subscribe/` says "Subscriptions aren't open yet" (`503`) | `SUBSCRIPTIONS_ENABLED` isn't `1`, or `RESEND_API_KEY`, a verified-domain `EMAIL_FROM` or a site URL is missing for this deployment | Set them for Production; redeploy (see [Subscriber email](#subscriber-email-optional)) |
+| `/signup/` says "Sign-up isn't open yet" (`503`) | `SUBSCRIPTIONS_ENABLED` isn't `1`, or `RESEND_API_KEY`, a verified-domain `EMAIL_FROM` or a site URL is missing for this deployment | Set them for Production; redeploy (see [Subscriber email](#subscriber-email-optional)) |
 | `"subscribers": "not configured"` in the sweep reply | Same as the row above | Same fix |
 | Sign-up says the link is on its way, but no confirmation email comes | In order: the spam folder; `MAX_SUBSCRIBERS` unset (the list is closed) or reached; `MAX_CONFIRMS_PER_DAY` used up today; more than `MAX_SIGNUPS_PER_IP_HOUR` sign-ups from the same connection this hour. The reply is the same in every case on purpose. (An address already confirmed, or with a link sent in the last 24 hours, gets a reply that says so instead) | Check spam first. Then the `subscribe confirm-email` log line in Vercel (kept about 30 minutes), `stats` for today's confirmation emails, and Resend's **Logs** |
-| `/subscribe/` says "Too many tries from your connection" (`429`) | The Vercel Firewall rule: more than 5 sign-up requests from one IP in 10 minutes | Wait 10 minutes. Many people behind one office or mobile network share an IP; raise the rule's limit if that matters |
+| `/signup/` says "Too many tries from your connection" (`429`) | The Vercel Firewall rule: more than 5 sign-up requests from one IP in 10 minutes | Wait 10 minutes. Many people behind one office or mobile network share an IP; raise the rule's limit if that matters |
 | Unsubscribe says "This link is no longer active", but emails keep coming | The link is from an email sent before that address unsubscribed and signed up again. The new record has the same id but a new token, so older links (and Gmail's Unsubscribe button on older emails) change nothing | Use the Unsubscribe link in the most recent email, or `delete <email> --yes` with the admin script |
 | Resend's webhook log shows `401` | `RESEND_WEBHOOK_SECRET` isn't this webhook's signing secret (for example after re-creating the webhook), or the server clock and the event's timestamp differ by more than 5 minutes | Copy the secret again from Resend's webhook page; redeploy. Resend retries failed deliveries |
 | Resend's webhook log shows `503` | `RESEND_WEBHOOK_SECRET` isn't set for this deployment, or was added without a redeploy | Set it for Production; redeploy |

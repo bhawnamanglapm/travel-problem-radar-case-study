@@ -396,6 +396,15 @@ working in a real inbox; that is T12's staged launch.
 - Checked in production on 2026-10-22 (see T16 above). The sign-up page said a confirmation link had already gone out
   in the last 24 hours, since that address had an unconfirmed sign-up, and that earlier link was used.
 
+### Account-flow fixes (2026-10-22, branch `fix/account-flows`)
+Issues #2 to #5 from [account-flows.md](../account-flows.md); no new function (8 of 12).
+- #2: "Sign in" on the home page and the live board; on the board it reads "Account" when signed in.
+- #3: one sign-up form, on `/signup/`, which gains the Pro box. `/subscribe/` is now the plans page and links to it.
+- #4: signing up again with a confirmed address emails a sign-in link (sign-in limits apply). Without
+  `SESSION_SECRET` the manage-link notice stays.
+- #5: asking to sign in with an address that never confirmed re-sends the confirmation, on sign-up's limits.
+- `npm test`: 563 passing (13 new). Not yet checked in production: #4's email with a real inbox.
+
 ### Chrome "Dangerous site" warning (2026-10-22)
 - Chrome showed a full-page "Dangerous site" warning on the Vercel site. Search Console listed "Deceptive pages" with
   no sample URLs, so the cause is unknown.
