@@ -5,6 +5,9 @@ grouped by date.
 
 ## 2026-10-22
 
+- Sign-up page: `/signup/` ("Create your account"), email only, no password. It posts to the same
+  `/api/subscribe` as `/subscribe/`; pressing Confirm creates the account and signs that browser in, and the
+  confirm page now says so. `/signin/` links to it.
 - T16, accounts and sign-in: a `/signin/` page that emails a one-time sign-in link (no passwords), a 30-day login
   cookie signed with `SESSION_SECRET`, Confirm signs you in, `/manage/` works by the cookie, and Sign out. Nothing is
   locked yet. Off until `SESSION_SECRET` is set.

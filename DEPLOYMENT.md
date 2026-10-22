@@ -458,7 +458,7 @@ Do not commit the `.vercel/` folder that `vercel link` creates. It is already in
 | Key | What it does |
 |---|---|
 | `framework: null` | No framework preset; Vercel treats this as a plain static site plus functions |
-| `buildCommand` | Copies `index.html`, `demo/`, `live/`, `subscribe/` and `manage/` into `public/`, then removes the JSX sources. It does **not** run `npm run build`. A new page folder must be added here, or Vercel won't serve it (`npm run check` tests for `subscribe` and `manage`) |
+| `buildCommand` | Copies `index.html`, `demo/`, `live/`, `subscribe/`, `manage/`, `signin/` and `signup/` into `public/`, then removes the JSX sources. It does **not** run `npm run build`. A new page folder must be added here, or Vercel won't serve it (`npm run check` tests for `subscribe`, `manage`, `signin` and `signup`) |
 | `outputDirectory` | Serves `public/` as the static site |
 | `crons` | The daily backstop: calls `/api/sweep` at 01:30 UTC (07:00 IST), within the hour on Hobby |
 | `functions["api/sweep.js"].maxDuration` | Lets the sweep run for up to 300 s, the Hobby maximum |
@@ -686,7 +686,8 @@ unchanged. Code: `api/subscribe.js`, `api/confirm.js`, `api/unsubscribe.js`, `ap
 
 **What a subscriber goes through**
 
-1. `/subscribe/` posts the address to `POST /api/subscribe`. One inbox holds one subscription: `a.b+x@gmail.com` and
+1. `/subscribe/` posts the address to `POST /api/subscribe`. So does `/signup/` ("Create your account"), the same
+   form without the Pro box. One inbox holds one subscription: `a.b+x@gmail.com` and
    `ab@gmail.com` are the same subscriber. An address that is already confirmed (or a variant of it) is told "This
    address is already subscribed", and its inbox gets one email with its manage and unsubscribe links, at most once
    every 24 hours. A pending address whose confirmation went out in the last 24 hours is told so. Every other

@@ -30,6 +30,7 @@ flowchart LR
     SUBP["/subscribe/ page"]
     MAN["/manage/ page"]
     SIGN["/signin/ page"]
+    SUP["/signup/ page"]
   end
   subgraph Fn["Vercel Functions"]
     SWEEP["api/sweep"]
@@ -56,6 +57,7 @@ flowchart LR
   SWEEP --> SLK
   V --> LIVE --> DATA --> BLOB
   V --> SUBP --> SUBS
+  V --> SUP --> SUBS
   SUBS --> BLOB
   SUBS --> RES
   V -->|email link| CONF --> BLOB
@@ -169,6 +171,7 @@ flowchart LR
 | Endpoint | `GET` and `POST /api/confirm` | Link in the confirmation email | Built | [email-signup.md](email-signup.md) |
 | Endpoint | `GET` and `POST /api/unsubscribe` | Link and one-click header in every email | Built | [email-signup.md](email-signup.md) |
 | Page | `/signin/` | Subscribers: sign in by an emailed link, sign out | Built (T16) | [paid-website.md](paid-website.md) |
+| Page | `/signup/` | Visitors: "Create your account", the same form and `POST /api/subscribe` as `/subscribe/`, email only | Built | [paid-website.md](paid-website.md) |
 | Endpoint | `GET` and `POST /api/account` | Manage page, by email link or login cookie | Built | [email-signup.md](email-signup.md) |
 | Endpoint | `GET` and `POST /api/session` | Sign-in page and sign-in link: request a link, sign in, sign out, "who am I" | Built (T16) | [paid-website.md](paid-website.md) |
 | Cookie | `tpr_session` (signed with `SESSION_SECRET`, 30 days) | Confirm and sign-in set it; account and session read it | Built (T16) | [paid-website.md](paid-website.md) |

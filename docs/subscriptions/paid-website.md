@@ -26,9 +26,11 @@ an account are the same thing.
 
 ## Flow
 
-1. **Sign up.** `/subscribe/` as today: enter an address, get a confirmation email, press **Confirm**. Confirming
-   now also **signs you in** in that browser (sets the login cookie). It stays on the "You're subscribed" page, which
-   links to `/live/`, so the confirmation still shows.
+1. **Sign up.** `/signup/` ("Create your account", email only) or `/subscribe/` as today: both post to
+   `/api/subscribe`, so they create the same record. Enter an address, get a confirmation email, press **Confirm**.
+   Confirming now also **signs you in** in that browser (sets the login cookie). It stays on the "You're subscribed"
+   page, which says you're signed in and links to `/live/`, so the confirmation still shows. An account is the
+   subscriber record, so it comes with the free daily email; `/signup/` says so.
 2. **Sign in.** New `/signin/` page with one email field, linked from `/subscribe/` and from `/manage/` when not
    signed in (`/live/` links to it from its panel in T17).
    - `POST /api/session` with `action: "request"` and the address. If the address has a confirmed record, the

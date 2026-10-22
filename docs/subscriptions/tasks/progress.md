@@ -382,4 +382,11 @@ working in a real inbox; that is T12's staged launch.
   - A cookie `POST` from another `Origin` gets `403`.
 - Nothing is locked: the board stays open until T17.
 - **Not checked yet:** a Vercel Preview with `SESSION_SECRET` set and a real inbox (sign up and confirm, sign in from
-  a private window, reuse the link, sign out). `SESSION_SECRET` isn't set on Preview or Production yet.
+  a private window, reuse the link, sign out). `SESSION_SECRET` is set on Production (2026-10-22), not on Preview.
+
+### Sign-up page (after T16)
+- `/signup/`: "Create your account", email only. The same `POST /api/subscribe` as `/subscribe/`, without the Pro
+  box; no new function. It says plainly that the account includes the free daily email and that unsubscribing
+  deletes it, because the account is the subscriber record.
+- The confirm page now says "you're signed in on this browser" when the cookie was set.
+- **Not checked yet:** the production walk-through with a real inbox, which now starts at `/signup/`.
