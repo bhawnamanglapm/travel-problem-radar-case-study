@@ -5,6 +5,9 @@ grouped by date.
 
 ## 2026-10-22
 
+- T16, accounts and sign-in: a `/signin/` page that emails a one-time sign-in link (no passwords), a 30-day login
+  cookie signed with `SESSION_SECRET`, Confirm signs you in, `/manage/` works by the cookie, and Sign out. Nothing is
+  locked yet. Off until `SESSION_SECRET` is set.
 - Tasks renumbered to follow the build order: the paid-website tasks are now T16 to T18 (were T20 to T22)
   and the Razorpay tasks T19 to T22 (were T16 to T19). progress.md lists all of them.
 - Tasks T20 to T22 for the paid website: accounts and sign-in, the locked board, the teaser email.

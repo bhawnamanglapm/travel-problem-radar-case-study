@@ -27,15 +27,19 @@ an account are the same thing.
 ## Flow
 
 1. **Sign up.** `/subscribe/` as today: enter an address, get a confirmation email, press **Confirm**. Confirming
-   now also **signs you in** in that browser (sets the login cookie) and goes to `/live/`.
-2. **Sign in.** New `/signin/` page with one email field, linked from `/subscribe/`, `/live/` and `/manage/`.
+   now also **signs you in** in that browser (sets the login cookie). It stays on the "You're subscribed" page, which
+   links to `/live/`, so the confirmation still shows.
+2. **Sign in.** New `/signin/` page with one email field, linked from `/subscribe/` and from `/manage/` when not
+   signed in (`/live/` links to it from its panel in T17).
    - `POST /api/session` with `action: "request"` and the address. If the address has a confirmed record, the
      record gets a sign-in code (only its hash is stored, valid for 15 minutes, usable once), and the inbox gets an
      email with a sign-in link.
    - The reply is the same whether or not the address has an account. Sign-up already shows whether an address
      subscribes (the owner's choice, decision log), so this hides nothing new; it just keeps the form simple.
-   - The per-IP limit (`MAX_SIGNUPS_PER_IP_HOUR`) and the daily email cap (`MAX_CONFIRMS_PER_DAY`) apply, as for
-     sign-up.
+   - Sign-in emails have their own limits, so a burst of bot sign-ups can't use up the day's emails and stop paying
+     subscribers signing in: at most one per address every 5 minutes, at most `MAX_SIGNINS_PER_DAY` a day (default
+     50, counted by a `signinsent` event), and the per-IP limit `MAX_SIGNUPS_PER_IP_HOUR`, counted together with
+     sign-ups. They don't count against `MAX_CONFIRMS_PER_DAY`.
 3. **The sign-in link** opens a page with a **Sign in** button, like Confirm, because mail scanners open links but
    don't press buttons. Pressing it checks the code, deletes it from the record, sets the login cookie and goes to
    `/live/`. An expired or used code says so and offers a new link.
@@ -44,7 +48,8 @@ an account are the same thing.
    - signed in, Free → `402`, and the page shows "Upgrade" (until payments exist: the existing **Request Pro**);
    - signed in, Pro (`effectivePlan()` in `api/_lib/subscribers.js`) → the data.
 5. **Upgrade.** On `/manage/` while signed in (checkout is T20). The `id`/`t` link from the emails keeps working.
-6. **Sign out.** A button on `/manage/` and `/live/` (`action: "signout"`) clears the cookie in that browser.
+6. **Sign out.** A button on `/manage/` and `/signin/` (`action: "signout"`) clears the cookie in that browser;
+   `/live/` gets one in T17.
 7. **Unsubscribe and delete.**
    - Free: the Unsubscribe link deletes the record, as today.
    - **Pro: unsubscribing stops email but keeps the account** (`emailOff: true`), because they paid for the board.
@@ -55,7 +60,9 @@ an account are the same thing.
 ## The login cookie
 
 - Name `tpr_session`. Value: the record id, an expiry and a session version, signed with HMAC-SHA256 using
-  `SESSION_SECRET`.
+  `SESSION_SECRET` (at least 32 characters; shorter counts as unset, and then nobody can sign in).
+- The signature also covers the record's `createdAt`, which is not in the cookie. Someone who unsubscribes and signs
+  up again gets a new record under the same id but a new `createdAt`, so a cookie from before stops working.
 - `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, 30 days.
 - Checked on every use against the stored record: a deleted record, or a record whose `sessionVer` has moved on,
   makes the cookie worthless. Bumping `sessionVer` ("sign out everywhere") is how to end every session for an
@@ -63,6 +70,10 @@ an account are the same thing.
 - It holds no address and no plan; the plan is always read from the record, so a lapsed Pro loses the board at once.
 - New module `api/_lib/session.js` (sign, verify, read and set the cookie); new endpoint `api/session.js`
   (`request`, the sign-in link's `GET` and `POST`, `me`, `signout`). Functions: 8 of 12 on Hobby.
+- `/manage/` without `id`/`t` uses the cookie. Opened that way it never gets the token, so it shows no Unsubscribe
+  link ("use the Unsubscribe link in any digest email"); T17 adds Delete my account.
+- A `POST` authenticated by the cookie is refused (`403`) if its `Origin` header names another host, on top of
+  `SameSite=Lax`.
 
 ## Storage
 
@@ -70,8 +81,8 @@ New fields on the subscriber record, all optional, so existing records need no m
 
 | Field | Meaning |
 |---|---|
-| `signin` | `{ hash, exp }` of the current sign-in code, or `null`. Deleted when used |
-| `sessionVer` | Whole number, default 0. Bumped to end every session |
+| `signin` | `{ hash, exp, sentAt }` of the current sign-in code, or `null`. Set to `null` when used. `sentAt` spaces the emails 5 minutes apart |
+| `sessionVer` | Whole number, default 0. Bumped to end every session (by hand for now) |
 | `emailOff` | `true` when a Pro account has unsubscribed from email. Delivery skips it |
 
 `/api/data` changes only its access rule and its cache header: with the switch on it answers
@@ -117,7 +128,8 @@ As tasks: [T16](tasks/T16-accounts-and-sign-in.md), [T17](tasks/T17-locked-board
 
 Offline, in `scripts/test-subscriptions.mjs` with fake storage and a fake `fetch`, as for the rest:
 
-- the cookie: a valid one, a tampered one, an expired one, one for a deleted record, one with an old `sessionVer`;
+- the cookie: a valid one, a tampered one, an expired one, one for a deleted record, one for a re-subscribed record,
+  one with an old `sessionVer`, no secret or a short one;
 - sign-in codes: work once, expire after 15 minutes, the same reply for an unknown address, the limits respected;
 - `/api/data` with the switch off (unchanged) and on (not signed in, Free, Pro, lapsed Pro), and its cache header;
 - Pro unsubscribe, bounce and complaint keep the account and stop email; Free still deletes;
@@ -137,7 +149,7 @@ on `/manage/`. Not in Razorpay's docs: what the form asks for after "Yes" (T15 S
 ## Still open (OWNER INPUT NEEDED)
 
 1. Prices, currency, trial and refund rule (the T15 pricing worksheet).
-2. How long a sign-in lasts: 30 days is proposed.
+2. How long a sign-in lasts: 30 days is built (T16); say if it should change.
 3. Whether the teaser shows headlines from every category, or only counts for some.
 4. Whether turning on the paywall before payments is wanted (only hand-granted Pro could see the board).
 5. Not checked: whether a locked board with no way to pay counts as commercial use under Vercel Hobby's terms.

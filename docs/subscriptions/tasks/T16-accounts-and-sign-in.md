@@ -7,7 +7,7 @@
 | Size | L |
 | Depends on | T12 (the subscriber records, sign-up, confirm and `/manage/` it builds on) |
 | Unblocks | T17, T20 (checkout needs a signed-in account) |
-| Status | todo |
+| Status | **Built** on 2026-10-22. Offline tests pass. Not yet tried on a Preview or production: `SESSION_SECRET` isn't set anywhere yet, so sign-in answers "not set up yet" until it is |
 
 ## Why
 
@@ -22,28 +22,40 @@ site, without an email in hand, must be able to sign up, sign in and reach `/man
   `SameSite=Lax`, `Path=/`, 30 days) and the one that clears it. Constant-time compare, as `tokenOk` does.
 - **`api/session.js`** (functions: 8 of 12):
   - `POST {action: "request", email}`: for a confirmed record, store `signin: {hash, exp}` (SHA-256 of a random
-    code, 15 minutes) and email the sign-in link. The same reply for every address. Uses `MAX_SIGNUPS_PER_IP_HOUR`
-    and `MAX_CONFIRMS_PER_DAY`, as sign-up does.
+    code, 15 minutes) and email the sign-in link. The same reply for every address. **Built with its own limits**
+    instead of `MAX_CONFIRMS_PER_DAY`, so a burst of bot sign-ups can't stop subscribers signing in: one email per
+    address every 5 minutes (`signin.sentAt`), `MAX_SIGNINS_PER_DAY` a day (default 50, counted by a new
+    `signinsent` event), and `MAX_SIGNUPS_PER_IP_HOUR`, counted together with sign-ups (`ipLimitReached()`).
   - `GET ?id&c`: a page with a **Sign in** button (`hiddenForm` in `api/_lib/subscription-handlers.js`), so mail
     scanners can't use the link. `POST`: check the code and expiry, delete `signin` from the record, set the
     cookie, redirect to `/live/`. Expired or used: say so and offer a new link.
   - `GET ?action=me`: `{signedIn, plan}` (`effectivePlan`), and nothing else about the record.
   - `POST {action: "signout"}`: clear the cookie.
-- **Confirm signs you in:** a successful `POST /api/confirm` also sets the cookie.
-- **`/manage/` by cookie:** `/api/account` accepts the cookie when there is no `id`/`t`; a Sign out button.
+- **Confirm signs you in:** a successful `POST /api/confirm` also sets the cookie (when `SESSION_SECRET` is set). It
+  stays on the "You're subscribed" page, which links to the board, rather than redirecting.
+- **The cookie's signature also covers the record's `createdAt`** (not stored in the cookie), so after someone
+  unsubscribes and signs up again under the same id, an older cookie is refused.
+- **`/manage/` by cookie:** `/api/account` accepts the cookie when there is no `id`/`t`; a Sign out button. Its
+  replies gain `signedIn`. Opened by cookie, the page has no token, so it shows "use the Unsubscribe link in any
+  digest email" instead of an Unsubscribe link. A cookie `POST` whose `Origin` names another host gets `403`.
 - **`/signin/` page:** self-contained, styled like `/subscribe/`, with the GitHub Pages redirect snippet; linked
-  from `/subscribe/` ("Already have an account? Sign in") and `/manage/`.
+  from `/subscribe/` ("Already subscribed? Sign in") and `/manage/` (when not signed in). When already signed in it
+  shows "You're signed in" with Sign out.
 - **Email:** `buildSignInEmail()` in `api/_lib/email.js`.
 - **Build:** add `signin` to `vercel.json`'s `buildCommand`.
-- **Record fields:** `signin`, `sessionVer` (default 0). Both optional; no migration.
+- **Record fields:** `signin` (`{hash, exp, sentAt}`, `null` once used), `sessionVer` (default 0). Both optional; no
+  migration.
+- **`stats`** in `scripts/subscribers.mjs` gains a sign-ins column and total.
 
 ## Acceptance criteria
 
-- [ ] A confirmed address gets a sign-in email; an unknown or pending one gets the same reply and no email
-- [ ] The sign-in link works once, and not after 15 minutes
-- [ ] A tampered cookie, an expired one, one for a deleted record and one with an old `sessionVer` are refused
-- [ ] Confirming signs you in; `/manage/` works with the cookie alone; Sign out ends it
-- [ ] No code, token or cookie value appears in a log or a reply
+- [x] A confirmed address gets a sign-in email; an unknown or pending one gets the same reply and no email (offline tests)
+- [x] The sign-in link works once, and not after 15 minutes (offline tests)
+- [x] A tampered cookie, an expired one, one for a deleted record and one with an old `sessionVer` are refused
+  (offline tests; also one for a re-subscribed record, and any cookie when the secret is unset or short)
+- [x] Confirming signs you in; `/manage/` works with the cookie alone; Sign out ends it (offline tests)
+- [x] No code, token or cookie value appears in a log or a reply (offline tests)
+- [ ] The same on a Vercel Preview with `SESSION_SECRET` set, with a real inbox
 
 ## Tests
 

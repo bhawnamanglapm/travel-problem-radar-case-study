@@ -216,6 +216,8 @@ Open **Settings → Environment Variables** and add:
 | `MAX_SUBSCRIBERS` | A whole number, for example `5000` | **Production only** | Only with `SUBSCRIPTIONS_ENABLED`. Unset means the list takes nobody new |
 | `MAX_CONFIRMS_PER_DAY` | A whole number | **Production only** | No. Defaults to 10 confirmation emails a day |
 | `MAX_SIGNUPS_PER_IP_HOUR` | A whole number | **Production only** | No. Defaults to 5 sign-ups per connection per UTC hour |
+| `SESSION_SECRET` | A random string of at least 32 characters (see [Signing in](#signing-in-t16)) | **Production and Preview, a different value for each** | Only for sign-in. Without it `/signin/` answers "not set up yet" and Confirm signs nobody in |
+| `MAX_SIGNINS_PER_DAY` | A whole number | **Production only** | No. Defaults to 50 sign-in emails a day; `0` stops them |
 | `RESEND_WEBHOOK_SECRET` | The signing secret (`whsec_…`) of the Resend webhook | **Production only** | No. Turns on `/api/resend-webhook`; see [Subscriber email](#subscriber-email-optional) |
 | `SITE_URL` | `https://` plus your production domain, no trailing slash | **Production only** | No. Defaults to the Vercel production domain |
 | `LEGAL_NAME`, `LEGAL_ADDRESS`, `LEGAL_PHONE` | The name, postal address and phone shown on the policy pages | Production and Preview | Only once `legal/` is in the build: the build fails without them |
@@ -227,7 +229,7 @@ openssl rand -hex 32
 node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 ```
 
-Tick **Sensitive** for both secrets, and for `SLACK_WEBHOOK_URL`, `RESEND_API_KEY` and `RESEND_WEBHOOK_SECRET` if you add them, so the
+Tick **Sensitive** for both secrets, and for `SLACK_WEBHOOK_URL`, `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET` and `SESSION_SECRET` if you add them, so the
 dashboard never shows them again. Save a copy of `CRON_SECRET` in your
 password manager: you need it for the GitHub Actions schedule (4.7) and to run a sweep by hand.
 
@@ -498,7 +500,9 @@ needed at runtime.
 | `SUBSCRIPTIONS_ENABLED` | You (optional) | The subscriber endpoints, `/api/sweep` | `1` turns sign-up and subscriber delivery on together. Anything else, or unset, means off |
 | `MAX_SUBSCRIBERS` | You (with subscriptions) | `/api/subscribe` | The cap on records (pending and active). Unset or not a positive whole number means **closed**: the sign-up reply looks the same but nothing is stored. The count is the one the last saved sweep wrote |
 | `MAX_CONFIRMS_PER_DAY` | You (optional) | `/api/subscribe` | Emails sign-up sends per UTC day, across all addresses: confirmations and "already subscribed" notices together. Default 10; `0` stops both |
-| `MAX_SIGNUPS_PER_IP_HOUR` | You (optional) | `/api/subscribe` | Sign-up attempts per client IP per UTC hour. Default 5; unset or not a positive whole number means 5. Over it the reply is the same and nothing is stored or sent |
+| `MAX_SIGNUPS_PER_IP_HOUR` | You (optional) | `/api/subscribe`, `/api/session` | Sign-up and sign-in requests per client IP per UTC hour, counted together. Default 5; unset or not a positive whole number means 5. Over it the reply is the same and nothing is stored or sent |
+| `SESSION_SECRET` | You (for sign-in) | `/api/session`, `/api/confirm`, `/api/account` | Signs the login cookie (HMAC-SHA256). At least 32 characters; shorter counts as unset. Unset means sign-in answers `503`, Confirm sets no cookie, and `/manage/` works only from an email link. Use a different value on Preview and Production. Changing it signs everyone out |
+| `MAX_SIGNINS_PER_DAY` | You (optional) | `/api/session` | Sign-in emails per UTC day, across all addresses. Default 50; `0` stops them. Separate from `MAX_CONFIRMS_PER_DAY`, so a burst of sign-ups can't stop subscribers signing in |
 | `RESEND_WEBHOOK_SECRET` | You (optional) | `/api/resend-webhook` | The Resend webhook's signing secret. If it is unset, the endpoint answers `503` and does nothing |
 | `SITE_URL` | You (optional) | The subscriber endpoints, `/api/sweep` | Base of the links in subscriber emails. If unset, `https://` plus `VERCEL_PROJECT_PRODUCTION_URL`. With neither, subscriber email is off |
 | `LEGAL_NAME`, `LEGAL_ADDRESS`, `LEGAL_PHONE` | You (once `legal/` ships) | The build (`scripts/fill-legal.mjs`) | Filled into the `{{LEGAL_…}}` slots of the policy pages at build time, HTML-escaped; a newline in the address becomes a line break. Kept out of the repository so they are not in its history. If `legal/` is built and one is unset, the build fails |
@@ -515,8 +519,8 @@ not a letter or digit with `-`.
 | `radar:history` | `radar/radar-history.json` | Index of saved sweeps (id, time, counts), last 60 | Yes |
 | `radar:sweep:<id>` | `radar/radar-sweep-<id>.json` | One sweep's items | Yes |
 | `radar:seenIds` | `radar/radar-seenIds.json` | Up to 800 item IDs already seen, used for the New flag | No |
-| `radar:sub:<id>` | `radar/radar-sub-<id>.json` | One subscriber: address, status, plan, token, dates, and chosen categories (`cats`, Pro only). `<id>` is the SHA-256 of the canonical address (Gmail without dots or `+tags`, and `+tags` dropped for the big providers; see [email-signup.md](docs/subscriptions/email-signup.md#flow)). Records made before 2026-10-22 keep the SHA-256 of the lowercased address | No |
-| `radar:event:<YYYYMMDD>-<time>-<type>-<random>` | `radar/radar-event-….json` | One sign-up, confirmation, unsubscribe, Pro, bounce or complaint event: type, time and plan, **no address or id**. Kept until `prune-events` deletes it | No |
+| `radar:sub:<id>` | `radar/radar-sub-<id>.json` | One subscriber: address, status, plan, token, dates, and chosen categories (`cats`, Pro only). Since T16 also `signin` (the SHA-256 of an unused sign-in code, its expiry and when it was sent; `null` once used) and, optionally, `sessionVer` (raising it by hand signs that subscriber out on every browser). `<id>` is the SHA-256 of the canonical address (Gmail without dots or `+tags`, and `+tags` dropped for the big providers; see [email-signup.md](docs/subscriptions/email-signup.md#flow)). Records made before 2026-10-22 keep the SHA-256 of the lowercased address | No |
+| `radar:event:<YYYYMMDD>-<time>-<type>-<random>` | `radar/radar-event-….json` | One sign-up, confirmation, sign-in email, unsubscribe, Pro, bounce or complaint event: type, time and plan, **no address or id**. Kept until `prune-events` deletes it | No |
 | `radar:deliveries:<YYYYMMDD>` | `radar/radar-deliveries-<YYYYMMDD>.json` | Record ids already sent that day's Free digest. Deleted by the sweep after 7 days | No |
 | `radar:subscriberCount` | `radar/radar-subscriberCount.json` | Pending plus active records at the last saved sweep; the sign-up cap reads it | No |
 | `radar:iphit:<YYYYMMDDHH>-<16 hex>-<6 hex>` | `radar/radar-iphit-….json` | One sign-up attempt: its time only. The 16 hex are from a SHA-256 of the client IP; **the IP itself is not stored**. Deleted by the sweep after 2 hours | No |
@@ -698,6 +702,8 @@ unchanged. Code: `api/subscribe.js`, `api/confirm.js`, `api/unsubscribe.js`, `ap
 4. Every email has an Unsubscribe link and a "Manage subscription" link (`/manage/`), plus `List-Unsubscribe` headers
    so mail apps can offer one-click unsubscribe. Unsubscribing deletes the record, and works even while subscriptions
    are switched off.
+5. Confirming also signs that browser in, and a subscriber can sign in on any browser at `/signin/`: see
+   [Signing in](#signing-in-t16).
 
 **What it needs**
 
@@ -798,6 +804,48 @@ secret), `500` (a storage error, so Resend tries again). No reply or log line co
 
   The sign-up page shows "Too many tries from your connection. Please try again in a few minutes." on a `429`. The
   rule's traffic shows on the Firewall overview.
+
+### Signing in (T16)
+
+A confirmed subscriber can sign in to the site with a link sent to their email; there are no passwords. Code:
+`api/session.js` and `api/_lib/session.js`, with the logic in `makeSessionHandler` in
+`api/_lib/subscription-handlers.js`. Design: [paid-website.md](docs/subscriptions/paid-website.md). Nothing is locked
+yet: the live board stays open to everyone until T17.
+
+**How it works**
+
+1. `/signin/` posts the address to `POST /api/session`. Every address gets the same reply ("If that address has an
+   account, a sign-in link is on its way"); only a confirmed subscriber is emailed. The link holds a one-time code
+   that works for 15 minutes; the record keeps only its SHA-256.
+2. Opening the link shows a **Sign in** button (so a mail scanner that opens links signs nobody in). Pressing it uses
+   up the code, sets the login cookie and goes to `/live/`.
+3. Pressing **Confirm** in the confirmation email also sets the cookie.
+4. `/manage/` opened without an email link uses the cookie, and shows **Sign out**. Opened that way it has no
+   Unsubscribe link (the page never gets the token): to unsubscribe, use the link in any digest email.
+
+**The cookie.** `tpr_session` holds the subscriber id, an expiry and a version, signed with HMAC-SHA256 using
+`SESSION_SECRET`. The signature also covers the record's creation time, so after someone unsubscribes and signs up
+again, the old cookie stops working. It holds no address and no plan (the plan is read from the record each time).
+`HttpOnly; Secure; SameSite=Lax`, 30 days. A cookie-authenticated `POST` whose `Origin` names another site is refused.
+
+**Limits on sign-in emails.** At most one per address every 5 minutes, at most `MAX_SIGNINS_PER_DAY` a day (default
+50), and the sign-up limit of `MAX_SIGNUPS_PER_IP_HOUR` per connection, counted together with sign-ups. Over any of
+them the reply is the same and nothing is sent. Each sign-in email records a `signinsent` event; `stats` counts them.
+They come out of the same Resend daily quota as everything else.
+
+**Setting `SESSION_SECRET`.** Make it at random and send it straight to Vercel, so it is never shown or saved:
+
+```bash
+node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('base64url'))" \
+  | vercel env add SESSION_SECRET --environment preview --sensitive --yes
+```
+
+Run it again with `--environment production` for a separate production value, then redeploy. Preview and
+production must differ, so a cookie from a preview is no good on production. Sign-in also needs everything
+subscriber email needs (above). Until the secret is set, `/api/session` answers `503` and the sign-in page says
+sign-in isn't open yet; Confirm and the email links work as before.
+
+**Signing everyone out.** Set a new `SESSION_SECRET` and redeploy: every cookie stops working at once.
 
 ### Managing subscribers
 
@@ -944,7 +992,7 @@ covers a missed 00:17 run.
 | `pro: { "skipped": "manual run" }` | Pro email goes only with scheduled sweeps (decision D4) | Expected |
 | A Pro subscriber got no Pro email | Pro was granted after the last scheduled sweep; `proUntil` has passed (`list` shows `pro (lapsed)`); or the categories they chose had nothing in that sweep (`pro.emptyForCats` above 0) | Wait for the next scheduled sweep, or grant again. For categories, `show <email>` prints `cats`; they can tick more on `/manage/` |
 | A confirm or manage link says "This link isn't valid" | The record was deleted (unsubscribed, or pending for more than 7 days), or the mail app cut the link short | Sign up again, or use the links in the most recent email |
-| `/subscribe/`, `/manage/` or `/live/` opened on GitHub Pages | Pages has no `/api/`, so these pages send the visit on to the Vercel copy | Nothing to fix; link to `https://travel-problem-radar.vercel.app/subscribe/` |
+| `/subscribe/`, `/signin/`, `/manage/` or `/live/` opened on GitHub Pages | Pages has no `/api/`, so these pages send the visit on to the Vercel copy | Nothing to fix; link to `https://travel-problem-radar.vercel.app/subscribe/` |
 
 ---
 

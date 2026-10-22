@@ -44,13 +44,17 @@
     <li>your email address;</li>
     <li>whether it is confirmed, your plan (Free or Pro), and the categories you chose;</li>
     <li>the dates you signed up, were sent a confirmation, confirmed, were sent an &ldquo;already subscribed&rdquo; email, and asked for Pro;</li>
-    <li>a random code that makes the links in your emails work.</li>
+    <li>a random code that makes the links in your emails work;</li>
+    <li>when you ask for a sign-in link: a one-way hash of that link&rsquo;s code, when it was sent and when it expires (15 minutes later). It is cleared once you use the link.</li>
   </ul>
-  <p>We also count events, such as a sign-up or an unsubscribe, with only the type, the time and the plan. These counts hold no address, so they stay after you leave. To limit automated sign-ups, we keep a shortened, one-way hash of the connection&rsquo;s IP address (never the address itself) and delete it within a few hours.</p>
+  <p>We also count events, such as a sign-up, a sign-in email or an unsubscribe, with only the type, the time and the plan. These counts hold no address, so they stay after you leave. To limit automated sign-ups, we keep a shortened, one-way hash of the connection&rsquo;s IP address (never the address itself) and delete it within a few hours.</p>
   <p><span class="todo">[OWNER INPUT NEEDED: once paid Pro exists: what is stored about payments, for example the Razorpay subscription id and its status. Card and bank details are entered on Razorpay's own form; check what Razorpay sends back before writing this]</span></p>
 
+  <h2>Cookies</h2>
+  <p>When you confirm your address or sign in, we set one cookie, <code>tpr_session</code>, so the site knows it&rsquo;s you. It holds your record&rsquo;s id (a one-way hash of your address, not the address itself), an expiry date and a signature. It lasts 30 days, or until you sign out. We set no advertising or tracking cookies.</p>
+
   <h2>What we use it for</h2>
-  <p>Only to send the digest you asked for, to let you manage or end it, and to count sign-ups and unsubscribes. We don&rsquo;t sell it, share it for advertising, or add you to any other list.</p>
+  <p>Only to send the digest you asked for, to let you sign in and manage or end it, and to count sign-ups and unsubscribes. We don&rsquo;t sell it, share it for advertising, or add you to any other list.</p>
 
   <h2>Who handles it for us</h2>
   <ul>
