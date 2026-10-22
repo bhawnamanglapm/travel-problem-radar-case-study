@@ -187,6 +187,7 @@ flowchart LR
 | Blob key | `radar:rzp-event:<id>` | Webhook | Later | [payments-razorpay.md](payments-razorpay.md) |
 | Variable | `EMAIL_FROM` (on a verified domain), `SUBSCRIPTIONS_ENABLED`, `MAX_SUBSCRIBERS`, `MAX_CONFIRMS_PER_DAY`, `SITE_URL`, `MAX_SIGNUPS_PER_IP_HOUR`, `RESEND_WEBHOOK_SECRET` | Email | Built | [DEPLOYMENT.md](../../DEPLOYMENT.md#environment-variables) |
 | Variable | `SESSION_SECRET`, `MAX_SIGNINS_PER_DAY` | Sign-in | Built (T16) | [DEPLOYMENT.md](../../DEPLOYMENT.md#signing-in-t16) |
+| Variable | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Continue with Google | Built, not set | [DEPLOYMENT.md](../../DEPLOYMENT.md#google-sign-in-optional) |
 | Variable | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `RAZORPAY_PLAN_ID` | Payments | Later | [payments-razorpay.md](payments-razorpay.md) |
 
 Everything in the Blob store stays private. `/api/data` serves only history and sweep keys, so none of the new keys

@@ -10,7 +10,8 @@
 ## Goal
 
 People pay to see the sweeps on the website. A visitor who comes straight to the site, without ever seeing an
-email, can sign up, sign in and upgrade there. No passwords.
+email, can sign up, sign in and upgrade there. No passwords: an emailed link, or Continue with Google (added 2026-10-22,
+off until the owner sets it up).
 
 ## Who sees what
 
@@ -50,6 +51,14 @@ an account are the same thing.
 3. **The sign-in link** opens a page with a **Sign in** button, like Confirm, because mail scanners open links but
    don't press buttons. Pressing it checks the code, deletes it from the record, sets the login cookie and goes to
    `/live/`. An expired or used code says so and offers a new link.
+   - **Continue with Google** (added 2026-10-22) is the other way in, on the same endpoint and with no new
+     package: `GET /api/session?action=google` goes to Google (OpenID Connect, `scope=openid email`, PKCE), and
+     Google sends the person back to `GET /api/session?state&code`. A short signed cookie, `tpr_oauth` (10
+     minutes), ties the return to the browser that started it. The address Google verified signs in its account,
+     activates a pending one, or makes a new Free account that is active at once (no confirmation email), under
+     `MAX_SUBSCRIBERS` and the per-IP limit. Then the login cookie is set and it goes to `/live/`. Only the
+     address is kept: no Google id, name or token. Hidden until `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are
+     set (`action=me` reports `google`).
 4. **The board.** `/live/` reads `/api/data` as today. With the switch on:
    - not signed in → `401`, and the page shows "Sign in" and "Sign up", plus a link to the demo;
    - signed in, Free → `402`, and the page shows "Upgrade" (until payments exist: the existing **Request Pro**);
@@ -116,6 +125,8 @@ the README and the `/subscribe/` nav also change wording.
 
 - No passwords stored. Sign-in codes are random, stored hashed, expire in 15 minutes and work once.
 - Never log or return a sign-in code, a token or a cookie value.
+- Continue with Google: the `id_token` is read only straight from Google's token endpoint over TLS, and its
+  `iss`, `aud`, `exp`, `nonce` and `email_verified` are checked. Logs name only the kind of failure.
 - The sign-in email and the sign-in page carry no subscriber data beyond what the person typed.
 - `SESSION_SECRET` is set for Production and Preview with **different** values and marked Sensitive, so a Preview
   cookie never works on Production.
