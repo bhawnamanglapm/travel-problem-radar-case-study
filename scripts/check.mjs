@@ -27,7 +27,7 @@ for (const c of CATS) {
 const titles = sample.map((p) => p.cat + ":" + p.title.toLowerCase());
 check(new Set(titles).size === titles.length, "no duplicate titles within a category (the New flag keys on them)");
 
-// 2. Case-study page: no dead buttons, and every local link points at a real file.
+// 2. Home page (a customer product page): no dead buttons, and every local link points at a real file.
 const page = readFileSync("index.html", "utf8");
 check(!/href="#"/.test(page), 'index.html has no placeholder href="#" links');
 check(/id="back"/.test(page) && /if \(!\/\\.github\\.io\$\/\.test\(location\.hostname\)\) document\.getElementById\("back"\)\.remove\(\);/.test(page),
@@ -138,7 +138,16 @@ const subLinks = [...page.matchAll(/href="([^"]*subscribe[^"]*)"/g)].map((m) => 
 check(subLinks.length > 0 && subLinks.every((h) => h.startsWith("https://travel-problem-radar.vercel.app/subscribe/")), `index.html links to the subscribe page, only by the absolute Vercel URL (GitHub Pages has no /api/)${subLinks.length ? " (" + subLinks.join(", ") + ")" : " (no link)"}`);
 check(/<a href="\.\.\/subscribe\/">Get it by email<\/a>/.test(livePage), "live/index.html links to the subscribe page");
 // Account pages are findable: the home page links sign-in (absolute, as above); the board shows Sign in or Account.
-check(/<a class="btn sec" href="https:\/\/travel-problem-radar\.vercel\.app\/signin\/">Sign in<\/a>/.test(page), "index.html links to the sign-in page by the absolute Vercel URL");
+check(/<a id="acct" class="btn sec small" href="https:\/\/travel-problem-radar\.vercel\.app\/signin\/" data-open="in">Sign in<\/a>/.test(page), "index.html links to the sign-in page by the absolute Vercel URL");
+// The home page's sign-up / sign-in dialog: the same posts as /signup/ and /signin/, shown while signed out.
+check(/fetch\(url, \{ method: "POST"/.test(page) && /"\/api\/subscribe"/.test(page) && /action: "request"/.test(page) && /wantsPro: up\.wantsPro\.checked/.test(page),
+  "index.html's dialog posts sign-up to /api/subscribe (with wantsPro) and sign-in to /api/session");
+check(/<dialog id="dlg" aria-labelledby="dlg-h">/.test(page) && /fetch\("\/api\/session\?action=me"\)/.test(page) && (page.match(/name="website"/g) || []).length === 2,
+  "index.html has the dialog, checks whether the visitor is signed in, and both forms keep the honeypot field");
+check(!/\.innerHTML\s*=/.test(page), "index.html never uses innerHTML (findings are written with textContent)");
+check(!/BHAWNA|Bhawna Mangla|More work|Product Manager|case study/i.test(page.replace(/<a class="back"[^>]*>[^<]*<\/a>/, "")),
+  "index.html has no portfolio branding outside the Pages-only back link");
+check(/Gathered by an AI model with web search\. Items are not verified/.test(page) && /mailto:hello@pehchanthetraveller\.com/.test(page), "index.html has the AI notice and the contact address");
 check(/<a id="acct" href="\.\.\/signin\/">Sign in<\/a>/.test(livePage) && /fetch\("\/api\/session\?action=me"\)/.test(livePage) && /a\.href = "\.\.\/manage\/"/.test(livePage) && !/\.innerHTML\s*=/.test(livePage), "live/index.html links Sign in, and Account when signed in (no innerHTML)");
 check(/\| \*\*Get it by email\*\* \| https:\/\/travel-problem-radar\.vercel\.app\/subscribe\/[ .]/.test(readFileSync("README.md", "utf8")), "README.md's top table links to the subscribe page");
 
