@@ -126,7 +126,9 @@ the README and the `/subscribe/` nav also change wording.
 
 **The owner turned it on on 2026-10-23**, before checkout. The board is locked; the Free email stays complete until
 T18 is deployed, and then turns into the teaser at once, because the switch is already on. The wording changes
-above are not done yet.
+above were made the same day: "Live board (Pro)" in the navs, the home page's second button goes to the
+demo, the Free plan no longer lists the board, and the home page's "What it found recently" section (empty for
+anyone without Pro) points to the demo.
 
 ## Guardrails
 
