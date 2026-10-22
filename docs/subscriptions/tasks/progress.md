@@ -28,7 +28,7 @@ working in a real inbox; that is T12's staged launch.
 | One subscription per inbox (fix, not in the original task list) | done, live on production and checked | merged as #19 (33d1ef1, 3af6403) | 485 pass (417 subscriber + 68 sweep; +31 new); 46 `npm run check` checks | See "One subscription per inbox" below |
 | Old unsubscribe links say "no longer active" (fix) | done, live on production | merged as #23 (f43e25f) | 486 pass (418 subscriber + 68 sweep; +1 new); 46 `npm run check` checks | An old link's page said the address was off the list when it wasn't |
 | [T15](T15-phase2-gate-and-accounts.md) Gate and accounts | in progress: gate skipped by the owner; prerequisites started | | | See "T15" below |
-| [T16](T16-accounts-and-sign-in.md) Accounts and sign-in | done (offline); Preview check open | branch `feat/t16-accounts-and-sign-in` | 548 pass (480 subscriber + 68 sweep; +62 new); 71 `npm run check` checks (+9) | See "T16" below |
+| [T16](T16-accounts-and-sign-in.md) Accounts and sign-in | done; sign-up half checked in production, sign-in link not yet | branch `feat/t16-accounts-and-sign-in` | 548 pass (480 subscriber + 68 sweep; +62 new); 71 `npm run check` checks (+9) | See "T16" below |
 | [T17](T17-locked-board.md) Locked board | todo | | | Behind `BOARD_PAYWALL`, off |
 | [T18](T18-teaser-email.md) Free email becomes a teaser | todo | | | Same switch |
 | [T19](T19-razorpay-library.md) Razorpay library | todo | | | Needs T15's prices and Razorpay test keys |
@@ -381,12 +381,28 @@ working in a real inbox; that is T12's staged launch.
   - `/manage/` opened by cookie has no Unsubscribe link (it never gets the token).
   - A cookie `POST` from another `Origin` gets `403`.
 - Nothing is locked: the board stays open until T17.
-- **Not checked yet:** a Vercel Preview with `SESSION_SECRET` set and a real inbox (sign up and confirm, sign in from
-  a private window, reuse the link, sign out). `SESSION_SECRET` is set on Production (2026-10-22), not on Preview.
+- `SESSION_SECRET` is set on Production (2026-10-22), not on Preview, so the check ran on production.
+- **Checked in production, 2026-10-22, with a real inbox:** confirm showed "Your account is ready, and you're signed
+  in on this browser"; `/manage/` with no email link showed the plan and Sign out; `/signup/` showed "You're signed
+  in"; after Sign out, `/manage/` went to `/signin/`.
+- **Not checked yet:** a sign-in link requested at `/signin/` (lands on `/live/` signed in), and that the same link is
+  refused the second time.
 
 ### Sign-up page (after T16)
 - `/signup/`: "Create your account", email only. The same `POST /api/subscribe` as `/subscribe/`, without the Pro
   box; no new function. It says plainly that the account includes the free daily email and that unsubscribing
   deletes it, because the account is the subscriber record.
 - The confirm page now says "you're signed in on this browser" when the cookie was set.
-- **Not checked yet:** the production walk-through with a real inbox, which now starts at `/signup/`.
+- Checked in production on 2026-10-22 (see T16 above). The sign-up page said a confirmation link had already gone out
+  in the last 24 hours, since that address had an unconfirmed sign-up, and that earlier link was used.
+
+### Chrome "Dangerous site" warning (2026-10-22)
+- Chrome showed a full-page "Dangerous site" warning on the Vercel site. Search Console listed "Deceptive pages" with
+  no sample URLs, so the cause is unknown.
+- The site was verified in Search Console with a meta tag on `index.html` (PR #33; the tag must stay), a review was
+  requested, and Search Console then showed "No issues detected".
+- Later the same day, after `/signup/` went live, Chrome warned again on the confirm link, and Google's public
+  Safe Browsing status for `/signup/` and `/api/confirm` changed. Its fields aren't documented, so whether the site
+  is listed again should be read in Search Console, not from that status.
+- Guess, not confirmed: a new site on a shared `*.vercel.app` address with sign-in and sign-up forms that ask for an
+  email. A custom domain is the likely longer-term fix; not started.
