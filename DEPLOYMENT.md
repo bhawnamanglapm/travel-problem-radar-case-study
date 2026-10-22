@@ -219,6 +219,7 @@ Open **Settings → Environment Variables** and add:
 | `SESSION_SECRET` | A random string of at least 32 characters (see [Signing in](#signing-in-t16)) | **Production and Preview, a different value for each** | Only for sign-in. Without it `/signin/` answers "not set up yet" and Confirm signs nobody in |
 | `MAX_SIGNINS_PER_DAY` | A whole number | **Production only** | No. Defaults to 50 sign-in emails a day; `0` stops them |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | The OAuth client from Google Cloud (see [Google sign-in](#google-sign-in-optional)) | **Production only**, the secret marked Sensitive | No. Both, with `SESSION_SECRET`, show "Continue with Google" |
+| `BOARD_PAYWALL` | `1` | **Production only**, at go-live | No. Locks the live board to signed-in Pro accounts; see [The locked board](#the-locked-board-t17). Leave it unset until then |
 | `RESEND_WEBHOOK_SECRET` | The signing secret (`whsec_…`) of the Resend webhook | **Production only** | No. Turns on `/api/resend-webhook`; see [Subscriber email](#subscriber-email-optional) |
 | `SITE_URL` | `https://` plus your production domain, no trailing slash | **Production only** | No. Defaults to the Vercel production domain |
 | `LEGAL_NAME`, `LEGAL_ADDRESS`, `LEGAL_PHONE` | The name, postal address and phone shown on the policy pages | Production and Preview | Yes for `LEGAL_NAME`: the build ships `legal/privacy` (since 2026-10-22) and fails without it. The address and phone fill the other policy pages once they ship |
@@ -505,6 +506,7 @@ needed at runtime.
 | `SESSION_SECRET` | You (for sign-in) | `/api/session`, `/api/confirm`, `/api/account` | Signs the login cookie (HMAC-SHA256). At least 32 characters; shorter counts as unset. Unset means sign-in answers `503`, Confirm sets no cookie, and `/manage/` works only from an email link. Use a different value on Preview and Production. Changing it signs everyone out |
 | `MAX_SIGNINS_PER_DAY` | You (optional) | `/api/session` | Sign-in emails per UTC day, across all addresses. Default 50; `0` stops them. Separate from `MAX_CONFIRMS_PER_DAY`, so a burst of sign-ups can't stop subscribers signing in |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | You (optional) | `/api/session` | The Google OAuth client. With both and `SESSION_SECRET`, the pages show "Continue with Google"; with either unset the button stays hidden and `?action=google` answers `503`. The secret never leaves the server |
+| `BOARD_PAYWALL` | You (at go-live) | `/api/data` | `1` locks the board: not signed in `401`, Free or lapsed Pro `402`, Pro the data, and every reply `private, no-store`. Anything else, or unset, means off: the replies and their public cache header are as before. Needs `SESSION_SECRET`, or nobody can sign in to see it. Read only by a new deployment |
 | `RESEND_WEBHOOK_SECRET` | You (optional) | `/api/resend-webhook` | The Resend webhook's signing secret. If it is unset, the endpoint answers `503` and does nothing |
 | `SITE_URL` | You (optional) | The subscriber endpoints, `/api/sweep` | Base of the links in subscriber emails. If unset, `https://` plus `VERCEL_PROJECT_PRODUCTION_URL`. With neither, subscriber email is off |
 | `LEGAL_NAME`, `LEGAL_ADDRESS`, `LEGAL_PHONE` | You (`LEGAL_NAME` now; the rest once their pages ship) | The build (`scripts/fill-legal.mjs`) | Filled into the `{{LEGAL_…}}` slots of the policy pages at build time, HTML-escaped; a newline in the address becomes a line break. Kept out of the repository so they are not in its history. If `legal/` is built and one is unset, the build fails |
@@ -521,8 +523,8 @@ not a letter or digit with `-`.
 | `radar:history` | `radar/radar-history.json` | Index of saved sweeps (id, time, counts), last 60 | Yes |
 | `radar:sweep:<id>` | `radar/radar-sweep-<id>.json` | One sweep's items | Yes |
 | `radar:seenIds` | `radar/radar-seenIds.json` | Up to 800 item IDs already seen, used for the New flag | No |
-| `radar:sub:<id>` | `radar/radar-sub-<id>.json` | One subscriber: address, status, plan, token, dates, and chosen categories (`cats`, Pro only). Since T16 also `signin` (the SHA-256 of an unused sign-in code, its expiry and when it was sent; `null` once used) and, optionally, `sessionVer` (raising it by hand signs that subscriber out on every browser). `<id>` is the SHA-256 of the canonical address (Gmail without dots or `+tags`, and `+tags` dropped for the big providers; see [email-signup.md](docs/subscriptions/email-signup.md#flow)). Records made before 2026-10-22 keep the SHA-256 of the lowercased address | No |
-| `radar:event:<YYYYMMDD>-<time>-<type>-<random>` | `radar/radar-event-….json` | One sign-up, confirmation, sign-in email, unsubscribe, Pro, bounce or complaint event: type, time and plan, **no address or id**. Kept until `prune-events` deletes it | No |
+| `radar:sub:<id>` | `radar/radar-sub-<id>.json` | One subscriber: address, status, plan, token, dates, and chosen categories (`cats`, Pro only). Since T16 also `signin` (the SHA-256 of an unused sign-in code, its expiry and when it was sent; `null` once used) and, optionally, `sessionVer` (raising it by hand signs that subscriber out on every browser). Since T17, a Pro record whose emails stopped has `emailOff`: `unsubscribed`, `bounced` or `complained`. `<id>` is the SHA-256 of the canonical address (Gmail without dots or `+tags`, and `+tags` dropped for the big providers; see [email-signup.md](docs/subscriptions/email-signup.md#flow)). Records made before 2026-10-22 keep the SHA-256 of the lowercased address | No |
+| `radar:event:<YYYYMMDD>-<time>-<type>-<random>` | `radar/radar-event-….json` | One sign-up, confirmation, sign-in email, unsubscribe, emails-off, account-deleted, Pro, bounce or complaint event: type, time and plan, **no address or id**. Kept until `prune-events` deletes it | No |
 | `radar:deliveries:<YYYYMMDD>` | `radar/radar-deliveries-<YYYYMMDD>.json` | Record ids already sent that day's Free digest. Deleted by the sweep after 7 days | No |
 | `radar:subscriberCount` | `radar/radar-subscriberCount.json` | Pending plus active records at the last saved sweep; the sign-up cap reads it | No |
 | `radar:iphit:<YYYYMMDDHH>-<16 hex>-<6 hex>` | `radar/radar-iphit-….json` | One sign-up attempt: its time only. The 16 hex are from a SHA-256 of the client IP; **the IP itself is not stored**. Deleted by the sweep after 2 hours | No |
@@ -533,7 +535,8 @@ not a letter or digit with `-`.
 
 - `/api/data` success responses carry `cache-control: public, s-maxage=300, stale-while-revalidate=3600`. After a
   sweep, the live page can show the previous sweep for about 5 minutes, sometimes a little longer while the CDN
-  refreshes.
+  refreshes. With `BOARD_PAYWALL=1`, every `/api/data` reply is `private, no-store` instead, so no shared cache
+  holds the board.
 - Error responses and `/api/sweep` use `no-store`.
 - Vercel Blob itself can take up to 60 seconds to serve a new version of an overwritten file from its CDN cache.
   So every read skips that cache (`useCache: false`) except `/api/data`'s, which is read-only. Before this, a
@@ -707,8 +710,8 @@ unchanged. Code: `api/subscribe.js`, `api/confirm.js`, `api/unsubscribe.js`, `ap
    holding everything saved in the last 24 hours. **Pro:** an email after every saved **scheduled** sweep (about 5 a
    day); manual runs send Pro nothing. Pro is switched on by hand for now: see "Handling Pro requests" below.
 4. Every email has an Unsubscribe link and a "Manage subscription" link (`/manage/`), plus `List-Unsubscribe` headers
-   so mail apps can offer one-click unsubscribe. Unsubscribing deletes the record, and works even while subscriptions
-   are switched off.
+   so mail apps can offer one-click unsubscribe. Unsubscribing deletes a Free record; a Pro account stays, with its
+   emails off (see [The locked board](#the-locked-board-t17)). It works even while subscriptions are switched off.
 5. Confirming also signs that browser in, and a subscriber can sign in on any browser at `/signin/`: see
    [Signing in](#signing-in-t16).
 
@@ -761,7 +764,8 @@ kept, and unsubscribe links still work. Set it back to `1` and redeploy to resum
 
 **Bounces and spam complaints (Resend webhook, T13).** `POST /api/resend-webhook` takes Resend's `email.bounced` and
 `email.complained` events. A hard bounce (`bounce.type` is `Permanent`) or a complaint deletes that address's record
-and records a `bounced` or `complained` event, with no address. Soft bounces (`Transient`, `Undetermined`) and other
+if it is Free or a lapsed Pro. A Pro record is kept with `emailOff` set to `bounced` or `complained`: it keeps the
+board and gets no more email. Either way a `bounced` or `complained` event is recorded, with no address. Soft bounces (`Transient`, `Undetermined`) and other
 event types are ignored, and so is an address that isn't a subscriber, such as `EMAIL_TO`. Every request's signature
 (Resend signs the Svix way) is checked against the raw body before anything is read, and a timestamp more than 5
 minutes off is refused. Like unsubscribe, it works while `SUBSCRIPTIONS_ENABLED` is off. Setup:
@@ -816,8 +820,8 @@ secret), `500` (a storage error, so Resend tries again). No reply or log line co
 
 A confirmed subscriber can sign in to the site with a link sent to their email; there are no passwords. Code:
 `api/session.js` and `api/_lib/session.js`, with the logic in `makeSessionHandler` in
-`api/_lib/subscription-handlers.js`. Design: [paid-website.md](docs/subscriptions/paid-website.md). Nothing is locked
-yet: the live board stays open to everyone until T17.
+`api/_lib/subscription-handlers.js`. Design: [paid-website.md](docs/subscriptions/paid-website.md). The board is
+locked only while `BOARD_PAYWALL` is on: see [The locked board](#the-locked-board-t17).
 
 **How it works**
 
@@ -830,7 +834,8 @@ yet: the live board stays open to everyone until T17.
    up the code, sets the login cookie and goes to `/live/`.
 3. Pressing **Confirm** in the confirmation email also sets the cookie.
 4. `/manage/` opened without an email link uses the cookie, and shows **Sign out**. Opened that way it has no
-   Unsubscribe link (the page never gets the token): to unsubscribe, use the link in any digest email.
+   Unsubscribe link (the page never gets the token): to unsubscribe, use the link in any digest email. It does
+   have **Delete my account** (see [The locked board](#the-locked-board-t17)).
 
 **The cookie.** `tpr_session` holds the subscriber id, an expiry and a version, signed with HMAC-SHA256 using
 `SESSION_SECRET`. The signature also covers the record's creation time, so after someone unsubscribes and signs up
@@ -894,6 +899,45 @@ you land on `/live/` signed in, and the address is on the list (`node scripts/su
 
 **Turning it off.** Remove either variable and redeploy: the button disappears and the routes answer `503`.
 
+### The locked board (T17)
+
+`BOARD_PAYWALL=1` makes the live board Pro-only. It stays **off** in production until go-live (T22); while it is off,
+`/api/data` and `/live/` behave as before. Code: `makeDataHandler` in `api/_lib/handlers.js`, and the panels in
+`travel-problem-radar.jsx` (rebuilt into `live/radar-live.js`). `/demo/` is never locked.
+
+| Visitor | `/api/data` | `/live/` shows |
+|---|---|---|
+| Not signed in | `401` | "The board is for Pro members", with **Sign in**, **Create account** and a link to the sample demo |
+| Signed in, Free or lapsed Pro | `402` | "The live board is part of Pro", with **Request Pro** (to `/manage/`) and the demo link |
+| Signed in, Pro | `200` and the data | The board |
+
+Every reply then carries `cache-control: private, no-store`. The cookie is checked against the record on every
+request, read without Blob's CDN cache, so a revoked or deleted account loses the board at once.
+
+**Turning it on**
+
+1. Give your own account Pro first, or the board locks you out too: `grant-pro <your email> --yes` (see
+   [Managing subscribers](#managing-subscribers)).
+2. Add `BOARD_PAYWALL` = `1` to Production and redeploy. Only a new deployment reads the variable, and a new
+   deployment starts with an empty CDN cache, so no public copy of the board outlives the switch.
+3. Open `/live/` in a private window: it shows the sign-in panel. Sign in as yourself: the board loads.
+
+To turn it off, delete the variable (or set anything but `1`) and redeploy. `SESSION_SECRET` must be set, or nobody
+can sign in. It is set on Production only, so a Preview with the switch on shows every visitor the sign-in panel.
+
+**A Pro account outlives its emails** (live now, whatever the switch says):
+
+- The Unsubscribe link asks a Pro to confirm "You'll stop getting emails. Your Pro account stays". Pressing it sets
+  `emailOff: "unsubscribed"` and records an `emailoff` event. A Free account, or a lapsed Pro, is deleted as before.
+- A hard bounce or a spam complaint sets `emailOff` to `bounced` or `complained` on a Pro record (see Bounces above).
+- Delivery skips every record with `emailOff`. Sign-in emails still go, because the person asked for them.
+- `/manage/` shows "Email: off" and why. After an unsubscribe, **Turn emails back on** clears it. After a bounce or a
+  complaint the page says to write to hello@pehchanthetraveller.com instead, because sending again to an address
+  that refused mail hurts the domain. No admin command clears it yet.
+- **Delete my account** on `/manage/` (from an email link or signed in) asks once more, then deletes the record,
+  records a `deleted` event holding only the plan, and signs that browser out. A paying Razorpay Pro is told to
+  cancel first (`409`); there are none until T22.
+
 ### Managing subscribers
 
 `scripts/subscribers.mjs` runs on your own machine against the Blob store. It is not deployed (`.vercelignore` skips
@@ -917,8 +961,8 @@ node --env-file=.env.local scripts/subscribers.mjs prune-events --older-than 400
 
 | Command | What it does |
 |---|---|
-| `stats` | Counts now (pending, Free, Pro, Pro ending within 7 days, waiting for Pro) and per UTC day: sign-ups, confirmation emails, already-subscribed notices, confirmations, unsubscribes (Free and Pro), expired, bounced and complained (deleted by the Resend webhook), Pro requests, Free digests sent. Ends with the confirm rate, `confirmed / subscribed`. No addresses |
-| `list` | Address, status, plan, `proUntil`, confirmed date and the date they asked for Pro. `--plan requested` lists the active Free subscribers who asked for Pro (the waiting list). A Pro record past its end date shows as `pro (lapsed)`: the sweep treats it as Free |
+| `stats` | Counts now (pending, Free, Pro, Pro ending within 7 days, waiting for Pro) and per UTC day: sign-ups, confirmation emails, already-subscribed notices, confirmations, unsubscribes (Free deleted; Pro only turns emails off), expired, bounced and complained (from the Resend webhook), Pro requests, Free digests sent. Ends with the confirm rate, `confirmed / subscribed`. No addresses |
+| `list` | Address, status, plan, `proUntil`, confirmed date, the date they asked for Pro, and `emailOff` (why a Pro's emails are off, or `-`). `--plan requested` lists the active Free subscribers who asked for Pro (the waiting list). A Pro record past its end date shows as `pro (lapsed)`: the sweep treats it as Free |
 | `show` | One record without its token |
 | `grant-pro` | Only for an active (confirmed) subscriber. Pro with `proSource: owner`, and the Pro request is cleared (the `prorequested` event keeps the history). `--until 2027-01-31` makes Pro run through the end of that UTC day; leave it out for no end date. A past date is accepted and acts as Free. Refuses a paid Razorpay record |
 | `revoke-pro` | Back to Free, clearing the end date. Refuses a Razorpay record |
@@ -1038,7 +1082,7 @@ covers a missed 00:17 run.
 | `free.due: 0` with `alreadySent` above 0 | Today's Free digest has already gone to those subscribers | Expected; the next one goes after the first sweep of the next UTC day |
 | `pro: { "skipped": "manual run" }` | Pro email goes only with scheduled sweeps (decision D4) | Expected |
 | A Pro subscriber got no Pro email | Pro was granted after the last scheduled sweep; `proUntil` has passed (`list` shows `pro (lapsed)`); or the categories they chose had nothing in that sweep (`pro.emptyForCats` above 0) | Wait for the next scheduled sweep, or grant again. For categories, `show <email>` prints `cats`; they can tick more on `/manage/` |
-| A confirm or manage link says "This link isn't valid" | The record was deleted (unsubscribed, or pending for more than 7 days), or the mail app cut the link short | Sign up again, or use the links in the most recent email |
+| A confirm or manage link says "This link isn't valid" | The record was deleted (a Free account unsubscribed, someone pressed Delete my account, or it was pending for more than 7 days), or the mail app cut the link short | Sign up again, or use the links in the most recent email |
 | `/subscribe/`, `/signin/`, `/manage/` or `/live/` opened on GitHub Pages | Pages has no `/api/`, so these pages send the visit on to the Vercel copy | Nothing to fix; link to `https://travel-problem-radar.vercel.app/subscribe/` |
 
 ---

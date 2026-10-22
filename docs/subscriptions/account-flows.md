@@ -69,12 +69,13 @@ flowchart TD
 ```mermaid
 flowchart LR
   S["Signed in<br/>(cookie, this browser)"] --> M["/manage/ without a link:<br/>plan, categories, Pro request"]
-  S --> V["/live/ board<br/>(open to everyone until T17)"]
+  S --> V["/live/ board<br/>(Pro only once BOARD_PAYWALL is on)"]
   M --> O["Sign out"]
   S --> O
   O --> P["Cookie cleared → /manage/<br/>sends you to /signin/"]
   S -. "browser closed, 12 h pass,<br/>or owner signs everyone out" .-> P
-  M --> U["Unsubscribe link in any email<br/>→ account deleted"]
+  M --> U["Unsubscribe link in any email<br/>→ Free: account deleted<br/>Pro: emails off, account stays"]
+  M --> D["Delete my account<br/>→ record deleted, signed out"]
 ```
 
 ## Flow 4: Continue with Google
@@ -135,8 +136,8 @@ which sends every visitor through these screens. "With T17" means T17 needs it. 
 | 3 | Two sign-up pages make one record with different words, and only `/subscribe/` has the Pro box. People can't tell whether a subscription and an account differ | Keep one form. The owner chose: `/subscribe/` becomes the plans page with a "Create account" button to `/signup/`, which gains the Pro box | **Done** (2026-10-22) |
 | 4 | A returning user who uses the sign-up form gets "already subscribed" and an email with the manage link. That link doesn't sign them in | For an existing account, send a sign-in link instead. The reply already says the address is subscribed, so this reveals nothing new | **Done** (2026-10-22) |
 | 5 | Sign-in for an address that never pressed Confirm says "a link is on its way", and nothing arrives | For a pending address, re-send the confirmation link within the existing limits. The reply stays the same for everyone | **Done** (2026-10-22) |
-| 6 | Sign-in always lands on `/live/`, not on the page the person started from | Remember where they started (pages on this site only) and return there after Sign in | With T17 |
-| 7 | The account is the daily email: unsubscribing deletes the account. Fine for a free newsletter, but a paying Pro user who only wants fewer emails would lose what they paid for | Split "stop emails" from "delete my account": the email link turns emails off, and a manage-page button deletes the account (T17 already plans Delete my account) | With T17 to T20 |
+| 6 | Sign-in always lands on `/live/`, not on the page the person started from | Remember where they started (pages on this site only) and return there after Sign in | Later. T17 didn't need it: the board's panel sends people to sign in, and sign-in lands back on `/live/` |
+| 7 | The account is the daily email: unsubscribing deletes the account. Fine for a free newsletter, but a paying Pro user who only wants fewer emails would lose what they paid for | Split "stop emails" from "delete my account": the email link turns emails off, and a manage-page button deletes the account (T17 already plans Delete my account) | **Part done** (T17, 2026-10-23): a Pro's Unsubscribe link turns emails off and keeps the account, and `/manage/` has Delete my account. Free accounts are still deleted by unsubscribing. Cancelling a paid plan comes with T22 |
 | 8 | A link opened on a phone signs in the phone, not the laptop that asked | Also put a short code in the sign-in email that can be typed on the page that asked | Later |
 | 9 | Two waits the page doesn't explain. A second sign-in request within 5 minutes sends nothing but still says "on its way". A lost confirmation can't be re-sent for 24 hours | Add "You can ask again in 5 minutes" to the sign-in reply. Allow a confirmation re-send after about 10 minutes, still capped per day | **Done** (2026-10-22): re-send after 10 minutes, at most 5 per address |
 | 10 | Every way in waits for an email. When one is slow, lost or blocked (#1), the person is stuck | Add "Continue with Google" beside the emailed link. A new address sees "Create your account" and gets a free account when it presses Create account, with no confirmation email | **Built** (2026-10-22). The confirm step was added the same day, at the owner's request |
@@ -144,5 +145,5 @@ which sends every visitor through these screens. "With T17" means T17 needs it. 
 **Suggested order:**
 1. The domain (#1), when the owner picks it up again.
 2. ~~One small PR for #2 to #5~~: done on branch `fix/account-flows`, with no new server function.
-3. #6 and #7 inside T17.
+3. ~~#7 inside T17~~: done for Pro. #6 moved to Later.
 4. #8 once there are real users asking. (#9 was done early, on 2026-10-22, after the owner hit it.)

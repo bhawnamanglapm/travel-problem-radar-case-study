@@ -36,8 +36,8 @@ an account are the same thing.
    subscriber record, so it comes with the free daily email; `/signup/` says so. Signing up again with an address
    that already has an account emails a sign-in link instead.
 2. **Sign in.** New `/signin/` page with one email field, linked from the home page, `/subscribe/`, `/signup/`,
-   and `/manage/` when not signed in. The live board's strip shows "Sign in", or "Account" when signed in (T17 adds
-   its panel).
+   and `/manage/` when not signed in. The live board's strip shows "Sign in", or "Account" when signed in (the panel
+   for a locked board is built, T17).
    - `POST /api/session` with `action: "request"` and the address. If the address has a confirmed record, the
      record gets a sign-in code (only its hash is stored, valid for 15 minutes, usable once), and the inbox gets an
      email with a sign-in link. An address that never pressed Confirm gets its confirmation link again instead,
@@ -62,19 +62,19 @@ an account are the same thing.
      cookie is set and it goes to `/live/`. Only the
      address is kept: no Google id, name or token. Hidden until `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are
      set (`action=me` reports `google`).
-4. **The board.** `/live/` reads `/api/data` as today. With the switch on:
+4. **The board.** `/live/` reads `/api/data` as today. With the switch on (built in T17; the switch is off):
    - not signed in → `401`, and the page shows "Sign in" and "Sign up", plus a link to the demo;
    - signed in, Free → `402`, and the page shows "Upgrade" (until payments exist: the existing **Request Pro**);
    - signed in, Pro (`effectivePlan()` in `api/_lib/subscribers.js`) → the data.
 5. **Upgrade.** On `/manage/` while signed in (checkout is T20). The `id`/`t` link from the emails keeps working.
 6. **Sign out.** A button on `/manage/` and `/signin/` (`action: "signout"`) clears the cookie in that browser;
-   `/live/` gets one in T17.
+   `/live/` has none of its own: its "Account" link leads to `/manage/`, which has one.
 7. **Unsubscribe and delete.**
    - Free: the Unsubscribe link deletes the record, as today.
-   - **Pro: unsubscribing stops email but keeps the account** (`emailOff: true`), because they paid for the board.
-     A hard bounce or a spam complaint does the same for Pro.
-   - `/manage/` gets **Delete my account**, which deletes the record for anyone. For a paying subscriber it comes
-     after cancelling (T22).
+   - **Pro: unsubscribing stops email but keeps the account** (`emailOff: "unsubscribed"`), because they paid for
+     the board. A hard bounce or a spam complaint does the same for Pro (`"bounced"`, `"complained"`). Built in T17.
+   - `/manage/` has **Delete my account** (T17), which deletes the record for anyone. A paying subscriber gets
+     "cancel first" (`409`) until T22 adds cancelling.
 
 ## The login cookie
 
@@ -91,7 +91,7 @@ an account are the same thing.
 - New module `api/_lib/session.js` (sign, verify, read and set the cookie); new endpoint `api/session.js`
   (`request`, the sign-in link's `GET` and `POST`, `me`, `signout`). Functions: 8 of 12 on Hobby.
 - `/manage/` without `id`/`t` uses the cookie. Opened that way it never gets the token, so it shows no Unsubscribe
-  link ("use the Unsubscribe link in any digest email"); T17 adds Delete my account.
+  link ("use the Unsubscribe link in any digest email"), but it has Delete my account (T17).
 - A `POST` authenticated by the cookie is refused (`403`) if its `Origin` header names another host, on top of
   `SameSite=Lax`.
 
@@ -103,7 +103,7 @@ New fields on the subscriber record, all optional, so existing records need no m
 |---|---|
 | `signin` | `{ hash, exp, sentAt }` of the current sign-in code, or `null`. Set to `null` when used. `sentAt` spaces the emails 5 minutes apart |
 | `sessionVer` | Whole number, default 0. Bumped to end every session (by hand for now) |
-| `emailOff` | `true` when a Pro account has unsubscribed from email. Delivery skips it |
+| `emailOff` | Absent while emails are on. For a Pro account whose emails stopped: `"unsubscribed"`, `"bounced"` or `"complained"`. Delivery skips it. Only `"unsubscribed"` can be turned back on from `/manage/` |
 
 `/api/data` changes only its access rule and its cache header: with the switch on it answers
 `cache-control: private, no-store`, so no shared cache can hand the board to someone who hasn't paid.
@@ -143,6 +143,7 @@ As tasks: [T16](tasks/T16-accounts-and-sign-in.md), [T17](tasks/T17-locked-board
 1. Accounts and sign-in (the cookie, `/api/session`, `/signin/`, Confirm signs you in, `/manage/` by cookie,
    sign-out, the privacy draft gains the cookie and sign-in emails).
 2. The locked board behind `BOARD_PAYWALL`, the `/live/` panel, and Pro accounts that survive unsubscribing.
+   **Built** (T17, 2026-10-23); the switch is off.
 3. The teaser email behind the same switch.
 4. Payments: T19 to T22, with checkout on `/manage/` while signed in.
 
