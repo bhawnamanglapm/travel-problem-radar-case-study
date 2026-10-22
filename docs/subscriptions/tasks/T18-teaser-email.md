@@ -7,7 +7,7 @@
 | Size | S |
 | Depends on | T17 |
 | Unblocks | T22 |
-| Status | todo |
+| Status | todo. `BOARD_PAYWALL` is already on in production (2026-10-23), so the teaser starts as soon as this is deployed |
 
 ## Why
 

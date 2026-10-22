@@ -5,7 +5,7 @@ grouped by date.
 
 ## 2026-10-23
 
-- The live board can be locked to Pro accounts with `BOARD_PAYWALL=1` (off in production). Signed-out visitors see
+- The live board can be locked to Pro accounts with `BOARD_PAYWALL=1`, turned on in production the same day. Signed-out visitors see
   a sign-in panel and signed-in Free accounts a Request Pro panel; `/api/data` answers `401` or `402`, never
   publicly cached.
 - A Pro account is no longer deleted when its emails stop: the Unsubscribe link, a hard bounce or a spam complaint
