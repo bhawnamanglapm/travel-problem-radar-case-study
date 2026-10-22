@@ -5,6 +5,7 @@ grouped by date.
 
 ## 2026-10-22
 
+- T15 checklist: how to answer Razorpay's "Does your website require users to login to complete a payment?".
 - Policy pages: reply time and governing law filled in. The owner's name, address and phone are filled from Vercel
   variables at build time (`scripts/fill-legal.mjs`), so they never enter the repository. Still not deployed.
 - T15 prerequisites checklist, checked against Vercel's and Razorpay's docs with links, and a pricing worksheet for
