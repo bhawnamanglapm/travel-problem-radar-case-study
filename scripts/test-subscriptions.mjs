@@ -2594,4 +2594,92 @@ const iso = (ms) => new Date(ms).toISOString();
   }
 }
 
+// ---- T18: the Free email becomes a summary (counts and headlines) while the board is locked
+{
+  const at = "2026-10-21T08:09:10.123Z";
+  const SIGNIN = "https://site.example/signin/";
+  const problems = [
+    { id: "a", cat: "traveler_pain", severity: "High", isNew: true, title: "Refunds <late>", summary: "SUMMARY-A", source: "SOURCE-A", region: "REGION-A", date: "2026-10-19", link: "https://news.example/a", opportunity: "IDEA-A" },
+    { id: "b", cat: "traveler_pain", severity: "Low", isNew: false, title: "Lost bags", summary: "SUMMARY-B", source: "SOURCE-B", region: "", date: "", link: "https://news.example/b", opportunity: "" },
+    { id: "c", cat: "industry", severity: "Medium", isNew: false, title: "Strike & delays", summary: "SUMMARY-C", source: "SOURCE-C", region: "REGION-C", date: "2026-10-18", link: "https://news.example/c", opportunity: "IDEA-C" },
+  ];
+  const urls = (s) => s.match(/https?:\/\/[^\s<>"']+/g) || [];
+  const DETAIL = /SUMMARY-|SOURCE-|REGION-|IDEA-|2026-10-1[89]|news\.example|\[(High|Medium|Low)\]|Opportunity/;
+
+  // The builder
+  const full = buildDigestEmail({ at, problems, perCat: {} }, "https://site.example/live/", { heading: "Travel Problem Radar: daily digest", subjectLead: "daily" });
+  const fullAgain = buildDigestEmail({ at, problems, perCat: {} }, "https://site.example/live/", { heading: "Travel Problem Radar: daily digest", subjectLead: "daily", teaser: false });
+  check(full.html === fullAgain.html && full.text === fullAgain.text && full.subject === fullAgain.subject, "teaser: teaser:false gives exactly today's email");
+  const tz = buildDigestEmail({ at, problems, perCat: {} }, "https://site.example/live/", { heading: "Travel Problem Radar: daily summary", subjectLead: "daily summary", teaser: true, signInUrl: SIGNIN });
+  check(tz.subject === "Travel Problem Radar daily summary · 2026-10-21 · 3 problems, 1 new", "teaser: the subject says it is a summary");
+  check(/TRAVELER PAIN \(2\)/i.test(tz.text) && /INDUSTRY \(1\)/i.test(tz.text) && />[^<]*\(2\)</.test(tz.html) && />[^<]*\(1\)</.test(tz.html), "teaser: each category has its count, in text and HTML");
+  check(tz.text.includes("- NEW Refunds <late>") && tz.text.includes("- Lost bags") && tz.text.includes("- Strike & delays"), "teaser: the text has every headline, New marked");
+  check(tz.html.includes(esc("Refunds <late>")) && !tz.html.includes("Refunds <late>") && tz.html.includes(esc("Strike & delays")), "teaser: the HTML has every headline, escaped");
+  check(!DETAIL.test(tz.text) && !DETAIL.test(tz.html), "teaser: no summary, source, region, date, severity tag or product idea");
+  check(urls(tz.text).every((u) => u === SIGNIN) && urls(tz.html).every((u) => u === SIGNIN) && urls(tz.text).length === 1 && urls(tz.html).length === 1, "teaser: the only link is the sign-in link");
+  check(!/live board:/i.test(tz.text) && /Sign in to see everything/.test(tz.text) && tz.text.includes("Sign in: " + SIGNIN) && tz.html.includes(">Sign in</a>"), "teaser: a sign-in link instead of the live board link");
+  check(!/check each source link/.test(tz.text + tz.html) && /Items are not verified\./.test(tz.text), "teaser: the AI notice doesn't mention source links");
+  const tf = withSubscriberFooter(tz, { unsubscribeUrl: "https://site.example/api/unsubscribe?id=x&t=y", manageUrl: "https://site.example/manage/?id=x&t=y", plan: "free" });
+  check(urls(tf.text + tf.html).every((u) => u.startsWith("https://site.example/")), "teaser: with the footer, every link is on the site");
+  for (const bad of ["", "javascript:alert(1)", "https://x.example/a b"]) {
+    let threw = false;
+    try { buildDigestEmail({ at, problems, perCat: {} }, "", { teaser: true, signInUrl: bad }); } catch (e) { threw = true; }
+    check(threw, `teaser: a bad sign-in link throws (${JSON.stringify(bad)})`);
+  }
+
+  // Delivery behind BOARD_PAYWALL
+  const ENV = { SUBSCRIPTIONS_ENABLED: "1", RESEND_API_KEY: "re_k", EMAIL_FROM: "Radar <hello@pehchanthetraveller.com>", SITE_URL: "https://site.example" };
+  const world = async (env) => {
+    const st = memStorage();
+    const mails = [];
+    const keys = [];
+    const logs = [];
+    let clock = T0;
+    const fetchFn = async (url, init) => {
+      keys.push(init.headers["idempotency-key"]);
+      const body = JSON.parse(init.body);
+      mails.push(...body);
+      return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ data: body.map((_, i) => ({ id: "m" + i })) }) };
+    };
+    for (const [n, plan] of [[1, "pro"], [2, "free"], [3, "free"]]) {
+      await putSubscriber(st, { ...newPending(`t${n}@example.com`, { now: T0 - 2 * 24 * 3600 * 1000, randomBytes: seeded(200 + n) }), token: "tok" + n, status: "active", plan, proSource: plan === "pro" ? "owner" : null, proUntil: null });
+    }
+    const sweep = async (id, ms) => {
+      const hist = JSON.parse(st.m.get("radar:history") || "[]");
+      hist.push({ id, at: iso(ms), total: problems.length, newCount: 1 });
+      st.m.set("radar:history", JSON.stringify(hist));
+      st.m.set("radar:sweep:" + id, JSON.stringify({ at: iso(ms), problems }));
+      clock = ms;
+      return deliverToSubscribers({ env: { ...ENV, ...env }, storage: st, fetchFn, now: () => clock, randomBytes: seeded(9), log: (...a) => logs.push(a.join(" ")), sweep: { id, at: iso(ms), problems, perCat: {} }, scheduled: true });
+    };
+    return { mails, keys, logs, sweep };
+  };
+  const proOf = (w) => w.mails.find((m) => m.to[0] === "t1@example.com");
+  const freeOf = (w) => w.mails.filter((m) => m.to[0] !== "t1@example.com");
+
+  const off = {};
+  for (const [label, env] of [["unset", {}], ["0", { BOARD_PAYWALL: "0" }], ["true", { BOARD_PAYWALL: "true" }]]) {
+    const w = await world(env);
+    const out = await w.sweep("1792570150123", T0);
+    const fr = freeOf(w);
+    check(fr.length === 2 && fr.every((m) => /daily digest/.test(m.text) && m.text.includes("Live board: https://site.example/live/") && m.text.includes("https://news.example/a") && /^Travel Problem Radar daily · /.test(m.subject)), `teaser delivery: switch ${label}, the Free email is the full digest`);
+    check(out.free.teaser === false && w.keys.some((k) => /-free-1792570150123-0$/.test(k)), `teaser delivery: switch ${label}, the result says teaser:false and the key is unchanged`);
+    off[label] = proOf(w);
+  }
+
+  const w = await world({ BOARD_PAYWALL: "1" });
+  const out = await w.sweep("1792570150123", T0);
+  const fr = freeOf(w);
+  check(fr.length === 2 && fr.every((m) => /daily summary/.test(m.text) && /^Travel Problem Radar daily summary · /.test(m.subject)), "teaser delivery: switch on, Free gets the summary");
+  check(fr.every((m) => m.text.includes("Sign in: https://site.example/signin/") && !DETAIL.test(m.text) && !DETAIL.test(m.html) && !/Live board:/.test(m.text)), "teaser delivery: switch on, a sign-in link and no detail or source link");
+  check(fr.every((m) => urls(m.text + m.html).every((u) => u.startsWith("https://site.example/"))), "teaser delivery: switch on, every link in the Free email is on the site");
+  check(out.free.teaser === true && out.free.sent === 2 && w.keys.some((k) => /-free-1792570150123-teaser-0$/.test(k)), "teaser delivery: switch on, teaser:true in the result and its own idempotency key");
+  const pro = proOf(w);
+  check(["unset", "0", "true"].every((l) => off[l].subject === pro.subject && off[l].text === pro.text && off[l].html === pro.html), "teaser delivery: the Pro email is the same with the switch on and off");
+  check(pro.text.includes("https://news.example/a") && /Pro update/.test(pro.text), "teaser delivery: Pro keeps the full detail");
+  const out2 = await w.sweep("1792588150123", T0 + 5 * 3600 * 1000);
+  check(out2.free.due === 0 && out2.free.alreadySent === 2 && freeOf(w).length === 2, "teaser delivery: still once a day for Free");
+  check(!/@|tok\d/.test([...w.logs, JSON.stringify(out)].join("\n")), "teaser delivery: no address or token in the result or the log");
+}
+
 finish("subscription tests");

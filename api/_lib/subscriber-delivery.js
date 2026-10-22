@@ -145,14 +145,19 @@ export async function deliverToSubscribers({ env, storage, fetchFn, now, randomB
     const doneFile = await readJSON(storage, deliveriesKey);
     const sentToday = new Set(doneFile && Array.isArray(doneFile.free) ? doneFile.free : []);
     const due = free.filter((r) => !sentToday.has(r.id));
-    result.free = { due: due.length, sent: 0, failed: 0, deferred: 0, alreadySent: free.length - due.length };
+    // With the board locked (T17), Free gets the summary: counts and headlines, and a sign-in link (T18).
+    const teaser = env.BOARD_PAYWALL === "1";
+    result.free = { due: due.length, sent: 0, failed: 0, deferred: 0, alreadySent: free.length - due.length, teaser };
     if (due.length && halted) {
       result.free.deferred = due.length;
     } else if (due.length) {
       const problems = await buildRollup(storage, sweep, t);
-      const mail = buildDigestEmail({ at: sweep.at, problems, perCat: {} }, liveUrl, { heading: "Travel Problem Radar: daily digest", subjectLead: "daily" });
+      const mail = teaser
+        ? buildDigestEmail({ at: sweep.at, problems, perCat: {} }, liveUrl, { heading: "Travel Problem Radar: daily summary", subjectLead: "daily summary", teaser, signInUrl: `${site}/signin/` })
+        : buildDigestEmail({ at: sweep.at, problems, perCat: {} }, liveUrl, { heading: "Travel Problem Radar: daily digest", subjectLead: "daily" });
       const r = await sendBatch(creds, due.map((rec) => message(rec, mail, "free")), {
-        fetchFn, shouldStop, idempotencyKey: `${today}-free-${sweep.id}`,
+        // A different body needs a different key: Resend refuses a reused key with a new body.
+        fetchFn, shouldStop, idempotencyKey: `${today}-free-${sweep.id}${teaser ? "-teaser" : ""}`,
         // After each chunk, so a timeout after chunk 2 doesn't resend chunks 1 and 2 at the next sweep.
         onChunk: async ({ sentIndexes }) => {
           if (!sentIndexes.length) return;
