@@ -52,6 +52,9 @@ const livePage = readFileSync("live/index.html", "utf8");
 check(/<script src="radar-live.js"><\/script>/.test(livePage), "live/index.html loads radar-live.js");
 const liveBundle = existsSync("live/radar-live.js") ? readFileSync("live/radar-live.js", "utf8") : "";
 check(liveBundle.includes("/api/data"), "live/radar-live.js is built and reads /api/data");
+// T17: with the board locked, 401 and 402 show a panel instead of an empty board.
+check(liveBundle.includes("The board is for Pro members") && liveBundle.includes("The live board is part of Pro") && liveBundle.includes("../signin/") && liveBundle.includes("../manage/"),
+  "live/radar-live.js has the locked-board panels (sign in, and Pro only)");
 
 // 4b. Subscribe page (Vercel): the plans page. One sign-up form only, on /signup/ (4c3).
 const subPage = existsSync("subscribe/index.html") ? readFileSync("subscribe/index.html", "utf8") : "";
@@ -75,6 +78,10 @@ check(manPage.length > 0 && !/<script[^>]*\ssrc=|<link[^>]*rel=["']?stylesheet|@
 check(/\bcp -r [^&]*\bmanage\b[^&]* public\//.test(vercelJson.buildCommand || ""), "vercel.json's buildCommand copies manage into public/");
 check(existsSync("api/account.js"), "api/account.js exists (the manage page's endpoint)");
 check(/fetch\("\/api\/session"/.test(manPage) && /action: "signout"/.test(manPage), "manage/index.html has a Sign out button that posts to /api/session");
+check(/action: "delete-account"/.test(manPage) && />Delete my account</.test(manPage) && /This can’t be undone/.test(manPage) && /action: "email-on"/.test(manPage),
+  "manage/index.html has Delete my account (asked twice) and Turn emails back on (T17)");
+// The switch is set in Vercel's settings when T22 turns it on, never in the repo.
+check(!JSON.stringify(vercelJson).includes("BOARD_PAYWALL"), "vercel.json does not set BOARD_PAYWALL");
 
 // 4c2. Sign-in page (T16): self-contained, posts to /api/session, and is copied into the deployment.
 const inPage = existsSync("signin/index.html") ? readFileSync("signin/index.html", "utf8") : "";

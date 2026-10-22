@@ -29,7 +29,9 @@
   button[disabled] { opacity: .6; cursor: default; }
   #status { min-height: 1.6em; margin: 12px 0 0; color: #F4F4F7; }
   #status.err, #catStatus.err { color: #FF8A80; }
-  #catStatus { min-height: 1.6em; margin: 12px 0 0; color: #F4F4F7; }
+  #catStatus, #delStatus { min-height: 1.6em; margin: 12px 0 0; color: #F4F4F7; }
+  #delStatus.err { color: #FF8A80; }
+  #delCancel { margin-left: 8px; }
   h2 { font-size: 16px; margin: 0 0 8px; color: #F4F4F7; }
   .cats { border: 0; margin: 0 0 14px; padding: 0; }
   .cats label { display: block; margin: 0 0 6px; color: #F4F4F7; }
@@ -52,6 +54,8 @@
       <p>Pro sends an email after every sweep (about 5 a day) instead of one a day. It&rsquo;s free while it&rsquo;s being tested and is switched on by hand, so it can take a day.</p>
       <button id="req" type="button">Request Pro</button>
     </div>
+    <p id="emailLine" hidden></p>
+    <p id="emailOnRow" hidden><button id="emailOn" class="plain" type="button">Turn emails back on</button></p>
     <p id="status" role="status" aria-live="polite"></p>
   </div>
 
@@ -68,7 +72,15 @@
     <p id="catStatus" role="status" aria-live="polite"></p>
   </div>
 
-  <p id="leave" hidden><a id="unsub" href="#">Unsubscribe</a> <span class="small">(stops every email and deletes your address)</span></p>
+  <div class="card" id="deleteCard" hidden>
+    <h2>Delete my account</h2>
+    <p id="deleteNote">Deletes your address and everything stored with it, and signs this browser out. Nothing more is sent.</p>
+    <button id="del" class="plain" type="button">Delete my account</button>
+    <button id="delCancel" class="plain" type="button" hidden>Keep my account</button>
+    <p id="delStatus" role="status" aria-live="polite"></p>
+  </div>
+
+  <p id="leave" hidden><a id="unsub" href="#">Unsubscribe</a> <span class="small" id="unsubNote">(stops every email and deletes your address)</span></p>
   <p id="leaveByLink" class="small" hidden>To unsubscribe, use the Unsubscribe link in any digest email.</p>
   <p id="signOutRow" hidden><button id="signOut" class="plain" type="button">Sign out</button></p>
   <p class="small">Reached from the link in your emails (don&rsquo;t share it) or by <a href="../signin/">signing in</a>. Questions: <a href="mailto:hello@pehchanthetraveller.com">hello@pehchanthetraveller.com</a>.</p>
@@ -99,6 +111,19 @@
     var b = document.createElement("b"); b.textContent = name; planEl.appendChild(b);
     detail.textContent = rest || "";
   }
+  // Emails on or off (T17). Only an unsubscribe can be undone here: after a bounce or a spam report,
+  // sending again would go to an address that refused mail.
+  var EMAIL_OFF = {
+    unsubscribed: "Email: off. You unsubscribed; your account stays.",
+    bounced: "Email: off, because the last one bounced. Write to hello@pehchanthetraveller.com to restart them.",
+    complained: "Email: off, because the last one was marked as spam. Write to hello@pehchanthetraveller.com to restart them."
+  };
+  function showEmail(a) {
+    var line = document.getElementById("emailLine");
+    line.hidden = false;
+    line.textContent = a.emailOff ? (EMAIL_OFF[a.emailOff] || "Email: off.") : "Email: on.";
+    document.getElementById("emailOnRow").hidden = a.emailOff !== "unsubscribed";
+  }
   function show(a) {
     ask.hidden = true;
     document.getElementById("signOutRow").hidden = !a.signedIn;
@@ -106,16 +131,23 @@
       setPlan("not confirmed yet", "Press Confirm in the email we sent you first; nothing is sent until then.");
       return;
     }
+    var isPro = a.effectivePlan === "pro";
+    document.getElementById("leave").hidden = document.getElementById("leaveByLink").hidden = true;
     // Signed in by cookie, the page has no token, so unsubscribing goes through an email's link.
-    if (id && t) {
+    if (a.emailOff) {
+      // nothing to unsubscribe from
+    } else if (id && t) {
       document.getElementById("unsub").href = "/api/unsubscribe?id=" + encodeURIComponent(id) + "&t=" + encodeURIComponent(t);
+      document.getElementById("unsubNote").textContent = isPro ? "(stops emails; your Pro account stays)" : "(stops every email and deletes your address)";
       document.getElementById("leave").hidden = false;
     } else {
       document.getElementById("leaveByLink").hidden = false;
     }
+    showEmail(a);
+    document.getElementById("deleteCard").hidden = false;
     showCats(a);
-    if (a.effectivePlan === "pro") {
-      setPlan("Pro", "An email after every sweep" + (a.proUntil ? ", until " + day(a.proUntil) + "." : "."));
+    if (isPro) {
+      setPlan("Pro", (a.emailOff ? "The live board" : "The live board and an email after every sweep") + (a.proUntil ? ", until " + day(a.proUntil) + "." : "."));
     } else if (a.proRequestedAt) {
       setPlan("Free", "One email a day. You asked for Pro on " + day(a.proRequestedAt) + "; it will be switched on shortly.");
     } else {
@@ -171,6 +203,50 @@
       })
       .catch(function () { say("Couldn’t sign out. Please try again in a minute.", true); })
       .then(function () { b.disabled = false; });
+  });
+
+  var emailOn = document.getElementById("emailOn");
+  emailOn.addEventListener("click", function () {
+    emailOn.disabled = true;
+    say("Turning emails back on…", false);
+    call("POST", { id: id, t: t, action: "email-on" }).then(function (x) {
+      if (x.status === 200) { show(x.body); say("Emails are back on, starting with the next one.", false); }
+      else if (x.status === 409) { say("That couldn’t be changed here. Reload the page.", true); }
+      else fail(x);
+    }).catch(function () {
+      say("Couldn’t reach the server. Please try again in a minute.", true);
+    }).then(function () { emailOn.disabled = false; });
+  });
+
+  // Delete my account: the first click asks, the second deletes.
+  var del = document.getElementById("del"), delCancel = document.getElementById("delCancel");
+  var delStatus = document.getElementById("delStatus"), armed = false;
+  function sayDel(text, isErr) { delStatus.textContent = text; delStatus.className = isErr ? "err" : ""; }
+  function disarm() { armed = false; del.textContent = "Delete my account"; delCancel.hidden = true; sayDel("", false); }
+  delCancel.addEventListener("click", disarm);
+  del.addEventListener("click", function () {
+    if (!armed) {
+      armed = true;
+      del.textContent = "Yes, delete it";
+      delCancel.hidden = false;
+      sayDel("Delete your account? This can’t be undone.", true);
+      return;
+    }
+    del.disabled = true;
+    sayDel("Deleting…", false);
+    call("POST", { id: id, t: t, action: "delete-account" }).then(function (x) {
+      if (x.status === 200) {
+        ["ask", "catsCard", "deleteCard", "leave", "leaveByLink", "signOutRow", "emailLine", "emailOnRow"].forEach(function (k) { document.getElementById(k).hidden = true; });
+        planEl.textContent = "Your account is deleted";
+        detail.textContent = "Your address is gone and nothing more will be sent. You can sign up again any time.";
+        say("", false);
+      } else if (x.status === 409 && x.body.error === "cancel_first") {
+        disarm();
+        sayDel("Your Pro plan is paid, so it has to be cancelled first. Write to hello@pehchanthetraveller.com and it will be done for you.", true);
+      } else { disarm(); fail(x); }
+    }).catch(function () {
+      sayDel("Couldn’t reach the server. Please try again in a minute.", true);
+    }).then(function () { del.disabled = false; });
   });
 
   saveCats.addEventListener("click", function () {

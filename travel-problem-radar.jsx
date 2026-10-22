@@ -179,6 +179,10 @@ const CSS = `
 .tpr-radar-big.spin::before { animation:tpr-sweep 1.3s linear infinite; }
 .tpr-empty h2 { font-family:var(--display); font-weight:400; font-size:30px; letter-spacing:.03em; margin:0 0 8px; }
 .tpr-empty p { color:var(--muted); font-size:14px; max-width:400px; margin:0 auto; line-height:1.6; }
+.tpr-empty p + p { margin-top:14px; }
+.tpr-locked-actions { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+.tpr-locked-actions .tpr-hview { margin-left:0; text-decoration:none; }
+.tpr-locked-actions .tpr-hview.cur { cursor:pointer; }
 
 .tpr-progress { display:flex; flex-direction:column; gap:9px; max-width:360px; margin:26px auto 0; }
 .tpr-prow { display:flex; align-items:center; gap:11px; font-family:var(--mono); font-size:11px;
@@ -303,6 +307,8 @@ const store = {
     if (REMOTE !== null) {
       const r = await fetch(REMOTE + "?key=" + encodeURIComponent(key));
       if (r.status === 404) return null;
+      // With the board locked (BOARD_PAYWALL), 401 is "sign in" and 402 is "Pro only".
+      if (r.status === 401 || r.status === 402) throw Object.assign(new Error("locked"), { locked: r.status });
       if (!r.ok) throw new Error("http " + r.status);
       return r.json();
     }
@@ -324,7 +330,7 @@ const store = {
 
 async function loadJSON(key) {
   try { const r = await store.get(key); return r ? JSON.parse(r.value) : null; }
-  catch (e) { return null; }
+  catch (e) { if (e && e.locked) throw e; return null; }
 }
 async function saveJSON(key, val) {
   try { await store.set(key, JSON.stringify(val)); } catch (e) {}
@@ -349,6 +355,7 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
   const [selId, setSelId] = useState(null);
   const [sweptAt, setSweptAt] = useState(null);
   const [status, setStatus] = useState("idle"); // idle | scanning | done | error
+  const [locked, setLocked] = useState(null); // 401 | 402 when the live board is for Pro only
   const [progress, setProgress] = useState({});
   const [view, setView] = useState("board"); // board | report | history
   const [fCat, setFCat] = useState("all");
@@ -362,47 +369,52 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
 
   useEffect(() => {
     (async () => {
-      const seen = await loadJSON(KEY_SEEN);
-      if (Array.isArray(seen)) seenRef.current = new Set(seen);
-
-      let hist = await loadJSON(KEY_INDEX);
-      hist = Array.isArray(hist) ? hist : [];
-
-      // migrate a pre-history single sweep, if present
-      if (hist.length === 0) {
-        const legacy = await loadJSON(KEY_LEGACY);
-        if (legacy && Array.isArray(legacy.problems) && legacy.problems.length) {
-          const at = legacy.at || new Date().toISOString();
-          const id = String(new Date(at).getTime());
-          const p = legacy.problems;
-          const entry = { id, at, total: p.length,
-            newCount: p.filter((x) => x.isNew).length,
-            highCount: p.filter((x) => x.severity === "High").length };
-          await saveJSON(sweepKey(id), { at, problems: p });
-          hist = [entry];
-          await saveJSON(KEY_INDEX, hist);
-        }
-      }
-
-      // demo/#report (the case study's "Sample digest" link) opens on the report
-      const wantReport = demo && window.location.hash === "#report";
-
-      if (hist.length) {
-        setHistory(hist);
-        const latest = hist[hist.length - 1];
-        const full = await loadJSON(sweepKey(latest.id));
-        if (full && Array.isArray(full.problems)) {
-          setProblems(full.problems);
-          setSelId(latest.id);
-          setSweptAt(latest.at);
-          setStatus("done");
-          if (wantReport) setView("report");
-          return;
-        }
-      }
-      if (wantReport) runSweep("report");
+      try { await firstLoad(); }
+      catch (e) { if (e && e.locked) { setLocked(e.locked); setStatus("idle"); } }
     })();
   }, []);
+
+  async function firstLoad() {
+    const seen = await loadJSON(KEY_SEEN);
+    if (Array.isArray(seen)) seenRef.current = new Set(seen);
+
+    let hist = await loadJSON(KEY_INDEX);
+    hist = Array.isArray(hist) ? hist : [];
+
+    // migrate a pre-history single sweep, if present
+    if (hist.length === 0) {
+      const legacy = await loadJSON(KEY_LEGACY);
+      if (legacy && Array.isArray(legacy.problems) && legacy.problems.length) {
+        const at = legacy.at || new Date().toISOString();
+        const id = String(new Date(at).getTime());
+        const p = legacy.problems;
+        const entry = { id, at, total: p.length,
+          newCount: p.filter((x) => x.isNew).length,
+          highCount: p.filter((x) => x.severity === "High").length };
+        await saveJSON(sweepKey(id), { at, problems: p });
+        hist = [entry];
+        await saveJSON(KEY_INDEX, hist);
+      }
+    }
+
+    // demo/#report (the case study's "Sample digest" link) opens on the report
+    const wantReport = demo && window.location.hash === "#report";
+
+    if (hist.length) {
+      setHistory(hist);
+      const latest = hist[hist.length - 1];
+      const full = await loadJSON(sweepKey(latest.id));
+      if (full && Array.isArray(full.problems)) {
+        setProblems(full.problems);
+        setSelId(latest.id);
+        setSweptAt(latest.at);
+        setStatus("done");
+        if (wantReport) setView("report");
+        return;
+      }
+    }
+    if (wantReport) runSweep("report");
+  }
 
   async function runSweep(nextView = "board") {
     setStatus("scanning");
@@ -476,7 +488,9 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
   }
 
   async function openSweep(id) {
-    const full = await loadJSON(sweepKey(id));
+    let full;
+    try { full = await loadJSON(sweepKey(id)); }
+    catch (e) { if (e && e.locked) { setLocked(e.locked); setStatus("idle"); } return; }
     if (full && Array.isArray(full.problems)) {
       setProblems(full.problems);
       setSelId(id);
@@ -724,7 +738,26 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
               </div>
             </>
           ) : (
-            live ? (
+            live && locked === 401 ? (
+              <>
+                <h2>The board is for Pro members</h2>
+                <p>Sign in to read the live board. New here? Create an account, then ask for Pro on your account page.</p>
+                <p className="tpr-locked-actions">
+                  <a className="tpr-hview cur" href="../signin/">Sign in</a>
+                  <a className="tpr-hview" href="../signup/">Create account</a>
+                </p>
+                <p>or <a href="../demo/" style={{ color: "inherit" }}>try the sample demo</a></p>
+              </>
+            ) : live && locked === 402 ? (
+              <>
+                <h2>The live board is part of Pro</h2>
+                <p>You’re signed in on the Free plan, which gets the daily email digest. Pro adds this live board and an email after every sweep.</p>
+                <p className="tpr-locked-actions">
+                  <a className="tpr-hview cur" href="../manage/">Request Pro</a>
+                </p>
+                <p>or <a href="../demo/" style={{ color: "inherit" }}>try the sample demo</a></p>
+              </>
+            ) : live ? (
               <>
                 <h2>The first sweep hasn’t run yet</h2>
                 <p>This page shows the result of an automatic sweep that runs every 5 hours. Nothing has been saved yet, so there is nothing to show. In the meantime, <a href="../demo/" style={{ color: "inherit" }}>try the sample demo</a>.</p>
