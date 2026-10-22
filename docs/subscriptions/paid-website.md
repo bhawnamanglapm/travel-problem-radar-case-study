@@ -55,8 +55,11 @@ an account are the same thing.
      package: `GET /api/session?action=google` goes to Google (OpenID Connect, `scope=openid email`, PKCE), and
      Google sends the person back to `GET /api/session?state&code`. A short signed cookie, `tpr_oauth` (10
      minutes), ties the return to the browser that started it. The address Google verified signs in its account,
-     activates a pending one, or makes a new Free account that is active at once (no confirmation email), under
-     `MAX_SUBSCRIBERS` and the per-IP limit. Then the login cookie is set and it goes to `/live/`. Only the
+     or activates a pending one. A new address gets a "Create your account" page first (its address, the daily
+     email, the Pro box): the cookie then holds the verified address for 10 minutes, and only
+     `POST {action: "google-signup"}` (its Create account button) makes the Free account, active at once with no
+     confirmation email, under `MAX_SUBSCRIBERS` and the per-IP limit. Cancel creates nothing. Then the login
+     cookie is set and it goes to `/live/`. Only the
      address is kept: no Google id, name or token. Hidden until `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are
      set (`action=me` reports `google`).
 4. **The board.** `/live/` reads `/api/data` as today. With the switch on:

@@ -82,7 +82,7 @@ flowchart LR
 Shown only once `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set (see
 [DEPLOYMENT.md](../../DEPLOYMENT.md#google-sign-in-optional)); until then the button stays hidden and Flows 1 and
 2 are the only ways in. Entry points: the home page popup (both tabs), `/signup/` and `/signin/`. Under the button:
-"New here? This creates a free account and starts the daily email."
+"New here? You'll confirm before a free account is created."
 
 ```mermaid
 flowchart TD
@@ -93,9 +93,11 @@ flowchart TD
   C -- yes --> D{"That address"}
   D -- "has an account" --> S["Signed in, account unchanged"]
   D -- "never confirmed" --> P["Account made active<br/>(Pro box → Pro request)"]
-  D -- "new" --> N{"List full or<br/>per-IP limit?"}
+  D -- "new" --> N{"List full?<br/>(per-IP limit checked<br/>at Create account)"}
   N -- yes --> X3["New accounts are closed /<br/>too many from this network"]
-  N -- no --> F["Free account, active at once,<br/>no confirmation email<br/>(Pro box → Pro request)"]
+  N -- no --> K["Create your account page:<br/>their address, the daily email,<br/>the Pro box"]
+  K -- "Cancel" --> X4["Nothing created"]
+  K -- "Create account,<br/>within 10 min" --> F["Free account, active at once,<br/>no confirmation email<br/>(Pro box → Pro request)"]
   P --> S
   F --> S
   S --> L["Cookie set (until the browser<br/>closes, 12 h at most)<br/>→ lands on /live/"]
@@ -137,7 +139,7 @@ which sends every visitor through these screens. "With T17" means T17 needs it. 
 | 7 | The account is the daily email: unsubscribing deletes the account. Fine for a free newsletter, but a paying Pro user who only wants fewer emails would lose what they paid for | Split "stop emails" from "delete my account": the email link turns emails off, and a manage-page button deletes the account (T17 already plans Delete my account) | With T17 to T20 |
 | 8 | A link opened on a phone signs in the phone, not the laptop that asked | Also put a short code in the sign-in email that can be typed on the page that asked | Later |
 | 9 | Two waits the page doesn't explain. A second sign-in request within 5 minutes sends nothing but still says "on its way". A lost confirmation can't be re-sent for 24 hours | Add "You can ask again in 5 minutes" to the sign-in reply. Allow a confirmation re-send after about 10 minutes, still capped per day | **Done** (2026-10-22): re-send after 10 minutes, at most 5 per address |
-| 10 | Every way in waits for an email. When one is slow, lost or blocked (#1), the person is stuck | Add "Continue with Google" beside the emailed link. A new address gets a free account at once, with no confirmation email | **Built** (2026-10-22), hidden until the owner sets up Google |
+| 10 | Every way in waits for an email. When one is slow, lost or blocked (#1), the person is stuck | Add "Continue with Google" beside the emailed link. A new address sees "Create your account" and gets a free account when it presses Create account, with no confirmation email | **Built** (2026-10-22). The confirm step was added the same day, at the owner's request |
 
 **Suggested order:**
 1. The domain (#1), when the owner picks it up again.
