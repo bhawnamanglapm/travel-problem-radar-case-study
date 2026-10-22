@@ -901,8 +901,9 @@ you land on `/live/` signed in, and the address is on the list (`node scripts/su
 
 ### The locked board (T17)
 
-`BOARD_PAYWALL=1` makes the live board Pro-only. It stays **off** in production until go-live (T22); while it is off,
-`/api/data` and `/live/` behave as before. Code: `makeDataHandler` in `api/_lib/handlers.js`, and the panels in
+`BOARD_PAYWALL=1` makes the live board Pro-only. It is **on** in production since 2026-10-23, before checkout
+exists, so only accounts given Pro with `grant-pro` read the board. While it is off, `/api/data` and `/live/` behave
+as before. Code: `makeDataHandler` in `api/_lib/handlers.js`, and the panels in
 `travel-problem-radar.jsx` (rebuilt into `live/radar-live.js`). `/demo/` is never locked.
 
 | Visitor | `/api/data` | `/live/` shows |

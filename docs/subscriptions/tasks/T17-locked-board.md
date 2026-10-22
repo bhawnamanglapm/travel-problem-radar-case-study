@@ -7,7 +7,7 @@
 | Size | M |
 | Depends on | T16 |
 | Unblocks | T18, T22 (go-live turns the switch on) |
-| Status | done (2026-10-23); the switch is off in production |
+| Status | done (2026-10-23); the switch is on in production since 2026-10-23 |
 
 ## Why
 

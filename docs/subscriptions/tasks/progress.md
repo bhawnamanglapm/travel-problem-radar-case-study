@@ -29,7 +29,7 @@ working in a real inbox; that is T12's staged launch.
 | Old unsubscribe links say "no longer active" (fix) | done, live on production | merged as #23 (f43e25f) | 486 pass (418 subscriber + 68 sweep; +1 new); 46 `npm run check` checks | An old link's page said the address was off the list when it wasn't |
 | [T15](T15-phase2-gate-and-accounts.md) Gate and accounts | in progress: gate skipped by the owner; prerequisites started | | | See "T15" below |
 | [T16](T16-accounts-and-sign-in.md) Accounts and sign-in | done; sign-up half checked in production, sign-in link not yet | branch `feat/t16-accounts-and-sign-in` | 548 pass (480 subscriber + 68 sweep; +62 new); 71 `npm run check` checks (+9) | See "T16" below |
-| [T17](T17-locked-board.md) Locked board | done; switch off in production | branch `feat/locked-board` | 676 pass (608 subscriber + 68 sweep; +45 new); 107 `npm run check` checks (+3) | See "T17" below |
+| [T17](T17-locked-board.md) Locked board | done; switch on in production since 2026-10-23 | branch `feat/locked-board` | 676 pass (608 subscriber + 68 sweep; +45 new); 107 `npm run check` checks (+3) | See "T17" below |
 | [T18](T18-teaser-email.md) Free email becomes a teaser | todo | | | Same switch |
 | [T19](T19-razorpay-library.md) Razorpay library | todo | | | Needs T15's prices and Razorpay test keys |
 | [T20](T20-manage-page-and-checkout.md) `/manage/` page, checkout, cancel | todo | | | Needs T16 and T19 |
@@ -390,9 +390,12 @@ working in a real inbox; that is T12's staged launch.
 
 ### T17
 - `BOARD_PAYWALL=1` locks `/api/data`: `401` signed out, `402` Free or lapsed Pro, Pro gets the data, all
-  `private, no-store`. Off in production; turning it on waits for the owner (T22 or sooner).
+  `private, no-store`. The owner turned it on in production on 2026-10-23, after `grant-pro` on their own account.
 - `/live/` shows "The board is for Pro members" (`401`) or "The live board is part of Pro" (`402`). Checked locally
-  with a stub API, at desktop and phone width; not seen in production, because the switch is off.
+  with a stub API, at desktop and phone width.
+- **Checked in production, 2026-10-23, with the switch on:** signed out, `/api/data` answers `401` and `/live/` shows
+  "The board is for Pro members"; signed in as a Free account, `/live/` shows "The live board is part of Pro";
+  `/demo/` still opens. **Not checked yet:** the Pro account loading the board.
 - Live now: a Pro account keeps the board when its emails stop (unsubscribe, hard bounce, spam complaint), with
   `emailOff` holding the reason. `/manage/` shows the Email line, **Turn emails back on** (after an unsubscribe only)
   and **Delete my account**.

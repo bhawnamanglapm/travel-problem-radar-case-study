@@ -62,7 +62,7 @@ an account are the same thing.
      cookie is set and it goes to `/live/`. Only the
      address is kept: no Google id, name or token. Hidden until `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are
      set (`action=me` reports `google`).
-4. **The board.** `/live/` reads `/api/data` as today. With the switch on (built in T17; the switch is off):
+4. **The board.** `/live/` reads `/api/data` as today. With the switch on (built in T17; on in production since 2026-10-23):
    - not signed in → `401`, and the page shows "Sign in" and "Sign up", plus a link to the demo;
    - signed in, Free → `402`, and the page shows "Upgrade" (until payments exist: the existing **Request Pro**);
    - signed in, Pro (`effectivePlan()` in `api/_lib/subscribers.js`) → the data.
@@ -124,6 +124,10 @@ Turning it on before checkout exists locks the board for everyone except account
 So it goes on with go-live (T22), unless the owner chooses sooner. On that day, the "Live" button in the case study,
 the README and the `/subscribe/` nav also change wording.
 
+**The owner turned it on on 2026-10-23**, before checkout. The board is locked; the Free email stays complete until
+T18 is deployed, and then turns into the teaser at once, because the switch is already on. The wording changes
+above are not done yet.
+
 ## Guardrails
 
 - No passwords stored. Sign-in codes are random, stored hashed, expire in 15 minutes and work once.
@@ -143,7 +147,7 @@ As tasks: [T16](tasks/T16-accounts-and-sign-in.md), [T17](tasks/T17-locked-board
 1. Accounts and sign-in (the cookie, `/api/session`, `/signin/`, Confirm signs you in, `/manage/` by cookie,
    sign-out, the privacy draft gains the cookie and sign-in emails).
 2. The locked board behind `BOARD_PAYWALL`, the `/live/` panel, and Pro accounts that survive unsubscribing.
-   **Built** (T17, 2026-10-23); the switch is off.
+   **Built** (T17, 2026-10-23); the switch went on in production the same day.
 3. The teaser email behind the same switch.
 4. Payments: T19 to T22, with checkout on `/manage/` while signed in.
 
