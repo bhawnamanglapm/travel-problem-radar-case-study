@@ -344,3 +344,7 @@ working in a real inbox; that is T12's staged launch.
   live. `npm run check` fails if the build ships them with a gap, the draft notice or `noindex` left, or if
   `/subscribe/` or `/manage/` link them before then. To publish: fill the gaps, have them reviewed, remove the
   notice and `noindex`, add `legal` to `buildCommand`, then link them from the page footers.
+- **Prerequisites checked against Vercel and Razorpay docs (2026-10-22)**, now a table in T15 Step 2 with sources.
+  The owner created a Razorpay account the same day; activation is not submitted. Razorpay's website check wants
+  **About us** and **Pricing details** pages as well as the four drafts. Vercel's Hobby terms rule out "any method
+  of requesting or processing payment", so Pro ($20 a month per developer seat) comes before live payments.
