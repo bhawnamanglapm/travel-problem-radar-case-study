@@ -2,8 +2,9 @@
 
 > **Phase 1 (free email sign-up) is built** and switched on in production since 21 Oct 2026; launch checks are in
 > progress ([T12](tasks/T12-docs-and-launch.md)). **Phase 2 (Razorpay) is not built.** Items marked **later** do not
-> exist yet. The design is split across three documents: [pricing and rollout](pricing.md),
-> [free email sign-up](email-signup.md) and [paid Pro through Razorpay](payments-razorpay.md). How to run what is
+> exist yet. The design is split across four documents: [pricing and rollout](pricing.md),
+> [free email sign-up](email-signup.md), [the paid website](paid-website.md) (planned 2026-10-22: Pro pays for the live
+> board, with sign-in by email link) and [paid Pro through Razorpay](payments-razorpay.md). How to run what is
 > built: [DEPLOYMENT.md](../../DEPLOYMENT.md#subscriber-email-optional).
 
 ## What existed before and what was added

@@ -9,7 +9,7 @@
 | Unblocks | — |
 
 > **Changed 2026-10-22 ([decision log](../../decisions.md)):** Pro now pays for the live board on the website, not
-> for email. Accounts and sign-in (email link, login cookie) and the locked board come first, behind a
+> for email ([paid-website.md](../paid-website.md)). Accounts and sign-in (email link, login cookie) and the locked board come first, behind a
 > `BOARD_PAYWALL` switch. Unsubscribing from email must not delete a paying account: a Pro record keeps its account and stops email. Go-live includes turning `BOARD_PAYWALL` on.
 
 ## Why

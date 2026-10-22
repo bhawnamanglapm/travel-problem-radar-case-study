@@ -19,8 +19,8 @@ sign-up first, payments only if people actually sign up.
 
 ## Tiers (draft)
 
-> **Changed 2026-10-22 ([decision log](../decisions.md)):** Pro now pays for the **live board on the website**. The
-> table below is the new plan; the board and the emails work as before until the `BOARD_PAYWALL` switch is turned on.
+> **Changed 2026-10-22 ([decision log](../decisions.md)):** Pro now pays for the **live board on the website**; the
+> design is [paid-website.md](paid-website.md). The table below is the new plan; the board and the emails work as before until the `BOARD_PAYWALL` switch is turned on.
 
 | | Visitor | Free account | Pro (paid) |
 |---|---|---|---|

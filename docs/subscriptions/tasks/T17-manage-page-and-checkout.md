@@ -9,7 +9,7 @@
 | Unblocks | T18 (the record shape it writes), T19 |
 
 > **Changed 2026-10-22 ([decision log](../../decisions.md)):** Pro now pays for the live board on the website, not
-> for email. Accounts and sign-in (email link, login cookie) and the locked board come first, behind a
+> for email ([paid-website.md](../paid-website.md)). Accounts and sign-in (email link, login cookie) and the locked board come first, behind a
 > `BOARD_PAYWALL` switch. Checkout lives on `/manage/` **while signed in**; the `id`/`t` link still works for email readers.
 
 ## Why
