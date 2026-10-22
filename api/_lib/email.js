@@ -146,6 +146,26 @@ export function buildConfirmEmail({ confirmUrl, siteUrl = "" }) {
   };
 }
 
+// The sign-in link (T16), sent only to a confirmed address that asked for it on /signin/.
+export function buildSignInEmail({ signInUrl, siteUrl = "" }) {
+  if (!LINK_OK.test(signInUrl || "")) throw new Error("buildSignInEmail: bad sign-in link");
+  const subject = "Your Travel Problem Radar sign-in link";
+  const intro = "Someone, probably you, asked to sign in to Travel Problem Radar with this address. The link works once and expires in 15 minutes.";
+  const ignore = "If you didn't ask for this, ignore this email; nobody can sign in without the link.";
+  return {
+    subject,
+    text: [subject, "", intro, "", `Sign in: ${signInUrl}`, "", ignore, ...(siteUrl ? ["", siteUrl] : [])].join("\n"),
+    html: [
+      `<div style="${FONT};max-width:640px">`,
+      `<h1 style="font-size:18px;margin:0 0 8px">${esc(subject)}</h1>`,
+      `<p style="margin:0 0 14px">${esc(intro)}</p>`,
+      `<p style="margin:0 0 14px"><a href="${esc(signInUrl)}" style="display:inline-block;padding:10px 18px;background:#1a1a1a;color:#ffffff;text-decoration:none;border-radius:6px">Sign in</a></p>`,
+      `<p style="margin:0;font-size:12px;${MUTED}">${esc(ignore)}</p>`,
+      `</div>`,
+    ].join("\n"),
+  };
+}
+
 // To an address that is already subscribed, when someone signs it up again (at most once a day).
 export function buildAlreadySubscribedEmail({ manageUrl, unsubscribeUrl, siteUrl = "" }) {
   if (!LINK_OK.test(manageUrl || "") || !LINK_OK.test(unsubscribeUrl || "")) throw new Error("buildAlreadySubscribedEmail: bad link");

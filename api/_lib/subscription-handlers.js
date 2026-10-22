@@ -2,8 +2,9 @@
 // injected dependencies like handlers.js, so the offline tests can call them directly.
 // Nothing here puts an address, an id or a token in a reply or a log line.
 import { createHash, createHmac, randomBytes as cryptoRandomBytes, timingSafeEqual } from "node:crypto";
-import { DEFAULT_FROM, buildAlreadySubscribedEmail, buildConfirmEmail, buildProRequestEmail, sendEmail, sendOne } from "./email.js";
+import { DEFAULT_FROM, buildAlreadySubscribedEmail, buildConfirmEmail, buildProRequestEmail, buildSignInEmail, sendEmail, sendOne } from "./email.js";
 import { BodyTooLargeError, allowMethods, esc, readFields, sendJson, sendPage } from "./http.js";
+import { clearCookie, originOk, readSession, sessionCookie, sessionSecret, signSession } from "./session.js";
 import {
   CONFIRM_RESEND_HOURS, PENDING_TTL_DAYS, countEvents, deleteSubscriber, effectivePlan, findSubscriber, getSubscriber, newPending, normaliseCats, normaliseEmail, putSubscriber,
   recordEvent, tokenOk, utcDay,
@@ -66,6 +67,22 @@ export function clientIp(headers = {}) {
 // The list prefix for this IP's attempts in this UTC hour.
 export const ipHitPrefix = (ip, now) =>
   `${KEY_IPHIT_PREFIX}${utcHour(now)}-${createHash("sha256").update("radar-ip:" + ip).digest("hex").slice(0, 16)}-`;
+
+// T13 part B: true when this IP has used up its attempts this hour (sign-up and sign-in share the
+// limit); otherwise the attempt is counted. A count we can't read counts as reached.
+async function ipLimitReached({ req, env, storage, t, randomBytes }) {
+  const ip = clientIp(req.headers);
+  if (!ip) return false;
+  const prefix = ipHitPrefix(ip, t);
+  const maxPerIp = positiveInt(env.MAX_SIGNUPS_PER_IP_HOUR) ?? DEFAULT_MAX_SIGNUPS_PER_IP_HOUR;
+  let hits;
+  try { hits = (await storage.list(prefix)).length; } catch (e) { hits = Infinity; }
+  if (hits >= maxPerIp) return true;
+  try {
+    await storage.set(prefix + Buffer.from(randomBytes(3)).toString("hex"), JSON.stringify({ at: new Date(t).toISOString() }));
+  } catch (e) { /* best effort: a lost hit only makes the limit a little looser */ }
+  return false;
+}
 
 // The count as a number. A missing file is 0 (no sweep has written one yet); a file that can't
 // be read or understood is null, which callers treat as "full".
@@ -132,19 +149,8 @@ export function makeSubscribeHandler({ env, storage, fetchFn, now, randomBytes =
 
     try {
       const t = now();
-      // T13 part B: more than the limit from one IP this hour gets the usual reply and nothing is
-      // stored or sent. A count we can't read counts as reached, like the confirm cap below.
-      const ip = clientIp(req.headers);
-      if (ip) {
-        const prefix = ipHitPrefix(ip, t);
-        const maxPerIp = positiveInt(env.MAX_SIGNUPS_PER_IP_HOUR) ?? DEFAULT_MAX_SIGNUPS_PER_IP_HOUR;
-        let hits;
-        try { hits = (await storage.list(prefix)).length; } catch (e) { hits = Infinity; }
-        if (hits >= maxPerIp) return reply();
-        try {
-          await storage.set(prefix + Buffer.from(randomBytes(3)).toString("hex"), JSON.stringify({ at: new Date(t).toISOString() }));
-        } catch (e) { /* best effort: a lost hit only makes the limit a little looser */ }
-      }
+      // More than the limit from one IP this hour gets the usual reply and nothing is stored or sent.
+      if (await ipLimitReached({ req, env, storage, t, randomBytes })) return reply();
       const maxSubs = positiveInt(env.MAX_SUBSCRIBERS);
       const maxConfirms = maxConfirmsPerDay(env.MAX_CONFIRMS_PER_DAY);
 
@@ -232,8 +238,9 @@ async function linkParams(req, { queryOnly }) {
   return { id: typeof q.id === "string" ? q.id : "", t: typeof q.t === "string" ? q.t : "" };
 }
 
-const hiddenForm = (action, id, t, label) =>
-  `<form method="post" action="${action}"><input type="hidden" name="id" value="${esc(id)}"><input type="hidden" name="t" value="${esc(t)}"><p><button type="submit">${esc(label)}</button></p></form>`;
+// `name` is the secret's field: "t" for a token, "c" for a sign-in code.
+const hiddenForm = (action, id, secret, label, name = "t") =>
+  `<form method="post" action="${action}"><input type="hidden" name="id" value="${esc(id)}"><input type="hidden" name="${name}" value="${esc(secret)}"><p><button type="submit">${esc(label)}</button></p></form>`;
 
 // Shared by confirm and unsubscribe. Unknown id, bad token and missing fields are all the same
 // answer (the invalid page), so the endpoint can't be used to test ids.
@@ -268,14 +275,19 @@ export function makeConfirmHandler({ env, storage, fetchFn = fetch, now, randomB
           await recordEvent(storage, "expired", { now: t, randomBytes });
           return sendPage(res, 404, INVALID);
         }
-        const done = (rec) => sendPage(res, 200, {
-          title: "You're subscribed",
-          body: `<p>You'll get the daily digest after the first sweep of the UTC day (about 05:47 IST).</p>`
-            + (effectivePlan(rec, t) === "pro" ? ""
-              : rec.proRequestedAt ? `<p>You asked for Pro (an email after every sweep). You'll be switched over shortly; until then you get the daily digest.</p>`
-              : `<p>Want an email after every sweep instead? <a href="${esc(managePath(params.id, params.t))}">Request Pro</a></p>`)
-            + `<p><a href="/live/">Open the live board</a></p>`,
-        });
+        // Confirming also signs this browser in (T16), when sign-in is set up.
+        const done = (rec) => {
+          const secret = sessionSecret(env);
+          if (secret) res.setHeader("set-cookie", sessionCookie(signSession(rec, { secret, now: t })));
+          return sendPage(res, 200, {
+            title: "You're subscribed",
+            body: `<p>You'll get the daily digest after the first sweep of the UTC day (about 05:47 IST).</p>`
+              + (effectivePlan(rec, t) === "pro" ? ""
+                : rec.proRequestedAt ? `<p>You asked for Pro (an email after every sweep). You'll be switched over shortly; until then you get the daily digest.</p>`
+                : `<p>Want an email after every sweep instead? <a href="${esc(managePath(params.id, params.t))}">Request Pro</a></p>`)
+              + `<p><a href="/live/">Open the live board</a></p>`,
+          });
+        };
         if (record.status === "active") {
           return post ? done(record) : sendPage(res, 200, { title: "You're already subscribed", body: `<p>Nothing more to do. <a href="${esc(managePath(params.id, params.t))}">Manage your subscription</a> · <a href="/live/">Open the live board</a></p>` });
         }
@@ -345,7 +357,9 @@ const accountView = (record, t) => ({
   cats: record.cats || null,
 });
 
-// GET ?id&t: the plan. POST {id, t, action: "request-pro"}: ask for Pro. Until payments exist
+// GET ?id&t: the plan. With no id and no token, the login cookie (T16) says whose plan; a POST
+// signed in that way must come from this site (originOk). Replies add `signedIn`, whether this
+// browser holds a valid login cookie. POST {id, t, action: "request-pro"}: ask for Pro. Until payments exist
 // (T20, T21) the owner grants it with the admin script; this records the request and tells them.
 // POST {id, t, action: "set-cats", cats: [...]}: a Pro subscriber picks their categories (T14).
 export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomBytes = cryptoRandomBytes, log = console.log }) {
@@ -364,11 +378,20 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
       throw e;
     }
     try {
-      const record = await getSubscriber(storage, params.id);
-      // Unknown id and wrong token are the same answer, so ids can't be tested.
-      if (!record || !tokenOk(record, params.t)) return sendJson(res, 404, { error: "this link isn't valid" });
       const t = now();
-      if (req.method === "GET") return sendJson(res, 200, accountView(record, t));
+      const session = await readSession(req, { env, storage, now: t });
+      let record;
+      if (params.id || params.t) {
+        record = await getSubscriber(storage, params.id);
+        // Unknown id and wrong token are the same answer, so ids can't be tested.
+        if (!record || !tokenOk(record, params.t)) return sendJson(res, 404, { error: "this link isn't valid" });
+      } else {
+        if (!session) return sendJson(res, 401, { error: "not_signed_in" });
+        if (req.method === "POST" && !originOk(req)) return sendJson(res, 403, { error: "wrong_origin" });
+        record = session;
+      }
+      const view = (rec) => ({ ...accountView(rec, t), signedIn: Boolean(session) });
+      if (req.method === "GET") return sendJson(res, 200, view(record));
 
       if (action === "set-cats") {
         if (record.status !== "active") return sendJson(res, 409, { error: "not_confirmed" });
@@ -378,20 +401,147 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
         if (!chosen.ok) return sendJson(res, 400, { error: "unknown category" });
         const updated = { ...record, cats: chosen.cats };
         await putSubscriber(storage, updated);
-        return sendJson(res, 200, { ok: true, ...accountView(updated, t) });
+        return sendJson(res, 200, { ok: true, ...view(updated) });
       }
       if (action !== "request-pro") return sendJson(res, 400, { error: "unknown action" });
       if (record.status !== "active") return sendJson(res, 409, { error: "not_confirmed" });
       if (effectivePlan(record, t) === "pro") return sendJson(res, 409, { error: "already_pro" });
-      if (record.proRequestedAt) return sendJson(res, 200, { ok: true, ...accountView(record, t) }); // a repeat click
+      if (record.proRequestedAt) return sendJson(res, 200, { ok: true, ...view(record) }); // a repeat click
       const updated = { ...record, proRequestedAt: new Date(t).toISOString() };
       await putSubscriber(storage, updated);
       await recordEvent(storage, "prorequested", { now: t, randomBytes, plan: "free" });
       await notifyOwnerProRequest({ env, fetchFn, at: t, source: "manage", log });
-      return sendJson(res, 200, { ok: true, ...accountView(updated, t) });
+      return sendJson(res, 200, { ok: true, ...view(updated) });
     } catch (e) {
       log("account", "error: " + ((e && e.name) || "Error"));
       return sendJson(res, 500, { error: "could not process the request; try again later" });
+    }
+  };
+}
+
+// ---- sign-in by emailed link (T16, docs/subscriptions/paid-website.md)
+
+export const SIGNIN_MINUTES = 15;
+export const SIGNIN_GAP_MINUTES = 5;
+export const DEFAULT_MAX_SIGNINS_PER_DAY = 50;
+const MINUTE_MS = 60 * 1000;
+
+// The same words whether or not the address has an account, and whether or not a limit held the email back.
+const SIGNIN_REPLY = { ok: true, message: "If that address has an account, a sign-in link is on its way. Not in your inbox within a few minutes? Check your spam or junk folder." };
+const NOT_SET_UP = { title: "Sign-in isn't set up yet", body: `<p>Use the Manage link in any digest email instead.</p>` };
+const SIGNIN_INVALID = { title: "This sign-in link isn't valid", body: `<p>It may have expired or been used already. <a href="/signin/">Get a new link</a>.</p>` };
+
+const codeHash = (code) => createHash("sha256").update("radar-signin:" + code).digest("hex");
+
+// Constant-time: the record's stored hash against the hash of the code given.
+function signinOk(record, code, t) {
+  const s = record && record.signin;
+  if (!s || typeof s.hash !== "string" || typeof code !== "string" || !code) return false;
+  if (!(Date.parse(s.exp) > t)) return false;
+  const want = Buffer.from(s.hash);
+  const got = Buffer.from(codeHash(code));
+  return got.length === want.length && timingSafeEqual(got, want);
+}
+
+// One endpoint, /api/session:
+//   POST {action: "request", email, website}  emails a sign-in link to a confirmed address
+//   GET  ?id&c                                 the link: a Sign in button (mail scanners open links)
+//   POST id, c                                 the button: uses the code, sets the cookie, 303 to /live/
+//   GET  ?action=me                            {signedIn, plan} for the pages
+//   POST {action: "signout"}                   clears the cookie in this browser
+// The code is random, stored only as a hash, works once and expires after SIGNIN_MINUTES.
+export function makeSessionHandler({ env, storage, fetchFn = fetch, now, randomBytes = cryptoRandomBytes, log = console.log }) {
+  return async function session(req, res) {
+    if (!allowMethods(req, res, ["GET", "POST"])) return;
+    let q = req.query;
+    if (!q || typeof q !== "object") q = Object.fromEntries(new URL(req.url || "/", "http://x").searchParams);
+    const t = now();
+    const secret = sessionSecret(env);
+
+    if (req.method === "GET" && q.action === "me") {
+      const rec = await readSession(req, { env, storage, now: t });
+      return sendJson(res, 200, { signedIn: Boolean(rec), plan: rec ? effectivePlan(rec, t) : null });
+    }
+
+    let fields = {};
+    if (req.method === "POST") {
+      try {
+        fields = await readFields(req, { limit: 4096 });
+      } catch (e) {
+        if (e instanceof BodyTooLargeError) return sendJson(res, 413, { error: "request too large" });
+        throw e;
+      }
+      if (!originOk(req)) return sendJson(res, 403, { error: "wrong_origin" });
+      if (fields.action === "signout") {
+        res.setHeader("set-cookie", clearCookie());
+        return sendJson(res, 200, { ok: true });
+      }
+    }
+
+    if (fields.action === "request") {
+      const site = siteUrl(env);
+      if (env.SUBSCRIPTIONS_ENABLED !== "1" || !secret || !env.RESEND_API_KEY || !senderOk(env.EMAIL_FROM) || !site) {
+        return sendJson(res, 503, { error: "sign-in isn't set up yet" });
+      }
+      const reply = () => sendJson(res, 200, SIGNIN_REPLY);
+      if (fields.website) return reply(); // the honeypot
+      const email = normaliseEmail(fields.email);
+      if (!email) return sendJson(res, 400, { error: "enter a valid email address" });
+      try {
+        if (await ipLimitReached({ req, env, storage, t, randomBytes })) return reply();
+        const record = await findSubscriber(storage, email);
+        if (!record || record.status !== "active") return reply();
+        // One email per address every SIGNIN_GAP_MINUTES; the newest link replaces the last.
+        if (record.signin && t - Date.parse(record.signin.sentAt) < SIGNIN_GAP_MINUTES * MINUTE_MS) return reply();
+        const raw = String(env.MAX_SIGNINS_PER_DAY ?? "").trim();
+        const maxPerDay = raw === "0" ? 0 : positiveInt(raw) ?? DEFAULT_MAX_SIGNINS_PER_DAY;
+        let sentToday;
+        try { sentToday = await countEvents(storage, { day: utcDay(t), type: "signinsent" }); } catch (e) { sentToday = Infinity; }
+        if (sentToday >= maxPerDay) return reply();
+
+        const code = Buffer.from(randomBytes(32)).toString("base64url");
+        await putSubscriber(storage, {
+          ...record,
+          signin: { hash: codeHash(code), exp: new Date(t + SIGNIN_MINUTES * MINUTE_MS).toISOString(), sentAt: new Date(t).toISOString() },
+        });
+        await recordEvent(storage, "signinsent", { now: t, randomBytes, plan: effectivePlan(record, t) });
+        const mail = buildSignInEmail({ signInUrl: `${site}/api/session?id=${record.id}&c=${code}`, siteUrl: site });
+        const result = await sendOne({ apiKey: env.RESEND_API_KEY, from: env.EMAIL_FROM }, { to: record.email, ...mail }, {
+          fetchFn,
+          idempotencyKey: `signin-${record.id.slice(0, 24)}-${t}`,
+        });
+        if (result !== "sent") log("session signin-email", result);
+        return reply();
+      } catch (e) {
+        log("session", "error: " + ((e && e.name) || "Error"));
+        return sendJson(res, 500, { error: "could not process the request; try again later" });
+      }
+    }
+    if (req.method === "POST" && fields.action !== undefined) return sendJson(res, 400, { error: "unknown action" });
+
+    // The link and its button. Unknown id, wrong code, used and expired all get the same page.
+    if (env.SUBSCRIPTIONS_ENABLED !== "1") return sendPage(res, 503, PAUSED);
+    if (!secret) return sendPage(res, 503, NOT_SET_UP);
+    const src = req.method === "POST" ? fields : q;
+    const id = typeof src.id === "string" ? src.id : "";
+    const code = typeof src.c === "string" ? src.c : "";
+    try {
+      const record = await getSubscriber(storage, id);
+      if (!record || record.status !== "active" || !signinOk(record, code, t)) return sendPage(res, 400, SIGNIN_INVALID);
+      if (req.method === "GET") {
+        return sendPage(res, 200, { title: "Sign in to Travel Problem Radar", body: `<p>One click to sign in on this browser.</p>${hiddenForm("/api/session", id, code, "Sign in", "c")}` });
+      }
+      const used = { ...record, signin: null };
+      await putSubscriber(storage, used);
+      res.statusCode = 303;
+      res.setHeader("set-cookie", sessionCookie(signSession(used, { secret, now: t })));
+      res.setHeader("location", "/live/");
+      res.setHeader("cache-control", "no-store");
+      res.setHeader("referrer-policy", "no-referrer");
+      return res.end();
+    } catch (e) {
+      log("session", "error: " + ((e && e.name) || "Error"));
+      return sendPage(res, 500, { title: "Something went wrong", body: "<p>Please try the link again in a minute.</p>" });
     }
   };
 }
