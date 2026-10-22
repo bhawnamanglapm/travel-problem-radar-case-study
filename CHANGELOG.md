@@ -8,6 +8,8 @@ grouped by date.
 - The home page is a customer product page instead of the portfolio case study, with the latest findings, plans and
   a sign-up / sign-in popup on every signed-out visit (`docs/site/homepage-review.md`). A sign-in now lasts until the
   browser closes, 12 hours at most (was 30 days).
+- The other pages' "← Case study" link is now "← Home". The live board drops its "Sample demo" and "Source" links,
+  and "Get it by email" becomes "Plans".
 - A lost confirmation can be asked for again after 10 minutes instead of 24 hours, at most 5 times per address;
   the sign-in reply says a new link can be asked for every 5 minutes (#9 in `docs/subscriptions/account-flows.md`).
 - Account-flow fixes (#2 to #5 in `docs/subscriptions/account-flows.md`): "Sign in" on the home page and the live

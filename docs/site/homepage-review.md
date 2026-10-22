@@ -23,6 +23,10 @@ or from the sweep code (`api/_lib/radar.js`); nothing was made up.
 
 "← Back to portfolio" stays, on the GitHub Pages copy only (the portfolio links there).
 
+The other pages followed the same day: their "← Case study" link became "← Home", and the live board lost its
+"Sample demo" (the July sample) and "Source" (the GitHub repo) links, with "Get it by email" renamed "Plans". The demo
+page still exists at `/demo/`, linked from the README.
+
 ## What was missing and is now there
 
 | Item | On the new page |

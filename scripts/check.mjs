@@ -136,7 +136,11 @@ check(legalShipped || !LEGAL.some((s) => /href="[^"]*legal\//.test(subPage + man
 
 const subLinks = [...page.matchAll(/href="([^"]*subscribe[^"]*)"/g)].map((m) => m[1]);
 check(subLinks.length > 0 && subLinks.every((h) => h.startsWith("https://travel-problem-radar.vercel.app/subscribe/")), `index.html links to the subscribe page, only by the absolute Vercel URL (GitHub Pages has no /api/)${subLinks.length ? " (" + subLinks.join(", ") + ")" : " (no link)"}`);
-check(/<a href="\.\.\/subscribe\/">Get it by email<\/a>/.test(livePage), "live/index.html links to the subscribe page");
+check(/<a href="\.\.\/subscribe\/">Plans<\/a>/.test(livePage), "live/index.html links to the subscribe page");
+// Customer pages: the back link says Home (the home page is no longer a case study), and the board has no demo or repo links.
+const backPages = ["live", "demo", "signup", "signin", "subscribe", "manage"];
+check(backPages.every((d) => readFileSync(`${d}/index.html`, "utf8").includes("&larr; Home</a>")) && !backPages.some((d) => readFileSync(`${d}/index.html`, "utf8").includes("Case study")), "every sub-page's back link says Home, not Case study");
+check(!/Sample demo|github\.com/.test(livePage), "live/index.html has no Sample demo or repo link");
 // Account pages are findable: the home page links sign-in (absolute, as above); the board shows Sign in or Account.
 check(/<a id="acct" class="btn sec small" href="https:\/\/travel-problem-radar\.vercel\.app\/signin\/" data-open="in">Sign in<\/a>/.test(page), "index.html links to the sign-in page by the absolute Vercel URL");
 // The home page's sign-up / sign-in dialog: the same posts as /signup/ and /signin/, shown while signed out.
