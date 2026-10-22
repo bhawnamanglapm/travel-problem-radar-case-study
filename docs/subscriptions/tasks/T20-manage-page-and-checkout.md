@@ -1,12 +1,12 @@
-# T17 · Manage page and checkout
+# T20 · Manage page and checkout
 
 | | |
 |---|---|
 | Phase | 2, paid Pro |
 | Who | Developer |
 | Size | L |
-| Depends on | T16, T20 (sign-in) |
-| Unblocks | T18 (the record shape it writes), T19 |
+| Depends on | T16 (sign-in), T19 |
+| Unblocks | T21 (the record shape it writes), T22 |
 
 > **Changed 2026-10-22 ([decision log](../../decisions.md)):** Pro now pays for the live board on the website, not
 > for email ([paid-website.md](../paid-website.md)). Accounts and sign-in (email link, login cookie) and the locked board come first, behind a
@@ -67,14 +67,14 @@ names).
 
 - `verifyCheckout` with the key secret. Bad signature: `400`.
 - Good signature: set `rzp.status = "authenticated"` and reply "Payment received; Pro starts in a minute or two".
-  **Do not set `plan: "pro"` here.** The webhook (T18) is the only thing that grants paid Pro, because the browser
+  **Do not set `plan: "pro"` here.** The webhook (T21) is the only thing that grants paid Pro, because the browser
   callback can be lost or replayed and the webhook is signed by Razorpay.
 
 ### 4. `POST /api/cancel`
 
 - Token check. Must have `proSource: "razorpay"` and a `rzp.subscriptionId`.
 - `cancelSubscription({atCycleEnd: true})`. On success set `rzp.cancelAtPeriodEnd = true`. Plan stays Pro until
-  `proUntil`; T18 handles the switch to Free.
+  `proUntil`; T21 handles the switch to Free.
 
 ## Record shape (adds to T02)
 

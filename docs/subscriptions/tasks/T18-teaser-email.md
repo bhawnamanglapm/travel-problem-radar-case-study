@@ -1,12 +1,12 @@
-# T22 · Free email becomes a teaser
+# T18 · Free email becomes a teaser
 
 | | |
 |---|---|
 | Phase | 2a, paid website ([paid-website.md](../paid-website.md)) |
 | Who | Developer |
 | Size | S |
-| Depends on | T21 |
-| Unblocks | T19 |
+| Depends on | T17 |
+| Unblocks | T22 |
 | Status | todo |
 
 ## Why

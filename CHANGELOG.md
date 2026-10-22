@@ -5,6 +5,8 @@ grouped by date.
 
 ## 2026-10-22
 
+- Tasks renumbered to follow the build order: the paid-website tasks are now T16 to T18 (were T20 to T22)
+  and the Razorpay tasks T19 to T22 (were T16 to T19). progress.md lists all of them.
 - Tasks T20 to T22 for the paid website: accounts and sign-in, the locked board, the teaser email.
 - Decision: Pro will pay for the live board on the website, not for email. The free email becomes a teaser, and
   sign-in works by an emailed link. Design in `docs/subscriptions/paid-website.md`; docs and the draft terms

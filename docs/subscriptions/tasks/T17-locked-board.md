@@ -1,12 +1,12 @@
-# T21 · The locked board
+# T17 · The locked board
 
 | | |
 |---|---|
 | Phase | 2a, paid website ([paid-website.md](../paid-website.md)) |
 | Who | Developer |
 | Size | M |
-| Depends on | T20 |
-| Unblocks | T22, T19 (go-live turns the switch on) |
+| Depends on | T16 |
+| Unblocks | T18, T22 (go-live turns the switch on) |
 | Status | todo |
 
 ## Why
@@ -22,13 +22,13 @@ unsubscribing from email, which today deletes the record.
   - no valid cookie → `401`; a signed-in Free (or lapsed Pro) → `402`; Pro → the data;
   - `cache-control: private, no-store` on every reply, so no shared cache serves the board.
 - **`/live/`:** the `remote` store in `travel-problem-radar.jsx` reports `401` and `402` instead of failing quietly,
-  and the page shows a panel: Sign in and Sign up (`401`), or Upgrade, which is Request Pro until T17 (`402`), plus
+  and the page shows a panel: Sign in and Sign up (`401`), or Upgrade, which is Request Pro until T20 (`402`), plus
   a link to the demo.
 - **A Pro account survives:**
   - The Unsubscribe link, a hard bounce and a spam complaint set `emailOff: true` on a Pro record instead of
     deleting it; delivery skips `emailOff`. Free records are deleted as today.
   - `/manage/` shows "Email: off" with a way to turn it back on, and **Delete my account** for anyone. For a paying
-    account, deleting comes after cancelling (T19).
+    account, deleting comes after cancelling (T22).
 - **Record field:** `emailOff` (optional).
 
 ## Acceptance criteria

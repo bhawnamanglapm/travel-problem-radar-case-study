@@ -1,4 +1,4 @@
-# T20 · Accounts and sign-in
+# T16 · Accounts and sign-in
 
 | | |
 |---|---|
@@ -6,7 +6,7 @@
 | Who | Developer |
 | Size | L |
 | Depends on | T12 (the subscriber records, sign-up, confirm and `/manage/` it builds on) |
-| Unblocks | T21, T17 (checkout needs a signed-in account) |
+| Unblocks | T17, T20 (checkout needs a signed-in account) |
 | Status | todo |
 
 ## Why

@@ -3,7 +3,7 @@
 > **Planned, not built.** Decided on 2026-10-22 ([decision log](../decisions.md)). The plan replaces "Pro is a paid
 > email" with "Pro pays for the live board". Until the `BOARD_PAYWALL` switch is turned on, the board stays open
 > and the emails work as described in [email-signup.md](email-signup.md). Payments themselves are
-> [payments-razorpay.md](payments-razorpay.md) and tasks T16 to T19; this page covers what comes before them:
+> [payments-razorpay.md](payments-razorpay.md) and tasks T19 to T22; this page covers what comes before them:
 > accounts, sign-in, the locked board and the teaser email.
 
 ## Goal
@@ -43,14 +43,14 @@ an account are the same thing.
    - not signed in → `401`, and the page shows "Sign in" and "Sign up", plus a link to the demo;
    - signed in, Free → `402`, and the page shows "Upgrade" (until payments exist: the existing **Request Pro**);
    - signed in, Pro (`effectivePlan()` in `api/_lib/subscribers.js`) → the data.
-5. **Upgrade.** On `/manage/` while signed in (checkout is T17). The `id`/`t` link from the emails keeps working.
+5. **Upgrade.** On `/manage/` while signed in (checkout is T20). The `id`/`t` link from the emails keeps working.
 6. **Sign out.** A button on `/manage/` and `/live/` (`action: "signout"`) clears the cookie in that browser.
 7. **Unsubscribe and delete.**
    - Free: the Unsubscribe link deletes the record, as today.
    - **Pro: unsubscribing stops email but keeps the account** (`emailOff: true`), because they paid for the board.
      A hard bounce or a spam complaint does the same for Pro.
    - `/manage/` gets **Delete my account**, which deletes the record for anyone. For a paying subscriber it comes
-     after cancelling (T19).
+     after cancelling (T22).
 
 ## The login cookie
 
@@ -90,7 +90,7 @@ the board is locked.
 Accounts, sign-in and sign-out work either way.
 
 Turning it on before checkout exists locks the board for everyone except accounts given Pro by hand (`grant-pro`).
-So it goes on with go-live (T19), unless the owner chooses sooner. On that day, the "Live" button in the case study,
+So it goes on with go-live (T22), unless the owner chooses sooner. On that day, the "Live" button in the case study,
 the README and the `/subscribe/` nav also change wording.
 
 ## Guardrails
@@ -104,14 +104,14 @@ the README and the `/subscribe/` nav also change wording.
 
 ## Build order
 
-As tasks: [T20](tasks/T20-accounts-and-sign-in.md), [T21](tasks/T21-locked-board.md),
-[T22](tasks/T22-teaser-email.md), then T16 to T19.
+As tasks: [T16](tasks/T16-accounts-and-sign-in.md), [T17](tasks/T17-locked-board.md),
+[T18](tasks/T18-teaser-email.md), then T19 to T22.
 
 1. Accounts and sign-in (the cookie, `/api/session`, `/signin/`, Confirm signs you in, `/manage/` by cookie,
    sign-out, the privacy draft gains the cookie and sign-in emails).
 2. The locked board behind `BOARD_PAYWALL`, the `/live/` panel, and Pro accounts that survive unsubscribing.
 3. The teaser email behind the same switch.
-4. Payments: T16 to T19, with checkout on `/manage/` while signed in.
+4. Payments: T19 to T22, with checkout on `/manage/` while signed in.
 
 ## Tests
 

@@ -835,7 +835,7 @@ Every write only describes what it would change until you add `--yes` (and then 
 email goes only with scheduled sweeps. `stats` is where the Phase 2 numbers in
 [`docs/subscriptions/pricing.md`](docs/subscriptions/pricing.md) come from.
 
-**Handling Pro requests.** Until payments exist (T16 to T19), Pro is free and switched on by hand. A subscriber asks
+**Handling Pro requests.** Until payments exist (T19 to T22), Pro is free and switched on by hand. A subscriber asks
 for it in one of two places: the "I'd also like Pro" box on `/subscribe/` (counted only once they press Confirm), or
 the "Request Pro" button on `/manage/`, which every digest links to as "Manage subscription" (the link carries their
 id and token; `/api/account` answers it and never returns the address). Each request sends one email to `EMAIL_TO`,
