@@ -5,6 +5,9 @@ grouped by date.
 
 ## 2026-10-22
 
+- Decision: Pro will pay for the live board on the website, not for email. The free email becomes a teaser, and
+  sign-in works by an emailed link. Design in `docs/subscriptions/paid-website.md`; docs and the draft terms
+  updated. Nothing is built or switched on yet.
 - T15 checklist: how to answer Razorpay's "Does your website require users to login to complete a payment?".
 - Policy pages: reply time and governing law filled in. The owner's name, address and phone are filled from Vercel
   variables at build time (`scripts/fill-legal.mjs`), so they never enter the repository. Still not deployed.

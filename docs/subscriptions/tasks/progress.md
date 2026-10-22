@@ -357,3 +357,8 @@ working in a real inbox; that is T12's staged launch.
   subscribers, liability, the DPDP grievance contact, and Razorpay's details.
 - **Row 10 added to Step 2**: Razorpay's "login to complete a payment?" question. Suggested answer Yes, with the
   sign-up steps; what the form asks for next is not in Razorpay's docs, so it is unchecked.
+- **2026-10-22: Pro pays for the website, not email** (decision log; design in
+  [paid-website.md](../paid-website.md)). The whole live board becomes paid; the free
+  email becomes a teaser; sign-up and sign-in by email link, no passwords. Planned PRs: accounts and sign-in, the
+  locked board behind `BOARD_PAYWALL` (off), the teaser email. pricing.md, T16 to T19 and the draft terms updated.
+  Step 2 row 10: Razorpay's "login to complete a payment?" is answered Yes.

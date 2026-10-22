@@ -8,6 +8,10 @@
 | Depends on | T15 (test-mode account, plan id) |
 | Unblocks | T17, T18 |
 
+> **Changed 2026-10-22 ([decision log](../../decisions.md)):** Pro now pays for the live board on the website, not
+> for email ([paid-website.md](../paid-website.md)). Accounts and sign-in (email link, login cookie) and the locked board come first, behind a
+> `BOARD_PAYWALL` switch. This task's library is unchanged.
+
 ## Why
 
 Checkout, cancel and the webhook all need the same few calls and the same two signature checks. Putting them in one
