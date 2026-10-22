@@ -1910,7 +1910,7 @@ const iso = (ms) => new Date(ms).toISOString();
     return { st, rec, env, sent, logs, call, ask, signUp, codeIn, evs, now: () => getSubscriber(st, rec.id), tick: (ms) => { clock += ms; } };
   };
   const cookieOf = (res) => { const m = /^tpr_session=([^;]*)/.exec(res.headers["set-cookie"] || ""); return m && m[1] ? `tpr_session=${m[1]}` : ""; };
-  const REPLY = "If that address has an account, a sign-in link is on its way. Not in your inbox within a few minutes? Check your spam or junk folder.";
+  const REPLY = "If that address has an account, a sign-in link is on its way. Not in your inbox within a few minutes? Check your spam or junk folder. You can ask for a new link once every 5 minutes.";
 
   // the cookie on its own
   {
