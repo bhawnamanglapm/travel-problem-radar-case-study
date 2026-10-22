@@ -311,8 +311,8 @@ export function makeConfirmHandler({ env, storage, fetchFn = fetch, now, randomB
             body: (secret ? `<p>Your account is ready, and you're signed in on this browser.</p>` : "")
               + `<p>You'll get the daily digest after the first sweep of the UTC day (about 05:47 IST).</p>`
               + (effectivePlan(rec, t) === "pro" ? ""
-                : rec.proRequestedAt ? `<p>You asked for Pro (an email after every sweep). You'll be switched over shortly; until then you get the daily digest.</p>`
-                : `<p>Want an email after every sweep instead? <a href="${esc(managePath(params.id, params.t))}">Request Pro</a></p>`)
+                : rec.proRequestedAt ? `<p>You asked for Pro (the live board and an email after every sweep). You'll be switched over shortly; until then you get the daily digest.</p>`
+                : `<p>Want the live board and an email after every sweep? <a href="${esc(managePath(params.id, params.t))}">Request Pro</a></p>`)
               + `<p><a href="/live/">Open the live board</a></p>`,
           });
         };
@@ -741,7 +741,7 @@ const signupPage = (email, pro) => ({
   body: `<p>You&rsquo;re signing up with <b>${esc(email)}</b>, the address Google confirmed.</p>
 <p>Your account includes the free daily email: the travel-industry problems found in the last 24 hours, once a day. Unsubscribing from it deletes the account.</p>
 <form method="post" action="/api/session"><input type="hidden" name="action" value="google-signup">
-<p><label><input type="checkbox" name="wantsPro" value="1"${pro ? " checked" : ""}> I&rsquo;d also like Pro (an email after every sweep). You&rsquo;ll get the daily email until it&rsquo;s switched on.</label></p>
+<p><label><input type="checkbox" name="wantsPro" value="1"${pro ? " checked" : ""}> I&rsquo;d also like Pro (the live board and an email after every sweep). You&rsquo;ll get the daily email until it&rsquo;s switched on.</label></p>
 <p><button type="submit">Create account</button></p></form>
 <p><small><a href="/">Cancel</a>: nothing is created. <a href="/legal/privacy/">Privacy policy</a></small></p>`,
 });

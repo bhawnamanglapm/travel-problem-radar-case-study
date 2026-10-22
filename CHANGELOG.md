@@ -12,6 +12,8 @@ grouped by date.
   turns its emails off and keeps the board. Free accounts are deleted as before.
 - `/manage/` shows whether emails are on, can turn them back on after an unsubscribe, and has Delete my account.
 - The privacy policy and the home page FAQ say a Pro account stays until it is deleted.
+- With the board locked: the navs say "Live board (Pro)", the home page's second button opens the sample demo, the
+  Free plan no longer lists the live board, and "What it found recently" points visitors without Pro to the demo.
 
 ## 2026-10-22
 
