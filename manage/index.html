@@ -36,6 +36,7 @@
   .cats input { margin-right: 8px; accent-color: #C6FF3D; }
   .cats input[disabled] + span { color: #93939F; }
   .small { font-size: 13px; color: #93939F; }
+  button.plain { background: transparent; color: #C6FF3D; border: 1px solid #3A3A46; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -68,7 +69,9 @@
   </div>
 
   <p id="leave" hidden><a id="unsub" href="#">Unsubscribe</a> <span class="small">(stops every email and deletes your address)</span></p>
-  <p class="small">This page is reached from the link in your emails; don&rsquo;t share it. Questions: <a href="mailto:hello@pehchanthetraveller.com">hello@pehchanthetraveller.com</a>.</p>
+  <p id="leaveByLink" class="small" hidden>To unsubscribe, use the Unsubscribe link in any digest email.</p>
+  <p id="signOutRow" hidden><button id="signOut" class="plain" type="button">Sign out</button></p>
+  <p class="small">Reached from the link in your emails (don&rsquo;t share it) or by <a href="../signin/">signing in</a>. Questions: <a href="mailto:hello@pehchanthetraveller.com">hello@pehchanthetraveller.com</a>.</p>
 </main>
 <script>
 (function () {
@@ -98,12 +101,18 @@
   }
   function show(a) {
     ask.hidden = true;
+    document.getElementById("signOutRow").hidden = !a.signedIn;
     if (a.status !== "active") {
       setPlan("not confirmed yet", "Press Confirm in the email we sent you first; nothing is sent until then.");
       return;
     }
-    document.getElementById("unsub").href = "/api/unsubscribe?id=" + encodeURIComponent(id) + "&t=" + encodeURIComponent(t);
-    document.getElementById("leave").hidden = false;
+    // Signed in by cookie, the page has no token, so unsubscribing goes through an email's link.
+    if (id && t) {
+      document.getElementById("unsub").href = "/api/unsubscribe?id=" + encodeURIComponent(id) + "&t=" + encodeURIComponent(t);
+      document.getElementById("leave").hidden = false;
+    } else {
+      document.getElementById("leaveByLink").hidden = false;
+    }
     showCats(a);
     if (a.effectivePlan === "pro") {
       setPlan("Pro", "An email after every sweep" + (a.proUntil ? ", until " + day(a.proUntil) + "." : "."));
@@ -115,7 +124,8 @@
     }
   }
   function call(method, body) {
-    return fetch("/api/account" + (method === "GET" ? "?id=" + encodeURIComponent(id) + "&t=" + encodeURIComponent(t) : ""), {
+    // With no id and token in the address, the login cookie says whose account this is.
+    return fetch("/api/account" + (method === "GET" && (id || t) ? "?id=" + encodeURIComponent(id) + "&t=" + encodeURIComponent(t) : ""), {
       method: method,
       headers: body ? { "content-type": "application/json" } : {},
       body: body ? JSON.stringify(body) : undefined
@@ -123,12 +133,16 @@
       return r.json().catch(function () { return {}; }).then(function (b) { return { status: r.status, body: b }; });
     });
   }
+  function signInLink(text) {
+    detail.textContent = text + " ";
+    var a = document.createElement("a"); a.href = "../signin/"; a.textContent = "Sign in"; detail.appendChild(a);
+  }
   function fail(x) {
-    if (x.status === 404) { planEl.textContent = "This link isn’t valid"; detail.textContent = "Use the Manage link in your most recent email."; }
+    if (x.status === 401) { planEl.textContent = "You’re not signed in"; signInLink("Use the Manage link in any digest email, or"); }
+    else if (x.status === 404) { planEl.textContent = "This link isn’t valid"; signInLink("Use the Manage link in your most recent email, or"); }
     else if (x.status === 503) { planEl.textContent = "Subscriptions are paused"; detail.textContent = "Your link stays valid: try again later."; }
     else say("Something went wrong. Please try again in a minute.", true);
   }
-  if (!id || !t) { fail({ status: 404 }); return; }
   call("GET").then(function (x) { if (x.status === 200) show(x.body); else fail(x); })
     .catch(function () { say("Couldn’t reach the server. Please try again in a minute.", true); });
 
@@ -143,6 +157,20 @@
     }).catch(function () {
       say("Couldn’t reach the server. Please try again in a minute.", true);
     }).then(function () { req.disabled = false; });
+  });
+
+  document.getElementById("signOut").addEventListener("click", function () {
+    var b = document.getElementById("signOut");
+    b.disabled = true;
+    fetch("/api/session", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "signout" }) })
+      .then(function (r) {
+        if (r.status !== 200) throw new Error("signout");
+        // Signed in only by cookie: nothing left to show. With a link, the page still works.
+        if (!id || !t) location.replace("../signin/");
+        else document.getElementById("signOutRow").hidden = true;
+      })
+      .catch(function () { say("Couldn’t sign out. Please try again in a minute.", true); })
+      .then(function () { b.disabled = false; });
   });
 
   saveCats.addEventListener("click", function () {

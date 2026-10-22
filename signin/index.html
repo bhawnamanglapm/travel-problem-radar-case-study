@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<script>
+  // GitHub Pages also serves this file but has no /api/: send the visit to the Vercel copy, which does.
+  if (/\.github\.io$/.test(location.hostname)) location.replace("https://travel-problem-radar.vercel.app" + location.pathname.replace(/^\/travel-problem-radar-case-study/, "") + location.search + location.hash);
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="referrer" content="no-referrer" />
+<title>Sign in to Travel Problem Radar</title>
+<meta name="description" content="Sign in to Travel Problem Radar with a link sent to your email. No password." />
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #0B0B0D; color: #F4F4F7; }
+  body { font: 16px/1.55 -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 0 16px; }
+  main { max-width: 640px; margin: 0 auto; padding: 40px 0 56px; }
+  h1 { font-size: 26px; line-height: 1.25; margin: 0 0 12px; }
+  p { margin: 0 0 14px; color: #C9C9D2; }
+  a { color: #C6FF3D; }
+  .nav { font: 12px/1.5 ui-monospace, 'JetBrains Mono', monospace; color: #93939F; margin: 0 0 28px; }
+  .nav a { color: #F4F4F7; }
+  .card { border: 1px solid #2A2A34; background: #131318; border-radius: 8px; padding: 16px 18px; margin: 20px 0 24px; }
+  form { margin: 20px 0 8px; }
+  label.field { display: block; font-weight: 600; margin: 0 0 6px; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; }
+  input[type=email] { flex: 1 1 240px; min-width: 0; font: inherit; color: #F4F4F7; background: #131318;
+    border: 1px solid #3A3A46; border-radius: 6px; padding: 10px 12px; }
+  input[type=email]:focus { outline: 2px solid #C6FF3D; outline-offset: 1px; }
+  button { font: inherit; font-weight: 600; background: #C6FF3D; color: #0B0B0D; border: 0; border-radius: 6px;
+    padding: 10px 20px; cursor: pointer; }
+  button:hover { background: #d8ff6f; }
+  button[disabled] { opacity: .6; cursor: default; }
+  button.plain { background: transparent; color: #C6FF3D; border: 1px solid #3A3A46; }
+  /* The trap field: off-screen rather than display:none, which some bots skip. */
+  .trap { position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+  #status, #outStatus { min-height: 1.6em; margin: 12px 0 0; color: #F4F4F7; }
+  #status.err, #outStatus.err { color: #FF8A80; }
+  .small { font-size: 13px; color: #93939F; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <p class="nav"><a href="../">&larr; Case study</a> &middot; <a href="../live/">Live board</a> &middot; <a href="../subscribe/">Sign up</a></p>
+  <h1>Sign in</h1>
+
+  <div id="signedIn" class="card" hidden>
+    <p>You&rsquo;re signed in on this browser.</p>
+    <p><a href="../live/">Open the live board</a> &middot; <a href="../manage/">Manage your subscription</a></p>
+    <button id="out" class="plain" type="button">Sign out</button>
+    <p id="outStatus" role="status" aria-live="polite"></p>
+  </div>
+
+  <div id="signIn">
+    <p>Enter the address you subscribed with. We&rsquo;ll email you a link that signs you in; there&rsquo;s no password.</p>
+    <form id="f" method="post" action="/api/session">
+      <input type="hidden" name="action" value="request" />
+      <label class="field" for="email">Your email address</label>
+      <div class="row">
+        <input id="email" name="email" type="email" autocomplete="email" required maxlength="254" placeholder="you@example.com" />
+        <button id="go" type="submit">Email me a link</button>
+      </div>
+      <div class="trap">
+        <label for="website">Leave this field empty (it is a trap for automated sign-ins)</label>
+        <input id="website" name="website" type="text" tabindex="-1" autocomplete="off" />
+      </div>
+    </form>
+    <p id="status" role="status" aria-live="polite"></p>
+    <p class="small">No account yet? <a href="../subscribe/">Sign up</a>; confirming your address signs you in.</p>
+  </div>
+
+  <p class="small">Signing in sets one cookie on this browser so the site knows it&rsquo;s you. It holds no address and lasts 30 days, or until you sign out.</p>
+  <p class="small">Questions: email <a href="mailto:hello@pehchanthetraveller.com">hello@pehchanthetraveller.com</a>.</p>
+</main>
+<script>
+(function () {
+  var form = document.getElementById("f");
+  var statusEl = document.getElementById("status"), outStatus = document.getElementById("outStatus");
+  var btn = document.getElementById("go"), out = document.getElementById("out");
+  function say(el, text, isErr) { el.textContent = text; el.className = isErr ? "err" : ""; }
+  function post(body) {
+    return fetch("/api/session", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body)
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (b) { return { status: r.status, body: b }; });
+    });
+  }
+  function showSignedIn(yes) {
+    document.getElementById("signedIn").hidden = !yes;
+    document.getElementById("signIn").hidden = yes;
+  }
+  fetch("/api/session?action=me").then(function (r) { return r.json(); })
+    .then(function (b) { showSignedIn(Boolean(b && b.signedIn)); })
+    .catch(function () { /* stay on the form */ });
+
+  form.addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    btn.disabled = true;
+    say(statusEl, "Sending…", false);
+    post({ action: "request", email: form.email.value, website: form.website.value }).then(function (x) {
+      if (x.status === 503) say(statusEl, "Sign-in isn’t open yet. Use the Manage link in any digest email.", true);
+      else if (x.status === 200 && x.body.message) { say(statusEl, x.body.message, false); form.email.value = ""; }
+      else if (x.body && x.body.error) say(statusEl, x.body.error.charAt(0).toUpperCase() + x.body.error.slice(1) + ".", true);
+      else say(statusEl, "Something went wrong. Please try again in a minute.", true);
+    }).catch(function () {
+      say(statusEl, "Couldn’t reach the server. Please try again in a minute.", true);
+    }).then(function () { btn.disabled = false; });
+  });
+
+  out.addEventListener("click", function () {
+    out.disabled = true;
+    post({ action: "signout" }).then(function (x) {
+      if (x.status === 200) { showSignedIn(false); say(statusEl, "You’re signed out on this browser.", false); }
+      else say(outStatus, "Something went wrong. Please try again in a minute.", true);
+    }).catch(function () {
+      say(outStatus, "Couldn’t reach the server. Please try again in a minute.", true);
+    }).then(function () { out.disabled = false; });
+  });
+})();
+</script>
+</body>
+</html>
