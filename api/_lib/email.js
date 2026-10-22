@@ -146,11 +146,14 @@ export function buildConfirmEmail({ confirmUrl, siteUrl = "" }) {
   };
 }
 
-// The sign-in link (T16), sent only to a confirmed address that asked for it on /signin/.
-export function buildSignInEmail({ signInUrl, siteUrl = "" }) {
+// The sign-in link (T16), sent only to a confirmed address that asked for it on /signin/, or
+// (`already`) that tried to sign up again.
+export function buildSignInEmail({ signInUrl, siteUrl = "", already = false }) {
   if (!LINK_OK.test(signInUrl || "")) throw new Error("buildSignInEmail: bad sign-in link");
   const subject = "Your Travel Problem Radar sign-in link";
-  const intro = "Someone, probably you, asked to sign in to Travel Problem Radar with this address. The link works once and expires in 15 minutes.";
+  const intro = (already
+    ? "Someone, probably you, tried to sign up to Travel Problem Radar with this address. It already has an account, so here is a sign-in link instead."
+    : "Someone, probably you, asked to sign in to Travel Problem Radar with this address.") + " The link works once and expires in 15 minutes.";
   const ignore = "If you didn't ask for this, ignore this email; nobody can sign in without the link.";
   return {
     subject,
