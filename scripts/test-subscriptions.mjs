@@ -2129,9 +2129,9 @@ const iso = (ms) => new Date(ms).toISOString();
     check(r.code === 200, "account: a POST with the email link's token works as before, whatever its Origin");
 
     r = await w.call("sess", { query: { action: "me" } });
-    check(r.code === 200 && r.body === '{"signedIn":false,"plan":null}', "me: not signed in");
+    check(r.code === 200 && r.body === '{"signedIn":false,"plan":null,"google":false}', "me: not signed in; no Google sign-in set up");
     r = await w.call("sess", { query: { action: "me" }, cookie });
-    check(r.code === 200 && r.body === '{"signedIn":true,"plan":"free"}', "me: signed in, Free, and nothing else");
+    check(r.code === 200 && r.body === '{"signedIn":true,"plan":"free","google":false}', "me: signed in, Free, and nothing else");
     await putSubscriber(w.st, { ...(await w.now()), plan: "pro" });
     r = await w.call("sess", { query: { action: "me" }, cookie });
     check(r.json().plan === "pro", "me: a Pro account says pro");
@@ -2143,6 +2143,188 @@ const iso = (ms) => new Date(ms).toISOString();
     check(r.code === 400, "session: an unknown action is a 400");
     r = await w.call("sess", { method: "DELETE" });
     check(r.code === 405, "session: other methods are a 405");
+  }
+
+  // "Continue with Google" (account-flows.md, the Google row). Google's token endpoint is faked: it
+  // answers with an ID token for `claims`, by default a verified me@gmail.com with this attempt's nonce.
+  {
+    const { GOOGLE_AUTH_URL, GOOGLE_TOKEN_URL, OAUTH_MINUTES, readOAuthCookie } = await import("../api/_lib/google.js");
+    const { ipHitPrefix } = await import("../api/_lib/subscription-handlers.js");
+    const { createHash } = await import("node:crypto");
+    const GENV = { ...ENV, EMAIL_TO: "owner@example.com", GOOGLE_CLIENT_ID: "cid-1.apps.googleusercontent.com", GOOGLE_CLIENT_SECRET: "gsecret-xyz" };
+    const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
+    const gw = async ({ envOver = {}, status = "active", existing = true, claims = {}, tokenStatus = 200 } = {}) => {
+      const st = memStorage();
+      const rec = { ...newPending("me@gmail.com", { now: T0 - 48 * HOUR, randomBytes: seeded(11) }), token: "tok-secret-1", status, confirmedAt: status === "active" ? iso(T0 - 47 * HOUR) : null };
+      if (existing) await putSubscriber(st, rec);
+      const w = { st, rec, sent: [], logs: [], tokenCalls: [], clock: T0 };
+      const fetchFn = async (url, init) => {
+        if (url === GOOGLE_TOKEN_URL) {
+          w.tokenCalls.push(Object.fromEntries(new URLSearchParams(init.body)));
+          const idc = { iss: "https://accounts.google.com", aud: GENV.GOOGLE_CLIENT_ID, exp: Math.floor(w.clock / 1000) + 3600, nonce: w.nonce, email: "me@gmail.com", email_verified: true, ...claims };
+          return { ok: tokenStatus === 200, status: tokenStatus, json: async () => ({ id_token: `h.${b64(idc)}.sig`, access_token: "at-secret" }) };
+        }
+        w.sent.push(JSON.parse(init.body));
+        return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ id: "m0" }) };
+      };
+      w.env = { ...GENV, ...envOver };
+      const sess = makeSessionHandler({ env: w.env, storage: st, fetchFn, now: () => w.clock, randomBytes: seeded(7), log: (...a) => w.logs.push(a.join(" ")) });
+      w.call = async (query, { cookie, ip = "203.0.113.9" } = {}) => {
+        const res = mockRes();
+        await sess({ method: "GET", headers: { host: "site.example", "x-forwarded-for": ip, ...(cookie ? { cookie } : {}) }, query }, res);
+        return res;
+      };
+      // Off to Google: remembers the state, nonce and cookie the redirect carried.
+      w.start = async (query = {}) => {
+        const r = await w.call({ action: "google", ...query });
+        if (r.code === 302) {
+          const u = new URL(r.headers.location);
+          w.state = u.searchParams.get("state");
+          w.nonce = u.searchParams.get("nonce");
+          w.cookie = r.headers["set-cookie"].split(";")[0];
+        }
+        return r;
+      };
+      // Back from Google with a code (or `query` instead).
+      w.back = (query, opts = {}) => w.call(query || { state: w.state, code: "code-1" }, { cookie: w.cookie, ...opts });
+      w.now = () => getSubscriber(st, rec.id);
+      w.evs = (type) => [...st.m.keys()].filter((k) => k.startsWith("radar:event:") && k.includes(`-${type}-`));
+      return w;
+    };
+    const sessionOf = (r) => { const c = [].concat(r.headers["set-cookie"] || []).find((s) => /^tpr_session=[^;]/.test(s)); return c ? c.split(";")[0] : ""; };
+    const clearsOAuth = (r) => [].concat(r.headers["set-cookie"] || []).some((s) => /^tpr_oauth=; Max-Age=0; Path=\/api\/session; HttpOnly; Secure; SameSite=Lax$/.test(s));
+    const signedInAs = async (w, r) => (await readSession({ headers: { cookie: sessionOf(r) } }, { env: w.env, storage: w.st, now: w.clock }))?.id;
+
+    // set up or not
+    let w = await gw();
+    let r = await w.call({ action: "me" });
+    check(r.json().google === true, "google: me says google:true when the client id and secret, SESSION_SECRET and the site URL are set");
+    for (const [over, label] of [[{ GOOGLE_CLIENT_ID: "" }, "no client id"], [{ GOOGLE_CLIENT_SECRET: " " }, "no client secret"], [{ SESSION_SECRET: "" }, "no SESSION_SECRET"], [{ SITE_URL: "" }, "no site URL"]]) {
+      w = await gw({ envOver: over });
+      const me = await w.call({ action: "me" });
+      const s = await w.start();
+      const b = await w.call({ state: "x", code: "y" });
+      check(me.json().google === false && s.code === 503 && b.code === 503 && !s.headers["set-cookie"] && /isn(&#39;|')t set up yet/.test(s.body) && w.tokenCalls.length === 0,
+        `google: ${label} gives google:false, and the start and return are a 503 page`);
+    }
+    w = await gw({ envOver: { SUBSCRIPTIONS_ENABLED: "0" } });
+    r = await w.start();
+    check(r.code === 503 && /paused/.test(r.body) && !r.headers["set-cookie"], "google: subscriptions switched off, a 503 page");
+
+    // the start
+    w = await gw();
+    r = await w.start();
+    const u = new URL(r.headers.location);
+    const p = Object.fromEntries(u.searchParams);
+    const [cState, cNonce, cVerifier, cPro, cExp] = w.cookie.slice("tpr_oauth=".length).split(".");
+    check(r.code === 302 && r.headers.location.startsWith(GOOGLE_AUTH_URL + "?") && r.headers["cache-control"] === "no-store", "google start: a 302 to Google, not cached");
+    check(p.client_id === GENV.GOOGLE_CLIENT_ID && p.redirect_uri === "https://site.example/api/session" && p.response_type === "code" && p.scope === "openid email" && p.prompt === "select_account",
+      "google start: our client id, the /api/session redirect, the code flow, openid email only, and the account picker every time");
+    check(p.state.length === 43 && p.nonce.length === 43 && p.state !== p.nonce && p.code_challenge_method === "S256" && p.code_challenge === createHash("sha256").update(cVerifier).digest("base64url"),
+      "google start: a random state and nonce, and a PKCE S256 challenge of the cookie's verifier");
+    check(!r.headers.location.includes("gsecret") && !r.headers.location.includes(cVerifier), "google start: the client secret and the verifier stay off the URL");
+    check(cState === p.state && cNonce === p.nonce && cPro === "0" && Number(cExp) === Math.floor(T0 / 1000) + OAUTH_MINUTES * 60
+      && new RegExp(`^tpr_oauth=[^;]+; Max-Age=${OAUTH_MINUTES * 60}; Path=/api/session; HttpOnly; Secure; SameSite=Lax$`).test(r.headers["set-cookie"]),
+      "google start: the cookie holds this state, nonce and verifier for 10 minutes; HttpOnly, Secure, Lax, only sent to /api/session");
+    const value = w.cookie.slice("tpr_oauth=".length);
+    const ro = (v, state, now = T0) => readOAuthCookie(v, state, { secret: SECRET, now });
+    check(ro(value, p.state)?.verifier === cVerifier && ro(value, p.state).pro === false, "google cookie: read back with its state");
+    check(ro(value, "x".repeat(43)) === null && ro(value, undefined) === null, "google cookie: refused for another state");
+    check(ro(value.replace(/\.0\./, ".1."), p.state) === null && ro(value.slice(0, -1) + (value.endsWith("A") ? "B" : "A"), p.state) === null, "google cookie: a changed Pro flag or signature is refused");
+    check(ro(value, p.state, T0 + OAUTH_MINUTES * 60_000) === null && ro(value, p.state, T0 + OAUTH_MINUTES * 60_000 - 1000) !== null, "google cookie: refused after 10 minutes");
+    check(readOAuthCookie(value, p.state, { secret: "another-secret-of-enough-length-000", now: T0 }) === null && ro("", p.state) === null && ro("a.b", p.state) === null,
+      "google cookie: one signed with another secret, or a malformed one, is refused");
+    await w.start({ pro: "1" });
+    check(w.cookie.split(".")[3] === "1", "google start: ?pro=1 (the sign-up tab's Pro box) is kept in the cookie");
+
+    // back from Google: an existing account
+    w = await gw();
+    await w.start();
+    let before = JSON.stringify(await w.now());
+    r = await w.back();
+    check(r.code === 303 && r.headers.location === "/live/" && r.headers["cache-control"] === "no-store" && await signedInAs(w, r) === w.rec.id && clearsOAuth(r),
+      "google return: an existing account is signed in, sent to /live/, and the attempt's cookie cleared");
+    check(/^tpr_session=[^;]+; Path=\/; HttpOnly; Secure; SameSite=Lax$/.test(r.headers["set-cookie"][0]), "google return: the usual login cookie, ending when the browser closes");
+    const tc = w.tokenCalls[0];
+    check(w.tokenCalls.length === 1 && tc.code === "code-1" && tc.code_verifier === w.cookie.split(".")[2] && tc.client_id === GENV.GOOGLE_CLIENT_ID && tc.client_secret === "gsecret-xyz"
+      && tc.redirect_uri === "https://site.example/api/session" && tc.grant_type === "authorization_code", "google return: swaps the code once, with the verifier, client secret and the same redirect URI");
+    check(JSON.stringify(await w.now()) === before && w.sent.length === 0 && w.evs("confirmed").length === 0, "google return: an existing account is unchanged; no email, no events");
+    w = await gw();
+    await w.start({ pro: "1" });
+    r = await w.back();
+    check(r.code === 303 && !(await w.now()).proRequestedAt && w.sent.length === 0, "google return: the Pro box doesn't touch an existing account");
+    w = await gw({ claims: { email: "M.E+trip@googlemail.com" } });
+    await w.start();
+    r = await w.back();
+    check(await signedInAs(w, r) === w.rec.id, "google return: the address is matched the usual way (dots, +tags, googlemail)");
+
+    // a new address
+    w = await gw({ existing: false, claims: { email: "new@example.com" } });
+    await w.start();
+    r = await w.back();
+    const made = await getSubscriber(w.st, subscriberId("new@example.com"));
+    check(r.code === 303 && r.headers.location === "/live/" && made && await signedInAs(w, r) === made.id, "google return: a new address gets an account and is signed in");
+    check(made.status === "active" && made.plan === "free" && made.confirmedAt === iso(T0) && made.createdAt === iso(T0) && made.confirmSentAt === null && made.confirmSends === 0 && !made.proRequestedAt && made.token.length > 20,
+      "google return: the new account is Free and active at once, with no confirmation sent");
+    check(w.sent.length === 0 && w.evs("subscribed").length === 1 && w.evs("confirmed").length === 1 && w.evs("confirmsent").length === 0 && (await w.st.list(KEY_IPHIT_PREFIX)).length === 1,
+      "google return: no email; subscribed and confirmed events; counts toward the per-IP limit");
+    w = await gw({ existing: false, claims: { email: "new@example.com" } });
+    await w.start({ pro: "1" });
+    await w.back();
+    const pro = await getSubscriber(w.st, subscriberId("new@example.com"));
+    check(pro.proRequestedAt === iso(T0) && pro.plan === "free" && w.evs("prorequested").length === 1 && w.sent.length === 1 && w.sent[0].to.includes("owner@example.com") && !JSON.stringify(w.sent[0]).includes("new@example.com"),
+      "google return: with the Pro box, the request is recorded and the owner emailed (naming nobody)");
+
+    // a pending address
+    w = await gw({ status: "pending" });
+    await w.start({ pro: "1" });
+    r = await w.back();
+    const act = await w.now();
+    check(r.code === 303 && await signedInAs(w, r) === w.rec.id && act.status === "active" && act.confirmedAt === iso(T0) && act.token === "tok-secret-1" && act.createdAt === w.rec.createdAt,
+      "google return: a never-confirmed address is activated (Google proved it) and signed in; token and createdAt kept");
+    check(w.evs("confirmed").length === 1 && w.evs("subscribed").length === 0 && act.proRequestedAt === iso(T0) && w.sent.length === 1, "google return: confirmed is counted; the Pro box counts for it");
+
+    // refused returns: an error page, no login cookie, nothing stored
+    const refused = async (label, { setup = {}, prep, query, code = 400, page, tokenCalls = 1, link = true } = {}) => {
+      const x = await gw({ existing: false, ...setup });
+      await x.start();
+      if (prep) await prep(x);
+      const rr = await x.back(query && query(x));
+      const ok = rr.code === code && !sessionOf(rr) && clearsOAuth(rr) && page.test(rr.body) && rr.body.includes('href="/signin/"') === link && (await x.st.list("radar:sub:")).length === 0
+        && x.tokenCalls.length === tokenCalls && !x.logs.some((l) => /@|code-1|at-secret|gsecret/.test(l));
+      check(ok, `google return refused: ${label}`);
+      return x;
+    };
+    await refused("cancelled at Google", { query: (x) => ({ state: x.state, error: "access_denied" }), page: /was cancelled/, tokenCalls: 0 });
+    await refused("no cookie (another browser)", { prep: (x) => { x.cookie = ""; }, page: /didn(&#39;|')t finish/, tokenCalls: 0 });
+    await refused("a state that isn't this attempt's", { query: () => ({ state: "s".repeat(43), code: "code-1" }), page: /didn(&#39;|')t finish/, tokenCalls: 0 });
+    await refused("a changed cookie", { prep: (x) => { x.cookie = x.cookie.slice(0, -1) + (x.cookie.endsWith("A") ? "B" : "A"); }, page: /didn(&#39;|')t finish/, tokenCalls: 0 });
+    await refused("after 10 minutes", { prep: (x) => { x.clock += OAUTH_MINUTES * 60_000; }, page: /longer than 10 minutes/, tokenCalls: 0 });
+    await refused("no code", { query: (x) => ({ state: x.state }), page: /didn(&#39;|')t finish/, tokenCalls: 0 });
+    const ex = await refused("Google refuses the code (a 502)", { setup: { tokenStatus: 400 }, code: 502, page: /didn(&#39;|')t work/ });
+    check(ex.logs.join("|") === "session google exchange", "google return: a failed swap is logged by kind only");
+    await refused("an ID token from another issuer", { setup: { claims: { iss: "https://evil.example" } }, page: /didn(&#39;|')t work/ });
+    await refused("an ID token for another app", { setup: { claims: { aud: "other.apps.googleusercontent.com" } }, page: /didn(&#39;|')t work/ });
+    await refused("an ID token with another nonce", { setup: { claims: { nonce: "n".repeat(43) } }, page: /didn(&#39;|')t work/ });
+    await refused("an expired ID token", { setup: { claims: { exp: Math.floor(T0 / 1000) - 1 } }, page: /didn(&#39;|')t work/ });
+    await refused("an address Google hasn't verified", { setup: { claims: { email_verified: false } }, page: /hasn(&#39;|')t verified this address/ });
+    await refused("an ID token with no usable address", { setup: { claims: { email: "not-an-address" } }, page: /didn(&#39;|')t work/ });
+    w = await gw({ status: "active" });
+    await w.start();
+    const used = await w.back();
+    r = await w.back();
+    check(sessionOf(used) && r.code === 303 && w.tokenCalls.length === 2, "google return: a replayed return just asks Google again (Google refuses a used code; see the 502 case)");
+
+    // limits on new accounts
+    await refused("a full list (MAX_SUBSCRIBERS) takes no new account", { link: false, code: 503, page: /closed for now/, prep: (x) => x.st.set(KEY_SUBSCRIBER_COUNT, JSON.stringify({ count: 5000 })) });
+    await refused("an unreadable count counts as full", { link: false, code: 503, page: /closed for now/, prep: (x) => x.st.set(KEY_SUBSCRIBER_COUNT, "garbage") });
+    await refused("the per-IP hourly limit (shared with sign-up)", { setup: { envOver: { MAX_SIGNUPS_PER_IP_HOUR: "1" } }, link: false, code: 429, page: /Too many new accounts/,
+      prep: (x) => x.st.set(ipHitPrefix("203.0.113.9", T0) + "aaaaaa", "{}") });
+    w = await gw({ envOver: { MAX_SIGNUPS_PER_IP_HOUR: "1" } });
+    await w.st.set(ipHitPrefix("203.0.113.9", T0) + "aaaaaa", "{}");
+    await w.start();
+    r = await w.back();
+    check(r.code === 303 && sessionOf(r), "google return: an existing account signs in whatever the per-IP limit");
   }
 
   // stats count sign-in emails

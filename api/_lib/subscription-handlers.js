@@ -4,7 +4,8 @@
 import { createHash, createHmac, randomBytes as cryptoRandomBytes, timingSafeEqual } from "node:crypto";
 import { DEFAULT_FROM, buildAlreadySubscribedEmail, buildConfirmEmail, buildProRequestEmail, buildSignInEmail, sendEmail, sendOne } from "./email.js";
 import { BodyTooLargeError, allowMethods, esc, readFields, sendJson, sendPage } from "./http.js";
-import { clearCookie, originOk, readSession, sessionCookie, sessionSecret, signSession } from "./session.js";
+import { OAUTH_COOKIE, OAUTH_MINUTES, clearOAuthCookie, googleConfigured, googleFinish, googleStart, readOAuthCookie } from "./google.js";
+import { clearCookie, originOk, parseCookies, readSession, sessionCookie, sessionSecret, signSession } from "./session.js";
 import {
   CONFIRM_RESEND_MINUTES, MAX_CONFIRMS_PER_ADDRESS, PENDING_TTL_DAYS, countEvents, deleteSubscriber, effectivePlan, findSubscriber, getSubscriber, newPending, normaliseCats, normaliseEmail, putSubscriber,
   recordEvent, tokenOk, utcDay,
@@ -503,7 +504,9 @@ async function sendSignInLink({ record, env, storage, fetchFn, t, randomBytes, l
 //                                              confirmation link again to one never confirmed
 //   GET  ?id&c                                 the link: a Sign in button (mail scanners open links)
 //   POST id, c                                 the button: uses the code, sets the cookie, 303 to /live/
-//   GET  ?action=me                            {signedIn, plan} for the pages
+//   GET  ?action=me                            {signedIn, plan, google} for the pages
+//   GET  ?action=google[&pro=1]                "Continue with Google": off to Google (google.js)
+//   GET  ?state&code (or ?state&error)         back from Google: signs in, or makes the account
 //   POST {action: "signout"}                   clears the cookie in this browser
 // The code is random, stored only as a hash, works once and expires after SIGNIN_MINUTES.
 export function makeSessionHandler({ env, storage, fetchFn = fetch, now, randomBytes = cryptoRandomBytes, log = console.log }) {
@@ -516,7 +519,21 @@ export function makeSessionHandler({ env, storage, fetchFn = fetch, now, randomB
 
     if (req.method === "GET" && q.action === "me") {
       const rec = await readSession(req, { env, storage, now: t });
-      return sendJson(res, 200, { signedIn: Boolean(rec), plan: rec ? effectivePlan(rec, t) : null });
+      return sendJson(res, 200, { signedIn: Boolean(rec), plan: rec ? effectivePlan(rec, t) : null, google: googleConfigured(env, { secret, site: siteUrl(env) }) });
+    }
+    if (req.method === "GET" && (q.action === "google" || q.state !== undefined)) {
+      if (env.SUBSCRIPTIONS_ENABLED !== "1") return sendPage(res, 503, PAUSED);
+      const site = siteUrl(env);
+      if (!googleConfigured(env, { secret, site })) return sendPage(res, 503, GOOGLE_OFF);
+      if (q.action === "google") {
+        const { url, cookie } = googleStart({ env, secret, site, now: t, randomBytes, pro: q.pro === "1" });
+        res.statusCode = 302;
+        res.setHeader("set-cookie", cookie);
+        res.setHeader("location", url);
+        res.setHeader("cache-control", "no-store");
+        return res.end();
+      }
+      return googleReturn({ req, res, q, env, storage, fetchFn, t, randomBytes, log, secret, site });
     }
 
     let fields = {};
@@ -589,6 +606,71 @@ export function makeSessionHandler({ env, storage, fetchFn = fetch, now, randomB
       return sendPage(res, 500, { title: "Something went wrong", body: "<p>Please try the link again in a minute.</p>" });
     }
   };
+}
+
+const GOOGLE_AGAIN = `<p><a href="/signin/">Try again</a>, or ask for a sign-in link by email instead.</p>`;
+const GOOGLE_OFF = { title: "Google sign-in isn't set up yet", body: `<p><a href="/signin/">Sign in with a link by email</a> instead.</p>` };
+const GOOGLE_CANCELLED = { title: "Google sign-in was cancelled", body: GOOGLE_AGAIN };
+const GOOGLE_EXPIRED = { title: "This Google sign-in didn't finish", body: `<p>It took longer than ${OAUTH_MINUTES} minutes, or it was started in another browser.</p>${GOOGLE_AGAIN}` };
+const GOOGLE_FAILED = { title: "Google sign-in didn't work", body: `<p>Google didn't confirm who you are.</p>${GOOGLE_AGAIN}` };
+const GOOGLE_UNVERIFIED = { title: "Google hasn't verified this address", body: `<p>Use a Google account whose address is verified.</p>${GOOGLE_AGAIN}` };
+const GOOGLE_CLOSED = { title: "New accounts are closed for now", body: "<p>We can't take new accounts at the moment. Please try again later.</p>" };
+const GOOGLE_BUSY = { title: "Too many new accounts from this network", body: "<p>Please try again in an hour.</p>" };
+
+// Back from Google. The address Google verified signs in its account; a pending one is activated
+// (Google proved the address, as the confirm link would); a new one gets a Free account that is
+// active at once, with no confirmation email, under the same MAX_SUBSCRIBERS and per-IP limits as
+// sign-up. The "Pro" box counts only for a new or pending account, as at sign-up.
+async function googleReturn({ req, res, q, env, storage, fetchFn, t, randomBytes, log, secret, site }) {
+  const cookies = [clearOAuthCookie()];
+  const page = (code, p) => { res.setHeader("set-cookie", cookies); return sendPage(res, code, p); };
+  if (typeof q.error === "string") return page(400, GOOGLE_CANCELLED);
+  const attempt = readOAuthCookie(parseCookies(req.headers && req.headers.cookie)[OAUTH_COOKIE], q.state, { secret, now: t });
+  if (!attempt || typeof q.code !== "string" || !q.code) return page(400, GOOGLE_EXPIRED);
+  const out = await googleFinish({ env, site, code: q.code, nonce: attempt.nonce, verifier: attempt.verifier, now: t, fetchFn });
+  if (out.error) {
+    log("session google", out.error);
+    return page(out.error === "exchange" ? 502 : 400, out.error === "unverified" ? GOOGLE_UNVERIFIED : GOOGLE_FAILED);
+  }
+  try {
+    const at = new Date(t).toISOString();
+    let record = await findSubscriber(storage, out.email);
+    let isNew = false;
+    let changed = false;
+    if (record && record.status === "pending") {
+      record = { ...record, status: "active", confirmedAt: at };
+      if (attempt.pro && !record.proRequestedAt) record.proRequestedAt = at;
+      changed = true;
+    } else if (!record) {
+      if (await ipLimitReached({ req, env, storage, t, randomBytes })) return page(429, GOOGLE_BUSY);
+      const maxSubs = positiveInt(env.MAX_SUBSCRIBERS);
+      const count = await readSubscriberCount(storage);
+      if (maxSubs === null || count === null || count >= maxSubs) return page(503, GOOGLE_CLOSED);
+      record = { ...newPending(out.email, { now: t, randomBytes }), status: "active", confirmSentAt: null, confirmSends: 0, confirmedAt: at };
+      if (attempt.pro) record.proRequestedAt = at;
+      isNew = changed = true;
+    } else if (record.status !== "active") {
+      return page(400, GOOGLE_FAILED); // anything unexpected
+    }
+    if (changed) {
+      await putSubscriber(storage, record);
+      if (isNew) await recordEvent(storage, "subscribed", { now: t, randomBytes, plan: "free" });
+      await recordEvent(storage, "confirmed", { now: t, randomBytes, plan: "free" });
+      if (record.proRequestedAt && effectivePlan(record, t) !== "pro") {
+        await recordEvent(storage, "prorequested", { now: t, randomBytes, plan: "free" });
+        await notifyOwnerProRequest({ env, fetchFn, at: t, source: "signup", log });
+      }
+    }
+    cookies.unshift(sessionCookie(signSession(record, { secret, now: t })));
+    res.statusCode = 303;
+    res.setHeader("set-cookie", cookies);
+    res.setHeader("location", "/live/");
+    res.setHeader("cache-control", "no-store");
+    return res.end();
+  } catch (e) {
+    log("session google", "error: " + ((e && e.name) || "Error"));
+    return page(500, { title: "Something went wrong", body: "<p>Please try again in a minute.</p>" });
+  }
 }
 
 // ---- bounces and complaints from Resend (T13 part A)
