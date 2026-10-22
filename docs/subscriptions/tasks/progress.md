@@ -298,7 +298,7 @@ working in a real inbox; that is T12's staged launch.
 - The honeypot, the per-IP limit, a full or closed list and the confirmation cap keep the generic reply.
 - **Owner's choice (2026-10-22):** accept that the reply shows whether an address subscribes.
 - **Checked on production, 2026-10-22 (about 07:45 UTC), by the owner signing up their confirmed Gmail
-  address again (whether as typed or as a dot/`+tag` variant is not recorded):**
+  address again, typed exactly as subscribed (no dot or `+tag` variant):**
   1. `/subscribe/` replied "This address is already subscribed. We've emailed it a link to manage the
      subscription."
   2. "You're already subscribed to Travel Problem Radar" arrived from `hello@pehchanthetraveller.com` in Gmail's
@@ -307,4 +307,5 @@ working in a real inbox; that is T12's staged launch.
   3. A second try straight after replied "Use the Manage link in any digest email to change it", and no second
      email came.
   4. `stats` for 2026-10-22: 1 notice and 0 sign-ups, so no new record was made.
-- Not checked: a `+tag` variant on Outlook or another listed provider, and the Unsubscribe link in the notice.
+- Not checked on production: a dot or `+tag` variant (Gmail or another listed provider) finding the same record;
+  the offline tests cover it. Also not checked: the Unsubscribe link in the notice.
