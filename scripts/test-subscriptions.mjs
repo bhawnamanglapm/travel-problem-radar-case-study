@@ -5,7 +5,7 @@ import { createHmac, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { blobStorage } from "../api/_lib/storage.js";
 import {
-  CONFIRM_RESEND_HOURS, PENDING_TTL_DAYS, countEvents, deleteSubscriber, effectivePlan, getSubscriber, listSubscribers,
+  CONFIRM_RESEND_MINUTES, MAX_CONFIRMS_PER_ADDRESS, PENDING_TTL_DAYS, countEvents, deleteSubscriber, effectivePlan, getSubscriber, listSubscribers,
   newPending, newToken, normaliseCats, normaliseEmail, putSubscriber, recordEvent, subscriberId, tokenOk, utcDay,
 } from "../api/_lib/subscribers.js";
 import { BodyTooLargeError, allowMethods, bearerOk, esc, parseForm, readBody, readFields, sendJson, sendPage } from "../api/_lib/http.js";
@@ -102,7 +102,7 @@ const iso = (ms) => new Date(ms).toISOString();
   check(p.v === 1 && p.email === "reader@example.com" && p.id === subscriberId("reader@example.com") && p.status === "pending" && p.plan === "free"
     && p.proUntil === null && p.proSource === null && p.confirmedAt === null && p.cats === null && p.rzp === null
     && p.createdAt === iso(T0) && p.confirmSentAt === iso(T0) && p.token.length === 43, "newPending: the record shape in T02");
-  check(PENDING_TTL_DAYS === 7 && CONFIRM_RESEND_HOURS === 24, "constants: 7-day pending life, 24-hour confirmation gap");
+  check(PENDING_TTL_DAYS === 7 && CONFIRM_RESEND_MINUTES === 10 && MAX_CONFIRMS_PER_ADDRESS === 5, "constants: 7-day pending life, 10-minute confirmation gap, 5 confirmations per address");
 
   const st = memStorage();
   let calls = 0;
@@ -416,14 +416,30 @@ const iso = (ms) => new Date(ms).toISOString();
   await w.post({ email: "p@example.com" });
   const pk = subKeys(w)[0];
   const tok = JSON.parse(w.st.m.get(pk)).token;
-  w.tick(23 * 3600 * 1000);
-  r = await w.post({ email: "p@example.com" });
-  check(r.code === 200 && /already sent to this address in the last 24 hours/.test(r.json().message) && !r.json().already && w.sent.length === 1, "subscribe row 8: pending, confirmation sent 23 h ago: says a link was already sent; no new email");
-  w.tick(2 * 3600 * 1000);
-  r = await w.post({ email: "P@example.com" });
+  const MIN = 60 * 1000;
+  check(JSON.parse(w.st.m.get(pk)).confirmSends === 1, "subscribe: a new pending record counts one confirmation sent");
+  w.tick(9 * MIN);
+  r = await w.post({ email: "p@example.com" }, "198.51.100.21");
+  check(r.code === 200 && /sent to this address in the last 10 minutes/.test(r.json().message) && !r.json().already && w.sent.length === 1, "subscribe row 8: pending, confirmation sent 9 min ago: says so and when to ask again; no new email");
+  w.tick(2 * MIN);
+  r = await w.post({ email: "P@example.com" }, "198.51.100.22");
   const after9 = JSON.parse(w.st.m.get(pk));
-  check(r.body === OK && w.sent.length === 2 && after9.token === tok && after9.confirmSentAt === iso(T0 + 25 * 3600 * 1000), "subscribe row 9: pending 25 h on: new email, same token, confirmSentAt updated");
+  check(r.body === OK && w.sent.length === 2 && after9.token === tok && after9.confirmSentAt === iso(T0 + 11 * MIN) && after9.confirmSends === 2, "subscribe row 9: pending 11 min on: new email, same token, confirmSentAt updated, confirmSends 2");
   check(w.sent[1].text.includes(`t=${tok}`) && subKeys(w).length === 1, "subscribe row 9: the new email carries the same token; still one record");
+  for (let i = 3; i <= 5; i++) { w.tick(11 * MIN); await w.post({ email: "p@example.com" }, `198.51.100.${20 + i * 2}`); }
+  check(w.sent.length === 5 && JSON.parse(w.st.m.get(pk)).confirmSends === 5, "subscribe row 9: re-sends 11 minutes apart reach five confirmations");
+  w.tick(11 * MIN);
+  r = await w.post({ email: "p@example.com" }, "198.51.100.40");
+  check(r.code === 200 && /already sent to this address several times/.test(r.json().message) && !r.json().already && w.sent.length === 5 && JSON.parse(w.st.m.get(pk)).confirmSends === 5,
+    "subscribe row 8: after MAX_CONFIRMS_PER_ADDRESS confirmations, nothing more is sent and the reply says so");
+  w = world({}, { count: 0 });
+  await w.post({ email: "old@example.com" });
+  const ok = subKeys(w)[0];
+  const { confirmSends: _drop, ...older } = JSON.parse(w.st.m.get(ok));
+  w.st.m.set(ok, JSON.stringify(older));
+  w.tick(11 * MIN);
+  r = await w.post({ email: "old@example.com" }, "198.51.100.41");
+  check(r.body === OK && w.sent.length === 2 && JSON.parse(w.st.m.get(ok)).confirmSends === 2, "subscribe row 9: a record from before confirmSends counts as one and is re-sent");
 
   // row 10: the list cap
   w = world({ MAX_SUBSCRIBERS: "" }, { count: 0 });
@@ -1842,9 +1858,10 @@ const iso = (ms) => new Date(ms).toISOString();
 
   // a pending address
   w = await world({}, { status: "pending" });
+  await putSubscriber(w.st, { ...w.rec, confirmSentAt: iso(T0 - 5 * 60 * 1000) });
   r = await w.post({ email: "m.e@gmail.com" });
-  check(r.json().message === "A confirmation link was already sent to this address in the last 24 hours. Check your inbox and spam or junk folder." && !r.json().already && w.sent.length === 0,
-    "pending: a confirmation sent within 24 h is mentioned; nothing is sent");
+  check(r.json().message === "A confirmation link was sent to this address in the last 10 minutes. Check your inbox and spam or junk folder. Nothing there after 10 minutes? Ask again here." && !r.json().already && w.sent.length === 0,
+    "pending: a confirmation sent within 10 minutes is mentioned; nothing is sent");
 
   // stats
   w = await world();
@@ -1893,7 +1910,7 @@ const iso = (ms) => new Date(ms).toISOString();
     return { st, rec, env, sent, logs, call, ask, signUp, codeIn, evs, now: () => getSubscriber(st, rec.id), tick: (ms) => { clock += ms; } };
   };
   const cookieOf = (res) => { const m = /^tpr_session=([^;]*)/.exec(res.headers["set-cookie"] || ""); return m && m[1] ? `tpr_session=${m[1]}` : ""; };
-  const REPLY = "If that address has an account, a sign-in link is on its way. Not in your inbox within a few minutes? Check your spam or junk folder.";
+  const REPLY = "If that address has an account, a sign-in link is on its way. Not in your inbox within a few minutes? Check your spam or junk folder. You can ask for a new link once every 5 minutes.";
 
   // the cookie on its own
   {
@@ -1964,16 +1981,20 @@ const iso = (ms) => new Date(ms).toISOString();
     r = await w.ask("me@gmail.com");
     let p = await w.now();
     check(r.json().message === REPLY && w.sent.length === 1 && w.sent[0].to[0] === "me@gmail.com" && w.sent[0].text.includes(`https://site.example/api/confirm?id=${w.rec.id}&t=tok-secret-1`) && !p.signin,
-      "sign-in request: an address never confirmed (last link over 24 h ago) gets the same reply and its confirmation link again, not a sign-in link");
-    check(p.confirmSentAt === iso(T0) && p.status === "pending" && w.evs("confirmsent").length === 1 && w.evs("subscribed").length === 0 && w.evs("signinsent").length === 0,
+      "sign-in request: an address never confirmed (last link over 10 minutes ago) gets the same reply and its confirmation link again, not a sign-in link");
+    check(p.confirmSentAt === iso(T0) && p.confirmSends === 2 && p.status === "pending" && w.evs("confirmsent").length === 1 && w.evs("subscribed").length === 0 && w.evs("signinsent").length === 0,
       "sign-in request: the re-send moves confirmSentAt and counts as confirmsent");
     r = await w.call("conf", { method: "POST", body: { id: w.rec.id, t: "tok-secret-1" } });
     check(r.code === 200 && cookieOf(r) && (await w.now()).status === "active", "sign-in request: confirming that link activates the account and signs the browser in");
     w = await world({}, { status: "pending" });
     await w.ask("me@gmail.com");
-    w.tick(23 * HOUR);
+    w.tick(9 * 60 * 1000);
     r = await w.ask("me@gmail.com");
-    check(r.json().message === REPLY && w.sent.length === 1, "sign-in request: a never-confirmed address gets at most one confirmation every 24 hours");
+    check(r.json().message === REPLY && w.sent.length === 1, "sign-in request: a never-confirmed address gets at most one confirmation every 10 minutes");
+    w = await world({}, { status: "pending" });
+    await putSubscriber(w.st, { ...w.rec, confirmSends: 5 });
+    r = await w.ask("me@gmail.com");
+    check(r.json().message === REPLY && w.sent.length === 0, "sign-in request: after MAX_CONFIRMS_PER_ADDRESS confirmations, no more are sent and the reply is the same");
     w = await world({ MAX_CONFIRMS_PER_DAY: "1" }, { status: "pending" });
     await w.st.set(`radar:event:${utcDay(T0)}-000000000-confirmsent-aaaaaa`, "{}");
     r = await w.ask("me@gmail.com");

@@ -9,7 +9,10 @@ import { CATS } from "./radar.js";
 export const KEY_SUB_PREFIX = "radar:sub:";
 export const KEY_EVENT_PREFIX = "radar:event:";
 export const PENDING_TTL_DAYS = 7;
-export const CONFIRM_RESEND_HOURS = 24;
+// A lost confirmation can be asked for again after CONFIRM_RESEND_MINUTES, and one pending address
+// gets at most MAX_CONFIRMS_PER_ADDRESS confirmation emails in its PENDING_TTL_DAYS life.
+export const CONFIRM_RESEND_MINUTES = 10;
+export const MAX_CONFIRMS_PER_ADDRESS = 5;
 
 // Letters only, so an event's key round-trips through storage.js's path().
 export const EVENT_TYPES = ["subscribed", "confirmsent", "confirmed", "unsubscribed", "expired",
@@ -155,6 +158,7 @@ export function newPending(email, { now, randomBytes }) {
     token: newToken(randomBytes),
     createdAt: at,
     confirmSentAt: at,
+    confirmSends: 1, // confirmation emails so far; a record from before this field counts as 1
     confirmedAt: null,
     proRequestedAt: null, // set when the subscriber asks for Pro; the owner grants it (until payments exist)
     cats: null,

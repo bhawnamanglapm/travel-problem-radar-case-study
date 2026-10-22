@@ -6,7 +6,7 @@ import { DEFAULT_FROM, buildAlreadySubscribedEmail, buildConfirmEmail, buildProR
 import { BodyTooLargeError, allowMethods, esc, readFields, sendJson, sendPage } from "./http.js";
 import { clearCookie, originOk, readSession, sessionCookie, sessionSecret, signSession } from "./session.js";
 import {
-  CONFIRM_RESEND_HOURS, PENDING_TTL_DAYS, countEvents, deleteSubscriber, effectivePlan, findSubscriber, getSubscriber, newPending, normaliseCats, normaliseEmail, putSubscriber,
+  CONFIRM_RESEND_MINUTES, MAX_CONFIRMS_PER_ADDRESS, PENDING_TTL_DAYS, countEvents, deleteSubscriber, effectivePlan, findSubscriber, getSubscriber, newPending, normaliseCats, normaliseEmail, putSubscriber,
   recordEvent, tokenOk, utcDay,
 } from "./subscribers.js";
 
@@ -33,9 +33,19 @@ const ALREADY = { ok: true, already: true, message: "This address is already sub
 // Row 7 with sign-in set up (T16): the way back in is a sign-in link, so that is what goes.
 const ALREADY_SIGNIN = { ok: true, already: true, message: "This address already has an account. We've emailed it a sign-in link. Not in your inbox within a few minutes? Check your spam or junk folder." };
 const ALREADY_HELD = { ok: true, already: true, message: "This address already has an account. Sign in with a link from the sign-in page, or use the Manage link in any digest email." };
-const PENDING_REPLY = { ok: true, message: "A confirmation link was already sent to this address in the last 24 hours. Check your inbox and spam or junk folder." };
+const PENDING_REPLY = { ok: true, message: "A confirmation link was sent to this address in the last 10 minutes. Check your inbox and spam or junk folder. Nothing there after 10 minutes? Ask again here." };
+const PENDING_CAPPED = { ok: true, message: "A confirmation link was already sent to this address several times. Check your inbox and spam or junk folder for the newest one." };
 export const NOTICE_HOURS = 24;
 const HOUR_MS = 3600 * 1000;
+
+// Whether a pending record may get its confirmation again: "wait" within CONFIRM_RESEND_MINUTES of
+// the last one, "capped" after MAX_CONFIRMS_PER_ADDRESS, otherwise null. resent() is the record to store.
+const confirmSends = (record) => (Number.isInteger(record.confirmSends) && record.confirmSends > 0 ? record.confirmSends : 1);
+function confirmHeld(record, t) {
+  if (t - Date.parse(record.confirmSentAt) < CONFIRM_RESEND_MINUTES * 60 * 1000) return "wait";
+  return confirmSends(record) >= MAX_CONFIRMS_PER_ADDRESS ? "capped" : null;
+}
+const resent = (record, t) => ({ ...record, confirmSentAt: new Date(t).toISOString(), confirmSends: confirmSends(record) + 1 });
 
 // Emails sign-up has sent today: confirmations and already-subscribed notices share MAX_CONFIRMS_PER_DAY.
 async function signupEmailsToday(storage, t) {
@@ -207,7 +217,8 @@ export function makeSubscribeHandler({ env, storage, fetchFn, now, randomBytes =
         return sendJson(res, 200, ALREADY_EMAILED);
       }
       if (existing && existing.status !== "pending") return reply(); // anything unexpected
-      if (existing && t - Date.parse(existing.confirmSentAt) < CONFIRM_RESEND_HOURS * HOUR_MS) return sendJson(res, 200, PENDING_REPLY); // row 8
+      const held = existing && confirmHeld(existing, t); // row 8
+      if (held) return sendJson(res, 200, held === "wait" ? PENDING_REPLY : PENDING_CAPPED);
 
       if (!existing) {
         // Rows 10: a full list, or one we can't measure, takes no new address.
@@ -224,7 +235,7 @@ export function makeSubscribeHandler({ env, storage, fetchFn, now, randomBytes =
       if (!record) {
         record = newPending(email, { now: t, randomBytes });
       } else {
-        record = { ...record, confirmSentAt: new Date(t).toISOString() };
+        record = resent(record, t);
       }
       if (wantsPro && !record.proRequestedAt) record = { ...record, proRequestedAt: new Date(t).toISOString() };
       await sendConfirmation({ record, isNew: !existing, env, storage, fetchFn, t, randomBytes, log, logAs: "subscribe confirm-email" });
@@ -443,7 +454,7 @@ export const DEFAULT_MAX_SIGNINS_PER_DAY = 50;
 const MINUTE_MS = 60 * 1000;
 
 // The same words whether or not the address has an account, and whether or not a limit held the email back.
-const SIGNIN_REPLY = { ok: true, message: "If that address has an account, a sign-in link is on its way. Not in your inbox within a few minutes? Check your spam or junk folder." };
+const SIGNIN_REPLY = { ok: true, message: "If that address has an account, a sign-in link is on its way. Not in your inbox within a few minutes? Check your spam or junk folder. You can ask for a new link once every 5 minutes." };
 const NOT_SET_UP = { title: "Sign-in isn't set up yet", body: `<p>Use the Manage link in any digest email instead.</p>` };
 const SIGNIN_INVALID = { title: "This sign-in link isn't valid", body: `<p>It may have expired or been used already. <a href="/signin/">Get a new link</a>.</p>` };
 
@@ -537,12 +548,12 @@ export function makeSessionHandler({ env, storage, fetchFn = fetch, now, randomB
         const record = await findSubscriber(storage, email);
         if (record && record.status === "active") await sendSignInLink({ record, env, storage, fetchFn, t, randomBytes, log });
         // Never confirmed: the confirmation link again (confirming signs you in), on sign-up's own
-        // limits: once every CONFIRM_RESEND_HOURS, within MAX_CONFIRMS_PER_DAY.
-        if (record && record.status === "pending" && !(t - Date.parse(record.confirmSentAt) < CONFIRM_RESEND_HOURS * HOUR_MS)) {
+        // limits: CONFIRM_RESEND_MINUTES apart, MAX_CONFIRMS_PER_ADDRESS in all, within MAX_CONFIRMS_PER_DAY.
+        if (record && record.status === "pending" && !confirmHeld(record, t)) {
           let sentToday;
           try { sentToday = await signupEmailsToday(storage, t); } catch (e) { sentToday = Infinity; }
           if (sentToday < maxConfirmsPerDay(env.MAX_CONFIRMS_PER_DAY)) {
-            await sendConfirmation({ record: { ...record, confirmSentAt: new Date(t).toISOString() }, isNew: false, env, storage, fetchFn, t, randomBytes, log, logAs: "session confirm-email" });
+            await sendConfirmation({ record: resent(record, t), isNew: false, env, storage, fetchFn, t, randomBytes, log, logAs: "session confirm-email" });
           }
         }
         return reply();

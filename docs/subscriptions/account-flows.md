@@ -25,7 +25,8 @@ flowchart TD
   B -- no --> C["Enters email, presses<br/>Create account"]
   C --> D{"What is this address?"}
   D -- "new" --> E["Confirmation email sent<br/>Reply: a link is on its way,<br/>check spam"]
-  D -- "waiting for confirm,<br/>emailed in last 24 h" --> F["Nothing sent<br/>Reply: already sent,<br/>check inbox"]
+  D -- "waiting for confirm,<br/>emailed in last 10 min" --> F["Nothing sent<br/>Reply: sent in the last 10 min,<br/>ask again after that"]
+  D -- "waiting for confirm,<br/>older than 10 min" --> E3["Same link re-sent<br/>(at most 5 per address)"]
   D -- "already has an account" --> G["Sign-in link email<br/>(sign-in limits: 5 min, daily cap)<br/>Reply: already has an account"]
   D -- "limit reached / bot field" --> E2["Nothing sent<br/>Same reply as new"]
   E --> H["Opens link in email"]
@@ -54,7 +55,7 @@ flowchart TD
   C --> D{"Behind the scenes"}
   D -- "active account" --> E["Sign-in email sent<br/>link works 15 min, once"]
   D -- "unknown" --> N["Nothing sent"]
-  D -- "not confirmed" --> CF["Confirmation link re-sent<br/>(once in 24 h, daily cap)<br/>→ Confirm signs you in"]
+  D -- "not confirmed" --> CF["Confirmation link re-sent<br/>(10 min apart, 5 per address,<br/>daily cap)<br/>→ Confirm signs you in"]
   D -- "asked under 5 min ago /<br/>daily or per-IP limit" --> N
   E --> F["Opens link"]
   F --> G["Page with a Sign in button"]
@@ -111,10 +112,10 @@ which sends every visitor through these screens. "With T17" means T17 needs it. 
 | 6 | Sign-in always lands on `/live/`, not on the page the person started from | Remember where they started (pages on this site only) and return there after Sign in | With T17 |
 | 7 | The account is the daily email: unsubscribing deletes the account. Fine for a free newsletter, but a paying Pro user who only wants fewer emails would lose what they paid for | Split "stop emails" from "delete my account": the email link turns emails off, and a manage-page button deletes the account (T17 already plans Delete my account) | With T17 to T20 |
 | 8 | A link opened on a phone signs in the phone, not the laptop that asked | Also put a short code in the sign-in email that can be typed on the page that asked | Later |
-| 9 | Two waits the page doesn't explain. A second sign-in request within 5 minutes sends nothing but still says "on its way". A lost confirmation can't be re-sent for 24 hours | Add "You can ask again in 5 minutes" to the sign-in reply. Allow a confirmation re-send after about 10 minutes, still capped per day | Later |
+| 9 | Two waits the page doesn't explain. A second sign-in request within 5 minutes sends nothing but still says "on its way". A lost confirmation can't be re-sent for 24 hours | Add "You can ask again in 5 minutes" to the sign-in reply. Allow a confirmation re-send after about 10 minutes, still capped per day | **Done** (2026-10-22): re-send after 10 minutes, at most 5 per address |
 
 **Suggested order:**
 1. The domain (#1), when the owner picks it up again.
 2. ~~One small PR for #2 to #5~~: done on branch `fix/account-flows`, with no new server function.
 3. #6 and #7 inside T17.
-4. #8 and #9 once there are real users asking.
+4. #8 once there are real users asking. (#9 was done early, on 2026-10-22, after the owner hit it.)

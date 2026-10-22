@@ -124,7 +124,7 @@ changed:
 | A reply is cut off by the output token limit | Raised to 16,000 tokens, because the model's thinking counts toward it; a reply with no usable answer says why the model stopped | `npm test`; `scanCategory()` in `api/_lib/radar.js` |
 | **The model invents or misreads a source** | **No guardrail beyond the link check.** This is the main open risk. | Not measured |
 | Spend runs away | The owner sets a monthly limit in the Anthropic Console; about five scheduled sweeps a day, up to 3 searches per category | Owner step; not verified here |
-| Someone signs up another person's address | Double opt-in: one confirmation email, and nothing else until the Confirm button is pressed. At most one per address per 24 hours, and 10 a day in all | `npm test` |
+| Someone signs up another person's address | Double opt-in: one confirmation email, and nothing else until the Confirm button is pressed. At most 5 per address, 10 minutes apart, and 10 a day in all | `npm test` |
 | Subscriber addresses leak | Replies and log lines carry counts only; the data feed refuses subscriber keys; the manage page's endpoint never returns the address | `npm test` |
 | More subscribers than the email quota allows | The owner's email goes first; the rest wait for the next sweep, and nobody gets a day's digest twice. Sign-up stops at `MAX_SUBSCRIBERS` | `npm test` |
 | Subscriber mail has to stop at once | One switch, `SUBSCRIPTIONS_ENABLED`, stops sign-up and delivery; unsubscribe keeps working | `npm test` |

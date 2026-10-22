@@ -396,6 +396,14 @@ working in a real inbox; that is T12's staged launch.
 - Checked in production on 2026-10-22 (see T16 above). The sign-up page said a confirmation link had already gone out
   in the last 24 hours, since that address had an unconfirmed sign-up, and that earlier link was used.
 
+### Account-flow fix #9 (2026-10-22, branch `fix/confirm-resend-wait`)
+The owner hit #9: a lost confirmation and "already sent in the last 24 hours".
+- A pending address can get its confirmation again after 10 minutes (was 24 hours), from `/signup/` or `/signin/`.
+  At most 5 per address (`confirmSends` on the record; older records count as 1), still within
+  `MAX_CONFIRMS_PER_DAY`. The replies say when to ask again, or that the limit is reached.
+- The sign-in reply adds "You can ask for a new link once every 5 minutes", the same for every address.
+- `npm test`: 568 passing (5 new). Not yet checked in production.
+
 ### Account-flow fixes (2026-10-22, branch `fix/account-flows`)
 Issues #2 to #5 from [account-flows.md](../account-flows.md); no new function (8 of 12).
 - #2: "Sign in" on the home page and the live board; on the board it reads "Account" when signed in.
