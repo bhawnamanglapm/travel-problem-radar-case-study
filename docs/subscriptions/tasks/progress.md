@@ -403,6 +403,15 @@ working in a real inbox; that is T12's staged launch.
 - The login cookie has no `Max-Age` (it ends when the browser closes); the signed expiry is 12 hours, not 30 days.
 - `npm test` and `npm run check` pass. Not yet checked in production.
 
+### Continue with Google (2026-10-22, branch `feat/google-signin`)
+The owner asked for a way in without an emailed link and chose Google plus the email link (no passwords). #10 in
+[account-flows.md](../account-flows.md).
+- `api/_lib/google.js` and two routes on `/api/session`; no new function (8 of 12) and no new package.
+- The button on the home page popup (both tabs), `/signup/` and `/signin/` is hidden until `me` reports
+  `google:true`, which needs `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `SESSION_SECRET`.
+- `npm test` and `npm run check` pass. Not checked in production: the owner hasn't set up the Google client yet
+  (steps in DEPLOYMENT.md, "Google sign-in").
+
 ### Account-flow fix #9 (2026-10-22, branch `fix/confirm-resend-wait`)
 The owner hit #9: a lost confirmation and "already sent in the last 24 hours".
 - A pending address can get its confirmation again after 10 minutes (was 24 hours), from `/signup/` or `/signin/`.

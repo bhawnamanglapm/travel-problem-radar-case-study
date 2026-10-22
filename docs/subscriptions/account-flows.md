@@ -3,7 +3,7 @@
 > **What this is:** the user flows on 2026-10-22, after T16, the `/signup/` page (PR #34) and the fixes for #2 to
 > #5 below (branch `fix/account-flows`). They are drawn from the code, not from the plan. Below them is a review
 > against common practice for email-only accounts, with ranked changes. #2 to #5 are done; the rest are still
-> proposals.
+> proposals. Flow 4, Continue with Google (#10), is built but stays hidden until the owner sets it up.
 > The design behind these flows: [paid-website.md](paid-website.md). Where the pieces sit:
 > [architecture.md](architecture.md).
 
@@ -77,6 +77,30 @@ flowchart LR
   M --> U["Unsubscribe link in any email<br/>→ account deleted"]
 ```
 
+## Flow 4: Continue with Google
+
+Shown only once `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set (see
+[DEPLOYMENT.md](../../DEPLOYMENT.md#google-sign-in-optional)); until then the button stays hidden and Flows 1 and
+2 are the only ways in. Entry points: the home page popup (both tabs), `/signup/` and `/signin/`. Under the button:
+"New here? This creates a free account and starts the daily email."
+
+```mermaid
+flowchart TD
+  A["Presses Continue with Google<br/>(Pro box ticked → &pro=1)"] --> B["Google: pick an account<br/>(asked every time)"]
+  B -- "cancels" --> X1["Google sign-in was cancelled<br/>→ try again or use email"]
+  B --> C{"Back on /api/session:<br/>same browser, under 10 min,<br/>Google confirms the address?"}
+  C -- no --> X2["Didn't finish / didn't work /<br/>address not verified<br/>→ try again or use email"]
+  C -- yes --> D{"That address"}
+  D -- "has an account" --> S["Signed in, account unchanged"]
+  D -- "never confirmed" --> P["Account made active<br/>(Pro box → Pro request)"]
+  D -- "new" --> N{"List full or<br/>per-IP limit?"}
+  N -- yes --> X3["New accounts are closed /<br/>too many from this network"]
+  N -- no --> F["Free account, active at once,<br/>no confirmation email<br/>(Pro box → Pro request)"]
+  P --> S
+  F --> S
+  S --> L["Cookie set (until the browser<br/>closes, 12 h at most)<br/>→ lands on /live/"]
+```
+
 Solid lines are what a person does. Dotted lines are what happens over time or on failure.
 
 **Checked in production on 2026-10-22, with a real inbox:**
@@ -90,7 +114,7 @@ Flow 2's emailed link is not checked yet, and neither are the #4 and #5 changes.
 
 | What | Why |
 |---|---|
-| No passwords | Nothing to store, leak or reset. The inbox proves who you are, which fits a product that already lives in email |
+| No passwords | Nothing to store, leak or reset. The inbox proves who you are, which fits a product that already lives in email. Continue with Google keeps this: Google proves the address, and we keep only the address |
 | A button after every link | Mail scanners open links automatically. Requiring a press means they can't confirm or sign anyone in |
 | Confirming signs you in | A new user never has to sign in separately right after signing up |
 | Short, single-use sign-in links | 15 minutes, once. A forwarded or old email can't be reused |
@@ -113,6 +137,7 @@ which sends every visitor through these screens. "With T17" means T17 needs it. 
 | 7 | The account is the daily email: unsubscribing deletes the account. Fine for a free newsletter, but a paying Pro user who only wants fewer emails would lose what they paid for | Split "stop emails" from "delete my account": the email link turns emails off, and a manage-page button deletes the account (T17 already plans Delete my account) | With T17 to T20 |
 | 8 | A link opened on a phone signs in the phone, not the laptop that asked | Also put a short code in the sign-in email that can be typed on the page that asked | Later |
 | 9 | Two waits the page doesn't explain. A second sign-in request within 5 minutes sends nothing but still says "on its way". A lost confirmation can't be re-sent for 24 hours | Add "You can ask again in 5 minutes" to the sign-in reply. Allow a confirmation re-send after about 10 minutes, still capped per day | **Done** (2026-10-22): re-send after 10 minutes, at most 5 per address |
+| 10 | Every way in waits for an email. When one is slow, lost or blocked (#1), the person is stuck | Add "Continue with Google" beside the emailed link. A new address gets a free account at once, with no confirmation email | **Built** (2026-10-22), hidden until the owner sets up Google |
 
 **Suggested order:**
 1. The domain (#1), when the owner picks it up again.

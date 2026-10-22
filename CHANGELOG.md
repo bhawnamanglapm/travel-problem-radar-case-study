@@ -5,6 +5,9 @@ grouped by date.
 
 ## 2026-10-22
 
+- "Continue with Google" on the home page popup, `/signup/` and `/signin/`, beside the emailed link. A new address
+  gets a free account at once, with no confirmation email. Hidden until `GOOGLE_CLIENT_ID` and
+  `GOOGLE_CLIENT_SECRET` are set (DEPLOYMENT.md, "Google sign-in").
 - The home page is a customer product page instead of the portfolio case study, with the latest findings, plans and
   a sign-up / sign-in popup on every signed-out visit (`docs/site/homepage-review.md`). A sign-in now lasts until the
   browser closes, 12 hours at most (was 30 days).

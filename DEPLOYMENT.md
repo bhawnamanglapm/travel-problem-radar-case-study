@@ -218,6 +218,7 @@ Open **Settings → Environment Variables** and add:
 | `MAX_SIGNUPS_PER_IP_HOUR` | A whole number | **Production only** | No. Defaults to 5 sign-ups per connection per UTC hour |
 | `SESSION_SECRET` | A random string of at least 32 characters (see [Signing in](#signing-in-t16)) | **Production and Preview, a different value for each** | Only for sign-in. Without it `/signin/` answers "not set up yet" and Confirm signs nobody in |
 | `MAX_SIGNINS_PER_DAY` | A whole number | **Production only** | No. Defaults to 50 sign-in emails a day; `0` stops them |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | The OAuth client from Google Cloud (see [Google sign-in](#google-sign-in-optional)) | **Production only**, the secret marked Sensitive | No. Both, with `SESSION_SECRET`, show "Continue with Google" |
 | `RESEND_WEBHOOK_SECRET` | The signing secret (`whsec_…`) of the Resend webhook | **Production only** | No. Turns on `/api/resend-webhook`; see [Subscriber email](#subscriber-email-optional) |
 | `SITE_URL` | `https://` plus your production domain, no trailing slash | **Production only** | No. Defaults to the Vercel production domain |
 | `LEGAL_NAME`, `LEGAL_ADDRESS`, `LEGAL_PHONE` | The name, postal address and phone shown on the policy pages | Production and Preview | Only once `legal/` is in the build: the build fails without them |
@@ -503,6 +504,7 @@ needed at runtime.
 | `MAX_SIGNUPS_PER_IP_HOUR` | You (optional) | `/api/subscribe`, `/api/session` | Sign-up and sign-in requests per client IP per UTC hour, counted together. Default 5; unset or not a positive whole number means 5. Over it the reply is the same and nothing is stored or sent |
 | `SESSION_SECRET` | You (for sign-in) | `/api/session`, `/api/confirm`, `/api/account` | Signs the login cookie (HMAC-SHA256). At least 32 characters; shorter counts as unset. Unset means sign-in answers `503`, Confirm sets no cookie, and `/manage/` works only from an email link. Use a different value on Preview and Production. Changing it signs everyone out |
 | `MAX_SIGNINS_PER_DAY` | You (optional) | `/api/session` | Sign-in emails per UTC day, across all addresses. Default 50; `0` stops them. Separate from `MAX_CONFIRMS_PER_DAY`, so a burst of sign-ups can't stop subscribers signing in |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | You (optional) | `/api/session` | The Google OAuth client. With both and `SESSION_SECRET`, the pages show "Continue with Google"; with either unset the button stays hidden and `?action=google` answers `503`. The secret never leaves the server |
 | `RESEND_WEBHOOK_SECRET` | You (optional) | `/api/resend-webhook` | The Resend webhook's signing secret. If it is unset, the endpoint answers `503` and does nothing |
 | `SITE_URL` | You (optional) | The subscriber endpoints, `/api/sweep` | Base of the links in subscriber emails. If unset, `https://` plus `VERCEL_PROJECT_PRODUCTION_URL`. With neither, subscriber email is off |
 | `LEGAL_NAME`, `LEGAL_ADDRESS`, `LEGAL_PHONE` | You (once `legal/` ships) | The build (`scripts/fill-legal.mjs`) | Filled into the `{{LEGAL_…}}` slots of the policy pages at build time, HTML-escaped; a newline in the address becomes a line break. Kept out of the repository so they are not in its history. If `legal/` is built and one is unset, the build fails |
@@ -854,6 +856,42 @@ subscriber email needs (above). Until the secret is set, `/api/session` answers 
 sign-in isn't open yet; Confirm and the email links work as before.
 
 **Signing everyone out.** Set a new `SESSION_SECRET` and redeploy: every cookie stops working at once.
+
+### Google sign-in (optional)
+
+"Continue with Google" sits beside the emailed link on the home page popup, `/signup/` and `/signin/`. It stays
+hidden until the two variables below are set. Code: `api/_lib/google.js`, with the routes in `makeSessionHandler`;
+no new function and no new package. It needs `SESSION_SECRET` and subscriber email set up as above.
+
+**What it does.** The button goes to `/api/session?action=google`, which sends the person to Google (OpenID Connect,
+`scope=openid email`, PKCE, and Google asks which account every time). Google sends them back to `/api/session`.
+The address Google verified signs in its account, activates a pending one, or makes a new Free account that is
+active at once, with no confirmation email, under `MAX_SUBSCRIBERS` and `MAX_SIGNUPS_PER_IP_HOUR`. A ticked Pro box
+records a Pro request for a new or pending account. Then the login cookie is set, as for the emailed link. Only the
+address is kept; no Google id, name or token is stored.
+
+**Setting it up** (Google Cloud Console, free). The console's menu names change from time to time, so these are
+the settings to look for rather than exact clicks:
+
+1. Create a project, then its OAuth consent screen (the console may call it "Google Auth Platform"): user type
+   **External**, app name **Travel Problem Radar**, your support email, authorised domain
+   `travel-problem-radar.vercel.app` (or your own domain), and only the `openid` and `email` scopes.
+2. Create an **OAuth client ID** of type **Web application**. Authorised redirect URI, exactly:
+   `https://travel-problem-radar.vercel.app/api/session` (it is `SITE_URL` plus `/api/session`; change it if you
+   move to your own domain).
+3. Add the two values in Vercel → Settings → Environment Variables, **Production** only: `GOOGLE_CLIENT_ID`, and
+   `GOOGLE_CLIENT_SECRET` with **Sensitive** ticked. Don't paste the secret anywhere else. Redeploy.
+4. Publish the consent screen (**In production**). While it is in "Testing", only the test users listed there can
+   sign in.
+
+Not confirmed: whether Google asks to verify the app or the domain before it can be published. The site's existing
+Search Console verification may cover the domain.
+
+**Checking it.** `GET /api/session?action=me` should include `"google":true`, and the button should show on
+`/signin/`. Sign in with a Google address that has no account: you land on `/live/` signed in, and the address is on
+the list (`node scripts/subscribers.mjs list`). Cancelling at Google shows "Google sign-in was cancelled".
+
+**Turning it off.** Remove either variable and redeploy: the button disappears and the routes answer `503`.
 
 ### Managing subscribers
 

@@ -9,7 +9,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="referrer" content="no-referrer" />
 <title>Create your Travel Problem Radar account</title>
-<meta name="description" content="Create a Travel Problem Radar account with your email address. No password: confirm the link we email you and you're signed in." />
+<meta name="description" content="Create a Travel Problem Radar account with Google or your email address. No password: confirm the link we email you and you're signed in." />
 <style>
   * { box-sizing: border-box; }
   html, body { margin: 0; background: #0B0B0D; color: #F4F4F7; }
@@ -41,6 +41,13 @@
   .small { font-size: 13px; color: #93939F; }
   label.check { display: flex; gap: 8px; align-items: flex-start; margin: 12px 0 0; font-size: 14px; color: #C9C9D2; cursor: pointer; }
   label.check input { margin: 4px 0 0; accent-color: #C6FF3D; }
+  .gbtn { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; background: #fff; color: #1f1f1f;
+    border: 1px solid #747775; border-radius: 6px; padding: 10px 20px; text-decoration: none; }
+  .gbtn:hover { background: #f2f2f2; }
+  .gbtn svg { width: 18px; height: 18px; flex: none; }
+  .gwrap .small { margin: 8px 0 0; }
+  .or { display: flex; align-items: center; gap: 12px; font-size: 13px; color: #93939F; margin: 18px 0 16px; }
+  .or::before, .or::after { content: ""; flex: 1; border-top: 1px solid #2A2A34; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -57,6 +64,11 @@
   </div>
 
   <div id="signUp">
+    <div class="gwrap" hidden>
+      <a class="gbtn" id="gbtn" href="/api/session?action=google"><svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>Continue with Google</a>
+      <p class="small">New here? This creates a free account and starts the daily email.</p>
+      <p class="or">or use your email address</p>
+    </div>
     <p>There&rsquo;s no password. Your email address is your account:</p>
     <ol class="steps">
       <li>Enter your email address below.</li>
@@ -80,7 +92,7 @@
   </div>
 
   <p class="small">Your account includes the free daily email: the travel-industry problems found in the last 24 hours, once a day. Unsubscribing from it deletes the account.</p>
-  <p class="small">We store your email address, the dates you signed up and confirmed, and whether you asked for Pro. Confirming or signing in sets one cookie on that browser so the site knows it&rsquo;s you; it holds no address and lasts until you close the browser or sign out (12 hours at most). Questions or a deletion request: email <a href="mailto:hello@pehchanthetraveller.com">hello@pehchanthetraveller.com</a>.</p>
+  <p class="small">We store your email address, the dates you signed up and confirmed, and whether you asked for Pro. Confirming or signing in sets one cookie on that browser so the site knows it&rsquo;s you; it holds no address and lasts until you close the browser or sign out (12 hours at most). If you continue with Google, we receive only your email address from it. Questions or a deletion request: email <a href="mailto:hello@pehchanthetraveller.com">hello@pehchanthetraveller.com</a>.</p>
   <p class="small">Gathered by an AI model with web search. Items are not verified; check each source link.</p>
 </main>
 <script>
@@ -94,10 +106,17 @@
     document.getElementById("signUp").hidden = yes;
   }
   fetch("/api/session?action=me").then(function (r) { return r.json(); })
-    .then(function (b) { showSignedIn(Boolean(b && b.signedIn)); })
+    .then(function (b) {
+      showSignedIn(Boolean(b && b.signedIn));
+      if (b && b.google) document.querySelector(".gwrap").hidden = false;
+    })
     .catch(function () { /* stay on the form */ });
   // The plans page's "Ask for Pro" link arrives with ?pro=1.
   if (/[?&]pro=1(&|$)/.test(location.search)) form.wantsPro.checked = true;
+  // Continue with Google takes the Pro box along.
+  document.getElementById("gbtn").addEventListener("click", function () {
+    this.href = "/api/session?action=google" + (form.wantsPro.checked ? "&pro=1" : "");
+  });
 
   form.addEventListener("submit", function (ev) {
     ev.preventDefault();
