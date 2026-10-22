@@ -1215,7 +1215,9 @@ const iso = (ms) => new Date(ms).toISOString();
   check(r.code === 1 && /blob down/.test(r.err), "a storage failure is reported with exit 1, not a stack trace");
 
   // the script is kept out of the deployment
-  check(readFileSync(new URL("../.vercelignore", import.meta.url), "utf8").split(/\r?\n/).includes("scripts"), ".vercelignore keeps scripts/ (and so this tool) out of the deployment");
+  const ignored = readFileSync(new URL("../.vercelignore", import.meta.url), "utf8").split(/\r?\n/);
+  check(ignored.includes("scripts/*") && ignored.filter((l) => l.startsWith("!scripts/")).every((l) => l === "!scripts/fill-legal.mjs"),
+    ".vercelignore keeps scripts/ (and so this tool) out of the deployment; only the build's fill-legal.mjs is let back in");
 }
 
 // ---- Pro requests: the sign-up box, the confirm step, /api/account (the manage page) and the admin script
