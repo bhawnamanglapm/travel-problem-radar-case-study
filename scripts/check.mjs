@@ -74,6 +74,17 @@ check(!/\.innerHTML\s*=/.test(manPage), "manage/index.html writes server data wi
 check(manPage.length > 0 && !/<script[^>]*\ssrc=|<link[^>]*rel=["']?stylesheet|@import|url\(\s*["']?https?:/i.test(manPage), "manage/index.html is self-contained (no external script, stylesheet, import or font URL)");
 check(/\bcp -r [^&]*\bmanage\b[^&]* public\//.test(vercelJson.buildCommand || ""), "vercel.json's buildCommand copies manage into public/");
 check(existsSync("api/account.js"), "api/account.js exists (the manage page's endpoint)");
+check(/fetch\("\/api\/session"/.test(manPage) && /action: "signout"/.test(manPage), "manage/index.html has a Sign out button that posts to /api/session");
+
+// 4c2. Sign-in page (T16): self-contained, posts to /api/session, and is copied into the deployment.
+const inPage = existsSync("signin/index.html") ? readFileSync("signin/index.html", "utf8") : "";
+check(/fetch\("\/api\/session"/.test(inPage) && /action="\/api\/session"/.test(inPage) && /action: "request"/.test(inPage), "signin/index.html posts to /api/session (script and no-JavaScript form)");
+check(/name="email"/.test(inPage) && /name="website"/.test(inPage), "signin/index.html has the email field and the website honeypot field");
+check(!/\.innerHTML\s*=/.test(inPage), "signin/index.html never uses innerHTML");
+check(inPage.length > 0 && !/<script[^>]*\ssrc=|<link[^>]*rel=["']?stylesheet|@import|url\(\s*["']?https?:/i.test(inPage), "signin/index.html is self-contained (no external script, stylesheet, import or font URL)");
+check(/\bcp -r [^&]*\bsignin\b[^&]* public\//.test(vercelJson.buildCommand || ""), "vercel.json's buildCommand copies signin into public/");
+check(existsSync("api/session.js"), "api/session.js exists (sign-in and the login cookie)");
+check(/href="\.\.\/signin\/"/.test(subPage), "subscribe/index.html links to the sign-in page");
 // /live and /demo without the trailing slash load their script from the site root (a 404): each page adds the slash.
 const slashFix = 'if (!/(\\/|\\.html)$/.test(location.pathname)) location.replace(location.pathname + "/" + location.search + location.hash);';
 check(livePage.includes(slashFix), "live/index.html adds the trailing slash (/live would load /radar-live.js, a 404)");
@@ -84,7 +95,7 @@ check(/x\.status === 429/.test(subPage), "subscribe/index.html shows a message o
 check(/Check your spam or junk folder/.test(readFileSync("api/_lib/subscription-handlers.js", "utf8")), "the sign-up reply tells people to check spam or junk (the new domain's confirmation email is often filtered)");
 const fns = readdirSync("api").filter((f) => f.endsWith(".js"));
 check(fns.length <= 12, `at most 12 functions in api/, Hobby's limit (${fns.length}: ${fns.join(", ")})`);
-for (const f of ["subscribe/index.html", "manage/index.html", "live/index.html"]) {
+for (const f of ["subscribe/index.html", "manage/index.html", "signin/index.html", "live/index.html"]) {
   const t = existsSync(f) ? readFileSync(f, "utf8") : "";
   check(t.includes('if (/\\.github\\.io$/.test(location.hostname)) location.replace("https://travel-problem-radar.vercel.app" + location.pathname'), `${f} sends a GitHub Pages visit to the Vercel copy (Pages has no /api/)`);
 }

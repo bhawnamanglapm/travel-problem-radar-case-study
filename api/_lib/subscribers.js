@@ -13,7 +13,7 @@ export const CONFIRM_RESEND_HOURS = 24;
 
 // Letters only, so an event's key round-trips through storage.js's path().
 export const EVENT_TYPES = ["subscribed", "confirmsent", "confirmed", "unsubscribed", "expired",
-  "bounced", "complained", "progranted", "prorevoked", "prorequested", "noticesent"];
+  "bounced", "complained", "progranted", "prorevoked", "prorequested", "noticesent", "signinsent"];
 
 const ID_RE = /^[0-9a-f]{64}$/;
 

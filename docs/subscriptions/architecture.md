@@ -29,6 +29,7 @@ flowchart LR
     LIVE["/live/ board"]
     SUBP["/subscribe/ page"]
     MAN["/manage/ page"]
+    SIGN["/signin/ page"]
   end
   subgraph Fn["Vercel Functions"]
     SWEEP["api/sweep"]
@@ -37,6 +38,7 @@ flowchart LR
     CONF["api/confirm"]
     UNS["api/unsubscribe"]
     ACC["api/account"]
+    SES["api/session"]
     RWH["api/resend-webhook"]
     CHK["api/checkout (later)"]
     WH["api/razorpay-webhook (later)"]
@@ -59,6 +61,8 @@ flowchart LR
   V -->|email link| CONF --> BLOB
   V -->|email link| UNS --> BLOB
   V -->|email link| MAN --> ACC --> BLOB
+  V --> SIGN --> SES --> BLOB
+  SES -->|sign-in link| RES
   ACC -->|Pro request| RES
   RES -->|signed bounces, complaints| RWH --> BLOB
   MAN --> CHK --> RZP
@@ -164,7 +168,10 @@ flowchart LR
 | Endpoint | `POST /api/subscribe` | Subscribe page | Built | [email-signup.md](email-signup.md) |
 | Endpoint | `GET` and `POST /api/confirm` | Link in the confirmation email | Built | [email-signup.md](email-signup.md) |
 | Endpoint | `GET` and `POST /api/unsubscribe` | Link and one-click header in every email | Built | [email-signup.md](email-signup.md) |
-| Endpoint | `GET` and `POST /api/account` | Manage page | Built | [email-signup.md](email-signup.md) |
+| Page | `/signin/` | Subscribers: sign in by an emailed link, sign out | Built (T16) | [paid-website.md](paid-website.md) |
+| Endpoint | `GET` and `POST /api/account` | Manage page, by email link or login cookie | Built | [email-signup.md](email-signup.md) |
+| Endpoint | `GET` and `POST /api/session` | Sign-in page and sign-in link: request a link, sign in, sign out, "who am I" | Built (T16) | [paid-website.md](paid-website.md) |
+| Cookie | `tpr_session` (signed with `SESSION_SECRET`, 30 days) | Confirm and sign-in set it; account and session read it | Built (T16) | [paid-website.md](paid-website.md) |
 | Endpoint | `POST /api/resend-webhook` | Resend (bounces and complaints) | Built (T13) | [DEPLOYMENT.md](../../DEPLOYMENT.md#subscriber-email-optional) |
 | Endpoint | `POST /api/checkout` | Manage page | Later | [payments-razorpay.md](payments-razorpay.md) |
 | Endpoint | `POST /api/razorpay-webhook` | Razorpay | Later | [payments-razorpay.md](payments-razorpay.md) |
@@ -175,6 +182,7 @@ flowchart LR
 | Blob key | `radar:iphit:<hour>-<hash of IP>-<random>` | Per-IP sign-up limit | Built (T13) | [email-signup.md](email-signup.md) |
 | Blob key | `radar:rzp-event:<id>` | Webhook | Later | [payments-razorpay.md](payments-razorpay.md) |
 | Variable | `EMAIL_FROM` (on a verified domain), `SUBSCRIPTIONS_ENABLED`, `MAX_SUBSCRIBERS`, `MAX_CONFIRMS_PER_DAY`, `SITE_URL`, `MAX_SIGNUPS_PER_IP_HOUR`, `RESEND_WEBHOOK_SECRET` | Email | Built | [DEPLOYMENT.md](../../DEPLOYMENT.md#environment-variables) |
+| Variable | `SESSION_SECRET`, `MAX_SIGNINS_PER_DAY` | Sign-in | Built (T16) | [DEPLOYMENT.md](../../DEPLOYMENT.md#signing-in-t16) |
 | Variable | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `RAZORPAY_PLAN_ID` | Payments | Later | [payments-razorpay.md](payments-razorpay.md) |
 
 Everything in the Blob store stays private. `/api/data` serves only history and sweep keys, so none of the new keys

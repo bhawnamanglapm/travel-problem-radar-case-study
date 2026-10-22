@@ -1854,4 +1854,231 @@ const iso = (ms) => new Date(ms).toISOString();
   check(/1 already-subscribed notices/.test(out.join("\n")) && / notices /.test(out.join("\n")), "stats: already-subscribed notices per day and in the totals");
 }
 
+// ---- T16: accounts and sign-in (the login cookie, /api/session, Confirm signs in, /manage/ by cookie)
+{
+  const { makeSessionHandler, makeAccountHandler, SIGNIN_MINUTES, SIGNIN_GAP_MINUTES } = await import("../api/_lib/subscription-handlers.js");
+  const { SESSION_DAYS, clearCookie, originOk, parseCookies, readSession, sessionCookie, signSession } = await import("../api/_lib/session.js");
+  const { buildSignInEmail } = await import("../api/_lib/email.js");
+  const admin = await import("./subscribers.mjs");
+  const SECRET = "test-session-secret-0123456789abcdef";
+  const ENV = { SUBSCRIPTIONS_ENABLED: "1", RESEND_API_KEY: "re_k", EMAIL_FROM: "Radar <hello@pehchanthetraveller.com>", SITE_URL: "https://site.example", MAX_SUBSCRIBERS: "5000", SESSION_SECRET: SECRET };
+  const MIN = 60_000, HOUR = 60 * MIN, DAY = 24 * HOUR;
+  const world = async (envOver = {}, { status = "active", plan = "free" } = {}) => {
+    const st = memStorage();
+    const rec = { ...newPending("me@gmail.com", { now: T0 - 48 * HOUR, randomBytes: seeded(11) }), token: "tok-secret-1", status, plan, confirmedAt: status === "active" ? iso(T0 - 47 * HOUR) : null };
+    await putSubscriber(st, rec);
+    const sent = []; const logs = [];
+    let clock = T0;
+    const fetchFn = async (url, init) => {
+      const body = JSON.parse(init.body);
+      sent.push(...(Array.isArray(body) ? body : [body]));
+      return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ data: [{ id: "m0" }], id: "m0" }) };
+    };
+    const env = { ...ENV, ...envOver };
+    const deps = { env, storage: st, fetchFn, now: () => clock, randomBytes: seeded(7), log: (...a) => logs.push(a.join(" ")) };
+    const handlers = { sess: makeSessionHandler(deps), acct: makeAccountHandler(deps), conf: makeConfirmHandler(deps) };
+    let ipN = 0;
+    const call = async (name, { method = "GET", query = {}, body, cookie, origin, ip } = {}) => {
+      const headers = { host: "site.example", "content-type": "application/json", "x-forwarded-for": ip || "203.0.113." + ++ipN };
+      if (cookie) headers.cookie = cookie;
+      if (origin !== undefined) headers.origin = origin;
+      const res = mockRes();
+      await handlers[name]({ method, headers, query, body }, res);
+      return res;
+    };
+    const ask = (email, opts = {}) => call("sess", { method: "POST", body: { action: "request", email, ...(opts.body || {}) }, ip: opts.ip });
+    const codeIn = (mail) => { const m = /[?&]c=([A-Za-z0-9_-]+)/.exec(mail.text); return m ? m[1] : ""; };
+    const evs = (type) => [...st.m.keys()].filter((k) => k.startsWith("radar:event:") && k.includes(`-${type}-`));
+    return { st, rec, env, sent, logs, call, ask, codeIn, evs, now: () => getSubscriber(st, rec.id), tick: (ms) => { clock += ms; } };
+  };
+  const cookieOf = (res) => { const m = /^tpr_session=([^;]*)/.exec(res.headers["set-cookie"] || ""); return m && m[1] ? `tpr_session=${m[1]}` : ""; };
+  const REPLY = "If that address has an account, a sign-in link is on its way. Not in your inbox within a few minutes? Check your spam or junk folder.";
+
+  // the cookie on its own
+  {
+    const w = await world();
+    const value = signSession(w.rec, { secret: SECRET, now: T0 });
+    const read = (v, { now = T0, env = w.env } = {}) => readSession({ headers: { cookie: `other=1; tpr_session=${v}` } }, { env, storage: w.st, now });
+    check((await read(value))?.id === w.rec.id, "cookie: a valid one gives the record");
+    const [id, exp, ver, sig] = value.split(".");
+    check(await read(`${id}.${exp}.${ver}.${(sig[0] === "A" ? "B" : "A") + sig.slice(1)}`) === null, "cookie: a changed signature is refused");
+    check(await read(`${id}.${Number(exp) + 999}.${ver}.${sig}`) === null && await read(`${id}.${exp}.1.${sig}`) === null, "cookie: a changed expiry or version is refused");
+    check(await read(value, { now: T0 + SESSION_DAYS * DAY + 1000 }) === null && await read(value, { now: T0 + (SESSION_DAYS - 1) * DAY }) !== null, `cookie: refused after ${SESSION_DAYS} days, accepted before`);
+    check(await read(value, { env: {} }) === null && await read(value, { env: { SESSION_SECRET: "short" } }) === null, "cookie: no secret, or one under 32 characters, signs nobody in");
+    check(await read(signSession(w.rec, { secret: "another-secret-of-enough-length-000", now: T0 })) === null, "cookie: one signed with another secret (say, Preview's) is refused");
+    await putSubscriber(w.st, { ...w.rec, sessionVer: 1 });
+    check(await read(value) === null, "cookie: bumping sessionVer ends the session");
+    await putSubscriber(w.st, { ...w.rec, status: "pending" });
+    check(await read(value) === null, "cookie: a record that isn't active is refused");
+    await putSubscriber(w.st, { ...w.rec, createdAt: iso(T0 - HOUR) });
+    check(await read(value) === null, "cookie: a record made again for the same address (new createdAt) refuses the old cookie");
+    await deleteSubscriber(w.st, w.rec.id);
+    check(await read(value) === null, "cookie: a deleted record is refused");
+    check(await read("garbage") === null && await readSession({ headers: {} }, { env: w.env, storage: w.st, now: T0 }) === null, "cookie: a malformed or missing cookie is refused");
+    check(!value.includes("@") && !value.includes("tok-secret") && !value.includes("free"), "cookie: holds no address, token or plan");
+    check(sessionCookie("v") === `tpr_session=v; Max-Age=${SESSION_DAYS * 86400}; Path=/; HttpOnly; Secure; SameSite=Lax` && /^tpr_session=; Max-Age=0; .*HttpOnly; Secure; SameSite=Lax$/.test(clearCookie()),
+      "cookie: HttpOnly, Secure, SameSite=Lax, Path=/, 30 days; sign-out sets Max-Age=0");
+    check(JSON.stringify(parseCookies("a=1; tpr_session=x.y; a=2; junk")) === '{"a":"1","tpr_session":"x.y"}', "parseCookies: name=value pairs, the first of a repeated name wins");
+    const o = (origin) => originOk({ headers: { host: "site.example", ...(origin === undefined ? {} : { origin }) } });
+    check(o(undefined) && o("https://site.example") && !o("https://evil.example") && !o("null") && !o("https://site.example.evil.example"), "originOk: no Origin or this host passes; another host or \"null\" doesn't");
+  }
+
+  // the email on its own
+  {
+    const m = buildSignInEmail({ signInUrl: "https://s.example/api/session?id=a&c=b", siteUrl: "https://s.example" });
+    check(m.subject === "Your Travel Problem Radar sign-in link" && m.text.includes("Sign in: https://s.example/api/session?id=a&c=b") && /expires in 15 minutes/.test(m.text) && /If you didn't ask for this, ignore this email/.test(m.text) && m.html.includes('href="https://s.example/api/session?id=a&amp;c=b"'),
+      "buildSignInEmail: subject, the link, the 15 minutes, and an ignore line");
+    let threw = 0;
+    for (const bad of ["", "javascript:alert(1)"]) { try { buildSignInEmail({ signInUrl: bad }); } catch (e) { threw++; } }
+    check(threw === 2, "buildSignInEmail: refuses a missing or non-http link");
+  }
+
+  // asking for a link
+  {
+    let w = await world();
+    let r = await w.ask("nobody@example.com");
+    check(r.code === 200 && r.json().message === REPLY && w.sent.length === 0, "sign-in request: an unknown address gets the usual reply and no email");
+    r = await w.ask("M.E+x@gmail.com");
+    check(r.code === 200 && r.json().message === REPLY && w.sent.length === 1 && w.sent[0].to[0] === "me@gmail.com" && w.sent[0].subject === "Your Travel Problem Radar sign-in link",
+      "sign-in request: a confirmed address (any variant of it) gets the same reply and one email to the stored address");
+    const code = w.codeIn(w.sent[0]);
+    const after = await w.now();
+    check(code.length === 43 && w.sent[0].text.includes(`https://site.example/api/session?id=${w.rec.id}&c=${code}`) && after.signin.hash.length === 64 && !JSON.stringify(after).includes(code),
+      "sign-in request: the link carries a 43-character code; the record keeps only its hash");
+    check(after.signin.exp === iso(T0 + SIGNIN_MINUTES * MIN) && after.token === "tok-secret-1" && after.status === "active" && w.evs("signinsent").length === 1,
+      "sign-in request: the code expires in 15 minutes; the token is untouched; a signinsent event is recorded");
+    check(!r.body.includes(code) && !r.body.includes(w.rec.id) && !r.body.includes("@") && !w.logs.some((l) => l.includes(code) || /@/.test(l)), "sign-in request: no code, id or address in the reply or the logs");
+    w.tick((SIGNIN_GAP_MINUTES - 1) * MIN);
+    r = await w.ask("me@gmail.com");
+    check(r.json().message === REPLY && w.sent.length === 1 && (await w.now()).signin.hash === after.signin.hash, "sign-in request: a second ask within 5 minutes sends nothing and keeps the first code");
+    w.tick(2 * MIN);
+    r = await w.ask("me@gmail.com");
+    check(w.sent.length === 2 && (await w.now()).signin.hash !== after.signin.hash, "sign-in request: after 5 minutes a new link replaces the old one");
+
+    w = await world({}, { status: "pending" });
+    r = await w.ask("me@gmail.com");
+    check(r.json().message === REPLY && w.sent.length === 0 && !(await w.now()).signin, "sign-in request: an unconfirmed address gets the same reply and no email");
+    w = await world();
+    r = await w.ask("me@gmail.com", { body: { website: "bot" } });
+    check(r.json().message === REPLY && w.sent.length === 0, "sign-in request: the honeypot gets the usual reply and no email");
+    r = await w.ask("not-an-address");
+    check(r.code === 400, "sign-in request: a malformed address is a 400");
+    w = await world({ MAX_SIGNINS_PER_DAY: "1" });
+    await w.st.set(`radar:event:${utcDay(T0)}-000000000-signinsent-aaaaaa`, "{}");
+    r = await w.ask("me@gmail.com");
+    check(r.json().message === REPLY && w.sent.length === 0, "sign-in request: MAX_SIGNINS_PER_DAY reached, the usual reply and no email");
+    w = await world({ MAX_SIGNINS_PER_DAY: "0" });
+    await w.ask("me@gmail.com");
+    check(w.sent.length === 0, "sign-in request: MAX_SIGNINS_PER_DAY=0 sends none");
+    w = await world({ MAX_SIGNUPS_PER_IP_HOUR: "1" });
+    await w.ask("nobody@example.com", { ip: "198.51.100.7" });
+    r = await w.ask("me@gmail.com", { ip: "198.51.100.7" });
+    check(r.json().message === REPLY && w.sent.length === 0 && (await w.st.list(KEY_IPHIT_PREFIX)).length === 1, "sign-in request: the per-IP hourly limit (shared with sign-up) holds the email back");
+    for (const [over, label] of [[{ SESSION_SECRET: "" }, "no SESSION_SECRET"], [{ SUBSCRIPTIONS_ENABLED: "0" }, "subscriptions switched off"]]) {
+      w = await world(over);
+      r = await w.ask("me@gmail.com");
+      check(r.code === 503 && w.sent.length === 0, `sign-in request: ${label} is a 503 and sends nothing`);
+    }
+  }
+
+  // the link and its button
+  {
+    const w = await world();
+    await w.ask("me@gmail.com");
+    const code = w.codeIn(w.sent[0]);
+    const before = await w.now();
+    let r = await w.call("sess", { query: { id: w.rec.id, c: code } });
+    check(r.code === 200 && /<button type="submit">Sign in<\/button>/.test(r.body) && r.body.includes('name="c"') && r.body.includes('action="/api/session"') && !r.headers["set-cookie"],
+      "sign-in link: GET shows a Sign in button that posts the code, and sets no cookie");
+    check(JSON.stringify(await w.now()) === JSON.stringify(before) && r.headers["cache-control"] === "no-store" && r.headers["referrer-policy"] === "no-referrer", "sign-in link: GET changes nothing; the page isn't cached and sends no Referer");
+    r = await w.call("sess", { method: "POST", body: { id: w.rec.id, c: code }, origin: "https://evil.example" });
+    check(r.code === 403 && !r.headers["set-cookie"] && (await w.now()).signin, "sign-in link: a POST from another site is a 403 and uses nothing");
+    r = await w.call("sess", { method: "POST", body: { id: w.rec.id, c: code }, origin: "https://site.example" });
+    const cookie = cookieOf(r);
+    check(r.code === 303 && r.headers.location === "/live/" && /HttpOnly; Secure; SameSite=Lax/.test(r.headers["set-cookie"]) && cookie, "sign-in link: the button sets the login cookie and goes to /live/");
+    check((await w.now()).signin === null, "sign-in link: the code is deleted once used");
+    check((await readSession({ headers: { cookie } }, { env: w.env, storage: w.st, now: T0 }))?.id === w.rec.id, "sign-in link: the cookie it set signs the browser in");
+    r = await w.call("sess", { method: "POST", body: { id: w.rec.id, c: code } });
+    check(r.code === 400 && /This sign-in link isn(&#39;|')t valid/.test(r.body) && r.body.includes('href="/signin/"') && !r.headers["set-cookie"], "sign-in link: a used code is refused and offers a new link");
+    r = await w.call("sess", { query: { id: w.rec.id, c: code } });
+    check(r.code === 400, "sign-in link: a used link's GET says so too");
+
+    w.tick(SIGNIN_GAP_MINUTES * MIN);
+    await w.ask("me@gmail.com");
+    const code2 = w.codeIn(w.sent[1]);
+    r = await w.call("sess", { method: "POST", body: { id: w.rec.id, c: code2.slice(0, -1) + (code2.endsWith("A") ? "B" : "A") } });
+    check(r.code === 400 && (await w.now()).signin, "sign-in link: a wrong code is refused and the real one still stands");
+    r = await w.call("sess", { method: "POST", body: { id: "f".repeat(64), c: code2 } });
+    check(r.code === 400, "sign-in link: an unknown id is refused the same way");
+    w.tick(SIGNIN_MINUTES * MIN + 1000);
+    r = await w.call("sess", { method: "POST", body: { id: w.rec.id, c: code2 } });
+    check(r.code === 400 && !r.headers["set-cookie"], "sign-in link: refused after 15 minutes");
+
+    const off = await world({ SESSION_SECRET: "" });
+    r = await off.call("sess", { query: { id: off.rec.id, c: "x" } });
+    check(r.code === 503 && /isn(&#39;|')t set up yet/.test(r.body), "sign-in link: with no SESSION_SECRET, a 503 page");
+  }
+
+  // Confirm signs you in
+  {
+    let w = await world({}, { status: "pending" });
+    let r = await w.call("conf", { query: { id: w.rec.id, t: "tok-secret-1" } });
+    check(r.code === 200 && !r.headers["set-cookie"], "confirm: the GET page sets no cookie");
+    r = await w.call("conf", { method: "POST", body: { id: w.rec.id, t: "tok-secret-1" } });
+    const cookie = cookieOf(r);
+    check(r.code === 200 && /You(&#39;|')re subscribed/.test(r.body) && cookie && (await readSession({ headers: { cookie } }, { env: w.env, storage: w.st, now: T0 }))?.status === "active",
+      "confirm: pressing Confirm also signs this browser in");
+    w = await world({ SESSION_SECRET: "" }, { status: "pending" });
+    r = await w.call("conf", { method: "POST", body: { id: w.rec.id, t: "tok-secret-1" } });
+    check(r.code === 200 && !r.headers["set-cookie"] && (await w.now()).status === "active", "confirm: with no SESSION_SECRET it confirms as before and sets no cookie");
+  }
+
+  // /api/account by cookie, me and sign-out
+  {
+    const w = await world();
+    const cookie = `tpr_session=${signSession(w.rec, { secret: SECRET, now: T0 })}`;
+    let r = await w.call("acct");
+    check(r.code === 401 && r.json().error === "not_signed_in", "account: no link and no cookie is a 401");
+    r = await w.call("acct", { cookie });
+    const b = r.json();
+    check(r.code === 200 && b.signedIn === true && b.status === "active" && b.effectivePlan === "free" && !r.body.includes("@") && !r.body.includes("tok-secret") && !r.body.includes(w.rec.id),
+      "account: by cookie, the plan and signedIn, and no address, token or id");
+    r = await w.call("acct", { query: { id: w.rec.id, t: "tok-secret-1" } });
+    check(r.code === 200 && r.json().signedIn === false, "account: the email link still works, with signedIn false when there's no cookie");
+    r = await w.call("acct", { query: { id: w.rec.id, t: "wrong" }, cookie });
+    check(r.code === 404, "account: a bad link is refused even with a valid cookie");
+    r = await w.call("acct", { method: "POST", body: { action: "request-pro" }, cookie, origin: "https://evil.example" });
+    check(r.code === 403 && !(await w.now()).proRequestedAt, "account: a cookie POST from another site is a 403 and changes nothing");
+    r = await w.call("acct", { method: "POST", body: { action: "request-pro" }, cookie, origin: "https://site.example" });
+    check(r.code === 200 && r.json().signedIn === true && (await w.now()).proRequestedAt === iso(T0), "account: a cookie POST from this site works (Request Pro)");
+    r = await w.call("acct", { method: "POST", body: { id: w.rec.id, t: "tok-secret-1", action: "request-pro" }, origin: "https://evil.example" });
+    check(r.code === 200, "account: a POST with the email link's token works as before, whatever its Origin");
+
+    r = await w.call("sess", { query: { action: "me" } });
+    check(r.code === 200 && r.body === '{"signedIn":false,"plan":null}', "me: not signed in");
+    r = await w.call("sess", { query: { action: "me" }, cookie });
+    check(r.code === 200 && r.body === '{"signedIn":true,"plan":"free"}', "me: signed in, Free, and nothing else");
+    await putSubscriber(w.st, { ...(await w.now()), plan: "pro" });
+    r = await w.call("sess", { query: { action: "me" }, cookie });
+    check(r.json().plan === "pro", "me: a Pro account says pro");
+    r = await w.call("sess", { method: "POST", body: { action: "signout" }, cookie, origin: "https://evil.example" });
+    check(r.code === 403 && !r.headers["set-cookie"], "sign-out: from another site, a 403");
+    r = await w.call("sess", { method: "POST", body: { action: "signout" }, cookie });
+    check(r.code === 200 && /^tpr_session=; Max-Age=0;/.test(r.headers["set-cookie"]), "sign-out: clears the cookie");
+    r = await w.call("sess", { method: "POST", body: { action: "nope" } });
+    check(r.code === 400, "session: an unknown action is a 400");
+    r = await w.call("sess", { method: "DELETE" });
+    check(r.code === 405, "session: other methods are a 405");
+  }
+
+  // stats count sign-in emails
+  {
+    const w = await world();
+    await w.ask("me@gmail.com");
+    const out = [];
+    await admin.main(["stats", "--days", "1"], { storage: w.st, now: T0, rb: seeded(70), out: (s) => out.push(s), err: (s) => out.push(s) });
+    check(/ sign-ins /.test(out.join("\n")) && /1 sign-in emails/.test(out.join("\n")), "stats: sign-in emails per day and in the totals");
+  }
+}
+
 finish("subscription tests");

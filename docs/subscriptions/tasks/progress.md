@@ -28,7 +28,7 @@ working in a real inbox; that is T12's staged launch.
 | One subscription per inbox (fix, not in the original task list) | done, live on production and checked | merged as #19 (33d1ef1, 3af6403) | 485 pass (417 subscriber + 68 sweep; +31 new); 46 `npm run check` checks | See "One subscription per inbox" below |
 | Old unsubscribe links say "no longer active" (fix) | done, live on production | merged as #23 (f43e25f) | 486 pass (418 subscriber + 68 sweep; +1 new); 46 `npm run check` checks | An old link's page said the address was off the list when it wasn't |
 | [T15](T15-phase2-gate-and-accounts.md) Gate and accounts | in progress: gate skipped by the owner; prerequisites started | | | See "T15" below |
-| [T16](T16-accounts-and-sign-in.md) Accounts and sign-in | todo | | | Paid website ([paid-website.md](../paid-website.md)) |
+| [T16](T16-accounts-and-sign-in.md) Accounts and sign-in | done (offline); Preview check open | branch `feat/t16-accounts-and-sign-in` | 548 pass (480 subscriber + 68 sweep; +62 new); 71 `npm run check` checks (+9) | See "T16" below |
 | [T17](T17-locked-board.md) Locked board | todo | | | Behind `BOARD_PAYWALL`, off |
 | [T18](T18-teaser-email.md) Free email becomes a teaser | todo | | | Same switch |
 | [T19](T19-razorpay-library.md) Razorpay library | todo | | | Needs T15's prices and Razorpay test keys |
@@ -369,3 +369,17 @@ working in a real inbox; that is T12's staged launch.
   email becomes a teaser; sign-up and sign-in by email link, no passwords. Planned PRs: accounts and sign-in, the
   locked board behind `BOARD_PAYWALL` (off), the teaser email. pricing.md, T19 to T22 and the draft terms updated.
   Step 2 row 10: Razorpay's "login to complete a payment?" is answered Yes.
+
+### T16
+- New function `api/session.js` (8 of Hobby's 12) and module `api/_lib/session.js`; no new package.
+- Decisions made while building (also in [paid-website.md](../paid-website.md)):
+  - The cookie's signature also covers the record's `createdAt`, so a cookie from before an unsubscribe and
+    re-sign-up is refused.
+  - Sign-in emails have their own limits (5 minutes per address, `MAX_SIGNINS_PER_DAY` default 50, and the shared
+    per-IP limit), not `MAX_CONFIRMS_PER_DAY`, so bot sign-ups can't lock subscribers out.
+  - Confirm sets the cookie but stays on the "You're subscribed" page.
+  - `/manage/` opened by cookie has no Unsubscribe link (it never gets the token).
+  - A cookie `POST` from another `Origin` gets `403`.
+- Nothing is locked: the board stays open until T17.
+- **Not checked yet:** a Vercel Preview with `SESSION_SECRET` set and a real inbox (sign up and confirm, sign in from
+  a private window, reuse the link, sign out). `SESSION_SECRET` isn't set on Preview or Production yet.
