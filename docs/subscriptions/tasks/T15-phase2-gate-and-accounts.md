@@ -16,6 +16,10 @@ time to clear, so start them before any code.
 
 ## Step 1: the gate
 
+> **2026-10-22: skipped by the owner.** No thresholds or measuring period were set before launch, and no real
+> sweep has been scored, so the table below is left empty. The decision is in [decisions.md](../../decisions.md).
+> Not charging anyone before a scored sweep still applies.
+
 Run `node scripts/subscribers.mjs stats --days <period>` (T11) and fill in:
 
 | Measure | Threshold (set before launch, T12) | Result |

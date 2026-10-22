@@ -5,6 +5,9 @@ grouped by date.
 
 ## 2026-10-22
 
+- T15 started: the owner chose to begin the Phase 2 (paid Pro) prerequisites without the gate; nothing is charged
+  and no payment code is written. T12 results recorded: Pro emails reached Gmail's inbox, Gmail's own Unsubscribe
+  button deleted the record, and Outlook.com filed every email in Junk.
 - Fixed: an Unsubscribe link from before a re-subscribe said "This address isn't on the list" although the person
   was still subscribed. It now says the link is no longer active and to use the most recent email's link.
 - **One inbox, one subscription.** Gmail addresses are matched without dots or `+tags` (and `googlemail.com` as
