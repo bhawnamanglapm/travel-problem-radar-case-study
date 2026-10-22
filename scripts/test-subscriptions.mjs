@@ -2385,4 +2385,77 @@ const iso = (ms) => new Date(ms).toISOString();
   }
 }
 
+// ---- T17: the locked board (BOARD_PAYWALL), a Pro account outlives its emails, Delete my account
+{
+  const { signSession } = await import("../api/_lib/session.js");
+  const SECRET = "test-session-secret-0123456789abcdef";
+  const DAY = 24 * 3600 * 1000;
+
+  // /api/data with the switch off and on
+  {
+    const sweeps = memStorage();
+    sweeps.m.set("radar:history", "[1]");
+    sweeps.m.set("radar:sweep:1800000000000", "{\"a\":1}");
+    const accounts = memStorage();
+    const mk = async (email, over) => {
+      const r = { ...newPending(email, { now: T0 - 2 * DAY, randomBytes: seeded(email.length) }), status: "active", confirmedAt: iso(T0 - DAY), ...over };
+      await putSubscriber(accounts, r);
+      return r;
+    };
+    const free = await mk("free@example.com", {});
+    const pro = await mk("pro@example.com", { plan: "pro", proSource: "owner" });
+    const lapsed = await mk("lapsed@example.com", { plan: "pro", proSource: "owner", proUntil: iso(T0 - DAY) });
+    const cookie = (r, { secret = SECRET, at = T0 } = {}) => `tpr_session=${signSession(r, { secret, now: at })}`;
+    const on = { BOARD_PAYWALL: "1", SESSION_SECRET: SECRET };
+    const call = async (env, { key = "radar:history", c, method = "GET", h } = {}) => {
+      const handler = h || makeDataHandler({ storage: sweeps, accounts, env, now: () => T0 });
+      const res = mockRes();
+      await handler({ method, url: "/api/data?key=" + encodeURIComponent(key), headers: c ? { cookie: c } : {} }, res);
+      return res;
+    };
+    const PUBLIC = "public, s-maxage=300, stale-while-revalidate=3600";
+
+    for (const [env, label] of [[{}, "unset"], [{ BOARD_PAYWALL: "0", SESSION_SECRET: SECRET }, "0"], [{ BOARD_PAYWALL: "true", SESSION_SECRET: SECRET }, "\"true\""]]) {
+      const anon = await call(env);
+      const signed = await call(env, { c: cookie(free) });
+      check(anon.code === 200 && anon.json().value === "[1]" && anon.headers["cache-control"] === PUBLIC && signed.code === 200 && signed.headers["cache-control"] === PUBLIC,
+        `board switch ${label}: everyone reads the board, with the public cache header as before`);
+    }
+    let r = await call(on);
+    check(r.code === 401 && r.json().error === "not_signed_in" && r.headers["cache-control"] === "private, no-store", "board switch on: not signed in is 401, never cached");
+    r = await call(on, { c: cookie(free) });
+    check(r.code === 402 && r.json().error === "pro_only" && r.headers["cache-control"] === "private, no-store", "board switch on: a signed-in Free is 402");
+    r = await call(on, { c: cookie(lapsed) });
+    check(r.code === 402, "board switch on: a lapsed Pro is 402");
+    r = await call(on, { c: cookie(pro) });
+    const sweep = await call(on, { c: cookie(pro), key: "radar:sweep:1800000000000" });
+    check(r.code === 200 && r.json().value === "[1]" && r.headers["cache-control"] === "private, no-store" && sweep.code === 200, "board switch on: a Pro reads the history and a sweep, private and uncached");
+    check((await call(on, { c: cookie(pro), key: "radar:sweep:1700000000000" })).code === 404, "board switch on: an unknown sweep is still 404 for a Pro");
+    for (const [c, label] of [
+      [cookie(pro, { secret: "another-secret-of-enough-length-000" }), "signed with another secret"],
+      [cookie(pro, { at: T0 - 13 * 3600 * 1000 }), "expired"],
+      [cookie(pro).slice(0, -2) + "xx", "changed"],
+      ["tpr_session=garbage", "garbage"],
+    ]) check((await call(on, { c })).code === 401, `board switch on: a cookie ${label} is 401`);
+    r = await call(on, { key: "radar:seenIds" });
+    const post = await call(on, { method: "POST" });
+    check(r.code === 400 && r.headers["cache-control"] === "private, no-store" && post.code === 405 && post.headers["cache-control"] === "private, no-store",
+      "board switch on: a key not allowed is still 400 and a POST 405, both private");
+    check((await call({ BOARD_PAYWALL: "1" }, { c: cookie(pro) })).code === 401, "board switch on with no SESSION_SECRET: nobody is signed in, so 401");
+
+    // the login is read from `accounts` (fresh), not the sweeps' cached store
+    const stale = memStorage();
+    stale.m.set("radar:history", "[1]");
+    await putSubscriber(stale, pro); // a cached copy of the record from before it was revoked
+    await putSubscriber(accounts, { ...pro, plan: "free", proSource: null });
+    r = await call(on, { c: cookie(pro), h: makeDataHandler({ storage: stale, accounts, env: on, now: () => T0 }) });
+    check(r.code === 402, "board switch on: Pro revoked a moment ago is 402 at once (the login is read from the fresh store)");
+    await putSubscriber(accounts, pro);
+    await deleteSubscriber(accounts, pro.id);
+    check((await call(on, { c: cookie(pro), h: makeDataHandler({ storage: stale, accounts, env: on, now: () => T0 }) })).code === 401, "board switch on: a deleted account is 401 at once");
+    const dataSrc = readFileSync(new URL("../api/data.js", import.meta.url), "utf8");
+    check(/accounts: blobStorage\(\)/.test(dataSrc) && /env: process\.env/.test(dataSrc), "api/data.js reads the login from a fresh store and passes the environment");
+  }
+}
+
 finish("subscription tests");
