@@ -40,7 +40,7 @@ an account are the same thing.
    - `POST /api/session` with `action: "request"` and the address. If the address has a confirmed record, the
      record gets a sign-in code (only its hash is stored, valid for 15 minutes, usable once), and the inbox gets an
      email with a sign-in link. An address that never pressed Confirm gets its confirmation link again instead,
-     on sign-up's limits (once every 24 hours, within `MAX_CONFIRMS_PER_DAY`).
+     on sign-up's limits (10 minutes apart, 5 per address, within `MAX_CONFIRMS_PER_DAY`).
    - The reply is the same whether or not the address has an account. Sign-up already shows whether an address
      subscribes (the owner's choice, decision log), so this hides nothing new; it just keeps the form simple.
    - Sign-in emails have their own limits, so a burst of bot sign-ups can't use up the day's emails and stop paying

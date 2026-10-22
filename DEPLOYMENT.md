@@ -698,7 +698,9 @@ unchanged. Code: `api/subscribe.js`, `api/confirm.js`, `api/unsubscribe.js`, `ap
    gets that reply and does nothing.
 2. A confirmation email links to `/api/confirm?id=…&t=…`. Opening it shows a **Confirm** button; only pressing it
    (a `POST`) confirms, so a mail scanner that opens links can't sign anyone up. An address not confirmed within 7
-   days is deleted by the next sweep. A second sign-up for the same pending address within 24 hours sends nothing.
+   days is deleted by the next sweep. A second sign-up for the same pending address within 10 minutes sends nothing
+   and says to ask again after 10 minutes; after that the same link is sent again. One pending address gets at most
+   5 confirmation emails, then the reply says a link was already sent several times.
 3. **Free:** one email a day, after the first saved sweep of the UTC day (normally 00:17 UTC, about 05:47 IST),
    holding everything saved in the last 24 hours. **Pro:** an email after every saved **scheduled** sweep (about 5 a
    day); manual runs send Pro nothing. Pro is switched on by hand for now: see "Handling Pro requests" below.
@@ -819,8 +821,8 @@ yet: the live board stays open to everyone until T17.
 
 1. `/signin/` posts the address to `POST /api/session`. Every address gets the same reply ("If that address has an
    account, a sign-in link is on its way"); only a confirmed subscriber is emailed a sign-in link. An address that
-   never pressed Confirm gets its confirmation link again instead, at most once every 24 hours and within
-   `MAX_CONFIRMS_PER_DAY`. Signing up again at `/signup/` with a confirmed address also sends a sign-in link. The link holds a one-time code
+   never pressed Confirm gets its confirmation link again instead, on sign-up's limits (10 minutes apart, 5 per
+   address, within `MAX_CONFIRMS_PER_DAY`). The reply also says a new link can be asked for once every 5 minutes. Signing up again at `/signup/` with a confirmed address also sends a sign-in link. The link holds a one-time code
    that works for 15 minutes; the record keeps only its SHA-256.
 2. Opening the link shows a **Sign in** button (so a mail scanner that opens links signs nobody in). Pressing it uses
    up the code, sets the login cookie and goes to `/live/`.

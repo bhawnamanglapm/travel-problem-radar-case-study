@@ -39,9 +39,11 @@ Done for this project: `pehchanthetraveller.com` is verified with SPF, DKIM and 
      emails; with the cap reached, or within 24 hours of the last one, the reply says to use the Manage link in any
      digest instead.
    - Either way this shows whether an address subscribes; the owner chose that on 2026-10-22 (decision log).
-   - **A pending address whose confirmation went out in the last 24 hours** is told that a link was already sent,
-     and nothing is sent. Asking to sign in at `/signin/` with a pending address re-sends the confirmation on the
-     same limits (once every 24 hours, within `MAX_CONFIRMS_PER_DAY`), with the usual sign-in reply.
+   - **A pending address whose confirmation went out in the last 10 minutes** is told so, and to ask again after
+     10 minutes; nothing is sent. After that it gets the same link again. One pending address gets at most 5
+     confirmation emails (`confirmSends` on the record); after that the reply says a link was already sent several
+     times. Asking to sign in at `/signin/` with a pending address re-sends the confirmation on the same limits
+     (10 minutes apart, 5 per address, within `MAX_CONFIRMS_PER_DAY`), with the usual sign-in reply.
    - Every other accepted request gets the same reply ("If that address can be subscribed, a confirmation link is
      on its way"), so a full list, a closed list, the day's confirmation cap and the per-IP limit look alike.
    - A filled trap field gets that same reply and does nothing.
@@ -107,7 +109,7 @@ Slack and email and only when the sweep saved. The owner's `EMAIL_TO` path is un
 | Risk | Guardrail |
 |---|---|
 | Someone signs up another person | Double opt-in by button; nothing is sent after the one confirmation email until confirmed |
-| Confirmation emails used to spam an address | At most one confirmation, and one already-subscribed email, per address per 24 hours; variants of one inbox count as one address. `MAX_CONFIRMS_PER_DAY` (default 10) caps both kinds together across all addresses. At most `MAX_SIGNUPS_PER_IP_HOUR` (default 5) sign-ups per connection per hour, with a Vercel Firewall rate limit (5 per 10 minutes, `429`) in front so a flood costs no Blob operations (T13) |
+| Confirmation emails used to spam an address | At most 5 confirmations per pending address, 10 minutes apart, and one already-subscribed email per address per 24 hours; variants of one inbox count as one address. `MAX_CONFIRMS_PER_DAY` (default 10) caps both kinds together across all addresses. At most `MAX_SIGNUPS_PER_IP_HOUR` (default 5) sign-ups per connection per hour, with a Vercel Firewall rate limit (5 per 10 minutes, `429`) in front so a flood costs no Blob operations (T13) |
 | Bots | The trap field. A CAPTCHA only if bots appear |
 | Addresses leak in logs | The sweep reply, which the public GitHub Actions log prints, gets **counts only**. Error text is cleaned of anything that looks like an address, id or token |
 | Subscriber data read through the public feed | `ALLOWED_KEY` in `api/_lib/handlers.js` only allows history and sweep keys; tests check that every subscriber key is refused |

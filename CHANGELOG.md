@@ -5,6 +5,8 @@ grouped by date.
 
 ## 2026-10-22
 
+- A lost confirmation can be asked for again after 10 minutes instead of 24 hours, at most 5 times per address;
+  the sign-in reply says a new link can be asked for every 5 minutes (#9 in `docs/subscriptions/account-flows.md`).
 - Account-flow fixes (#2 to #5 in `docs/subscriptions/account-flows.md`): "Sign in" on the home page and the live
   board (it reads "Account" there when signed in); one sign-up form, on `/signup/`, with the Pro box, and
   `/subscribe/` as the plans page; signing up again with an existing account emails a sign-in link instead of the
