@@ -5,7 +5,7 @@
 | Phase | 2, paid Pro |
 | Who | Developer |
 | Size | L |
-| Depends on | T16 |
+| Depends on | T16, T20 (sign-in) |
 | Unblocks | T18 (the record shape it writes), T19 |
 
 > **Changed 2026-10-22 ([decision log](../../decisions.md)):** Pro now pays for the live board on the website, not

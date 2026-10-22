@@ -104,6 +104,9 @@ the README and the `/subscribe/` nav also change wording.
 
 ## Build order
 
+As tasks: [T20](tasks/T20-accounts-and-sign-in.md), [T21](tasks/T21-locked-board.md),
+[T22](tasks/T22-teaser-email.md), then T16 to T19.
+
 1. Accounts and sign-in (the cookie, `/api/session`, `/signin/`, Confirm signs you in, `/manage/` by cookie,
    sign-out, the privacy draft gains the cookie and sign-in emails).
 2. The locked board behind `BOARD_PAYWALL`, the `/live/` panel, and Pro accounts that survive unsubscribing.

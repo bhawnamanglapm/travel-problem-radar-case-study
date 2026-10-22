@@ -7,6 +7,10 @@
 > (Resend, Vercel Blob, Vercel limits, Razorpay) is marked **verify at build time**. Sizes are rough guesses, not
 > measurements.
 
+> **Changed 2026-10-22:** Pro now pays for the live board on the website, not for email
+> ([paid-website.md](../paid-website.md)). T20 to T22 add accounts, sign-in, the locked board and the teaser email;
+> T17 now also needs T20.
+
 ## The requirement
 
 People subscribe with an email address to get the digest by email. There are two plans:
@@ -47,6 +51,11 @@ flowchart TD
     T13["T13 Optional: bounces, complaints, IP limit"]
     T14["T14 Optional: Pro category choice"]
   end
+  subgraph P2A["Phase 2a: paid website"]
+    T20["T20 Accounts and sign-in"]
+    T21["T21 Locked board"]
+    T22["T22 Free email becomes a teaser"]
+  end
   subgraph P2["Phase 2: paid Pro (gated)"]
     T15["T15 Owner: gate review + accounts"]
     T16["T16 Razorpay library"]
@@ -65,6 +74,9 @@ flowchart TD
   T12 --> T13 & T14
   T12 --> T15 --> T16 --> T17 & T18
   T17 & T18 --> T19
+  T12 --> T20 --> T21 --> T22
+  T20 --> T17
+  T21 & T22 --> T19
 ```
 
 **Pro before payments.** Phase 1 builds both plans. Until Phase 2, the owner grants Pro by hand with the admin
@@ -92,9 +104,12 @@ themselves. It is built only if the Phase 1 numbers pass the owner's gate ([pric
 | [T14](T14-optional-pro-categories.md) | Optional: Pro subscribers choose categories | Dev | M | T12 |
 | [T15](T15-phase2-gate-and-accounts.md) | Phase 2 gate review and accounts | Owner | S | T12 + measuring period |
 | [T16](T16-razorpay-library.md) | `api/_lib/razorpay.js`: signatures and API calls | Dev | M | T15 |
-| [T17](T17-manage-page-and-checkout.md) | `/manage/` page, checkout, cancel | Dev | L | T16 |
+| [T17](T17-manage-page-and-checkout.md) | `/manage/` page, checkout, cancel | Dev | L | T16, T20 |
 | [T18](T18-razorpay-webhook.md) | `POST /api/razorpay-webhook` | Dev | M | T16 |
-| [T19](T19-pro-lifecycle-and-go-live.md) | Pro expiry, paid unsubscribe, go-live | Dev + Owner | M | T17, T18 |
+| [T19](T19-pro-lifecycle-and-go-live.md) | Pro expiry, paid unsubscribe, go-live | Dev + Owner | M | T17, T18, T21, T22 |
+| [T20](T20-accounts-and-sign-in.md) | Accounts and sign-in: email link, login cookie, `/signin/` | Dev | L | T12 |
+| [T21](T21-locked-board.md) | Locked board behind `BOARD_PAYWALL`; Pro survives unsubscribe | Dev | M | T20 |
+| [T22](T22-teaser-email.md) | Free email becomes a teaser | Dev | S | T21 |
 
 ## Decisions to settle before or during the build (OWNER INPUT NEEDED)
 

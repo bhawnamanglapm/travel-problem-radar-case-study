@@ -5,7 +5,7 @@
 | Phase | 2, paid Pro |
 | Who | Developer (code, docs) and owner (go-live) |
 | Size | M |
-| Depends on | T17, T18 |
+| Depends on | T17, T18, T21, T22 |
 | Unblocks | — |
 
 > **Changed 2026-10-22 ([decision log](../../decisions.md)):** Pro now pays for the live board on the website, not
