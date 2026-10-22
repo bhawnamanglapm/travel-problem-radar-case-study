@@ -8,6 +8,10 @@
 | Depends on | T16, T17 |
 | Unblocks | T19 |
 
+> **Changed 2026-10-22 ([decision log](../../decisions.md)):** Pro now pays for the live board on the website, not
+> for email. Accounts and sign-in (email link, login cookie) and the locked board come first, behind a
+> `BOARD_PAYWALL` switch. The webhook still grants and removes Pro; Pro now also unlocks `/api/data`.
+
 ## Why
 
 The webhook is the only thing that may grant or remove paid Pro. It is signed by Razorpay, retried by Razorpay if it

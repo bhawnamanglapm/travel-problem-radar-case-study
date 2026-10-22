@@ -19,20 +19,25 @@ sign-up first, payments only if people actually sign up.
 
 ## Tiers (draft)
 
-| | Free web | Free email | Pro (paid) |
+> **Changed 2026-10-22 ([decision log](../decisions.md)):** Pro now pays for the **live board on the website**. The
+> table below is the new plan; the board and the emails work as before until the `BOARD_PAYWALL` switch is turned on.
+
+| | Visitor | Free account | Pro (paid) |
 |---|---|---|---|
-| Status | Exists today | Proposed | Proposed, Phase 2 |
-| Live board, demo, Copy report | Yes | Yes | Yes |
-| Email digest | No | One a day, from the first saved sweep of the UTC day | After every saved sweep (up to 5 a day) |
+| Status | Exists today (board open to all) | Exists today as the free email | Planned |
+| Demo with sample data | Yes | Yes | Yes |
+| Live board (every sweep, history, Copy report) | No: sign-in or upgrade panel | No: upgrade panel | Yes |
+| Email digest | No | Teaser once a day: counts and headlines, a link to sign in | Full digest after every saved sweep (up to 5 a day) |
 | Choose categories | No | No | Yes (built, T14) |
-| Post to your own Slack | No | No | Optional later (see risks) |
+| Sign in | — | By an emailed link, no password | By an emailed link, no password |
 | Price | Free | Free | **OWNER INPUT NEEDED** (monthly and yearly) |
 
 A "Team" tier is out of scope until someone other than the owner asks for it.
 
-**The honest value check.** The board is public, so Pro cannot sell access to the findings. It sells convenience (a
-digest in the inbox after every sweep), personalisation (categories) and timing. If readers are content with the free
-daily email, Pro will not sell. That is exactly what the Phase 1 measures are for.
+**The honest value check.** Until 2026-10-22 the board was public, so Pro could only sell convenience. Now Pro sells
+access to the findings themselves. That only works if the free paths don't give them away: the demo shows a saved
+sample, and the free email shows headlines without detail or sources. Whether people pay for AI-gathered, unverified
+findings is still unmeasured; no real sweep has been scored yet.
 
 The free daily email goes out after the first saved sweep of the UTC day. The scheduled run is at 00:17 UTC (about 05:47
 IST), though GitHub can start scheduled runs late.

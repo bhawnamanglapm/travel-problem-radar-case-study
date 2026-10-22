@@ -355,3 +355,7 @@ working in a real inbox; that is T12's staged launch.
   that the pages use exactly those slots and hold no phone number, and, once `legal` ships, that the build runs
   the filler. Still open: the go-live date, prices and payment terms, the refund rule and timing, notice to paying
   subscribers, liability, the DPDP grievance contact, and Razorpay's details.
+- **2026-10-22: Pro pays for the website, not email** (decision log). The whole live board becomes paid; the free
+  email becomes a teaser; sign-up and sign-in by email link, no passwords. Planned PRs: accounts and sign-in, the
+  locked board behind `BOARD_PAYWALL` (off), the teaser email. pricing.md, T16 to T19 and the draft terms updated.
+  Step 2 row 10: Razorpay's "login to complete a payment?" is answered Yes.
