@@ -337,3 +337,10 @@ working in a real inbox; that is T12's staged launch.
   or measuring period were set and no real sweep has been scored, so Step 1's table stays empty.
 - pricing.md's rule still applies: don't charge anyone before at least one real sweep is scored with the README's
   rubric.
+- **Policy pages drafted** (`legal/privacy`, `legal/terms`, `legal/refunds`, `legal/contact`): facts the repo
+  already holds (what is stored, for how long, Vercel and Resend, deletion), and a highlighted
+  `[OWNER INPUT NEEDED: …]` gap for everything else (legal name, address, prices, refund rule, governing law,
+  response times). Each has a draft notice and `noindex`. They are **not** in `vercel.json`'s build, so they aren't
+  live. `npm run check` fails if the build ships them with a gap, the draft notice or `noindex` left, or if
+  `/subscribe/` or `/manage/` link them before then. To publish: fill the gaps, have them reviewed, remove the
+  notice and `noindex`, add `legal` to `buildCommand`, then link them from the page footers.

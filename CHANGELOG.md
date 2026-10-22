@@ -5,6 +5,8 @@ grouped by date.
 
 ## 2026-10-22
 
+- Draft policy pages for Phase 2 (privacy, terms, cancellation and refunds, contact) under `legal/`, with the owner's
+  facts still to fill in. Not deployed yet; `npm run check` stops them going live with a gap left.
 - T15 started: the owner chose to begin the Phase 2 (paid Pro) prerequisites without the gate; nothing is charged
   and no payment code is written. T12 results recorded: Pro emails reached Gmail's inbox, Gmail's own Unsubscribe
   button deleted the record, and Outlook.com filed every email in Junk.
