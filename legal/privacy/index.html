@@ -7,7 +7,6 @@
   if (/\.github\.io$/.test(location.hostname)) location.replace("https://travel-problem-radar.vercel.app" + location.pathname.replace(/^\/travel-problem-radar-case-study/, "") + location.search + location.hash);
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<meta name="robots" content="noindex" />
 <title>Privacy policy · Travel Problem Radar</title>
 <style>
   * { box-sizing: border-box; }
@@ -24,17 +23,14 @@
   .nav { font: 12px/1.5 ui-monospace, 'JetBrains Mono', monospace; color: #93939F; margin: 0 0 28px; }
   .nav a { color: #F4F4F7; }
   .small { font-size: 13px; color: #93939F; }
-  .draft { border: 1px solid #FFB74D; background: #1E1A12; color: #FFD59A; border-radius: 6px; padding: 10px 14px; margin: 0 0 24px; font-size: 14px; }
-  .todo { background: #3A2A10; color: #FFD59A; padding: 0 4px; border-radius: 3px; }
   footer { margin-top: 36px; padding-top: 16px; border-top: 1px solid #2A2A34; }
 </style>
 </head>
 <body>
 <main>
-  <p class="nav"><a href="../../">&larr; Case study</a> &middot; <a href="../../subscribe/">Get the digest</a></p>
-  <p class="draft" id="draft-notice">Draft, not published. Not legal advice: have it reviewed (India&rsquo;s DPDP Act, consumer and tax rules) and fill every highlighted gap before it goes live.</p>
+  <p class="nav"><a href="../../">&larr; Home</a> &middot; <a href="../../signup/">Create account</a> &middot; <a href="../../signin/">Sign in</a></p>
   <h1>Privacy policy</h1>
-  <p class="small">Last updated: <span class="todo">[OWNER INPUT NEEDED: date it goes live]</span></p>
+  <p class="small">Last updated: 22 October 2026</p>
 
   <p>This page covers the Travel Problem Radar website and email digest, run by <span data-fill>{{LEGAL_NAME}}</span>. Questions or requests: <a href="mailto:hello@pehchanthetraveller.com">hello@pehchanthetraveller.com</a>.</p>
 
@@ -49,7 +45,6 @@
     <li>when you ask for a sign-in link: a one-way hash of that link&rsquo;s code, when it was sent and when it expires (15 minutes later). It is cleared once you use the link.</li>
   </ul>
   <p>We also count events, such as a sign-up, a sign-in email or an unsubscribe, with only the type, the time and the plan. These counts hold no address, so they stay after you leave. To limit automated sign-ups, we keep a shortened, one-way hash of the connection&rsquo;s IP address (never the address itself) and delete it within a few hours.</p>
-  <p><span class="todo">[OWNER INPUT NEEDED: once paid Pro exists: what is stored about payments, for example the Razorpay subscription id and its status. Card and bank details are entered on Razorpay's own form; check what Razorpay sends back before writing this]</span></p>
 
   <h2>Cookies</h2>
   <p>When you confirm your address or sign in, we set one cookie, <code>tpr_session</code>, so the site knows it&rsquo;s you. It holds your record&rsquo;s id (a one-way hash of your address, not the address itself), an expiry date and a signature. It lasts until you close the browser or sign out, and 12 hours at most. If you continue with Google, a second cookie, <code>tpr_oauth</code>, holds random values that check the reply comes from the sign-in you started; it lasts 10 minutes at most and is deleted when you come back. We set no advertising or tracking cookies.</p>
@@ -62,9 +57,8 @@
     <li><b>Vercel</b> hosts the site and stores the records in a private store.</li>
     <li><b>Resend</b> sends the emails and tells us when an address bounces or marks an email as spam.</li>
     <li><b>Google</b>, only if you choose &ldquo;Continue with Google&rdquo;: it confirms who you are and tells us your email address.</li>
-    <li><span class="todo">[OWNER INPUT NEEDED: Razorpay, once paid Pro exists]</span></li>
   </ul>
-  <p>Each keeps its own logs under its own policy. <span class="todo">[OWNER INPUT NEEDED: where these providers process data (country), if the review asks for it]</span></p>
+  <p>Each keeps its own logs under its own policy. They may store and process data outside India, including in the United States, where the site&rsquo;s server code runs.</p>
 
   <h2>How long we keep it</h2>
   <ul>
@@ -74,13 +68,13 @@
   </ul>
 
   <h2>Your choices</h2>
-  <p>Every email has a Manage link (change categories, ask for Pro) and an Unsubscribe link. To see or delete what we hold about you, or to complain, email <a href="mailto:hello@pehchanthetraveller.com">hello@pehchanthetraveller.com</a>. We reply within the same day. <span class="todo">[OWNER INPUT NEEDED: the grievance contact the DPDP Act may require]</span></p>
+  <p>Every email has a Manage link (change categories, ask for Pro) and an Unsubscribe link. To see or delete what we hold about you, or to complain, email <a href="mailto:hello@pehchanthetraveller.com">hello@pehchanthetraveller.com</a>. We reply within the same day. Grievance contact: <span data-fill>{{LEGAL_NAME}}</span>, at the same address.</p>
 
   <h2>Changes</h2>
-  <p>When this page changes, the date at the top changes. <span class="todo">[OWNER INPUT NEEDED: whether and how subscribers are told about changes]</span></p>
+  <p>When this page changes, the date at the top changes. If a change affects how we use your data, we email subscribers before it applies.</p>
 
   <footer>
-    <p class="small"><a href="../privacy/">Privacy</a> &middot; <a href="../terms/">Terms</a> &middot; <a href="../refunds/">Cancellation and refunds</a> &middot; <a href="../contact/">Contact</a></p>
+    <p class="small"><a href="../privacy/">Privacy</a> &middot; <a href="mailto:hello@pehchanthetraveller.com">Contact</a></p>
   </footer>
 </main>
 </body>

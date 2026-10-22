@@ -125,14 +125,19 @@ for (const f of ["subscribe/index.html", "manage/index.html", "signin/index.html
 }
 // 4d. Policy pages (T15): drafts with marked gaps until the owner fills them; only then may the build ship them.
 const LEGAL = ["privacy", "terms", "refunds", "contact"];
-const legalShipped = /\blegal\b/.test(JSON.parse(readFileSync("vercel.json", "utf8")).buildCommand);
+const buildCmd = JSON.parse(readFileSync("vercel.json", "utf8")).buildCommand;
+const shippedLegal = LEGAL.filter((s) => buildCmd.includes(`legal/${s}`)); // pages go live one at a time
+const draftLegal = LEGAL.filter((s) => !shippedLegal.includes(s));
+const legalShipped = shippedLegal.length > 0;
 for (const slug of LEGAL) {
+  const shipped = shippedLegal.includes(slug);
   const f = `legal/${slug}/index.html`;
   const t = existsSync(f) ? readFileSync(f, "utf8") : "";
   check(t.length > 0 && !/<script[^>]*\ssrc=|<link[^>]*rel=["']?stylesheet|@import|url\(\s*["']?https?:/i.test(t), `${f} exists and is self-contained`);
   check(t.includes('if (/\\.github\\.io$/.test(location.hostname)) location.replace("https://travel-problem-radar.vercel.app" + location.pathname'), `${f} sends a GitHub Pages visit to the Vercel copy`);
-  check(t.includes('href="mailto:hello@pehchanthetraveller.com"') && LEGAL.every((s) => t.includes(`href="../${s}/"`)), `${f} has the contact address and links all four policy pages`);
-  if (legalShipped) check(!/OWNER INPUT NEEDED|id="draft-notice"|name="robots" content="noindex"/.test(t), `${f} is in the build, so it has no gaps, draft notice or noindex left`);
+  if (shipped) check(t.includes('href="mailto:hello@pehchanthetraveller.com"') && shippedLegal.every((s) => t.includes(`href="../${s}/"`)) && draftLegal.every((s) => !t.includes(`href="../${s}/"`)), `${f} has the contact address and links only the policy pages that are live`);
+  else check(t.includes('href="mailto:hello@pehchanthetraveller.com"') && LEGAL.every((s) => t.includes(`href="../${s}/"`)), `${f} has the contact address and links all four policy pages`);
+  if (shipped) check(!/OWNER INPUT NEEDED|id="draft-notice"|name="robots" content="noindex"/.test(t), `${f} is in the build, so it has no gaps, draft notice or noindex left`);
 }
 // The owner's name, address and phone come from Vercel variables at build time (scripts/fill-legal.mjs), never the repo.
 const { fill, SLOTS } = await import("./fill-legal.mjs");
@@ -143,7 +148,9 @@ check(!/\b\d{10}\b|\+91/.test(legalText), "the policy pages hold no phone number
 const filled = fill("{{LEGAL_NAME}} {{LEGAL_ADDRESS}}", { LEGAL_NAME: "A & <b>", LEGAL_ADDRESS: "1\n2" });
 check(filled.out === "A &amp; &lt;b&gt; 1<br />2" && filled.missing.length === 0 && fill("{{LEGAL_PHONE}}", {}).missing[0] === "LEGAL_PHONE", "fill-legal escapes values, turns newlines into line breaks, and reports an unset variable");
 if (legalShipped) check(/node scripts\/fill-legal\.mjs public/.test(JSON.parse(readFileSync("vercel.json", "utf8")).buildCommand), "the build fills the policy pages from Vercel variables (scripts/fill-legal.mjs)");
-check(legalShipped || !LEGAL.some((s) => /href="[^"]*legal\//.test(subPage + manPage)), "subscribe and manage pages don't link the policy pages while the build doesn't ship them");
+check(!draftLegal.some((s) => [page, subPage, manPage, inPage, upPage].some((t) => t.includes(`legal/${s}/`))), `no page links a policy page the build doesn't ship (drafts: ${draftLegal.join(", ")})`);
+if (shippedLegal.includes("privacy")) check([inPage, upPage].every((t) => t.includes('href="../legal/privacy/"')) && page.includes('href="https://travel-problem-radar.vercel.app/legal/privacy/"'), "the home, sign-in and sign-up pages link the privacy policy");
+if (legalShipped) check(/^scripts\/\*$/m.test(readFileSync(".vercelignore", "utf8")) && /^!scripts\/fill-legal\.mjs$/m.test(readFileSync(".vercelignore", "utf8")), ".vercelignore keeps scripts/fill-legal.mjs, which the build runs");
 
 const subLinks = [...page.matchAll(/href="([^"]*subscribe[^"]*)"/g)].map((m) => m[1]);
 check(subLinks.length > 0 && subLinks.every((h) => h.startsWith("https://travel-problem-radar.vercel.app/subscribe/")), `index.html links to the subscribe page, only by the absolute Vercel URL (GitHub Pages has no /api/)${subLinks.length ? " (" + subLinks.join(", ") + ")" : " (no link)"}`);
