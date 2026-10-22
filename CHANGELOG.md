@@ -5,6 +5,8 @@ grouped by date.
 
 ## 2026-10-22
 
+- Fixed: an Unsubscribe link from before a re-subscribe said "This address isn't on the list" although the person
+  was still subscribed. It now says the link is no longer active and to use the most recent email's link.
 - **One inbox, one subscription.** Gmail addresses are matched without dots or `+tags` (and `googlemail.com` as
   `gmail.com`); Outlook, Hotmail, Live, MSN, iCloud, Proton and Fastmail without `+tags`. Records made before this
   keep their ids and links. Signing up an address that is already confirmed now says so, and emails that inbox its
