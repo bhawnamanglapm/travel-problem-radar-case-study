@@ -176,7 +176,7 @@ const iso = (ms) => new Date(ms).toISOString();
   check(page.code === 200 && !page.body.includes("<script>") && page.body.includes("&lt;script&gt;alert(1)&lt;/script&gt;") && page.body.startsWith("<!doctype html>"),
     "sendPage escapes the title and starts with a doctype");
   check(page.headers["content-type"] === "text/html; charset=utf-8" && page.headers["cache-control"] === "no-store"
-    && page.headers["x-robots-tag"] === "noindex" && page.headers["referrer-policy"] === "no-referrer", "sendPage sets the four headers");
+    && page.headers["x-robots-tag"] === "noindex" && page.headers["referrer-policy"] === "same-origin", "sendPage sets the four headers");
   check(/<meta name="viewport"/.test(page.body) && /<meta charset="utf-8">/.test(page.body), "sendPage has the charset and viewport metas");
 
   const r405 = mockRes();
@@ -547,7 +547,7 @@ const iso = (ms) => new Date(ms).toISOString();
   let r = await c.call("GET");
   check(r.code === 200 && r.body.includes('action="/api/confirm"') && r.body.includes("Confirm") && r.body.includes(`value="${c.rec.id}"`) && r.body.includes(`value="${c.rec.token}"`), "confirm GET: a page with a form that POSTs the id and token");
   check(c.stored().status === "pending" && evCount(c.st, "confirmed") === 0, "confirm GET: the record is unchanged");
-  check(r.headers["cache-control"] === "no-store" && r.headers["x-robots-tag"] === "noindex" && r.headers["referrer-policy"] === "no-referrer", "confirm: pages carry the no-store, noindex and no-referrer headers");
+  check(r.headers["cache-control"] === "no-store" && r.headers["x-robots-tag"] === "noindex" && r.headers["referrer-policy"] === "same-origin", "confirm: pages carry the no-store, noindex and same-origin referrer headers");
   check(!r.body.includes("@") && !r.body.includes("c.person"), "confirm GET: the page holds no address");
 
   r = await c.call("POST");
@@ -635,7 +635,7 @@ const iso = (ms) => new Date(ms).toISOString();
   let u = await setup();
   let r = await u.call("GET");
   check(r.code === 200 && r.body.includes("Unsubscribe from Travel Problem Radar?") && r.body.includes('method="post"') && r.body.includes("/api/unsubscribe?id=") && u.has(), "unsubscribe GET: a confirm page with a POST form, record still there");
-  check(!r.body.includes("@") && r.headers["cache-control"] === "no-store" && r.headers["referrer-policy"] === "no-referrer", "unsubscribe GET: no address on the page; no-store and no-referrer");
+  check(!r.body.includes("@") && r.headers["cache-control"] === "no-store" && r.headers["referrer-policy"] === "same-origin", "unsubscribe GET: no address on the page; no-store and same-origin referrer");
   r = await u.call("POST", { body: "List-Unsubscribe=One-Click" });
   check(r.code === 200 && r.body.includes("unsubscribed") && !u.has(), "unsubscribe POST one-click (id and token in the query, fixed body): record deleted, 200");
   const ev = events(u.st, "unsubscribed");
@@ -2031,7 +2031,7 @@ const iso = (ms) => new Date(ms).toISOString();
     let r = await w.call("sess", { query: { id: w.rec.id, c: code } });
     check(r.code === 200 && /<button type="submit">Sign in<\/button>/.test(r.body) && r.body.includes('name="c"') && r.body.includes('action="/api/session"') && !r.headers["set-cookie"],
       "sign-in link: GET shows a Sign in button that posts the code, and sets no cookie");
-    check(JSON.stringify(await w.now()) === JSON.stringify(before) && r.headers["cache-control"] === "no-store" && r.headers["referrer-policy"] === "no-referrer", "sign-in link: GET changes nothing; the page isn't cached and sends no Referer");
+    check(JSON.stringify(await w.now()) === JSON.stringify(before) && r.headers["cache-control"] === "no-store" && r.headers["referrer-policy"] === "same-origin", "sign-in link: GET changes nothing; the page isn't cached and sends no Referer to other sites");
     r = await w.call("sess", { method: "POST", body: { id: w.rec.id, c: code }, origin: "https://evil.example" });
     check(r.code === 403 && !r.headers["set-cookie"] && (await w.now()).signin, "sign-in link: a POST from another site is a 403 and uses nothing");
     r = await w.call("sess", { method: "POST", body: { id: w.rec.id, c: code }, origin: "https://site.example" });

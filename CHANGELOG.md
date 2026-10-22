@@ -8,6 +8,9 @@ grouped by date.
 - The home page is a customer product page instead of the portfolio case study, with the latest findings, plans and
   a sign-up / sign-in popup on every signed-out visit (`docs/site/homepage-review.md`). A sign-in now lasts until the
   browser closes, 12 hours at most (was 30 days).
+- Fix: the emailed sign-in link's "Sign in" button failed with `wrong_origin`. Its page sent
+  `Referrer-Policy: no-referrer`, so the browser posted the button with `Origin: null`; the server's pages now use
+  `same-origin`, which still sends no Referer to other sites.
 - The other pages' "← Case study" link is now "← Home". The live board drops its "Sample demo" and "Source" links,
   and "Get it by email" becomes "Plans".
 - A lost confirmation can be asked for again after 10 minutes instead of 24 hours, at most 5 times per address;
