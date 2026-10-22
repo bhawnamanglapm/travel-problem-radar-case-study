@@ -46,7 +46,7 @@ Checked against the sources below on **2026-10-22**. Providers change these page
 | 4 | **International cards** | Owner | Not decided | Not confirmed from a Razorpay page. Razorpay's Subscriptions settings have a **Card** switch for recurring card payments; UPI and eMandate are INR only; cards and UPI take recurring charges up to ₹15,000. The page says nothing about international cards. [Subscriptions settings][rzp-subs-settings] Decide, then ask Razorpay support |
 | 5 | **Tax and legal advice**: GST, income tax, DPDP Act | Owner | Not started | No source checked; this needs an adviser |
 | 6 | **Prices**, currency, trial, refund rule | Owner | Not set | See the worksheet below. Then create the Razorpay Plan(s) in test mode and note each plan id |
-| 7 | **Policy pages filled and published** | Owner, then Dev | Drafts exist with highlighted gaps | Fill the gaps, have them reviewed, then remove the draft notice and `noindex` and add `legal` to the build. `npm run check` stops them going live with a gap left |
+| 7 | **Policy pages filled and published** | Owner, then Dev | Drafts exist; reply time and governing law filled; name, address and phone come from Vercel variables (`scripts/fill-legal.mjs`) | Fill the remaining gaps, have them reviewed, then remove the draft notice and `noindex` and add `legal && node scripts/fill-legal.mjs public` to the build. `npm run check` stops them going live with a gap left |
 | 8 | **Support route**: who answers, where, how fast | Owner | Not set | The reply time also goes on the contact and refunds pages |
 | 9 | **A real sweep scored** with the README's rubric | Owner | Not done | Not a provider rule: pricing.md says not to charge anyone before this |
 

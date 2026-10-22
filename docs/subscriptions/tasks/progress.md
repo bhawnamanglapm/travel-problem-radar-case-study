@@ -348,3 +348,10 @@ working in a real inbox; that is T12's staged launch.
   The owner created a Razorpay account the same day; activation is not submitted. Razorpay's website check wants
   **About us** and **Pricing details** pages as well as the four drafts. Vercel's Hobby terms rule out "any method
   of requesting or processing payment", so Pro ($20 a month per developer seat) comes before live payments.
+- **Owner details filled (2026-10-22)**: reply time ("within the same day") and governing law (India; courts at
+  Patiala, Punjab) are in the pages. The name, postal address and phone are **not** in the repo: the pages carry
+  `{{LEGAL_NAME}}`, `{{LEGAL_ADDRESS}}` and `{{LEGAL_PHONE}}`, and `scripts/fill-legal.mjs` fills them from Vercel
+  variables of the same names at build time, failing the build if one is unset. `npm run check` tests the filler,
+  that the pages use exactly those slots and hold no phone number, and, once `legal` ships, that the build runs
+  the filler. Still open: the go-live date, prices and payment terms, the refund rule and timing, notice to paying
+  subscribers, liability, the DPDP grievance contact, and Razorpay's details.
