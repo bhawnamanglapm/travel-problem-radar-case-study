@@ -103,7 +103,8 @@ check(/\bcp -r [^&]*\bsignup\b[^&]* public\//.test(vercelJson.buildCommand || ""
 check(/name="wantsPro"/.test(upPage) && /wantsPro: form\.wantsPro\.checked/.test(upPage) && /pro=1/.test(upPage), "signup/index.html has the \"I'd also like Pro\" box, sends it, and ticks it for ?pro=1");
 check(/We store your email address, the dates you signed up and confirmed, and whether you asked for Pro/.test(upPage), "signup/index.html has the privacy note");
 check(/Questions or a deletion request: email <a href="mailto:hello@pehchanthetraveller\.com">/.test(upPage) && /Gathered by an AI model with web search\. Items are not verified/.test(upPage), "signup/index.html has the contact address and the AI notice");
-check(/includes the free daily email/.test(upPage) && /Unsubscribing from it deletes the account/.test(upPage), "signup/index.html says the account includes the daily email and how to delete it");
+check(/includes the free daily summary/.test(upPage) && /Unsubscribing from it deletes the account/.test(upPage), "signup/index.html says the account includes the daily summary and how to delete it");
+check(![page, subPage, upPage].some((s) => /everything found in the last 24 hours/i.test(s)), "home, subscribe and sign-up pages don't promise Free everything (it gets a summary, T18)");
 check(/href="\.\.\/signin\/"/.test(upPage) && /href="\.\.\/signup\/"/.test(inPage), "signup and signin pages link to each other");
 // /live and /demo without the trailing slash load their script from the site root (a 404): each page adds the slash.
 const slashFix = 'if (!/(\\/|\\.html)$/.test(location.pathname)) location.replace(location.pathname + "/" + location.search + location.hash);';

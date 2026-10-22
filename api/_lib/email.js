@@ -147,7 +147,7 @@ export function withSubscriberFooter(mail, { unsubscribeUrl, manageUrl = "", pla
 export function buildConfirmEmail({ confirmUrl, siteUrl = "" }) {
   if (!LINK_OK.test(confirmUrl || "")) throw new Error("buildConfirmEmail: bad confirm link");
   const subject = "Confirm your Travel Problem Radar subscription";
-  const intro = "You asked to get the Travel Problem Radar digest by email: one email a day with the travel problems an AI model found in the last 24 hours.";
+  const intro = "You asked to get the Travel Problem Radar digest by email: one email a day about the travel problems an AI model found in the last 24 hours.";
   const ignore = "If you didn't ask for this, ignore this email; nothing more will be sent.";
   const stored = "What we keep: your email address and the dates you subscribed and confirmed. Unsubscribing deletes it.";
   return {
