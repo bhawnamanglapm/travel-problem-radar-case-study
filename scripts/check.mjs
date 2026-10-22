@@ -88,6 +88,19 @@ for (const f of ["subscribe/index.html", "manage/index.html", "live/index.html"]
   const t = existsSync(f) ? readFileSync(f, "utf8") : "";
   check(t.includes('if (/\\.github\\.io$/.test(location.hostname)) location.replace("https://travel-problem-radar.vercel.app" + location.pathname'), `${f} sends a GitHub Pages visit to the Vercel copy (Pages has no /api/)`);
 }
+// 4d. Policy pages (T15): drafts with marked gaps until the owner fills them; only then may the build ship them.
+const LEGAL = ["privacy", "terms", "refunds", "contact"];
+const legalShipped = /\blegal\b/.test(JSON.parse(readFileSync("vercel.json", "utf8")).buildCommand);
+for (const slug of LEGAL) {
+  const f = `legal/${slug}/index.html`;
+  const t = existsSync(f) ? readFileSync(f, "utf8") : "";
+  check(t.length > 0 && !/<script[^>]*\ssrc=|<link[^>]*rel=["']?stylesheet|@import|url\(\s*["']?https?:/i.test(t), `${f} exists and is self-contained`);
+  check(t.includes('if (/\\.github\\.io$/.test(location.hostname)) location.replace("https://travel-problem-radar.vercel.app" + location.pathname'), `${f} sends a GitHub Pages visit to the Vercel copy`);
+  check(t.includes('href="mailto:hello@pehchanthetraveller.com"') && LEGAL.every((s) => t.includes(`href="../${s}/"`)), `${f} has the contact address and links all four policy pages`);
+  if (legalShipped) check(!/OWNER INPUT NEEDED|id="draft-notice"|name="robots" content="noindex"/.test(t), `${f} is in the build, so it has no gaps, draft notice or noindex left`);
+}
+check(legalShipped || !LEGAL.some((s) => /href="[^"]*legal\//.test(subPage + manPage)), "subscribe and manage pages don't link the policy pages while the build doesn't ship them");
+
 const subLinks = [...page.matchAll(/href="([^"]*subscribe[^"]*)"/g)].map((m) => m[1]);
 check(subLinks.length > 0 && subLinks.every((h) => h.startsWith("https://travel-problem-radar.vercel.app/subscribe/")), `index.html links to the subscribe page, only by the absolute Vercel URL (GitHub Pages has no /api/)${subLinks.length ? " (" + subLinks.join(", ") + ")" : " (no link)"}`);
 check(/<a href="\.\.\/subscribe\/">Get it by email<\/a>/.test(livePage), "live/index.html links to the subscribe page");
