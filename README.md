@@ -13,7 +13,7 @@ each item with a product idea a PM could build.
 
 | | |
 |---|---|
-| **Case study** | https://bhawnamanglapm.github.io/travel-problem-radar-case-study/ |
+| **Home page** | https://travel-problem-radar.vercel.app/ (also served by GitHub Pages). Latest findings, plans, and sign-up / sign-in |
 | **Try the demo** | https://bhawnamanglapm.github.io/travel-problem-radar-case-study/demo/ (replays a saved sample; no AI calls) |
 | **Sample digest** | https://bhawnamanglapm.github.io/travel-problem-radar-case-study/demo/#report |
 | **Live page** | https://travel-problem-radar.vercel.app/live/. Deployed; a sweep runs every 5 hours. The first production sweep (Oct 2026) saved items from only 1 of 4 categories; the cause, an output token limit, is fixed and a local run returned all four. |
@@ -24,7 +24,7 @@ each item with a product idea a PM could build.
 
 ## Problem
 
-The case study puts it this way: *"The best product ideas in travel start as someone's bad day: a refund that never
+The original case study put it this way: *"The best product ideas in travel start as someone's bad day: a refund that never
 came, a visa fee that quietly quadrupled, a booking that vanished after payment. But those signals live everywhere:
 news wires, government notices, outage trackers, review sites, protest calendars. No PM has time to read all of it,
 every day, across the world."*

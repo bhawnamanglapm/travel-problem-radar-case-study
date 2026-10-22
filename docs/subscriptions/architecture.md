@@ -175,7 +175,7 @@ flowchart LR
 | Page | `/signup/` | Visitors: "Create your account", the one sign-up form (`POST /api/subscribe`), email and the Pro box | Built | [paid-website.md](paid-website.md) |
 | Endpoint | `GET` and `POST /api/account` | Manage page, by email link or login cookie | Built | [email-signup.md](email-signup.md) |
 | Endpoint | `GET` and `POST /api/session` | Sign-in page and sign-in link: request a link, sign in, sign out, "who am I" | Built (T16) | [paid-website.md](paid-website.md) |
-| Cookie | `tpr_session` (signed with `SESSION_SECRET`, 30 days) | Confirm and sign-in set it; account and session read it | Built (T16) | [paid-website.md](paid-website.md) |
+| Cookie | `tpr_session` (signed with `SESSION_SECRET`, ends when the browser closes, 12 hours at most) | Confirm and sign-in set it; account and session read it | Built (T16) | [paid-website.md](paid-website.md) |
 | Endpoint | `POST /api/resend-webhook` | Resend (bounces and complaints) | Built (T13) | [DEPLOYMENT.md](../../DEPLOYMENT.md#subscriber-email-optional) |
 | Endpoint | `POST /api/checkout` | Manage page | Later | [payments-razorpay.md](payments-razorpay.md) |
 | Endpoint | `POST /api/razorpay-webhook` | Razorpay | Later | [payments-razorpay.md](payments-razorpay.md) |
