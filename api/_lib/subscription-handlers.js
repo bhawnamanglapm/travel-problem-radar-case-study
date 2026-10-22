@@ -307,7 +307,9 @@ export function makeUnsubscribeHandler({ env, storage, now, randomBytes = crypto
       queryOnly: true,
       needsEnabled: false, // leaving must always work
       // 200, not 404: a repeat click or a second one-click delivery isn't an error, and it changes nothing.
-      invalid: { code: 200, page: { title: "You're not subscribed", body: "<p>This address isn't on the list, so nothing more will be sent.</p>" } },
+      // The words claim nothing about the address: a link from before a re-subscribe has the same id
+      // but an old token, and that person is still on the list.
+      invalid: { code: 200, page: { title: "This link is no longer active", body: "<p>Nothing was changed. If you already unsubscribed, you're off the list. If you're still getting emails, use the Unsubscribe link in the most recent one.</p>" } },
       page: async ({ record, params, post, now: t }) => {
         if (!post) {
           const action = `/api/unsubscribe?id=${encodeURIComponent(params.id)}&t=${encodeURIComponent(params.t)}`;

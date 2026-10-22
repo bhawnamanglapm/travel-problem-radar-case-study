@@ -626,7 +626,7 @@ const iso = (ms) => new Date(ms).toISOString();
   check(ev.length === 1 && JSON.parse(ev[0][1]).plan === "free" && !/@|[0-9a-f]{64}/.test(ev[0][0] + ev[0][1]), "unsubscribe: the event holds the plan, not the address or id");
   check([...u.st.m.keys()].every((k) => !k.startsWith("radar:sub:")) && ![...u.st.m.values()].some((v) => v.includes("u.person")), "unsubscribe: nothing about the address is left in storage");
   const again = await u.call("POST", { body: "List-Unsubscribe=One-Click" });
-  check(again.code === 200 && again.body.includes("not subscribed") && events(u.st, "unsubscribed").length === 1, "unsubscribe POST again: 200 \"not subscribed\", no second event");
+  check(again.code === 200 && again.body.includes("no longer active") && events(u.st, "unsubscribed").length === 1, "unsubscribe POST again: 200 \"no longer active\", no second event");
 
   u = await setup();
   r = await u.call("POST");
@@ -637,7 +637,8 @@ const iso = (ms) => new Date(ms).toISOString();
 
   u = await setup();
   const wrong = [await u.call("GET", { t: "nope" }), await u.call("POST", { t: "nope" }), await u.call("POST", { t: null }), await u.call("POST", { id: "e".repeat(64) }), await u.call("GET", { id: "bad", t: null })];
-  check(wrong.every((x) => x.code === 200 && x.body === wrong[0].body) && wrong[0].body.includes("not subscribed") && u.has(), "unsubscribe: wrong token, missing token, unknown id: 200 \"not subscribed\" (identical), record kept");
+  check(wrong.every((x) => x.code === 200 && x.body === wrong[0].body) && wrong[0].body.includes("no longer active") && u.has(), "unsubscribe: wrong token, missing token, unknown id: 200 \"no longer active\" (identical), record kept");
+  check(!/not on the list|isn't on the list|not subscribed/i.test(wrong[0].body) && wrong[0].body.includes("most recent one"), "unsubscribe: an old link says nothing about the address and points to the most recent email (a re-subscribed person is still on the list)");
 
   u = await setup({ enabled: "" });
   r = await u.call("POST");
