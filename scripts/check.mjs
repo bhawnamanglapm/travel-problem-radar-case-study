@@ -104,8 +104,10 @@ check(livePage.includes(slashFix), "live/index.html adds the trailing slash (/li
 check(demo.includes(slashFix), "demo/index.html adds the trailing slash (/demo would load /radar.js, a 404)");
 // "Continue with Google" (account-flows.md): hidden until /api/session?action=me says google:true.
 for (const [f, t] of [["index.html", page], ["signin/index.html", inPage], ["signup/index.html", upPage]]) {
-  check(/<div class="gwrap" hidden>\s*<a class="gbtn" id="\w+" href="\/api\/session\?action=google">/.test(t) && /b\.google/.test(t) && /New here\? This creates a free account and starts the daily email\./.test(t),
+  check(/<div class="gwrap" hidden>\s*<p class="or">or continue with<\/p>\s*<a class="gbtn" id="\w+" href="\/api\/session\?action=google">/.test(t) && /b\.google/.test(t) && /New here\? This creates a free account and starts the daily email\./.test(t),
     `${f} has a Continue with Google button, hidden until me says google:true, with the new-account note`);
+  check(t.split('<div class="gwrap" hidden>').slice(0, -1).every((before) => /<\/form>(?![\s\S]*<form)/.test(before)),
+    `${f}: each Google button comes after its email form, not before it`);
 }
 check((page.match(/<div class="gwrap" hidden>/g) || []).length === 2 && /\$\("upPro"\)\.checked \? "&pro=1"/.test(page), "index.html: the Google button on both tabs; the Create account tab takes its Pro box along");
 check(/form\.wantsPro\.checked \? "&pro=1"/.test(upPage), "signup/index.html: Continue with Google takes the Pro box along");

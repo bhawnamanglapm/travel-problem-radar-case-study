@@ -5,6 +5,8 @@ grouped by date.
 
 ## 2026-10-22
 
+- "Continue with Google" moved below the email form, full width, under an "or continue with" divider, on the home
+  page popup, `/signin/` and `/signup/`.
 - The privacy policy is live at `/legal/privacy/`, linked from the home, sign-in and sign-up pages. The other
   policy pages are still drafts.
 - "Continue with Google" on the home page popup, `/signup/` and `/signin/`, beside the emailed link. A new address
