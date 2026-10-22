@@ -5,6 +5,8 @@ grouped by date.
 
 ## 2026-10-22
 
+- Policy pages: reply time and governing law filled in. The owner's name, address and phone are filled from Vercel
+  variables at build time (`scripts/fill-legal.mjs`), so they never enter the repository. Still not deployed.
 - T15 prerequisites checklist, checked against Vercel's and Razorpay's docs with links, and a pricing worksheet for
   the owner. Razorpay also wants About us and Pricing details pages.
 - Draft policy pages for Phase 2 (privacy, terms, cancellation and refunds, contact) under `legal/`, with the owner's
