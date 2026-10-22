@@ -4,7 +4,8 @@
 > progress ([T12](tasks/T12-docs-and-launch.md)). **Phase 2 (Razorpay) is not built.** Items marked **later** do not
 > exist yet. The design is split across four documents: [pricing and rollout](pricing.md),
 > [free email sign-up](email-signup.md), [the paid website](paid-website.md) (planned 2026-10-22: Pro pays for the live
-> board, with sign-in by email link) and [paid Pro through Razorpay](payments-razorpay.md). How to run what is
+> board, with sign-in by email link) and [paid Pro through Razorpay](payments-razorpay.md). The sign-up and sign-in
+> user flows as built, with a review: [account-flows.md](account-flows.md). How to run what is
 > built: [DEPLOYMENT.md](../../DEPLOYMENT.md#subscriber-email-optional).
 
 ## What existed before and what was added
