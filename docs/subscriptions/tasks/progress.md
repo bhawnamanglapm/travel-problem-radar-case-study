@@ -22,10 +22,12 @@ working in a real inbox; that is T12's staged launch.
 | Request Pro (owner-approved, before payments) | done | aba8d26 (#8) | 371 pass (+31 new) + 7 new `npm run check` checks | See "Request Pro" notes below |
 | Fresh Blob reads (bug fix) | done | 61b2f79 (#9) | 374 pass (+3 new) | Reads skip Blob's CDN cache except `/api/data`'s |
 | [T12](T12-docs-and-launch.md) Docs | done | branch `fix/pages-redirect-and-launch-docs` | 374 pass; 39 `npm run check` checks | Docs 1 to 6; see "T12" below |
-| [T12](T12-docs-and-launch.md) Staged launch | in progress | | | Steps recorded under "T12" below |
+| [T12](T12-docs-and-launch.md) Staged launch | in progress: one check open (a Pro email with one category) | | | Steps recorded under "T12" below |
 | [T13](T13-optional-hardening.md) Bounces, complaints, per-IP limit | done, live on production (webhook and firewall rule) | merged as #12 | 423 pass (355 subscriber + 68 sweep; +49 new) and 3 new `npm run check` checks | See "T13" below |
-| [T14](T14-optional-pro-categories.md) Pro chooses categories | done (offline); not deployed yet | branch `feat/t14-pro-categories` | 454 pass (386 subscriber + 68 sweep; +29 new); 46 `npm run check` checks (+1) | See "T14" below |
+| [T14](T14-optional-pro-categories.md) Pro chooses categories | done, live on production; the email side not checked yet | merged as #18 | 454 pass (386 subscriber + 68 sweep; +29 new); 46 `npm run check` checks (+1) | See "T14" below |
 | One subscription per inbox (fix, not in the original task list) | done, live on production and checked | merged as #19 (33d1ef1, 3af6403) | 485 pass (417 subscriber + 68 sweep; +31 new); 46 `npm run check` checks | See "One subscription per inbox" below |
+| Old unsubscribe links say "no longer active" (fix) | done, live on production | merged as #23 (f43e25f) | 486 pass (418 subscriber + 68 sweep; +1 new); 46 `npm run check` checks | An old link's page said the address was off the list when it wasn't |
+| [T15](T15-phase2-gate-and-accounts.md) Gate and accounts | in progress: gate skipped by the owner; prerequisites started | | | See "T15" below |
 
 ## Notes per task
 
@@ -247,17 +249,23 @@ working in a real inbox; that is T12's staged launch.
 | 2. Variables | Done. All set for Production (checked by name only): `EMAIL_FROM`, `MAX_SUBSCRIBERS`, `MAX_CONFIRMS_PER_DAY`, `SITE_URL`, `SUBSCRIPTIONS_ENABLED` and the rest |
 | 3. Confirmation email | Arrived from `EMAIL_FROM`, but **in spam**, so the check "not in spam" failed. SPF, DKIM (`resend._domainkey`) and DMARC (`p=none`) records exist for the domain. **Rechecked 2026-10-21 22:00 UTC:** Gmail's headers show SPF, DKIM (`d=pehchanthetraveller.com`) and DMARC all `pass`; Gmail still files it as spam ("similar to messages that were identified as spam in the past"). mail-tester scores it 9.1/10; nearly all the lost points are `FROM_FMBLA_NEWDOM14` ("From domain was registered in last 7-14 days"), so the likely cause is the domain's age, not the setup or the content. The sign-up reply now says to check spam or junk. Recheck with mail-tester in about two weeks |
 | 4. Confirm, `stats` | Done |
-| 5. Free digest | A manual sweep at 19:50 UTC replied `free.sent: 1`. Arrival not yet confirmed by the owner |
-| 6. Pro | `grant-pro` done for one address. Waiting for the next scheduled sweep (00:17 UTC on 2026-10-22) |
-| 7. Gmail Unsubscribe button | Not done |
-| 8. Other providers (Outlook) | Started 2026-10-21: the confirmation landed in Outlook.com's **Junk**; the confirm page and the Confirm button worked. The digest in Outlook is not checked yet |
+| 5. Free digest | A manual sweep at 19:50 UTC replied `free.sent: 1`. **2026-10-22:** Free digests from the 23:25 and 02:27 UTC sweeps reached the owner's Outlook.com address, in **Junk** |
+| 6. Pro | Done. Pro emails from the three scheduled sweeps after `grant-pro` (23:25 UTC on 2026-10-21, and 02:27 and 04:57 UTC on 2026-10-22) all reached the owner's Gmail **Inbox** |
+| 7. Gmail Unsubscribe button | Done 2026-10-22. The owner used Gmail's own Unsubscribe button; `stats` then showed a second Pro unsubscribe and 0 Pro, so the record was deleted. It must have been on an email sent after the owner signed up again at about 08:05 UTC, since older emails' links no longer match (#23) |
+| 8. Other providers (Outlook) | Done by the owner with their own Outlook.com address, not by other people: the confirmation, the Free digests and the already-subscribed notice all landed in **Junk**; the confirm page and Confirm button worked; the Unsubscribe link worked (see "One subscription per inbox"). Only Gmail and Outlook.com were tried |
 | 9. Links | Done (#10). The Pages redirect above completes "links work from both GitHub Pages and Vercel" once merged |
 
 - **Seen while checking:** the scheduled GitHub runs at 10:15 and 15:22 UTC on 2026-10-21 failed with "Add
   CRON_SECRET". The repository secret was added at 19:46 UTC, after both. No scheduled GitHub run has succeeded yet;
   the first chance after the secret was the 20:17 UTC slot, which had not started by 21:03 UTC.
-- **Not written down yet (owner):** the Phase 2 gate thresholds and the measuring period (acceptance item 3). They
-  must be set before looking at results.
+- **Not written down (owner):** the Phase 2 gate thresholds and the measuring period (acceptance item 3). On
+  2026-10-22 the owner chose to start the Phase 2 prerequisites without the gate (decisions.md), so this item is
+  closed as skipped, not met.
+- **Still open:** a Pro email after the owner chose categories (T14). The owner unticked Industry, but the Pro record
+  was deleted by step 7 before the next sweep. It needs a sign-up, `grant-pro`, the categories set again and a
+  scheduled sweep.
+- **Owner's checks, 2026-10-22:** `/manage/` on a phone, reported fine. An unsubscribe link from before the re-signup
+  now shows "This link is no longer active" (#23; also checked on production with a made-up link).
 
 ### T13
 - **Part A:** `api/resend-webhook.js` (function 7 of Hobby's 12) is a Web-standard handler, so the signature is
@@ -284,7 +292,9 @@ working in a real inbox; that is T12's staged launch.
 - Built on `/manage/` and `/api/account` (no new function; still 7 of 12). Free sees the boxes disabled.
 - A Pro whose categories have nothing in a sweep gets no email for it; the sweep reply counts them in
   `pro.emptyForCats`.
-- **Not checked yet:** a real Pro email with one category, and the page on a phone. Owner steps are in the PR.
+- **Checked on production, 2026-10-22:** the Categories card saved a choice ("Saved. Your next Pro email has only
+  these categories."), and the owner reported the page fine on a phone.
+- **Not checked yet:** a real Pro email after choosing categories (see T12, "Still open").
 
 ### One subscription per inbox (branch `fix/one-subscription-per-inbox`)
 - `canonicalEmail()` makes the id: Gmail drops dots and `+tags` and maps `googlemail.com` to `gmail.com`; Outlook,
@@ -321,3 +331,9 @@ working in a real inbox; that is T12's staged launch.
   record was deleted.
 - Not checked on production: `+tags` on the other listed providers (iCloud, Proton, Fastmail and the other
   Microsoft domains); the offline tests cover them.
+
+### T15
+- **2026-10-22: the owner chose to skip the gate** and start the Phase 2 prerequisites (decisions.md). No thresholds
+  or measuring period were set and no real sweep has been scored, so Step 1's table stays empty.
+- pricing.md's rule still applies: don't charge anyone before at least one real sweep is scored with the README's
+  rubric.
