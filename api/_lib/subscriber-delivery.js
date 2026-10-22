@@ -65,7 +65,7 @@ export async function deliverToSubscribers({ env, storage, fetchFn, now, randomB
     if (env.SUBSCRIPTIONS_ENABLED !== "1" || !env.RESEND_API_KEY || !senderOk(env.EMAIL_FROM) || !site) return "not configured";
 
     const t = now();
-    const result = { pro: null, free: null, pending: 0, expired: 0, unreadable: 0, stopped: null };
+    const result = { pro: null, free: null, pending: 0, expired: 0, unreadable: 0, emailOff: 0, stopped: null };
     const creds = { apiKey: env.RESEND_API_KEY, from: env.EMAIL_FROM };
     const shouldStop = () => deadlineAt != null && now() >= deadlineAt;
 
@@ -89,9 +89,12 @@ export async function deliverToSubscribers({ env, storage, fetchFn, now, randomB
       await storage.set(KEY_SUBSCRIBER_COUNT, JSON.stringify({ count: live.length, at: new Date(t).toISOString() }));
     } catch (e) { result.countSaveFailed = true; }
 
+    // A Pro account whose emails stopped (unsubscribed, bounced or complained: T17) stays, but gets nothing.
     const active = live.filter((r) => r.status === "active");
-    const sendable = active.filter((r) => typeof r.email === "string" && typeof r.token === "string" && r.token);
-    result.unreadable += active.length - sendable.length;
+    const emailOn = active.filter((r) => !r.emailOff);
+    result.emailOff = active.length - emailOn.length;
+    const sendable = emailOn.filter((r) => typeof r.email === "string" && typeof r.token === "string" && r.token);
+    result.unreadable += emailOn.length - sendable.length;
     const pro = sendable.filter((r) => effectivePlan(r, t) === "pro");
     const free = sendable.filter((r) => effectivePlan(r, t) !== "pro");
     const message = (r, mail, plan) => ({

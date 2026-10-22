@@ -55,8 +55,10 @@ Done for this project: `pehchanthetraveller.com` is verified with SPF, DKIM and 
    (through `GET` and `POST /api/account`; it never returns the address).
 5. **Unsubscribe.** Every email links to `/api/unsubscribe?id=…&t=…` and carries `List-Unsubscribe` and
    `List-Unsubscribe-Post: List-Unsubscribe=One-Click` headers, so mail apps can offer one-click opt-out. `GET` shows
-   a button; `POST` deletes the record. The address is gone, not just flagged. Unsubscribe works even while
-   subscriptions are switched off.
+   a button; `POST` deletes a Free record. The address is gone, not just flagged. A Pro account (since T17) is kept
+   with `emailOff: "unsubscribed"`: no more email, but the board and the account stay until the person presses
+   **Delete my account** on `/manage/`, or turns emails back on there. Unsubscribe works even while subscriptions
+   are switched off.
 
 ## Storage
 
@@ -64,8 +66,8 @@ One Blob file per subscriber, so two sign-ups at the same moment can't overwrite
 
 | Key | Holds |
 |---|---|
-| `radar:sub:<sha256 of the canonical address>` | `{ v, id, email, status: "pending" or "active", plan: "free" or "pro", proUntil, proSource, token, createdAt, confirmSentAt, confirmedAt, noticeSentAt, proRequestedAt, cats, rzp }` |
-| `radar:event:<YYYYMMDD>-<HHMMSSmmm>-<type>-<6 hex>` | One event (`subscribed`, `confirmsent`, `noticesent`, `confirmed`, `unsubscribed`, `expired`, `progranted`, `prorevoked`, `prorequested`, and `bounced` and `complained` from the Resend webhook): type, time and plan. No address and no id, so the counts survive a deletion |
+| `radar:sub:<sha256 of the canonical address>` | `{ v, id, email, status: "pending" or "active", plan: "free" or "pro", proUntil, proSource, token, createdAt, confirmSentAt, confirmedAt, noticeSentAt, proRequestedAt, cats, rzp }`, plus `signin` and `sessionVer` (T16) and `emailOff` (T17) |
+| `radar:event:<YYYYMMDD>-<HHMMSSmmm>-<type>-<6 hex>` | One event (`subscribed`, `confirmsent`, `noticesent`, `confirmed`, `unsubscribed`, `expired`, `progranted`, `prorevoked`, `prorequested`, `emailoff` and `deleted` (T17), and `bounced` and `complained` from the Resend webhook): type, time and plan. No address and no id, so the counts survive a deletion |
 | `radar:deliveries:<YYYYMMDD>` | The record ids already sent that day's Free digest. Written only by the sweep; deleted after 7 days |
 | `radar:subscriberCount` | Pending plus active records at the last saved sweep, which the sign-up cap reads |
 | `radar:iphit:<YYYYMMDDHH>-<16 hex of sha256 of the IP>-<6 hex>` | One sign-up attempt, for the per-IP limit (T13). No raw IP. Deleted by the sweep after 2 hours |
@@ -114,7 +116,7 @@ Slack and email and only when the sweep saved. The owner's `EMAIL_TO` path is un
 | Addresses leak in logs | The sweep reply, which the public GitHub Actions log prints, gets **counts only**. Error text is cleaned of anything that looks like an address, id or token |
 | Subscriber data read through the public feed | `ALLOWED_KEY` in `api/_lib/handlers.js` only allows history and sweep keys; tests check that every subscriber key is refused |
 | A link guessed | 32-byte random tokens, compared in constant time; an unknown id and a wrong token get the same answer |
-| Spam complaints and bounces | One-click unsubscribe, a visible sender name, at most one Free email a day. A complaint or a hard bounce deletes the address, through Resend's signed webhook (`/api/resend-webhook`, T13) |
+| Spam complaints and bounces | One-click unsubscribe, a visible sender name, at most one Free email a day. A complaint or a hard bounce deletes a Free address, through Resend's signed webhook (`/api/resend-webhook`, T13); a Pro account is kept with its emails off (T17) |
 | Privacy | The sign-up page says what is stored (the address, the dates, whether Pro was asked for) and that unsubscribing deletes it, with a contact address for deletion requests. Advice on India's DPDP Act: not recorded as done |
 
 ## Tests

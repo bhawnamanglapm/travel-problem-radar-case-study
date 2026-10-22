@@ -351,21 +351,30 @@ export function makeUnsubscribeHandler({ env, storage, now, randomBytes = crypto
       // but an old token, and that person is still on the list.
       invalid: { code: 200, page: { title: "This link is no longer active", body: "<p>Nothing was changed. If you already unsubscribed, you're off the list. If you're still getting emails, use the Unsubscribe link in the most recent one.</p>" } },
       page: async ({ record, params, post, now: t }) => {
+        // A Pro account outlives its emails (T17): unsubscribing turns them off and the account,
+        // with the board, stays until it is deleted on the manage page. Free (and a lapsed Pro) is deleted.
+        const keep = effectivePlan(record, t) === "pro";
+        const manage = `<a href="${esc(managePath(params.id, params.t))}">manage page</a>`;
+        if (keep && record.emailOff) {
+          return sendPage(res, 200, { title: "Your emails are already off", body: `<p>Nothing more will be sent. Your Pro account stays; you can turn emails back on, or delete the account, on the ${manage}.</p>` });
+        }
         if (!post) {
           const action = `/api/unsubscribe?id=${encodeURIComponent(params.id)}&t=${encodeURIComponent(params.t)}`;
+          const what = keep
+            ? `<p>You'll stop getting emails. Your Pro account stays: you can still sign in and read the board, and delete the account on the ${manage}.</p>`
+            : "<p>You'll stop getting the digest, and your address will be deleted.</p>";
           return sendPage(res, 200, {
             title: "Unsubscribe from Travel Problem Radar?",
-            body: `<p>You'll stop getting the digest, and your address will be deleted.</p><form method="post" action="${esc(action)}"><p><button type="submit">Unsubscribe</button></p></form>`,
+            body: `${what}<form method="post" action="${esc(action)}"><p><button type="submit">Unsubscribe</button></p></form>`,
           });
         }
-        if (record.proSource === "razorpay" && effectivePlan(record, t) === "pro") {
-          return sendPage(res, 200, {
-            title: "Cancel your Pro plan first",
-            body: `<p>Your Pro plan is paid, so it has to be cancelled on the <a href="${esc(managePath(params.id, params.t))}">manage page</a> before the address is deleted.</p>`,
-          });
+        if (keep) {
+          await putSubscriber(storage, { ...record, emailOff: "unsubscribed" });
+          await recordEvent(storage, "emailoff", { now: t, randomBytes, plan: "pro" });
+          return sendPage(res, 200, { title: "Your emails are off", body: `<p>Nothing more will be sent. Your Pro account stays; you can turn emails back on, or delete the account, on the ${manage}.</p>` });
         }
         await deleteSubscriber(storage, record.id);
-        await recordEvent(storage, "unsubscribed", { now: t, randomBytes, plan: record.plan === "pro" ? "pro" : "free" });
+        await recordEvent(storage, "unsubscribed", { now: t, randomBytes, plan: effectivePlan(record, t) });
         return sendPage(res, 200, { title: "You're unsubscribed", body: "<p>Your address has been deleted. Nothing more will be sent.</p>" });
       },
     });
@@ -383,6 +392,7 @@ const accountView = (record, t) => ({
   proSource: record.proSource || null,
   proRequestedAt: record.proRequestedAt || null,
   cats: record.cats || null,
+  emailOff: record.emailOff || null,
 });
 
 // GET ?id&t: the plan. With no id and no token, the login cookie (T16) says whose plan; a POST
@@ -390,6 +400,8 @@ const accountView = (record, t) => ({
 // browser holds a valid login cookie. POST {id, t, action: "request-pro"}: ask for Pro. Until payments exist
 // (T20, T21) the owner grants it with the admin script; this records the request and tells them.
 // POST {id, t, action: "set-cats", cats: [...]}: a Pro subscriber picks their categories (T14).
+// POST action "email-on" turns emails back on after an unsubscribe (not after a bounce or a
+// complaint), and "delete-account" deletes the record and signs this browser out (T17).
 export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomBytes = cryptoRandomBytes, log = console.log }) {
   return async function account(req, res) {
     if (!allowMethods(req, res, ["GET", "POST"])) return;
@@ -430,6 +442,21 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
         const updated = { ...record, cats: chosen.cats };
         await putSubscriber(storage, updated);
         return sendJson(res, 200, { ok: true, ...view(updated) });
+      }
+      if (action === "email-on") {
+        // A bounce or a complaint can't be undone here: that would send to an address that refused mail.
+        if (record.emailOff !== "unsubscribed") return sendJson(res, 409, { error: record.emailOff ? "email_blocked" : "already_on" });
+        const { emailOff, ...updated } = record;
+        await putSubscriber(storage, updated);
+        return sendJson(res, 200, { ok: true, ...view(updated) });
+      }
+      if (action === "delete-account") {
+        // A paid plan is cancelled first, so Razorpay stops charging (T22 adds that step).
+        if (record.proSource === "razorpay" && effectivePlan(record, t) === "pro") return sendJson(res, 409, { error: "cancel_first" });
+        await deleteSubscriber(storage, record.id);
+        await recordEvent(storage, "deleted", { now: t, randomBytes, plan: effectivePlan(record, t) });
+        res.setHeader("set-cookie", clearCookie());
+        return sendJson(res, 200, { ok: true, deleted: true });
       }
       if (action !== "request-pro") return sendJson(res, 400, { error: "unknown action" });
       if (record.status !== "active") return sendJson(res, 409, { error: "not_confirmed" });
@@ -761,8 +788,9 @@ function webhookAction(event) {
 
 // POST /api/resend-webhook, as a Web-standard handler: (Request) => Response. It reads the body
 // with request.text() because the signature covers the exact bytes. A hard bounce or complaint
-// deletes that subscriber's record and records an event with no address. Works while
-// subscriptions are switched off, like unsubscribe: removing an address is always allowed.
+// deletes that subscriber's record, or for a Pro turns its emails off (T17: the account stays), and
+// records an event with no address. Works while subscriptions are switched off, like unsubscribe:
+// removing an address is always allowed.
 export function makeResendWebhookHandler({ env, storage, now, randomBytes = cryptoRandomBytes, log = console.log }) {
   return async function resendWebhook(request) {
     if (request.method !== "POST") return new Response(null, { status: 405, headers: { allow: "POST" } });
@@ -792,17 +820,19 @@ export function makeResendWebhookHandler({ env, storage, now, randomBytes = cryp
 
     const to = Array.isArray(event.data && event.data.to) ? event.data.to.slice(0, WEBHOOK_MAX_RECIPIENTS) : [];
     try {
-      let removed = 0;
+      let matched = 0;
       for (const addr of to) {
         const email = normaliseEmail(addr);
         if (!email) continue;
         const record = await findSubscriber(storage, email);
         if (!record) continue; // not a subscriber, e.g. the owner's own EMAIL_TO
-        await deleteSubscriber(storage, record.id);
-        await recordEvent(storage, action, { now: t, randomBytes, plan: effectivePlan(record, t) });
-        removed++;
+        const plan = effectivePlan(record, t);
+        if (plan === "pro") await putSubscriber(storage, { ...record, emailOff: action });
+        else await deleteSubscriber(storage, record.id);
+        await recordEvent(storage, action, { now: t, randomBytes, plan });
+        matched++;
       }
-      log("resend-webhook", `${action}: removed ${removed}`);
+      log("resend-webhook", `${action}: matched ${matched}`);
       return jsonResponse(200, { ok: true });
     } catch (e) {
       log("resend-webhook", "error: " + ((e && e.name) || "Error"));

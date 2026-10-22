@@ -7,7 +7,7 @@
 | Size | M |
 | Depends on | T16 |
 | Unblocks | T18, T22 (go-live turns the switch on) |
-| Status | todo |
+| Status | done (2026-10-23); the switch is off in production |
 
 ## Why
 
@@ -25,19 +25,23 @@ unsubscribing from email, which today deletes the record.
   and the page shows a panel: Sign in and Sign up (`401`), or Upgrade, which is Request Pro until T20 (`402`), plus
   a link to the demo.
 - **A Pro account survives:**
-  - The Unsubscribe link, a hard bounce and a spam complaint set `emailOff: true` on a Pro record instead of
-    deleting it; delivery skips `emailOff`. Free records are deleted as today.
+  - The Unsubscribe link, a hard bounce and a spam complaint set `emailOff` on a Pro record instead of
+    deleting it; delivery skips `emailOff`. Free records are deleted as today. (Built with the reason as the value:
+    `"unsubscribed"`, `"bounced"` or `"complained"`.)
   - `/manage/` shows "Email: off" with a way to turn it back on, and **Delete my account** for anyone. For a paying
     account, deleting comes after cancelling (T22).
 - **Record field:** `emailOff` (optional).
 
+As built, the `402` panel's button is **Request Pro**, linking to `/manage/`. `/live/` has no Sign out of its own:
+its "Account" link leads to `/manage/`, which has one.
+
 ## Acceptance criteria
 
-- [ ] With the switch off, `/api/data` behaves exactly as today, cache header included
-- [ ] With it on: not signed in `401`, Free `402`, lapsed Pro `402`, Pro `200`, never publicly cached
-- [ ] `/live/` shows the right panel for `401` and `402`
-- [ ] A Pro who unsubscribes, bounces or complains keeps the board and gets no email; a Free one is deleted
-- [ ] Delete my account removes the record
+- [x] With the switch off, `/api/data` behaves exactly as today, cache header included
+- [x] With it on: not signed in `401`, Free `402`, lapsed Pro `402`, Pro `200`, never publicly cached
+- [x] `/live/` shows the right panel for `401` and `402` (checked locally against a stub API)
+- [x] A Pro who unsubscribes, bounces or complains keeps the board and gets no email; a Free one is deleted
+- [x] Delete my account removes the record
 
 ## Tests
 

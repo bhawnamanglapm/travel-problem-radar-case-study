@@ -103,7 +103,11 @@ export async function computeStats(storage, { now, days = 30 }) {
     const [, day, type] = m;
     const row = perDay.get(day);
     if (!row) continue;
-    if (type === "unsubscribed") {
+    if (type === "emailoff") {
+      // A Pro who unsubscribes keeps the account (T17), so its unsubscribe is recorded as emailoff.
+      row.unsubscribedPro++;
+      totals.unsubscribed++;
+    } else if (type === "unsubscribed") {
       let plan = null;
       try { plan = JSON.parse(await storage.get(KEY_EVENT_PREFIX + suffix)).plan; } catch (e) { /* counted as free below */ }
       if (plan === "pro") row.unsubscribedPro++; else row.unsubscribedFree++;
@@ -160,14 +164,14 @@ export async function listRows(storage, { now, plan = null }) {
     return true;
   }).map((r) => ({
     email: r.email, status: r.status, plan: r.plan, lapsed: r.status === "active" && r.plan === "pro" && effectivePlan(r, now) === "free",
-    proUntil: r.proUntil || null, confirmedAt: r.confirmedAt || null, proRequestedAt: r.proRequestedAt || null,
+    proUntil: r.proUntil || null, confirmedAt: r.confirmedAt || null, proRequestedAt: r.proRequestedAt || null, emailOff: r.emailOff || null,
   }));
   return { rows, skipped };
 }
 
 export function formatRows({ rows, skipped }) {
-  const lines = rows.map((r) => [r.email, r.status, r.plan + (r.lapsed ? " (lapsed)" : ""), r.proUntil || "-", r.confirmedAt || "-", r.proRequestedAt || "-"].join("\t"));
-  return ["email\tstatus\tplan\tproUntil\tconfirmedAt\tproRequestedAt", ...lines, `${rows.length} shown${skipped ? `, ${skipped} unreadable` : ""}`].join("\n");
+  const lines = rows.map((r) => [r.email, r.status, r.plan + (r.lapsed ? " (lapsed)" : ""), r.proUntil || "-", r.confirmedAt || "-", r.proRequestedAt || "-", r.emailOff || "-"].join("\t"));
+  return ["email\tstatus\tplan\tproUntil\tconfirmedAt\tproRequestedAt\temailOff",...lines, `${rows.length} shown${skipped ? `, ${skipped} unreadable` : ""}`].join("\n");
 }
 
 export async function showRecord(storage, email) {

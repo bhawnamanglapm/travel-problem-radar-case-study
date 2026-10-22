@@ -6,6 +6,8 @@ import { buildDigestEmail, buildFailureEmail, sendEmail } from "./email.js";
 import { randomBytes as cryptoRandomBytes } from "node:crypto";
 import { bearerOk, sendJson } from "./http.js";
 import { deliverToSubscribers } from "./subscriber-delivery.js";
+import { readSession } from "./session.js";
+import { effectivePlan } from "./subscribers.js";
 
 const DEFAULT_MODEL = "claude-sonnet-5-5";
 // No subscriber send starts after this long into the run: 60 s short of the 300 s function limit in
@@ -71,17 +73,32 @@ export function makeSweepHandler({ env, storage, fetchFn, now, randomBytes = cry
 // Read-only, and only for the two kinds of key the dashboard asks for.
 const ALLOWED_KEY = /^radar:(history|sweep:\d{10,16})$/;
 
-export function makeDataHandler({ storage }) {
+// With BOARD_PAYWALL=1 (T17) only a signed-in Pro reads the board: no login is 401, Free or a
+// lapsed Pro 402, and no reply may sit in a shared cache. The login is checked against `accounts`,
+// a store that reads fresh, so a revoked or deleted record stops working at once; `storage` (the
+// sweeps) may be the cached one. Switched off, nothing about the visitor is read.
+export function makeDataHandler({ storage, accounts = storage, env = {}, now = Date.now }) {
   return async function data(req, res) {
-    if (req.method !== "GET") return sendJson(res, 405, { error: "read-only" });
+    const paywall = env.BOARD_PAYWALL === "1";
+    const reply = (code, body) => {
+      sendJson(res, code, body);
+      if (paywall) res.setHeader("cache-control", "private, no-store");
+    };
+    if (req.method !== "GET") return reply(405, { error: "read-only" });
     const key = new URL(req.url, "http://x").searchParams.get("key") || "";
-    if (!ALLOWED_KEY.test(key)) return sendJson(res, 400, { error: "key not allowed" });
+    if (!ALLOWED_KEY.test(key)) return reply(400, { error: "key not allowed" });
+    if (paywall) {
+      const t = now();
+      const record = await readSession(req, { env, storage: accounts, now: t });
+      if (!record) return reply(401, { error: "not_signed_in" });
+      if (effectivePlan(record, t) !== "pro") return reply(402, { error: "pro_only" });
+    }
     let value;
-    try { value = await storage.get(key); } catch (e) { return sendJson(res, 502, { error: "storage unavailable" }); }
-    if (value == null) return sendJson(res, 404, { error: "not found" });
+    try { value = await storage.get(key); } catch (e) { return reply(502, { error: "storage unavailable" }); }
+    if (value == null) return reply(404, { error: "not found" });
     res.statusCode = 200;
     res.setHeader("content-type", "application/json; charset=utf-8");
-    res.setHeader("cache-control", "public, s-maxage=300, stale-while-revalidate=3600");
+    res.setHeader("cache-control", paywall ? "private, no-store" : "public, s-maxage=300, stale-while-revalidate=3600");
     res.end(JSON.stringify({ value }));
   };
 }

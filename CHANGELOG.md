@@ -3,6 +3,16 @@
 Built from the git history. Dates are commit dates. The project has no version numbers or releases, so entries are
 grouped by date.
 
+## 2026-10-23
+
+- The live board can be locked to Pro accounts with `BOARD_PAYWALL=1` (off in production). Signed-out visitors see
+  a sign-in panel and signed-in Free accounts a Request Pro panel; `/api/data` answers `401` or `402`, never
+  publicly cached.
+- A Pro account is no longer deleted when its emails stop: the Unsubscribe link, a hard bounce or a spam complaint
+  turns its emails off and keeps the board. Free accounts are deleted as before.
+- `/manage/` shows whether emails are on, can turn them back on after an unsubscribe, and has Delete my account.
+- The privacy policy and the home page FAQ say a Pro account stays until it is deleted.
+
 ## 2026-10-22
 
 - Continue with Google with a new address now shows "Create your account" first; the account is made only when

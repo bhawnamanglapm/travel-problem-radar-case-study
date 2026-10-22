@@ -663,19 +663,26 @@ const iso = (ms) => new Date(ms).toISOString();
   r = await u.call("DELETE");
   check(r.code === 405, "unsubscribe: other methods get 405");
 
-  // Pro
+  // Pro (T17): the account stays and only the emails stop
+  const stored = (x) => JSON.parse(x.st.m.get("radar:sub:" + x.rec.id));
   u = await setup({ plan: "pro", proSource: "owner" });
-  await u.call("POST");
-  check(!u.has() && JSON.parse(events(u.st, "unsubscribed")[0][1]).plan === "pro", "unsubscribe: owner-granted Pro unsubscribes like Free, and the event says pro");
-  u = await setup({ plan: "pro", proSource: "razorpay", proUntil: iso(T0 + 30 * 24 * 3600 * 1000) });
-  r = await u.call("POST");
-  check(r.code === 200 && u.has() && r.body.includes("Cancel your Pro plan first") && r.body.includes('href="/manage/?id=') && events(u.st, "unsubscribed").length === 0, "unsubscribe: a still-paid Razorpay Pro is kept, with a page pointing to the manage page");
-  u = await setup({ plan: "pro", proSource: "razorpay", proUntil: iso(T0 - 1000) });
-  await u.call("POST");
-  check(!u.has(), "unsubscribe: a lapsed Razorpay Pro unsubscribes like Free");
-  u = await setup({ plan: "pro", proSource: "razorpay", proUntil: iso(T0 + 30 * 24 * 3600 * 1000) });
   r = await u.call("GET");
-  check(r.body.includes("Unsubscribe from Travel Problem Radar?") && u.has(), "unsubscribe GET: a paid Pro sees the normal page; the explanation comes on POST");
+  check(r.body.includes("Your Pro account stays") && r.body.includes('href="/manage/?id=') && r.body.includes('method="post"') && !r.body.includes("will be deleted"), "unsubscribe GET: a Pro is told the account stays, with the manage page linked");
+  r = await u.call("POST");
+  check(r.code === 200 && u.has() && stored(u).emailOff === "unsubscribed" && stored(u).plan === "pro" && r.body.includes("Your emails are off"), "unsubscribe POST: a Pro is kept with emailOff \"unsubscribed\"");
+  check(events(u.st, "unsubscribed").length === 0 && events(u.st, "emailoff").length === 1 && JSON.parse(events(u.st, "emailoff")[0][1]).plan === "pro", "unsubscribe: a Pro records an emailoff event, not unsubscribed");
+  r = await u.call("POST", { body: "List-Unsubscribe=One-Click" });
+  check(r.code === 200 && r.body.includes("already off") && events(u.st, "emailoff").length === 1 && u.has(), "unsubscribe again: \"already off\", no second event");
+  r = await u.call("GET");
+  check(r.body.includes("already off") && !r.body.includes('method="post"'), "unsubscribe GET with emails off: no form, says they're already off");
+  u = await setup({ plan: "pro", proSource: "razorpay", proUntil: iso(T0 + 30 * 24 * 3600 * 1000) });
+  r = await u.call("POST", { body: "List-Unsubscribe=One-Click" });
+  check(r.code === 200 && u.has() && stored(u).emailOff === "unsubscribed" && !r.body.includes("Cancel your Pro plan first"), "unsubscribe: a paid Razorpay Pro one-click POST turns emails off (no cancel-first page)");
+  u = await setup({ plan: "pro", proSource: "razorpay", proUntil: iso(T0 - 1000) });
+  r = await u.call("GET");
+  check(r.body.includes("will be deleted") && !r.body.includes("Pro account stays"), "unsubscribe GET: a lapsed Pro sees the Free page");
+  await u.call("POST");
+  check(!u.has() && JSON.parse(events(u.st, "unsubscribed")[0][1]).plan === "free", "unsubscribe: a lapsed Pro is deleted like Free");
 
   // storage failure
   u = await setup();
@@ -1395,11 +1402,11 @@ const iso = (ms) => new Date(ms).toISOString();
   const keep = (r) => { replies.push(r.text); return r; };
 
   let w = world();
-  const hard = await w.add("hard@example.com", { plan: "pro", proSource: "owner" });
+  const hard = await w.add("hard@example.com");
   let r = keep(await w.send(bounce("Hard@Example.com")));
-  check(r.code === 200 && r.json().ok === true && !(await getSubscriber(w.st, hard.id)), "webhook: a Permanent bounce deletes the record (address matched case-insensitively)");
+  check(r.code === 200 && r.json().ok === true && !(await getSubscriber(w.st, hard.id)), "webhook: a Permanent bounce deletes a Free record (address matched case-insensitively)");
   const bouncedEv = w.evs("bounced");
-  check(bouncedEv.length === 1 && JSON.parse(w.st.m.get(bouncedEv[0])).plan === "pro" && !w.st.m.get(bouncedEv[0]).includes("@"), "webhook: one 'bounced' event, with the plan and no address");
+  check(bouncedEv.length === 1 && JSON.parse(w.st.m.get(bouncedEv[0])).plan === "free" && !w.st.m.get(bouncedEv[0]).includes("@"), "webhook: one 'bounced' event, with the plan and no address");
   allLogs.push(...w.logs);
 
   w = world();
@@ -2382,6 +2389,208 @@ const iso = (ms) => new Date(ms).toISOString();
     const out = [];
     await admin.main(["stats", "--days", "1"], { storage: w.st, now: T0, rb: seeded(70), out: (s) => out.push(s), err: (s) => out.push(s) });
     check(/ sign-ins /.test(out.join("\n")) && /1 sign-in emails/.test(out.join("\n")), "stats: sign-in emails per day and in the totals");
+  }
+}
+
+// ---- T17: the locked board (BOARD_PAYWALL), a Pro account outlives its emails, Delete my account
+{
+  const { signSession } = await import("../api/_lib/session.js");
+  const SECRET = "test-session-secret-0123456789abcdef";
+  const DAY = 24 * 3600 * 1000;
+
+  // /api/data with the switch off and on
+  {
+    const sweeps = memStorage();
+    sweeps.m.set("radar:history", "[1]");
+    sweeps.m.set("radar:sweep:1800000000000", "{\"a\":1}");
+    const accounts = memStorage();
+    const mk = async (email, over) => {
+      const r = { ...newPending(email, { now: T0 - 2 * DAY, randomBytes: seeded(email.length) }), status: "active", confirmedAt: iso(T0 - DAY), ...over };
+      await putSubscriber(accounts, r);
+      return r;
+    };
+    const free = await mk("free@example.com", {});
+    const pro = await mk("pro@example.com", { plan: "pro", proSource: "owner" });
+    const lapsed = await mk("lapsed@example.com", { plan: "pro", proSource: "owner", proUntil: iso(T0 - DAY) });
+    const cookie = (r, { secret = SECRET, at = T0 } = {}) => `tpr_session=${signSession(r, { secret, now: at })}`;
+    const on = { BOARD_PAYWALL: "1", SESSION_SECRET: SECRET };
+    const call = async (env, { key = "radar:history", c, method = "GET", h } = {}) => {
+      const handler = h || makeDataHandler({ storage: sweeps, accounts, env, now: () => T0 });
+      const res = mockRes();
+      await handler({ method, url: "/api/data?key=" + encodeURIComponent(key), headers: c ? { cookie: c } : {} }, res);
+      return res;
+    };
+    const PUBLIC = "public, s-maxage=300, stale-while-revalidate=3600";
+
+    for (const [env, label] of [[{}, "unset"], [{ BOARD_PAYWALL: "0", SESSION_SECRET: SECRET }, "0"], [{ BOARD_PAYWALL: "true", SESSION_SECRET: SECRET }, "\"true\""]]) {
+      const anon = await call(env);
+      const signed = await call(env, { c: cookie(free) });
+      check(anon.code === 200 && anon.json().value === "[1]" && anon.headers["cache-control"] === PUBLIC && signed.code === 200 && signed.headers["cache-control"] === PUBLIC,
+        `board switch ${label}: everyone reads the board, with the public cache header as before`);
+    }
+    let r = await call(on);
+    check(r.code === 401 && r.json().error === "not_signed_in" && r.headers["cache-control"] === "private, no-store", "board switch on: not signed in is 401, never cached");
+    r = await call(on, { c: cookie(free) });
+    check(r.code === 402 && r.json().error === "pro_only" && r.headers["cache-control"] === "private, no-store", "board switch on: a signed-in Free is 402");
+    r = await call(on, { c: cookie(lapsed) });
+    check(r.code === 402, "board switch on: a lapsed Pro is 402");
+    r = await call(on, { c: cookie(pro) });
+    const sweep = await call(on, { c: cookie(pro), key: "radar:sweep:1800000000000" });
+    check(r.code === 200 && r.json().value === "[1]" && r.headers["cache-control"] === "private, no-store" && sweep.code === 200, "board switch on: a Pro reads the history and a sweep, private and uncached");
+    check((await call(on, { c: cookie(pro), key: "radar:sweep:1700000000000" })).code === 404, "board switch on: an unknown sweep is still 404 for a Pro");
+    for (const [c, label] of [
+      [cookie(pro, { secret: "another-secret-of-enough-length-000" }), "signed with another secret"],
+      [cookie(pro, { at: T0 - 13 * 3600 * 1000 }), "expired"],
+      [cookie(pro).slice(0, -2) + "xx", "changed"],
+      ["tpr_session=garbage", "garbage"],
+    ]) check((await call(on, { c })).code === 401, `board switch on: a cookie ${label} is 401`);
+    r = await call(on, { key: "radar:seenIds" });
+    const post = await call(on, { method: "POST" });
+    check(r.code === 400 && r.headers["cache-control"] === "private, no-store" && post.code === 405 && post.headers["cache-control"] === "private, no-store",
+      "board switch on: a key not allowed is still 400 and a POST 405, both private");
+    check((await call({ BOARD_PAYWALL: "1" }, { c: cookie(pro) })).code === 401, "board switch on with no SESSION_SECRET: nobody is signed in, so 401");
+
+    // the login is read from `accounts` (fresh), not the sweeps' cached store
+    const stale = memStorage();
+    stale.m.set("radar:history", "[1]");
+    await putSubscriber(stale, pro); // a cached copy of the record from before it was revoked
+    await putSubscriber(accounts, { ...pro, plan: "free", proSource: null });
+    r = await call(on, { c: cookie(pro), h: makeDataHandler({ storage: stale, accounts, env: on, now: () => T0 }) });
+    check(r.code === 402, "board switch on: Pro revoked a moment ago is 402 at once (the login is read from the fresh store)");
+    await putSubscriber(accounts, pro);
+    await deleteSubscriber(accounts, pro.id);
+    check((await call(on, { c: cookie(pro), h: makeDataHandler({ storage: stale, accounts, env: on, now: () => T0 }) })).code === 401, "board switch on: a deleted account is 401 at once");
+    const dataSrc = readFileSync(new URL("../api/data.js", import.meta.url), "utf8");
+    check(/accounts: blobStorage\(\)/.test(dataSrc) && /env: process\.env/.test(dataSrc), "api/data.js reads the login from a fresh store and passes the environment");
+  }
+
+  // A bounce or a complaint keeps a Pro, with its emails off
+  {
+    const KEY = Buffer.from("test-webhook-key-0123456789abcdef");
+    const TS = String(Math.floor(T0 / 1000));
+    const st = memStorage();
+    const logs = [];
+    const hook = makeResendWebhookHandler({ env: { RESEND_WEBHOOK_SECRET: "whsec_" + KEY.toString("base64") }, storage: st, now: () => T0, randomBytes: seeded(40), log: (...a) => logs.push(a.join(" ")) });
+    let n = 0;
+    const send = async (type, to, extra = {}) => {
+      const id = "msg_" + ++n;
+      const raw = JSON.stringify({ type, created_at: iso(T0), data: { email_id: "e" + n, to: [to], ...extra } });
+      const sig = "v1," + createHmac("sha256", KEY).update(`${id}.${TS}.${raw}`).digest("base64");
+      return hook(new Request("https://site.example/api/resend-webhook", { method: "POST", headers: { "content-type": "application/json", "svix-id": id, "svix-timestamp": TS, "svix-signature": sig }, body: raw }));
+    };
+    const add = async (email, over) => { const r = { ...newPending(email, { now: T0, randomBytes: seeded(email.length) }), status: "active", ...over }; await putSubscriber(st, r); return r; };
+    const evs = (type) => [...st.m.entries()].filter(([k]) => k.startsWith("radar:event:") && k.includes(`-${type}-`));
+    const bp = await add("bounce.pro@example.com", { plan: "pro", proSource: "owner" });
+    const cp = await add("spam.pro@example.com", { plan: "pro", proSource: "razorpay", proUntil: iso(T0 + 30 * DAY) });
+    const lp = await add("lapsed.pro@example.com", { plan: "pro", proSource: "owner", proUntil: iso(T0 - DAY) });
+    await send("email.bounced", "bounce.pro@example.com", { bounce: { type: "Permanent" } });
+    await send("email.complained", "spam.pro@example.com");
+    await send("email.bounced", "lapsed.pro@example.com", { bounce: { type: "Permanent" } });
+    const after = async (r) => getSubscriber(st, r.id);
+    check((await after(bp))?.emailOff === "bounced" && (await after(bp)).plan === "pro", "webhook: a hard bounce keeps a Pro, with emailOff \"bounced\"");
+    check((await after(cp))?.emailOff === "complained", "webhook: a complaint keeps a paid Pro, with emailOff \"complained\"");
+    check(!(await after(lp)), "webhook: a lapsed Pro is deleted like Free");
+    check(evs("bounced").length === 2 && evs("complained").length === 1 && evs("bounced").map(([, v]) => JSON.parse(v).plan).sort().join() === "free,pro", "webhook: the bounced and complained events are recorded either way, with the plan");
+    check(logs.every((l) => !l.includes("@")) && logs.some((l) => /matched 1/.test(l)), "webhook: the log has counts only");
+  }
+
+  // Delivery skips a record with its emails off, Pro and Free alike
+  {
+    const st = memStorage();
+    const mails = [];
+    const fetchFn = async (url, init) => { const body = JSON.parse(init.body); mails.push(...body); return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ data: body.map((_, i) => ({ id: "m" + i })) }) }; };
+    const add = async (n, over) => { const r = { ...newPending(`d${n}@example.com`, { now: T0, randomBytes: seeded(200 + n) }), token: "tok" + n, status: "active", ...over }; await putSubscriber(st, r); return r; };
+    await add(1, { plan: "pro", proSource: "owner" });
+    await add(2, { plan: "pro", proSource: "owner", emailOff: "unsubscribed" });
+    await add(3, { plan: "pro", proSource: "owner", emailOff: "bounced" });
+    await add(4, {});
+    await add(5, { emailOff: "complained" }); // not expected (Free is deleted) but must not be sent to
+    const sweep = { id: "1792570150123", at: iso(T0), perCat: {}, problems: [{ id: "a", cat: "traveler_pain", title: "A", summary: "", source: "S", link: "https://example.com/a", region: "EU", date: "2026-10-20", severity: "Medium", opportunity: "", isNew: true }] };
+    st.m.set("radar:history", JSON.stringify([{ id: sweep.id, at: sweep.at, total: 1, newCount: 1 }]));
+    st.m.set("radar:sweep:" + sweep.id, JSON.stringify(sweep));
+    const out = await deliverToSubscribers({ env: { SUBSCRIPTIONS_ENABLED: "1", RESEND_API_KEY: "re_k", EMAIL_FROM: "Radar <hello@pehchanthetraveller.com>", SITE_URL: "https://site.example" }, storage: st, fetchFn, now: () => T0, randomBytes: seeded(9), sweep, scheduled: true, log: () => {} });
+    const to = mails.map((m) => m.to[0]).sort().join();
+    check(to === "d1@example.com,d4@example.com" && out.emailOff === 3 && out.pro.due === 1 && out.free.due === 1 && out.unreadable === 0, "delivery: records with emails off get nothing and are counted as emailOff");
+    check(JSON.parse(st.m.get(KEY_SUBSCRIBER_COUNT)).count === 5, "delivery: a Pro with emails off still counts as a subscriber");
+  }
+
+  // /manage/: email-on and delete-account
+  {
+    const { makeAccountHandler } = await import("../api/_lib/subscription-handlers.js");
+    const ENV = { SUBSCRIPTIONS_ENABLED: "1", RESEND_API_KEY: "re_k", EMAIL_FROM: "Radar <hello@pehchanthetraveller.com>", SITE_URL: "https://site.example", SESSION_SECRET: SECRET };
+    const world = async (over = {}) => {
+      const st = memStorage();
+      const rec = { ...newPending("acct@example.com", { now: T0 - 2 * DAY, randomBytes: seeded(31) }), token: "tok-acct", status: "active", confirmedAt: iso(T0 - DAY), ...over };
+      await putSubscriber(st, rec);
+      const logs = [];
+      const acct = makeAccountHandler({ env: ENV, storage: st, fetchFn: async () => ({ ok: true, status: 200, headers: { get: () => null }, json: async () => ({ id: "m" }) }), now: () => T0, randomBytes: seeded(4), log: (...a) => logs.push(a.join(" ")) });
+      const call = async ({ method = "POST", body = {}, link = true, cookie, origin = "https://site.example" } = {}) => {
+        const headers = { host: "site.example", "content-type": "application/json" };
+        if (cookie) headers.cookie = cookie;
+        if (origin) headers.origin = origin;
+        const res = mockRes();
+        const query = method === "GET" && link ? { id: rec.id, t: rec.token } : {};
+        await acct({ method, headers, query, body: link && method === "POST" ? { id: rec.id, t: rec.token, ...body } : body }, res);
+        return res;
+      };
+      const evs = (type) => [...st.m.entries()].filter(([k]) => k.startsWith("radar:event:") && k.includes(`-${type}-`));
+      return { st, rec, call, evs, logs, get: () => getSubscriber(st, rec.id), cookie: `tpr_session=${signSession(rec, { secret: SECRET, now: T0 })}` };
+    };
+
+    let w = await world({ plan: "pro", proSource: "owner", emailOff: "unsubscribed" });
+    let r = await w.call({ method: "GET" });
+    check(r.code === 200 && r.json().emailOff === "unsubscribed", "account GET: shows emailOff");
+    r = await w.call({ body: { action: "email-on" } });
+    check(r.code === 200 && r.json().emailOff === null && !("emailOff" in (await w.get())), "account email-on: clears emailOff after an unsubscribe");
+    r = await w.call({ body: { action: "email-on" } });
+    check(r.code === 409 && r.json().error === "already_on", "account email-on: 409 when emails are already on");
+    for (const reason of ["bounced", "complained"]) {
+      w = await world({ plan: "pro", proSource: "owner", emailOff: reason });
+      r = await w.call({ body: { action: "email-on" } });
+      check(r.code === 409 && r.json().error === "email_blocked" && (await w.get()).emailOff === reason, `account email-on: 409 after a ${reason === "bounced" ? "bounce" : "complaint"}, field kept`);
+    }
+    w = await world({ plan: "pro", proSource: "owner", emailOff: "unsubscribed" });
+    r = await w.call({ body: { action: "email-on" }, link: false, cookie: w.cookie });
+    check(r.code === 200 && !(await w.get()).emailOff, "account email-on: works signed in by cookie");
+
+    w = await world({ plan: "pro", proSource: "owner" });
+    r = await w.call({ body: { action: "delete-account" } });
+    const del = w.evs("deleted");
+    check(r.code === 200 && r.json().deleted === true && !(await w.get()) && /^tpr_session=;/.test(r.headers["set-cookie"] || "") && /Max-Age=0/.test(r.headers["set-cookie"]), "account delete-account by link: record gone, cookie cleared");
+    check(del.length === 1 && JSON.parse(del[0][1]).plan === "pro" && !/@|[0-9a-f]{64}/.test(del[0][0] + del[0][1]) && !r.body.includes("@"), "account delete-account: one 'deleted' event with the plan only, no address in the reply");
+    w = await world();
+    r = await w.call({ body: { action: "delete-account" }, link: false, cookie: w.cookie });
+    check(r.code === 200 && !(await w.get()) && JSON.parse(w.evs("deleted")[0][1]).plan === "free", "account delete-account by cookie: a Free account is deleted");
+    w = await world();
+    r = await w.call({ body: { action: "delete-account" }, link: false, cookie: w.cookie, origin: "https://evil.example" });
+    check(r.code === 403 && Boolean(await w.get()), "account delete-account by cookie from another origin: 403, kept");
+    r = await w.call({ body: { action: "delete-account" }, link: false });
+    check(r.code === 401 && Boolean(await w.get()), "account delete-account with no link and no cookie: 401, kept");
+    w = await world();
+    r = await w.call({ body: { action: "delete-account", t: "wrong" } });
+    check(r.code === 404 && Boolean(await w.get()), "account delete-account with a wrong token: 404, kept");
+    w = await world({ plan: "pro", proSource: "razorpay", proUntil: iso(T0 + 30 * DAY) });
+    r = await w.call({ body: { action: "delete-account" } });
+    check(r.code === 409 && r.json().error === "cancel_first" && Boolean(await w.get()) && w.evs("deleted").length === 0, "account delete-account: a paying Razorpay Pro gets 409 cancel_first, kept");
+    w = await world({ plan: "pro", proSource: "razorpay", proUntil: iso(T0 - DAY) });
+    r = await w.call({ body: { action: "delete-account" } });
+    check(r.code === 200 && !(await w.get()), "account delete-account: a lapsed Razorpay Pro can delete");
+    w = await world();
+    r = await w.call({ body: { action: "nope" } });
+    check(r.code === 400 && r.json().error === "unknown action", "account: an unknown action is still 400");
+  }
+
+  // Admin script: an emailOff column, and a Pro's unsubscribe counts in unsub(pro)
+  {
+    const admin = await import("./subscribers.mjs");
+    const st = memStorage();
+    await putSubscriber(st, { ...newPending("quiet.pro@example.com", { now: T0 - DAY, randomBytes: seeded(51) }), status: "active", plan: "pro", proSource: "owner", emailOff: "bounced" });
+    await recordEvent(st, "emailoff", { now: T0, randomBytes: seeded(52), plan: "pro" });
+    const out = [];
+    const code = await admin.main(["list"], { storage: st, now: T0, rb: seeded(53), out: (s) => out.push(s), err: (s) => out.push(s) });
+    check(code === 0 && /\temailOff$/m.test(out[0].split("\n")[0]) && /quiet\.pro@example\.com\t.*\tbounced$/m.test(out.join("\n")), "admin list: an emailOff column with the reason");
+    const s = await admin.computeStats(st, { now: T0, days: 1 });
+    check(s.perDay[0].unsubscribedPro === 1 && s.totals.unsubscribed === 1, "admin stats: an emailoff event counts as a Pro unsubscribe");
   }
 }
 
