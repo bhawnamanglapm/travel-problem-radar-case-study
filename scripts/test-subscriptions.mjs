@@ -2028,9 +2028,11 @@ const iso = (ms) => new Date(ms).toISOString();
     const cookie = cookieOf(r);
     check(r.code === 200 && /You(&#39;|')re subscribed/.test(r.body) && cookie && (await readSession({ headers: { cookie } }, { env: w.env, storage: w.st, now: T0 }))?.status === "active",
       "confirm: pressing Confirm also signs this browser in");
+    check(/you(&#39;|')re signed in on this browser/.test(r.body), "confirm: the page says this browser is now signed in");
     w = await world({ SESSION_SECRET: "" }, { status: "pending" });
     r = await w.call("conf", { method: "POST", body: { id: w.rec.id, t: "tok-secret-1" } });
     check(r.code === 200 && !r.headers["set-cookie"] && (await w.now()).status === "active", "confirm: with no SESSION_SECRET it confirms as before and sets no cookie");
+    check(!/signed in/.test(r.body), "confirm: with no SESSION_SECRET the page doesn't claim you're signed in");
   }
 
   // /api/account by cookie, me and sign-out
