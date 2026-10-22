@@ -1959,9 +1959,25 @@ const iso = (ms) => new Date(ms).toISOString();
     r = await w.ask("me@gmail.com");
     check(w.sent.length === 2 && (await w.now()).signin.hash !== after.signin.hash, "sign-in request: after 5 minutes a new link replaces the old one");
 
+    // never confirmed: the confirmation link again, on sign-up's limits (account-flows #5)
     w = await world({}, { status: "pending" });
     r = await w.ask("me@gmail.com");
-    check(r.json().message === REPLY && w.sent.length === 0 && !(await w.now()).signin, "sign-in request: an unconfirmed address gets the same reply and no email");
+    let p = await w.now();
+    check(r.json().message === REPLY && w.sent.length === 1 && w.sent[0].to[0] === "me@gmail.com" && w.sent[0].text.includes(`https://site.example/api/confirm?id=${w.rec.id}&t=tok-secret-1`) && !p.signin,
+      "sign-in request: an address never confirmed (last link over 24 h ago) gets the same reply and its confirmation link again, not a sign-in link");
+    check(p.confirmSentAt === iso(T0) && p.status === "pending" && w.evs("confirmsent").length === 1 && w.evs("subscribed").length === 0 && w.evs("signinsent").length === 0,
+      "sign-in request: the re-send moves confirmSentAt and counts as confirmsent");
+    r = await w.call("conf", { method: "POST", body: { id: w.rec.id, t: "tok-secret-1" } });
+    check(r.code === 200 && cookieOf(r) && (await w.now()).status === "active", "sign-in request: confirming that link activates the account and signs the browser in");
+    w = await world({}, { status: "pending" });
+    await w.ask("me@gmail.com");
+    w.tick(23 * HOUR);
+    r = await w.ask("me@gmail.com");
+    check(r.json().message === REPLY && w.sent.length === 1, "sign-in request: a never-confirmed address gets at most one confirmation every 24 hours");
+    w = await world({ MAX_CONFIRMS_PER_DAY: "1" }, { status: "pending" });
+    await w.st.set(`radar:event:${utcDay(T0)}-000000000-confirmsent-aaaaaa`, "{}");
+    r = await w.ask("me@gmail.com");
+    check(r.json().message === REPLY && w.sent.length === 0 && (await w.now()).confirmSentAt === w.rec.confirmSentAt, "sign-in request: MAX_CONFIRMS_PER_DAY reached, no confirmation re-sent and nothing stored");
     w = await world();
     r = await w.ask("me@gmail.com", { body: { website: "bot" } });
     check(r.json().message === REPLY && w.sent.length === 0, "sign-in request: the honeypot gets the usual reply and no email");

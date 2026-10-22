@@ -126,6 +126,22 @@ async function notifyOwnerProRequest({ env, fetchFn, at, source, log }) {
   }
 }
 
+// Stores a pending record whose confirmSentAt is now and emails it the confirmation link. Records
+// "subscribed" for a new one and "confirmsent" always. The caller has checked MAX_CONFIRMS_PER_DAY.
+async function sendConfirmation({ record, isNew, env, storage, fetchFn, t, randomBytes, log, logAs }) {
+  const site = siteUrl(env);
+  await putSubscriber(storage, record);
+  if (isNew) await recordEvent(storage, "subscribed", { now: t, randomBytes, plan: "free" });
+  await recordEvent(storage, "confirmsent", { now: t, randomBytes, plan: "free" });
+
+  const mail = buildConfirmEmail({ confirmUrl: `${site}/api/confirm?id=${record.id}&t=${record.token}`, siteUrl: site });
+  const result = await sendOne({ apiKey: env.RESEND_API_KEY, from: env.EMAIL_FROM }, { to: record.email, ...mail }, {
+    fetchFn,
+    idempotencyKey: `confirm-${record.id.slice(0, 24)}-${Date.parse(record.confirmSentAt)}`,
+  });
+  if (result !== "sent") log(logAs, result);
+}
+
 export function makeSubscribeHandler({ env, storage, fetchFn, now, randomBytes = cryptoRandomBytes, log = console.log }) {
   return async function subscribe(req, res) {
     if (!allowMethods(req, res, ["POST"])) return;
@@ -211,16 +227,7 @@ export function makeSubscribeHandler({ env, storage, fetchFn, now, randomBytes =
         record = { ...record, confirmSentAt: new Date(t).toISOString() };
       }
       if (wantsPro && !record.proRequestedAt) record = { ...record, proRequestedAt: new Date(t).toISOString() };
-      await putSubscriber(storage, record);
-      if (!existing) await recordEvent(storage, "subscribed", { now: t, randomBytes, plan: "free" });
-      await recordEvent(storage, "confirmsent", { now: t, randomBytes, plan: "free" });
-
-      const mail = buildConfirmEmail({ confirmUrl: `${site}/api/confirm?id=${record.id}&t=${record.token}`, siteUrl: site });
-      const result = await sendOne({ apiKey: env.RESEND_API_KEY, from: env.EMAIL_FROM }, { to: record.email, ...mail }, {
-        fetchFn,
-        idempotencyKey: `confirm-${record.id.slice(0, 24)}-${Date.parse(record.confirmSentAt)}`,
-      });
-      if (result !== "sent") log("subscribe confirm-email", result);
+      await sendConfirmation({ record, isNew: !existing, env, storage, fetchFn, t, randomBytes, log, logAs: "subscribe confirm-email" });
       return reply();
     } catch (e) {
       log("subscribe", "error: " + ((e && e.name) || "Error"));
@@ -481,7 +488,8 @@ async function sendSignInLink({ record, env, storage, fetchFn, t, randomBytes, l
 }
 
 // One endpoint, /api/session:
-//   POST {action: "request", email, website}  emails a sign-in link to a confirmed address
+//   POST {action: "request", email, website}  emails a sign-in link to a confirmed address, or the
+//                                              confirmation link again to one never confirmed
 //   GET  ?id&c                                 the link: a Sign in button (mail scanners open links)
 //   POST id, c                                 the button: uses the code, sets the cookie, 303 to /live/
 //   GET  ?action=me                            {signedIn, plan} for the pages
@@ -528,6 +536,15 @@ export function makeSessionHandler({ env, storage, fetchFn = fetch, now, randomB
         if (await ipLimitReached({ req, env, storage, t, randomBytes })) return reply();
         const record = await findSubscriber(storage, email);
         if (record && record.status === "active") await sendSignInLink({ record, env, storage, fetchFn, t, randomBytes, log });
+        // Never confirmed: the confirmation link again (confirming signs you in), on sign-up's own
+        // limits: once every CONFIRM_RESEND_HOURS, within MAX_CONFIRMS_PER_DAY.
+        if (record && record.status === "pending" && !(t - Date.parse(record.confirmSentAt) < CONFIRM_RESEND_HOURS * HOUR_MS)) {
+          let sentToday;
+          try { sentToday = await signupEmailsToday(storage, t); } catch (e) { sentToday = Infinity; }
+          if (sentToday < maxConfirmsPerDay(env.MAX_CONFIRMS_PER_DAY)) {
+            await sendConfirmation({ record: { ...record, confirmSentAt: new Date(t).toISOString() }, isNew: false, env, storage, fetchFn, t, randomBytes, log, logAs: "session confirm-email" });
+          }
+        }
         return reply();
       } catch (e) {
         log("session", "error: " + ((e && e.name) || "Error"));
