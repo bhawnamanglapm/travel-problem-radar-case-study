@@ -4,7 +4,7 @@
 import { createHash, createHmac, randomBytes as cryptoRandomBytes, timingSafeEqual } from "node:crypto";
 import { DEFAULT_FROM, buildAlreadySubscribedEmail, buildConfirmEmail, buildProRequestEmail, buildSignInEmail, sendEmail, sendOne } from "./email.js";
 import { BodyTooLargeError, allowMethods, esc, readFields, sendJson, sendPage } from "./http.js";
-import { OAUTH_COOKIE, OAUTH_MINUTES, clearOAuthCookie, googleConfigured, googleFinish, googleStart, readOAuthCookie } from "./google.js";
+import { OAUTH_COOKIE, OAUTH_MINUTES, clearOAuthCookie, googleConfigured, googleFinish, googleStart, readOAuthCookie, readSignupCookie, signupCookie } from "./google.js";
 import { clearCookie, originOk, parseCookies, readSession, sessionCookie, sessionSecret, signSession } from "./session.js";
 import {
   CONFIRM_RESEND_MINUTES, MAX_CONFIRMS_PER_ADDRESS, PENDING_TTL_DAYS, countEvents, deleteSubscriber, effectivePlan, findSubscriber, getSubscriber, newPending, normaliseCats, normaliseEmail, putSubscriber,
@@ -506,7 +506,8 @@ async function sendSignInLink({ record, env, storage, fetchFn, t, randomBytes, l
 //   POST id, c                                 the button: uses the code, sets the cookie, 303 to /live/
 //   GET  ?action=me                            {signedIn, plan, google} for the pages
 //   GET  ?action=google[&pro=1]                "Continue with Google": off to Google (google.js)
-//   GET  ?state&code (or ?state&error)         back from Google: signs in, or makes the account
+//   GET  ?state&code (or ?state&error)         back from Google: signs in, or the Create account page
+//   POST {action: "google-signup", wantsPro}   that page's button: makes the account and signs in
 //   POST {action: "signout"}                   clears the cookie in this browser
 // The code is random, stored only as a hash, works once and expires after SIGNIN_MINUTES.
 export function makeSessionHandler({ env, storage, fetchFn = fetch, now, randomBytes = cryptoRandomBytes, log = console.log }) {
@@ -579,6 +580,11 @@ export function makeSessionHandler({ env, storage, fetchFn = fetch, now, randomB
         return sendJson(res, 500, { error: "could not process the request; try again later" });
       }
     }
+    if (fields.action === "google-signup") {
+      if (env.SUBSCRIPTIONS_ENABLED !== "1") return sendPage(res, 503, PAUSED);
+      if (!googleConfigured(env, { secret, site: siteUrl(env) })) return sendPage(res, 503, GOOGLE_OFF);
+      return googleSignup({ req, res, fields, env, storage, fetchFn, t, randomBytes, log, secret });
+    }
     if (req.method === "POST" && fields.action !== undefined) return sendJson(res, 400, { error: "unknown action" });
 
     // The link and its button. Unknown id, wrong code, used and expired all get the same page.
@@ -614,13 +620,15 @@ const GOOGLE_CANCELLED = { title: "Google sign-in was cancelled", body: GOOGLE_A
 const GOOGLE_EXPIRED = { title: "This Google sign-in didn't finish", body: `<p>It took longer than ${OAUTH_MINUTES} minutes, or it was started in another browser.</p>${GOOGLE_AGAIN}` };
 const GOOGLE_FAILED = { title: "Google sign-in didn't work", body: `<p>Google didn't confirm who you are.</p>${GOOGLE_AGAIN}` };
 const GOOGLE_UNVERIFIED = { title: "Google hasn't verified this address", body: `<p>Use a Google account whose address is verified.</p>${GOOGLE_AGAIN}` };
+const GOOGLE_SIGNUP_EXPIRED = { title: "This sign-up didn't finish", body: `<p>It took longer than ${OAUTH_MINUTES} minutes, or it was started in another browser. Nothing was created.</p><p><a href="/signup/">Start again</a>.</p>` };
 const GOOGLE_CLOSED = { title: "New accounts are closed for now", body: "<p>We can't take new accounts at the moment. Please try again later.</p>" };
 const GOOGLE_BUSY = { title: "Too many new accounts from this network", body: "<p>Please try again in an hour.</p>" };
 
 // Back from Google. The address Google verified signs in its account; a pending one is activated
-// (Google proved the address, as the confirm link would); a new one gets a Free account that is
-// active at once, with no confirmation email, under the same MAX_SUBSCRIBERS and per-IP limits as
-// sign-up. The "Pro" box counts only for a new or pending account, as at sign-up.
+// (Google proved the address, as the confirm link would). A new address isn't made into an account
+// here: it gets the "Create your account" page, and the cookie now holds that address until the
+// person presses Create account (googleSignup). The "Pro" box counts only for a new or pending
+// account, as at sign-up.
 async function googleReturn({ req, res, q, env, storage, fetchFn, t, randomBytes, log, secret, site }) {
   const cookies = [clearOAuthCookie()];
   const page = (code, p) => { res.setHeader("set-cookie", cookies); return sendPage(res, code, p); };
@@ -633,45 +641,83 @@ async function googleReturn({ req, res, q, env, storage, fetchFn, t, randomBytes
     return page(out.error === "exchange" ? 502 : 400, out.error === "unverified" ? GOOGLE_UNVERIFIED : GOOGLE_FAILED);
   }
   try {
-    const at = new Date(t).toISOString();
-    let record = await findSubscriber(storage, out.email);
-    let isNew = false;
-    let changed = false;
-    if (record && record.status === "pending") {
-      record = { ...record, status: "active", confirmedAt: at };
-      if (attempt.pro && !record.proRequestedAt) record.proRequestedAt = at;
-      changed = true;
-    } else if (!record) {
-      if (await ipLimitReached({ req, env, storage, t, randomBytes })) return page(429, GOOGLE_BUSY);
-      const maxSubs = positiveInt(env.MAX_SUBSCRIBERS);
-      const count = await readSubscriberCount(storage);
-      if (maxSubs === null || count === null || count >= maxSubs) return page(503, GOOGLE_CLOSED);
-      record = { ...newPending(out.email, { now: t, randomBytes }), status: "active", confirmSentAt: null, confirmSends: 0, confirmedAt: at };
-      if (attempt.pro) record.proRequestedAt = at;
-      isNew = changed = true;
-    } else if (record.status !== "active") {
-      return page(400, GOOGLE_FAILED); // anything unexpected
+    const record = await findSubscriber(storage, out.email);
+    if (!record) {
+      if (await listFull(env, storage)) return page(503, GOOGLE_CLOSED);
+      res.setHeader("set-cookie", signupCookie({ email: out.email, secret, now: t }));
+      return sendPage(res, 200, signupPage(out.email, attempt.pro));
     }
-    if (changed) {
-      await putSubscriber(storage, record);
-      if (isNew) await recordEvent(storage, "subscribed", { now: t, randomBytes, plan: "free" });
-      await recordEvent(storage, "confirmed", { now: t, randomBytes, plan: "free" });
-      if (record.proRequestedAt && effectivePlan(record, t) !== "pro") {
-        await recordEvent(storage, "prorequested", { now: t, randomBytes, plan: "free" });
-        await notifyOwnerProRequest({ env, fetchFn, at: t, source: "signup", log });
-      }
-    }
-    cookies.unshift(sessionCookie(signSession(record, { secret, now: t })));
-    res.statusCode = 303;
-    res.setHeader("set-cookie", cookies);
-    res.setHeader("location", "/live/");
-    res.setHeader("cache-control", "no-store");
-    return res.end();
+    return await googleSignIn({ res, record, pro: attempt.pro, env, storage, fetchFn, t, randomBytes, log, secret, cookies, page });
   } catch (e) {
     log("session google", "error: " + ((e && e.name) || "Error"));
     return page(500, { title: "Something went wrong", body: "<p>Please try again in a minute.</p>" });
   }
 }
+
+// The Create account button on that page: makes the Free account, active at once with no
+// confirmation email (Google proved the address), under the same MAX_SUBSCRIBERS and per-IP limits
+// as sign-up. If the address got an account meanwhile (a second press), it just signs in.
+async function googleSignup({ req, res, fields, env, storage, fetchFn, t, randomBytes, log, secret }) {
+  const cookies = [clearOAuthCookie()];
+  const page = (code, p) => { res.setHeader("set-cookie", cookies); return sendPage(res, code, p); };
+  const email = readSignupCookie(parseCookies(req.headers && req.headers.cookie)[OAUTH_COOKIE], { secret, now: t });
+  if (!email) return page(400, GOOGLE_SIGNUP_EXPIRED);
+  const pro = fields.wantsPro === "1" || fields.wantsPro === true;
+  try {
+    const record = await findSubscriber(storage, email);
+    if (record) return await googleSignIn({ res, record, pro, env, storage, fetchFn, t, randomBytes, log, secret, cookies, page });
+    if (await ipLimitReached({ req, env, storage, t, randomBytes })) return page(429, GOOGLE_BUSY);
+    if (await listFull(env, storage)) return page(503, GOOGLE_CLOSED);
+    const made = newPending(email, { now: t, randomBytes });
+    return await googleSignIn({ res, record: made, isNew: true, pro, env, storage, fetchFn, t, randomBytes, log, secret, cookies, page });
+  } catch (e) {
+    log("session google", "error: " + ((e && e.name) || "Error"));
+    return page(500, { title: "Something went wrong", body: "<p>Please try again in a minute.</p>" });
+  }
+}
+
+const listFull = async (env, storage) => {
+  const maxSubs = positiveInt(env.MAX_SUBSCRIBERS);
+  const count = await readSubscriberCount(storage);
+  return maxSubs === null || count === null || count >= maxSubs;
+};
+
+// Signs `record` in: an active account as it is; a pending one (or a new one, `isNew`) is made
+// active first, with the subscribed/confirmed events and, with the Pro box, the Pro request.
+async function googleSignIn({ res, record, isNew = false, pro, env, storage, fetchFn, t, randomBytes, log, secret, cookies, page }) {
+  if (record.status === "pending") {
+    const at = new Date(t).toISOString();
+    record = isNew
+      ? { ...record, status: "active", confirmSentAt: null, confirmSends: 0, confirmedAt: at }
+      : { ...record, status: "active", confirmedAt: at };
+    if (pro && !record.proRequestedAt) record.proRequestedAt = at;
+    await putSubscriber(storage, record);
+    if (isNew) await recordEvent(storage, "subscribed", { now: t, randomBytes, plan: "free" });
+    await recordEvent(storage, "confirmed", { now: t, randomBytes, plan: "free" });
+    if (record.proRequestedAt && effectivePlan(record, t) !== "pro") {
+      await recordEvent(storage, "prorequested", { now: t, randomBytes, plan: "free" });
+      await notifyOwnerProRequest({ env, fetchFn, at: t, source: "signup", log });
+    }
+  } else if (record.status !== "active") {
+    return page(400, GOOGLE_FAILED); // anything unexpected
+  }
+  cookies.unshift(sessionCookie(signSession(record, { secret, now: t })));
+  res.statusCode = 303;
+  res.setHeader("set-cookie", cookies);
+  res.setHeader("location", "/live/");
+  res.setHeader("cache-control", "no-store");
+  return res.end();
+}
+
+const signupPage = (email, pro) => ({
+  title: "Create your account",
+  body: `<p>You&rsquo;re signing up with <b>${esc(email)}</b>, the address Google confirmed.</p>
+<p>Your account includes the free daily email: the travel-industry problems found in the last 24 hours, once a day. Unsubscribing from it deletes the account.</p>
+<form method="post" action="/api/session"><input type="hidden" name="action" value="google-signup">
+<p><label><input type="checkbox" name="wantsPro" value="1"${pro ? " checked" : ""}> I&rsquo;d also like Pro (an email after every sweep). You&rsquo;ll get the daily email until it&rsquo;s switched on.</label></p>
+<p><button type="submit">Create account</button></p></form>
+<p><small><a href="/">Cancel</a>: nothing is created. <a href="/legal/privacy/">Privacy policy</a></small></p>`,
+});
 
 // ---- bounces and complaints from Resend (T13 part A)
 
