@@ -13,7 +13,7 @@ export const CONFIRM_RESEND_HOURS = 24;
 
 // Letters only, so an event's key round-trips through storage.js's path().
 export const EVENT_TYPES = ["subscribed", "confirmsent", "confirmed", "unsubscribed", "expired",
-  "bounced", "complained", "progranted", "prorevoked", "prorequested"];
+  "bounced", "complained", "progranted", "prorevoked", "prorequested", "noticesent"];
 
 const ID_RE = /^[0-9a-f]{64}$/;
 
@@ -29,9 +29,46 @@ export function normaliseEmail(s) {
   return e;
 }
 
+// One inbox, one subscriber: the address the id is made from. Gmail ignores dots and anything after
+// "+", and treats googlemail.com as gmail.com; the other providers listed ignore anything after "+".
+// Any other domain is left as typed, because a company's mail server may treat both differently.
+const PLUS_DOMAINS = new Set(["gmail.com", "outlook.com", "hotmail.com", "live.com", "msn.com", "icloud.com", "me.com", "mac.com",
+  "proton.me", "protonmail.com", "fastmail.com"]);
+export function canonicalEmail(s) {
+  const e = normaliseEmail(s);
+  if (!e) return null;
+  let [local, domain] = e.split("@");
+  if (domain === "googlemail.com") domain = "gmail.com";
+  if (PLUS_DOMAINS.has(domain)) {
+    let l = local.split("+")[0];
+    if (domain === "gmail.com") l = l.replace(/\./g, "");
+    if (l) local = l; // "+x@gmail.com" or ".@gmail.com": keep what was typed
+  }
+  return local + "@" + domain;
+}
+
+const sha256 = (s) => createHash("sha256").update(s).digest("hex");
+
 export function subscriberId(email) {
+  const e = canonicalEmail(email);
+  return e ? sha256(e) : null;
+}
+
+// The id from before canonicalEmail (the address only trimmed and lowercased). Records made then
+// keep that id, because the links in their emails carry it.
+export function legacySubscriberId(email) {
   const e = normaliseEmail(email);
-  return e ? createHash("sha256").update(e).digest("hex") : null;
+  return e ? sha256(e) : null;
+}
+
+// The record for an address: by its id, else by the id it would have had before canonicalEmail.
+export async function findSubscriber(storage, email) {
+  const id = subscriberId(email);
+  if (!id) return null;
+  const r = await getSubscriber(storage, id);
+  if (r) return r;
+  const old = legacySubscriberId(email);
+  return old !== id ? getSubscriber(storage, old) : null;
 }
 
 // 32 random bytes from the injected source, base64url: 43 characters.

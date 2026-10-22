@@ -78,7 +78,7 @@ sequenceDiagram
   P->>S: POST email, trap field, Pro box
   S->>B: save as pending, with token
   S->>R: confirmation email
-  S-->>P: same reply for every address
+  S-->>P: same reply, unless already subscribed or a link went out in the last 24 h
   U->>C: GET link with id and token
   C-->>U: page with a Confirm button
   U->>C: POST Confirm

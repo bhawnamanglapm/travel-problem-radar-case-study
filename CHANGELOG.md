@@ -5,6 +5,12 @@ grouped by date.
 
 ## 2026-10-22
 
+- **One inbox, one subscription.** Gmail addresses are matched without dots or `+tags` (and `googlemail.com` as
+  `gmail.com`); Outlook, Hotmail, Live, MSN, iCloud, Proton and Fastmail without `+tags`. Records made before this
+  keep their ids and links. Signing up an address that is already confirmed now says so, and emails that inbox its
+  manage and unsubscribe links (at most once a day, within `MAX_CONFIRMS_PER_DAY`). A pending address with a link
+  sent in the last 24 hours is told so. `stats` counts the new emails. Tested offline (417 subscriber tests); not
+  deployed yet.
 - **Pro subscribers choose their categories** (T14): a Categories card on `/manage/` saves the choice. Each Pro
   email then carries only those categories, with its own counts, and a Pro whose categories had nothing in a sweep
   gets no email for it. Free always gets all four. Tested offline (386 subscriber tests); not deployed yet.

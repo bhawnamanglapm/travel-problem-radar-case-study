@@ -25,6 +25,7 @@ working in a real inbox; that is T12's staged launch.
 | [T12](T12-docs-and-launch.md) Staged launch | in progress | | | Steps recorded under "T12" below |
 | [T13](T13-optional-hardening.md) Bounces, complaints, per-IP limit | done, live on production (webhook and firewall rule) | merged as #12 | 423 pass (355 subscriber + 68 sweep; +49 new) and 3 new `npm run check` checks | See "T13" below |
 | [T14](T14-optional-pro-categories.md) Pro chooses categories | done (offline); not deployed yet | branch `feat/t14-pro-categories` | 454 pass (386 subscriber + 68 sweep; +29 new); 46 `npm run check` checks (+1) | See "T14" below |
+| One subscription per inbox (fix, not in the original task list) | done (offline); not deployed yet | branch `fix/one-subscription-per-inbox` (33d1ef1, 3af6403) | 485 pass (417 subscriber + 68 sweep; +31 new); 46 `npm run check` checks | See "One subscription per inbox" below |
 
 ## Notes per task
 
@@ -284,3 +285,17 @@ working in a real inbox; that is T12's staged launch.
 - A Pro whose categories have nothing in a sweep gets no email for it; the sweep reply counts them in
   `pro.emptyForCats`.
 - **Not checked yet:** a real Pro email with one category, and the page on a phone. Owner steps are in the PR.
+
+### One subscription per inbox (branch `fix/one-subscription-per-inbox`)
+- `canonicalEmail()` makes the id: Gmail drops dots and `+tags` and maps `googlemail.com` to `gmail.com`; Outlook,
+  Hotmail, Live, MSN, iCloud, Proton and Fastmail drop `+tags`; other domains are unchanged, so most existing ids
+  stay the same. `findSubscriber()` tries the canonical id, then the pre-change id, so older records and their
+  links still work.
+- An already-confirmed address is told so, and gets one email with its manage and unsubscribe links at most every
+  24 hours (`noticeSentAt` on the record, a `noticesent` event). Those emails count towards `MAX_CONFIRMS_PER_DAY`
+  with confirmations. A failed send stores nothing and points to a digest's Manage link.
+- A pending address with a confirmation sent in the last 24 hours is told so, and nothing is sent.
+- The honeypot, the per-IP limit, a full or closed list and the confirmation cap keep the generic reply.
+- **Owner's choice (2026-10-22):** accept that the reply shows whether an address subscribes.
+- **Not checked yet:** a real sign-up of an already-subscribed address on production, and the notice email's
+  arrival.

@@ -496,7 +496,7 @@ needed at runtime.
 | `EMAIL_FROM` | You (optional; required for subscribers) | `/api/sweep`, the subscriber endpoints | Defaults to `Travel Problem Radar <onboarding@resend.dev>`, Resend's shared sender, which is enough for the owner's own digest. Subscriber email refuses that default and any `@resend.dev` sender: it needs a sender on a domain verified in Resend |
 | `SUBSCRIPTIONS_ENABLED` | You (optional) | The subscriber endpoints, `/api/sweep` | `1` turns sign-up and subscriber delivery on together. Anything else, or unset, means off |
 | `MAX_SUBSCRIBERS` | You (with subscriptions) | `/api/subscribe` | The cap on records (pending and active). Unset or not a positive whole number means **closed**: the sign-up reply looks the same but nothing is stored. The count is the one the last saved sweep wrote |
-| `MAX_CONFIRMS_PER_DAY` | You (optional) | `/api/subscribe` | Confirmation emails per UTC day, across all addresses. Default 10; `0` stops confirmation emails |
+| `MAX_CONFIRMS_PER_DAY` | You (optional) | `/api/subscribe` | Emails sign-up sends per UTC day, across all addresses: confirmations and "already subscribed" notices together. Default 10; `0` stops both |
 | `MAX_SIGNUPS_PER_IP_HOUR` | You (optional) | `/api/subscribe` | Sign-up attempts per client IP per UTC hour. Default 5; unset or not a positive whole number means 5. Over it the reply is the same and nothing is stored or sent |
 | `RESEND_WEBHOOK_SECRET` | You (optional) | `/api/resend-webhook` | The Resend webhook's signing secret. If it is unset, the endpoint answers `503` and does nothing |
 | `SITE_URL` | You (optional) | The subscriber endpoints, `/api/sweep` | Base of the links in subscriber emails. If unset, `https://` plus `VERCEL_PROJECT_PRODUCTION_URL`. With neither, subscriber email is off |
@@ -513,7 +513,7 @@ not a letter or digit with `-`.
 | `radar:history` | `radar/radar-history.json` | Index of saved sweeps (id, time, counts), last 60 | Yes |
 | `radar:sweep:<id>` | `radar/radar-sweep-<id>.json` | One sweep's items | Yes |
 | `radar:seenIds` | `radar/radar-seenIds.json` | Up to 800 item IDs already seen, used for the New flag | No |
-| `radar:sub:<id>` | `radar/radar-sub-<id>.json` | One subscriber: address, status, plan, token, dates, and chosen categories (`cats`, Pro only). `<id>` is the SHA-256 of the lowercased address | No |
+| `radar:sub:<id>` | `radar/radar-sub-<id>.json` | One subscriber: address, status, plan, token, dates, and chosen categories (`cats`, Pro only). `<id>` is the SHA-256 of the canonical address (Gmail without dots or `+tags`, and `+tags` dropped for the big providers; see [email-signup.md](docs/subscriptions/email-signup.md#flow)). Records made before 2026-10-22 keep the SHA-256 of the lowercased address | No |
 | `radar:event:<YYYYMMDD>-<time>-<type>-<random>` | `radar/radar-event-….json` | One sign-up, confirmation, unsubscribe, Pro, bounce or complaint event: type, time and plan, **no address or id**. Kept until `prune-events` deletes it | No |
 | `radar:deliveries:<YYYYMMDD>` | `radar/radar-deliveries-<YYYYMMDD>.json` | Record ids already sent that day's Free digest. Deleted by the sweep after 7 days | No |
 | `radar:subscriberCount` | `radar/radar-subscriberCount.json` | Pending plus active records at the last saved sweep; the sign-up cap reads it | No |
@@ -680,9 +680,13 @@ unchanged. Code: `api/subscribe.js`, `api/confirm.js`, `api/unsubscribe.js`, `ap
 
 **What a subscriber goes through**
 
-1. `/subscribe/` posts the address to `POST /api/subscribe`. Every accepted request gets the same reply ("If that
-   address can be subscribed, a confirmation link is on its way"), so the endpoint never tells anyone whether an
-   address is on the list. A filled-in hidden field (a trap for bots) gets the same reply and does nothing.
+1. `/subscribe/` posts the address to `POST /api/subscribe`. One inbox holds one subscription: `a.b+x@gmail.com` and
+   `ab@gmail.com` are the same subscriber. An address that is already confirmed (or a variant of it) is told "This
+   address is already subscribed", and its inbox gets one email with its manage and unsubscribe links, at most once
+   every 24 hours. A pending address whose confirmation went out in the last 24 hours is told so. Every other
+   request gets the same reply ("If that address can be subscribed, a confirmation link is on its way"), so a
+   closed or full list, the daily cap and the per-IP limit look alike. A filled-in hidden field (a trap for bots)
+   gets that reply and does nothing.
 2. A confirmation email links to `/api/confirm?id=…&t=…`. Opening it shows a **Confirm** button; only pressing it
    (a `POST`) confirms, so a mail scanner that opens links can't sign anyone up. An address not confirmed within 7
    days is deleted by the next sweep. A second sign-up for the same pending address within 24 hours sends nothing.
@@ -816,7 +820,7 @@ node --env-file=.env.local scripts/subscribers.mjs prune-events --older-than 400
 
 | Command | What it does |
 |---|---|
-| `stats` | Counts now (pending, Free, Pro, Pro ending within 7 days, waiting for Pro) and per UTC day: sign-ups, confirmation emails, confirmations, unsubscribes (Free and Pro), expired, bounced and complained (deleted by the Resend webhook), Pro requests, Free digests sent. Ends with the confirm rate, `confirmed / subscribed`. No addresses |
+| `stats` | Counts now (pending, Free, Pro, Pro ending within 7 days, waiting for Pro) and per UTC day: sign-ups, confirmation emails, already-subscribed notices, confirmations, unsubscribes (Free and Pro), expired, bounced and complained (deleted by the Resend webhook), Pro requests, Free digests sent. Ends with the confirm rate, `confirmed / subscribed`. No addresses |
 | `list` | Address, status, plan, `proUntil`, confirmed date and the date they asked for Pro. `--plan requested` lists the active Free subscribers who asked for Pro (the waiting list). A Pro record past its end date shows as `pro (lapsed)`: the sweep treats it as Free |
 | `show` | One record without its token |
 | `grant-pro` | Only for an active (confirmed) subscriber. Pro with `proSource: owner`, and the Pro request is cleared (the `prorequested` event keeps the history). `--until 2027-01-31` makes Pro run through the end of that UTC day; leave it out for no end date. A past date is accepted and acts as Free. Refuses a paid Razorpay record |
@@ -926,7 +930,7 @@ covers a missed 00:17 run.
 | `email: failed: http 429 daily_quota_exceeded` (or `monthly_quota_exceeded`) | The plan's sending quota is used up; each recipient counts. Unlikely with one recipient | Fewer recipients or a paid plan. The daily quota resets at midnight UTC |
 | `/subscribe/` says "Subscriptions aren't open yet" (`503`) | `SUBSCRIPTIONS_ENABLED` isn't `1`, or `RESEND_API_KEY`, a verified-domain `EMAIL_FROM` or a site URL is missing for this deployment | Set them for Production; redeploy (see [Subscriber email](#subscriber-email-optional)) |
 | `"subscribers": "not configured"` in the sweep reply | Same as the row above | Same fix |
-| Sign-up says the link is on its way, but no confirmation email comes | In order: the spam folder; `MAX_SUBSCRIBERS` unset (the list is closed) or reached; `MAX_CONFIRMS_PER_DAY` used up today; more than `MAX_SIGNUPS_PER_IP_HOUR` sign-ups from the same connection this hour; a second sign-up within 24 hours of the first; the address is already confirmed. The reply is the same in every case on purpose | Check spam first. Then the `subscribe confirm-email` log line in Vercel (kept about 30 minutes), `stats` for today's confirmation emails, and Resend's **Logs** |
+| Sign-up says the link is on its way, but no confirmation email comes | In order: the spam folder; `MAX_SUBSCRIBERS` unset (the list is closed) or reached; `MAX_CONFIRMS_PER_DAY` used up today; more than `MAX_SIGNUPS_PER_IP_HOUR` sign-ups from the same connection this hour. The reply is the same in every case on purpose. (An address already confirmed, or with a link sent in the last 24 hours, gets a reply that says so instead) | Check spam first. Then the `subscribe confirm-email` log line in Vercel (kept about 30 minutes), `stats` for today's confirmation emails, and Resend's **Logs** |
 | `/subscribe/` says "Too many tries from your connection" (`429`) | The Vercel Firewall rule: more than 5 sign-up requests from one IP in 10 minutes | Wait 10 minutes. Many people behind one office or mobile network share an IP; raise the rule's limit if that matters |
 | Resend's webhook log shows `401` | `RESEND_WEBHOOK_SECRET` isn't this webhook's signing secret (for example after re-creating the webhook), or the server clock and the event's timestamp differ by more than 5 minutes | Copy the secret again from Resend's webhook page; redeploy. Resend retries failed deliveries |
 | Resend's webhook log shows `503` | `RESEND_WEBHOOK_SECRET` isn't set for this deployment, or was added without a redeploy | Set it for Production; redeploy |

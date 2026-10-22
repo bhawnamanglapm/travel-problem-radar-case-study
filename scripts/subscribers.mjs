@@ -14,8 +14,8 @@
 import { randomBytes } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import {
-  KEY_EVENT_PREFIX, deleteSubscriber, effectivePlan, getSubscriber, listSubscribers, normaliseEmail,
-  putSubscriber, recordEvent, subscriberId, utcDay,
+  KEY_EVENT_PREFIX, deleteSubscriber, effectivePlan, findSubscriber, getSubscriber, listSubscribers, normaliseEmail,
+  putSubscriber, recordEvent, utcDay,
 } from "../api/_lib/subscribers.js";
 
 const DAY_MS = 24 * 3600 * 1000;
@@ -94,8 +94,8 @@ export async function computeStats(storage, { now, days = 30 }) {
   const first = utcDay(now - (days - 1) * DAY_MS);
   const dayList = [];
   for (let i = days - 1; i >= 0; i--) dayList.push(utcDay(now - i * DAY_MS));
-  const perDay = new Map(dayList.map((d) => [d, { day: d, subscribed: 0, confirmsent: 0, confirmed: 0, unsubscribedFree: 0, unsubscribedPro: 0, expired: 0, bounced: 0, complained: 0, prorequested: 0, freeDelivered: 0 }]));
-  const totals = { subscribed: 0, confirmsent: 0, confirmed: 0, unsubscribed: 0, expired: 0, bounced: 0, complained: 0, prorequested: 0 };
+  const perDay = new Map(dayList.map((d) => [d, { day: d, subscribed: 0, confirmsent: 0, noticesent: 0, confirmed: 0, unsubscribedFree: 0, unsubscribedPro: 0, expired: 0, bounced: 0, complained: 0, prorequested: 0, freeDelivered: 0 }]));
+  const totals = { subscribed: 0, confirmsent: 0, noticesent: 0, confirmed: 0, unsubscribed: 0, expired: 0, bounced: 0, complained: 0, prorequested: 0 };
 
   for (const suffix of await storage.list(KEY_EVENT_PREFIX)) {
     const m = EVENT_RE.exec(suffix);
@@ -133,14 +133,14 @@ export function formatStats(s) {
     `Now: ${s.now.pending} pending, ${s.now.free} Free, ${s.now.pro} Pro (${s.now.proExpiring7d} of them ending within 7 days), ${s.now.proRequested} waiting for Pro${s.now.unreadable ? `, ${s.now.unreadable} unreadable` : ""}`,
     "",
     `Last ${s.days} days (UTC):`,
-    "day       subscribed  confirmsent  confirmed  unsub(free)  unsub(pro)  expired  bounced  complained  pro asked  free sent",
+    "day       subscribed  confirmsent  notices  confirmed  unsub(free)  unsub(pro)  expired  bounced  complained  pro asked  free sent",
   ];
   for (const r of s.perDay) {
-    if (!(r.subscribed || r.confirmsent || r.confirmed || r.unsubscribedFree || r.unsubscribedPro || r.expired || r.bounced || r.complained || r.prorequested || r.freeDelivered)) continue;
-    lines.push(`${r.day}  ${pad(r.subscribed, 10)}  ${pad(r.confirmsent, 11)}  ${pad(r.confirmed, 9)}  ${pad(r.unsubscribedFree, 11)}  ${pad(r.unsubscribedPro, 10)}  ${pad(r.expired, 7)}  ${pad(r.bounced, 7)}  ${pad(r.complained, 10)}  ${pad(r.prorequested, 9)}  ${pad(r.freeDelivered, 9)}`);
+    if (!(r.subscribed || r.confirmsent || r.noticesent || r.confirmed || r.unsubscribedFree || r.unsubscribedPro || r.expired || r.bounced || r.complained || r.prorequested || r.freeDelivered)) continue;
+    lines.push(`${r.day}  ${pad(r.subscribed, 10)}  ${pad(r.confirmsent, 11)}  ${pad(r.noticesent, 7)}  ${pad(r.confirmed, 9)}  ${pad(r.unsubscribedFree, 11)}  ${pad(r.unsubscribedPro, 10)}  ${pad(r.expired, 7)}  ${pad(r.bounced, 7)}  ${pad(r.complained, 10)}  ${pad(r.prorequested, 9)}  ${pad(r.freeDelivered, 9)}`);
   }
   const t = s.totals;
-  lines.push("", `Total: ${t.subscribed} subscribed, ${t.confirmsent} confirmation emails, ${t.confirmed} confirmed, ${t.unsubscribed} unsubscribed, ${t.expired} expired, ${t.bounced} bounced, ${t.complained} complained, ${t.prorequested} Pro requests`);
+  lines.push("", `Total: ${t.subscribed} subscribed, ${t.confirmsent} confirmation emails, ${t.noticesent} already-subscribed notices, ${t.confirmed} confirmed, ${t.unsubscribed} unsubscribed, ${t.expired} expired, ${t.bounced} bounced, ${t.complained} complained, ${t.prorequested} Pro requests`);
   lines.push(s.confirmRate === null
     ? "Confirm rate: n/a (nobody subscribed in this period)"
     : `Confirm rate: ${(s.confirmRate * 100).toFixed(1)}% (${t.confirmed} confirmed / ${t.subscribed} subscribed, counted by when each event happened, so people who subscribed earlier can raise it)`);
@@ -171,7 +171,7 @@ export function formatRows({ rows, skipped }) {
 }
 
 export async function showRecord(storage, email) {
-  const r = await getSubscriber(storage, subscriberId(email));
+  const r = await findSubscriber(storage, email);
   if (!r) return null;
   const { token, ...rest } = r; // never print the token
   return rest;
@@ -180,7 +180,7 @@ export async function showRecord(storage, email) {
 // ---- writes. Each returns { code: 0|1, message, changed } and writes only when apply is true.
 
 export async function grantPro(storage, email, { until = null, apply, now, randomBytes: rb = randomBytes }) {
-  const r = await getSubscriber(storage, subscriberId(email));
+  const r = await findSubscriber(storage, email);
   if (!r) return { code: 1, message: "not found: no subscriber with that address", changed: false };
   if (r.status !== "active") return { code: 1, message: `refused: the subscriber is ${r.status}, only an active (confirmed) subscriber can be given Pro`, changed: false };
   if (r.plan === "pro" && r.proSource === "razorpay") return { code: 1, message: "refused: this is a paid Razorpay Pro; change it in Razorpay, not here", changed: false };
@@ -195,7 +195,7 @@ export async function grantPro(storage, email, { until = null, apply, now, rando
 }
 
 export async function revokePro(storage, email, { apply, now, randomBytes: rb = randomBytes }) {
-  const r = await getSubscriber(storage, subscriberId(email));
+  const r = await findSubscriber(storage, email);
   if (!r) return { code: 1, message: "not found: no subscriber with that address", changed: false };
   if (r.proSource === "razorpay") return { code: 1, message: "refused: this is a paid Razorpay Pro; cancel it in Razorpay (Phase 2), not here", changed: false };
   if (r.plan !== "pro") return { code: 1, message: "nothing to do: the subscriber is already on the Free plan", changed: false };
@@ -207,11 +207,10 @@ export async function revokePro(storage, email, { apply, now, randomBytes: rb = 
 }
 
 export async function removeSubscriber(storage, email, { apply }) {
-  const id = subscriberId(email);
-  const r = await getSubscriber(storage, id);
+  const r = await findSubscriber(storage, email);
   if (!r) return { code: 1, message: "not found: no subscriber with that address", changed: false };
   if (!apply) return { code: 1, message: `would delete the ${r.status} ${r.plan} record. Nothing changed; add --yes to apply.`, changed: false };
-  await deleteSubscriber(storage, id);
+  await deleteSubscriber(storage, r.id);
   return { code: 0, message: `done: deleted the ${r.status} ${r.plan} record`, changed: true };
 }
 

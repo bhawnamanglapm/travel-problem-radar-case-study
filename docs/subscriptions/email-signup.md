@@ -25,10 +25,20 @@ Done for this project: `pehchanthetraveller.com` is verified with SPF, DKIM and 
 1. **Subscribe.** `/subscribe/` is a self-contained page with an email field, a hidden trap field for bots, and an
    "I'd also like Pro" box. It posts to `POST /api/subscribe`.
    - The endpoint checks the address, stores a `pending` record with a random token and sends a confirmation email.
-   - **Every accepted request gets the same reply** ("If that address can be subscribed, a confirmation link is on
-     its way"), so the endpoint never reveals who is already subscribed, whether the list is full, or whether a
-     limit was hit.
-   - A filled trap field gets the same reply and does nothing.
+   - **One inbox, one subscriber.** The record id is made from the address as the inbox sees it
+     (`canonicalEmail()`): Gmail ignores dots and anything after `+`, and `googlemail.com` is `gmail.com`; Outlook,
+     Hotmail, Live, MSN, iCloud, Proton and Fastmail ignore anything after `+`. Other domains are left as typed. So
+     `a.b+news@gmail.com` finds the record for `ab@gmail.com`.
+   - **An address that is already confirmed is told so** ("This address is already subscribed"), and the stored
+     address gets one email with its manage and unsubscribe links, at most once every 24 hours. Those emails share
+     `MAX_CONFIRMS_PER_DAY` with confirmation emails; with the cap reached, or within 24 hours of the last one, the
+     reply says to use the Manage link in any digest instead. This shows whether an address subscribes; the owner
+     chose that on 2026-10-22 (decision log).
+   - **A pending address whose confirmation went out in the last 24 hours** is told that a link was already sent,
+     and nothing is sent.
+   - Every other accepted request gets the same reply ("If that address can be subscribed, a confirmation link is
+     on its way"), so a full list, a closed list, the day's confirmation cap and the per-IP limit look alike.
+   - A filled trap field gets that same reply and does nothing.
 2. **Confirm.** The email links to `/api/confirm?id=<record id>&t=<token>`. `GET` shows a page with a **Confirm**
    button; only the `POST` from that button confirms (decision D9), so a mail scanner that opens links can't confirm
    anyone. Confirming sets `status: "active"`. A record not confirmed within 7 days is deleted by the next sweep.
@@ -46,8 +56,8 @@ One Blob file per subscriber, so two sign-ups at the same moment can't overwrite
 
 | Key | Holds |
 |---|---|
-| `radar:sub:<sha256 of the lowercased address>` | `{ v, id, email, status: "pending" or "active", plan: "free" or "pro", proUntil, proSource, token, createdAt, confirmSentAt, confirmedAt, proRequestedAt, cats, rzp }` |
-| `radar:event:<YYYYMMDD>-<HHMMSSmmm>-<type>-<6 hex>` | One event (`subscribed`, `confirmsent`, `confirmed`, `unsubscribed`, `expired`, `progranted`, `prorevoked`, `prorequested`, and `bounced` and `complained` from the Resend webhook): type, time and plan. No address and no id, so the counts survive a deletion |
+| `radar:sub:<sha256 of the canonical address>` | `{ v, id, email, status: "pending" or "active", plan: "free" or "pro", proUntil, proSource, token, createdAt, confirmSentAt, confirmedAt, noticeSentAt, proRequestedAt, cats, rzp }` |
+| `radar:event:<YYYYMMDD>-<HHMMSSmmm>-<type>-<6 hex>` | One event (`subscribed`, `confirmsent`, `noticesent`, `confirmed`, `unsubscribed`, `expired`, `progranted`, `prorevoked`, `prorequested`, and `bounced` and `complained` from the Resend webhook): type, time and plan. No address and no id, so the counts survive a deletion |
 | `radar:deliveries:<YYYYMMDD>` | The record ids already sent that day's Free digest. Written only by the sweep; deleted after 7 days |
 | `radar:subscriberCount` | Pending plus active records at the last saved sweep, which the sign-up cap reads |
 | `radar:iphit:<YYYYMMDDHH>-<16 hex of sha256 of the IP>-<6 hex>` | One sign-up attempt, for the per-IP limit (T13). No raw IP. Deleted by the sweep after 2 hours |
@@ -57,6 +67,9 @@ Notes:
   `effectivePlan()` in `api/_lib/subscribers.js` treats anything but a confirmed Pro record with a future (or no)
   `proUntil` as Free.
 - Links carry the record id as well as the token, so finding the record is one read, not a scan of every file.
+- Records made before 2026-10-22 have an id from the address only trimmed and lowercased, and their links carry it.
+  They keep it: `findSubscriber()` tries the canonical id, then that older one. Sign-up, the Resend webhook and the
+  admin script all look addresses up this way.
 - Tokens are 32 random bytes, stored on the record and compared in constant time. No `UNSUBSCRIBE_SECRET` is needed.
 - `blobStorage()` in `api/_lib/storage.js` gained `list(prefix)`. Its reads skip Blob's CDN cache (`useCache: false`)
   because a read-change-write on a minute-old copy would undo a recent change; only `/api/data` reads the cached copy.
@@ -88,7 +101,7 @@ Slack and email and only when the sweep saved. The owner's `EMAIL_TO` path is un
 | Risk | Guardrail |
 |---|---|
 | Someone signs up another person | Double opt-in by button; nothing is sent after the one confirmation email until confirmed |
-| Confirmation emails used to spam an address | At most one confirmation per address per 24 hours, and `MAX_CONFIRMS_PER_DAY` (default 10) across all addresses. At most `MAX_SIGNUPS_PER_IP_HOUR` (default 5) sign-ups per connection per hour, with a Vercel Firewall rate limit (5 per 10 minutes, `429`) in front so a flood costs no Blob operations (T13) |
+| Confirmation emails used to spam an address | At most one confirmation, and one already-subscribed email, per address per 24 hours; variants of one inbox count as one address. `MAX_CONFIRMS_PER_DAY` (default 10) caps both kinds together across all addresses. At most `MAX_SIGNUPS_PER_IP_HOUR` (default 5) sign-ups per connection per hour, with a Vercel Firewall rate limit (5 per 10 minutes, `429`) in front so a flood costs no Blob operations (T13) |
 | Bots | The trap field. A CAPTCHA only if bots appear |
 | Addresses leak in logs | The sweep reply, which the public GitHub Actions log prints, gets **counts only**. Error text is cleaned of anything that looks like an address, id or token |
 | Subscriber data read through the public feed | `ALLOWED_KEY` in `api/_lib/handlers.js` only allows history and sweep keys; tests check that every subscriber key is refused |
@@ -98,8 +111,9 @@ Slack and email and only when the sweep saved. The owner's `EMAIL_TO` path is un
 
 ## Tests
 
-`scripts/test-subscriptions.mjs` (offline, with a fake Resend `fetch` and an in-memory store) covers: identical
-replies for new, existing and trap sign-ups; the caps; confirm and unsubscribe with right and wrong tokens; one-click
+`scripts/test-subscriptions.mjs` (offline, with a fake Resend `fetch` and an in-memory store) covers: the same
+reply for new, pending and trap sign-ups; the already-subscribed reply and email; address variants and records made
+before canonical ids; the caps; confirm and unsubscribe with right and wrong tokens; one-click
 unsubscribe; Pro every scheduled sweep and Free once a day; the roll-up; quota and deadline stops and resuming; no
 address in any reply; `/api/data` refusing subscriber keys; the manage endpoint and Request Pro; and the admin script.
 `scripts/check.mjs` checks the sign-up and manage pages (self-contained, the privacy note, the contact address, the
