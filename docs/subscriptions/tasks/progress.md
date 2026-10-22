@@ -312,5 +312,12 @@ working in a real inbox; that is T12's staged launch.
   email to change it." (within 24 hours of the notice), and `stats` still showed 0 sign-ups and 1 notice. A variant
   that missed the record would have stored a new pending record and sent a confirmation, so it found the existing
   one.
-- Not checked: a `+tag` variant on Outlook or another listed provider (the offline tests cover it), and the
-  Unsubscribe link in the notice.
+- **Outlook checked on production, 2026-10-22 (about 07:58 UTC):** the owner signed up their confirmed Outlook.com
+  address with a `+test` tag. The page replied "already subscribed. We've emailed it a link…", and `stats` showed 2
+  notices and still 0 sign-ups, so the `+tag` was dropped and the existing record found. The notice landed in
+  Outlook's **Junk**, as the confirmation and the Free digests had (Gmail put its notice in the inbox).
+- **Unsubscribe link checked:** the owner opened Unsubscribe from a notice email, saw the button page, pressed it
+  and got "You're unsubscribed". `stats` then showed 1 Pro unsubscribe and 0 Pro subscribers, so the owner's Pro
+  record was deleted.
+- Not checked on production: `+tags` on the other listed providers (iCloud, Proton, Fastmail and the other
+  Microsoft domains); the offline tests cover them.
