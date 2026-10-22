@@ -35,17 +35,39 @@ keeps working.
 
 ## Step 2: prerequisites (from pricing.md's checklist)
 
-- [ ] **Vercel Pro.** The Hobby plan is for non-commercial use; **check the current terms and price**. Moving to Pro
-  also lifts the once-a-day cron limit, but keep the GitHub Actions schedule unless there's a reason to move it
-- [ ] **Razorpay account** in test mode (works before activation). Start live activation now: business details,
-  website review, bank account. **Check current requirements**
-- [ ] **International cards**: decide, and ask Razorpay to enable them if wanted (**check** how)
-- [ ] **Policy pages** published on the site: terms of service, privacy policy, refund and cancellation policy, and a
-  contact address. Payment providers usually check these during review
-- [ ] **Tax and legal advice**: GST, income tax on software subscriptions, DPDP Act for subscriber data
-- [ ] **Prices** (monthly, yearly), currency, free trial or not, refund rule: **OWNER INPUT NEEDED**. Then create the
-  Razorpay Plan(s) in test mode and note each plan id
-- [ ] **Support route**: who answers, where, and how fast
+Checked against the sources below on **2026-10-22**. Providers change these pages, so check again before acting.
+"Owner" means only you can do it; "Dev" means it can be done in the repo.
+
+| # | Item | Who | Status | What the source says |
+|---|---|---|---|---|
+| 1 | **Razorpay account**, test mode first | Owner | Account created 2026-10-22 (owner's screenshot of the dashboard). Activation not submitted | Test mode works before activation and moves no money. Activation asks for: business type (an **unregistered individual** is an option), PAN and brand name; KYC through CKYC, else DigiLocker/Aadhaar or an uploaded ID, else video KYC with physical PAN and Aadhaar; a bank account, checked with a ₹1 deposit. Registered businesses also need a GST or Udyam certificate plus one more document. [Activation steps][rzp-kyc] |
+| 2 | **Website for Razorpay's review** | Owner + Dev | Drafts of 4 of the 6 pages exist (`legal/`, #25); not live | The website must link **About us, Contact us, Pricing details, Terms and conditions, Privacy policy and a Refunds policy**. A primary website gets automatic checks of the site, the policy pages and the business industry; without website details there are no live API keys (Payment Links still work). [Business website details][rzp-web] **Missing: an About us page and a Pricing details page.** The case study (`/`) may do for About; Pricing needs your prices (row 6) |
+| 3 | **Vercel Pro** | Owner | Not started | Hobby is "restricted to non-commercial personal use only", and commercial use includes "any method of requesting or processing payment from visitors of the site". Pro is $20 a month per developer seat, with $20 of included usage credit. [Fair use][vercel-fair], [Pricing][vercel-price] Move before live payments. Whether a **test-mode** checkout on Hobby counts isn't said; ask Vercel support if you want to build T16–T17 on Hobby |
+| 4 | **International cards** | Owner | Not decided | Not confirmed from a Razorpay page. Razorpay's Subscriptions settings have a **Card** switch for recurring card payments; UPI and eMandate are INR only; cards and UPI take recurring charges up to ₹15,000. The page says nothing about international cards. [Subscriptions settings][rzp-subs-settings] Decide, then ask Razorpay support |
+| 5 | **Tax and legal advice**: GST, income tax, DPDP Act | Owner | Not started | No source checked; this needs an adviser |
+| 6 | **Prices**, currency, trial, refund rule | Owner | Not set | See the worksheet below. Then create the Razorpay Plan(s) in test mode and note each plan id |
+| 7 | **Policy pages filled and published** | Owner, then Dev | Drafts exist with highlighted gaps | Fill the gaps, have them reviewed, then remove the draft notice and `noindex` and add `legal` to the build. `npm run check` stops them going live with a gap left |
+| 8 | **Support route**: who answers, where, how fast | Owner | Not set | The reply time also goes on the contact and refunds pages |
+| 9 | **A real sweep scored** with the README's rubric | Owner | Not done | Not a provider rule: pricing.md says not to charge anyone before this |
+
+[rzp-kyc]: https://razorpay.com/docs/payments/easy-submit-kyc/
+[rzp-web]: https://razorpay.com/docs/payments/dashboard/account-settings/business-website-details/
+[rzp-subs-settings]: https://razorpay.com/docs/payments/subscriptions/settings/
+[vercel-fair]: https://vercel.com/docs/limits/fair-use-guidelines
+[vercel-price]: https://vercel.com/pricing
+
+### Pricing worksheet (owner)
+
+Answer these before the Pricing details page, the terms and the Razorpay Plans can be written. They come from
+pricing.md's open questions; no numbers are suggested here.
+
+1. Who pays: PMs on a team, solo PMs, founders, recruiters? Is it a personal or a company expense?
+2. Currency: INR only, or other currencies too (row 4)?
+3. Price per month, and per year if offered.
+4. Free trial: none, or how many days?
+5. Refund rule: none, pro-rata, or full within N days; and always for a double charge?
+6. What Pro adds over Free when it's paid: today it's an email after every sweep and a choice of categories.
+7. GST: included in the price or added on top (row 5)?
 
 ## Step 3: variables (test mode first)
 

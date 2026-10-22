@@ -5,6 +5,8 @@ grouped by date.
 
 ## 2026-10-22
 
+- T15 prerequisites checklist, checked against Vercel's and Razorpay's docs with links, and a pricing worksheet for
+  the owner. Razorpay also wants About us and Pricing details pages.
 - Draft policy pages for Phase 2 (privacy, terms, cancellation and refunds, contact) under `legal/`, with the owner's
   facts still to fill in. Not deployed yet; `npm run check` stops them going live with a gap left.
 - T15 started: the owner chose to begin the Phase 2 (paid Pro) prerequisites without the gate; nothing is charged
