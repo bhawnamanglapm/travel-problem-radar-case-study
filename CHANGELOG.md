@@ -5,6 +5,7 @@ grouped by date.
 
 ## 2026-10-22
 
+- Tasks T20 to T22 for the paid website: accounts and sign-in, the locked board, the teaser email.
 - Decision: Pro will pay for the live board on the website, not for email. The free email becomes a teaser, and
   sign-in works by an emailed link. Design in `docs/subscriptions/paid-website.md`; docs and the draft terms
   updated. Nothing is built or switched on yet.

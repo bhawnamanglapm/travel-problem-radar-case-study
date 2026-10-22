@@ -28,6 +28,9 @@ working in a real inbox; that is T12's staged launch.
 | One subscription per inbox (fix, not in the original task list) | done, live on production and checked | merged as #19 (33d1ef1, 3af6403) | 485 pass (417 subscriber + 68 sweep; +31 new); 46 `npm run check` checks | See "One subscription per inbox" below |
 | Old unsubscribe links say "no longer active" (fix) | done, live on production | merged as #23 (f43e25f) | 486 pass (418 subscriber + 68 sweep; +1 new); 46 `npm run check` checks | An old link's page said the address was off the list when it wasn't |
 | [T15](T15-phase2-gate-and-accounts.md) Gate and accounts | in progress: gate skipped by the owner; prerequisites started | | | See "T15" below |
+| [T20](T20-accounts-and-sign-in.md) Accounts and sign-in | todo | | | Paid website ([paid-website.md](../paid-website.md)) |
+| [T21](T21-locked-board.md) Locked board | todo | | | Behind `BOARD_PAYWALL`, off |
+| [T22](T22-teaser-email.md) Free email becomes a teaser | todo | | | Same switch |
 
 ## Notes per task
 
