@@ -307,5 +307,10 @@ working in a real inbox; that is T12's staged launch.
   3. A second try straight after replied "Use the Manage link in any digest email to change it", and no second
      email came.
   4. `stats` for 2026-10-22: 1 notice and 0 sign-ups, so no new record was made.
-- Not checked on production: a dot or `+tag` variant (Gmail or another listed provider) finding the same record;
-  the offline tests cover it. Also not checked: the Unsubscribe link in the notice.
+- **Variant checked on production, later on 2026-10-22:** the owner signed up a Gmail variant of the same address
+  (dots and/or a `+tag`). The page replied "This address is already subscribed. Use the Manage link in any digest
+  email to change it." (within 24 hours of the notice), and `stats` still showed 0 sign-ups and 1 notice. A variant
+  that missed the record would have stored a new pending record and sent a confirmation, so it found the existing
+  one.
+- Not checked: a `+tag` variant on Outlook or another listed provider (the offline tests cover it), and the
+  Unsubscribe link in the notice.
