@@ -134,6 +134,9 @@ check(legalShipped || !LEGAL.some((s) => /href="[^"]*legal\//.test(subPage + man
 const subLinks = [...page.matchAll(/href="([^"]*subscribe[^"]*)"/g)].map((m) => m[1]);
 check(subLinks.length > 0 && subLinks.every((h) => h.startsWith("https://travel-problem-radar.vercel.app/subscribe/")), `index.html links to the subscribe page, only by the absolute Vercel URL (GitHub Pages has no /api/)${subLinks.length ? " (" + subLinks.join(", ") + ")" : " (no link)"}`);
 check(/<a href="\.\.\/subscribe\/">Get it by email<\/a>/.test(livePage), "live/index.html links to the subscribe page");
+// Account pages are findable: the home page links sign-in (absolute, as above); the board shows Sign in or Account.
+check(/<a class="btn sec" href="https:\/\/travel-problem-radar\.vercel\.app\/signin\/">Sign in<\/a>/.test(page), "index.html links to the sign-in page by the absolute Vercel URL");
+check(/<a id="acct" href="\.\.\/signin\/">Sign in<\/a>/.test(livePage) && /fetch\("\/api\/session\?action=me"\)/.test(livePage) && /a\.href = "\.\.\/manage\/"/.test(livePage) && !/\.innerHTML\s*=/.test(livePage), "live/index.html links Sign in, and Account when signed in (no innerHTML)");
 check(/\| \*\*Get it by email\*\* \| https:\/\/travel-problem-radar\.vercel\.app\/subscribe\/[ .]/.test(readFileSync("README.md", "utf8")), "README.md's top table links to the subscribe page");
 
 // 5. The server copy of the prompt and categories must match the Claude artifact.
