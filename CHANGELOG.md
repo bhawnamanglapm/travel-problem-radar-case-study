@@ -5,6 +5,8 @@ grouped by date.
 
 ## 2026-10-22
 
+- Continue with Google with a new address now shows "Create your account" first; the account is made only when
+  the person presses Create account, and Cancel creates nothing. Existing accounts still go straight in.
 - "Continue with Google" moved below the email form, full width, under an "or continue with" divider, on the home
   page popup, `/signin/` and `/signup/`.
 - The privacy policy is live at `/legal/privacy/`, linked from the home, sign-in and sign-up pages. The other

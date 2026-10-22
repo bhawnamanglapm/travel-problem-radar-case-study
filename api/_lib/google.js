@@ -72,6 +72,32 @@ export function readOAuthCookie(value, state, { secret, now }) {
   } catch (e) { return null; }
 }
 
+// Step two, for an address with no account: the same cookie now holds the address Google verified
+// until the person presses Create account on the confirm page, for OAUTH_MINUTES at most. Its own
+// MAC prefix keeps it from being read as an attempt (or an attempt as this).
+const smac = (secret, payload) => createHmac("sha256", secret).update("radar-gsignup:" + payload).digest("base64url");
+
+export function signupCookie({ email, secret, now }) {
+  const payload = `${b64u(email)}.${Math.floor(now / 1000) + OAUTH_MINUTES * 60}`;
+  return `${OAUTH_COOKIE}=${payload}.${smac(secret, payload)}; Max-Age=${OAUTH_MINUTES * 60}; ${ATTRS}`;
+}
+
+const SIGNUP_RE = /^([A-Za-z0-9_-]{1,400})\.(\d{1,12})\.([A-Za-z0-9_-]{43})$/;
+
+// The verified address, or null: no cookie, a bad signature, expired or not an address. Never throws.
+export function readSignupCookie(value, { secret, now }) {
+  try {
+    const m = SIGNUP_RE.exec(String(value || ""));
+    if (!m) return null;
+    const [, addr, exp, sig] = m;
+    const good = Buffer.from(smac(secret, `${addr}.${exp}`));
+    const got = Buffer.from(sig);
+    if (got.length !== good.length || !timingSafeEqual(got, good)) return null;
+    if (Number(exp) * 1000 <= now) return null;
+    return normaliseEmail(Buffer.from(addr, "base64url").toString("utf8"));
+  } catch (e) { return null; }
+}
+
 // Swaps the code for an ID token and checks it. Returns { email } or { error }: "exchange" (Google
 // didn't answer or refused the code), "token" (the ID token isn't for us, is stale or doesn't match
 // this attempt) or "unverified" (Google hasn't verified the address). Never throws.

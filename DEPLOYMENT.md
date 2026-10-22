@@ -865,9 +865,10 @@ no new function and no new package. It needs `SESSION_SECRET` and subscriber ema
 
 **What it does.** The button goes to `/api/session?action=google`, which sends the person to Google (OpenID Connect,
 `scope=openid email`, PKCE, and Google asks which account every time). Google sends them back to `/api/session`.
-The address Google verified signs in its account, activates a pending one, or makes a new Free account that is
-active at once, with no confirmation email, under `MAX_SUBSCRIBERS` and `MAX_SIGNUPS_PER_IP_HOUR`. A ticked Pro box
-records a Pro request for a new or pending account. Then the login cookie is set, as for the emailed link. Only the
+The address Google verified signs in its account or activates a pending one. A new address first sees "Create
+your account" (its address, the daily email, the Pro box); pressing Create account makes a Free account that is
+active at once, with no confirmation email, under `MAX_SUBSCRIBERS` and `MAX_SIGNUPS_PER_IP_HOUR`, and Cancel
+creates nothing. A ticked Pro box records a Pro request for a new or pending account. Then the login cookie is set, as for the emailed link. Only the
 address is kept; no Google id, name or token is stored.
 
 **Setting it up** (Google Cloud Console, free). The console's menu names change from time to time, so these are
@@ -888,8 +889,8 @@ Not confirmed: whether Google asks to verify the app or the domain before it can
 Search Console verification may cover the domain.
 
 **Checking it.** `GET /api/session?action=me` should include `"google":true`, and the button should show on
-`/signin/`. Sign in with a Google address that has no account: you land on `/live/` signed in, and the address is on
-the list (`node scripts/subscribers.mjs list`). Cancelling at Google shows "Google sign-in was cancelled".
+`/signin/`. Sign in with a Google address that has no account: you see "Create your account"; press Create account and
+you land on `/live/` signed in, and the address is on the list (`node scripts/subscribers.mjs list`). Cancelling at Google shows "Google sign-in was cancelled".
 
 **Turning it off.** Remove either variable and redeploy: the button disappears and the routes answer `503`.
 

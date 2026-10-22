@@ -403,6 +403,13 @@ working in a real inbox; that is T12's staged launch.
 - The login cookie has no `Max-Age` (it ends when the browser closes); the signed expiry is 12 hours, not 30 days.
 - `npm test` and `npm run check` pass. Not yet checked in production.
 
+### Google sign-up confirm step (2026-10-22, branch `feat/google-signup-confirm`)
+The owner asked that a new Google address go through a sign-up step instead of being signed in at once, and chose a
+confirm screen. A new address now sees "Create your account" (its address, the daily email, the Pro box); the
+`tpr_oauth` cookie holds the verified address, signed, for 10 minutes, and `POST {action: "google-signup"}` makes
+the account. Cancel creates nothing; existing and pending addresses still go straight in. The note under the
+button now reads "New here? You'll confirm before a free account is created." `npm test` and `npm run check` pass.
+
 ### Continue with Google (2026-10-22, branch `feat/google-signin`)
 The owner asked for a way in without an emailed link and chose Google plus the email link (no passwords). #10 in
 [account-flows.md](../account-flows.md).

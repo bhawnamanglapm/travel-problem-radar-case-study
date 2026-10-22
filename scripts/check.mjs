@@ -104,7 +104,7 @@ check(livePage.includes(slashFix), "live/index.html adds the trailing slash (/li
 check(demo.includes(slashFix), "demo/index.html adds the trailing slash (/demo would load /radar.js, a 404)");
 // "Continue with Google" (account-flows.md): hidden until /api/session?action=me says google:true.
 for (const [f, t] of [["index.html", page], ["signin/index.html", inPage], ["signup/index.html", upPage]]) {
-  check(/<div class="gwrap" hidden>\s*<p class="or">or continue with<\/p>\s*<a class="gbtn" id="\w+" href="\/api\/session\?action=google">/.test(t) && /b\.google/.test(t) && /New here\? This creates a free account and starts the daily email\./.test(t),
+  check(/<div class="gwrap" hidden>\s*<p class="or">or continue with<\/p>\s*<a class="gbtn" id="\w+" href="\/api\/session\?action=google">/.test(t) && /b\.google/.test(t) && /New here\? You&rsquo;ll confirm before a free account is created\./.test(t),
     `${f} has a Continue with Google button, hidden until me says google:true, with the new-account note`);
   check(t.split('<div class="gwrap" hidden>').slice(0, -1).every((before) => /<\/form>(?![\s\S]*<form)/.test(before)),
     `${f}: each Google button comes after its email form, not before it`);
