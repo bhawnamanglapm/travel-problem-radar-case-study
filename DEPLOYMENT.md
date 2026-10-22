@@ -221,7 +221,7 @@ Open **Settings → Environment Variables** and add:
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | The OAuth client from Google Cloud (see [Google sign-in](#google-sign-in-optional)) | **Production only**, the secret marked Sensitive | No. Both, with `SESSION_SECRET`, show "Continue with Google" |
 | `RESEND_WEBHOOK_SECRET` | The signing secret (`whsec_…`) of the Resend webhook | **Production only** | No. Turns on `/api/resend-webhook`; see [Subscriber email](#subscriber-email-optional) |
 | `SITE_URL` | `https://` plus your production domain, no trailing slash | **Production only** | No. Defaults to the Vercel production domain |
-| `LEGAL_NAME`, `LEGAL_ADDRESS`, `LEGAL_PHONE` | The name, postal address and phone shown on the policy pages | Production and Preview | Only once `legal/` is in the build: the build fails without them |
+| `LEGAL_NAME`, `LEGAL_ADDRESS`, `LEGAL_PHONE` | The name, postal address and phone shown on the policy pages | Production and Preview | Yes for `LEGAL_NAME`: the build ships `legal/privacy` (since 2026-10-22) and fails without it. The address and phone fill the other policy pages once they ship |
 
 Generate the secret with either:
 
@@ -507,7 +507,7 @@ needed at runtime.
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | You (optional) | `/api/session` | The Google OAuth client. With both and `SESSION_SECRET`, the pages show "Continue with Google"; with either unset the button stays hidden and `?action=google` answers `503`. The secret never leaves the server |
 | `RESEND_WEBHOOK_SECRET` | You (optional) | `/api/resend-webhook` | The Resend webhook's signing secret. If it is unset, the endpoint answers `503` and does nothing |
 | `SITE_URL` | You (optional) | The subscriber endpoints, `/api/sweep` | Base of the links in subscriber emails. If unset, `https://` plus `VERCEL_PROJECT_PRODUCTION_URL`. With neither, subscriber email is off |
-| `LEGAL_NAME`, `LEGAL_ADDRESS`, `LEGAL_PHONE` | You (once `legal/` ships) | The build (`scripts/fill-legal.mjs`) | Filled into the `{{LEGAL_…}}` slots of the policy pages at build time, HTML-escaped; a newline in the address becomes a line break. Kept out of the repository so they are not in its history. If `legal/` is built and one is unset, the build fails |
+| `LEGAL_NAME`, `LEGAL_ADDRESS`, `LEGAL_PHONE` | You (`LEGAL_NAME` now; the rest once their pages ship) | The build (`scripts/fill-legal.mjs`) | Filled into the `{{LEGAL_…}}` slots of the policy pages at build time, HTML-escaped; a newline in the address becomes a line break. Kept out of the repository so they are not in its history. If `legal/` is built and one is unset, the build fails |
 | `VERCEL_PROJECT_PRODUCTION_URL` | Vercel, automatically | `/api/sweep`, the subscriber endpoints | Builds the "Open the live board" link in the Slack message, and the subscriber links when `SITE_URL` is unset. If it is missing, the Slack link is left out |
 | `BLOB_STORE_ID` or `BLOB_READ_WRITE_TOKEN` | Vercel, when the store is connected | `api/_lib/storage.js` | Do not set by hand unless running outside Vercel |
 

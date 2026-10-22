@@ -411,6 +411,10 @@ The owner asked for a way in without an emailed link and chose Google plus the e
   `google:true`, which needs `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `SESSION_SECRET`.
 - `npm test` and `npm run check` pass. Not checked in production: the owner hasn't set up the Google client yet
   (steps in DEPLOYMENT.md, "Google sign-in").
+- Google's "Publish app" stayed greyed out until the Branding page was complete, so `/legal/privacy/` went live on
+  its own (branch `feat/publish-privacy`): gaps filled with the owner's answers, payment lines left for paid Pro,
+  linked from the home, sign-in and sign-up pages. Terms, refunds and contact are still drafts. `npm run check`
+  now treats each policy page separately.
 
 ### Account-flow fix #9 (2026-10-22, branch `fix/confirm-resend-wait`)
 The owner hit #9: a lost confirmation and "already sent in the last 24 hours".

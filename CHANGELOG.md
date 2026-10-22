@@ -5,6 +5,8 @@ grouped by date.
 
 ## 2026-10-22
 
+- The privacy policy is live at `/legal/privacy/`, linked from the home, sign-in and sign-up pages. The other
+  policy pages are still drafts.
 - "Continue with Google" on the home page popup, `/signup/` and `/signin/`, beside the emailed link. A new address
   gets a free account at once, with no confirmation email. Hidden until `GOOGLE_CLIENT_ID` and
   `GOOGLE_CLIENT_SECRET` are set (DEPLOYMENT.md, "Google sign-in").
