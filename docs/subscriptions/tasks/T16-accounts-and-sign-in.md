@@ -7,7 +7,7 @@
 | Size | L |
 | Depends on | T12 (the subscriber records, sign-up, confirm and `/manage/` it builds on) |
 | Unblocks | T17, T20 (checkout needs a signed-in account) |
-| Status | **Built** on 2026-10-22. Offline tests pass. Not yet tried on a Preview or production: `SESSION_SECRET` isn't set anywhere yet, so sign-in answers "not set up yet" until it is |
+| Status | **Built** on 2026-10-22 and live in production (`SESSION_SECRET` set on Production, not Preview). Sign up, confirm, `/manage/` by cookie and Sign out checked in production with a real inbox on 2026-10-22; the emailed sign-in link not yet |
 
 ## Why
 
@@ -55,7 +55,9 @@ site, without an email in hand, must be able to sign up, sign in and reach `/man
   (offline tests; also one for a re-subscribed record, and any cookie when the secret is unset or short)
 - [x] Confirming signs you in; `/manage/` works with the cookie alone; Sign out ends it (offline tests)
 - [x] No code, token or cookie value appears in a log or a reply (offline tests)
-- [ ] The same on a Vercel Preview with `SESSION_SECRET` set, with a real inbox
+- [x] In production with a real inbox: confirm signs you in, `/manage/` works by cookie, Sign out (2026-10-22)
+- [ ] In production with a real inbox: a sign-in link from `/signin/` lands on `/live/` signed in, and is refused when
+      used again
 
 ## Tests
 
