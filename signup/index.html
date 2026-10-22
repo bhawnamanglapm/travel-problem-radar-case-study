@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<script>
+  // GitHub Pages also serves this file but has no /api/: send the visit to the Vercel copy, which does.
+  if (/\.github\.io$/.test(location.hostname)) location.replace("https://travel-problem-radar.vercel.app" + location.pathname.replace(/^\/travel-problem-radar-case-study/, "") + location.search + location.hash);
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="referrer" content="no-referrer" />
+<title>Create your Travel Problem Radar account</title>
+<meta name="description" content="Create a Travel Problem Radar account with your email address. No password: confirm the link we email you and you're signed in." />
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #0B0B0D; color: #F4F4F7; }
+  body { font: 16px/1.55 -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 0 16px; }
+  main { max-width: 640px; margin: 0 auto; padding: 40px 0 56px; }
+  h1 { font-size: 26px; line-height: 1.25; margin: 0 0 12px; }
+  p { margin: 0 0 14px; color: #C9C9D2; }
+  a { color: #C6FF3D; }
+  .nav { font: 12px/1.5 ui-monospace, 'JetBrains Mono', monospace; color: #93939F; margin: 0 0 28px; }
+  .nav a { color: #F4F4F7; }
+  .card { border: 1px solid #2A2A34; background: #131318; border-radius: 8px; padding: 16px 18px; margin: 20px 0 24px; }
+  ol.steps { margin: 0 0 20px; padding-left: 22px; color: #C9C9D2; }
+  ol.steps li { margin: 0 0 6px; }
+  form { margin: 20px 0 8px; }
+  label.field { display: block; font-weight: 600; margin: 0 0 6px; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; }
+  input[type=email] { flex: 1 1 240px; min-width: 0; font: inherit; color: #F4F4F7; background: #131318;
+    border: 1px solid #3A3A46; border-radius: 6px; padding: 10px 12px; }
+  input[type=email]:focus { outline: 2px solid #C6FF3D; outline-offset: 1px; }
+  button { font: inherit; font-weight: 600; background: #C6FF3D; color: #0B0B0D; border: 0; border-radius: 6px;
+    padding: 10px 20px; cursor: pointer; }
+  button:hover { background: #d8ff6f; }
+  button[disabled] { opacity: .6; cursor: default; }
+  button.plain { background: transparent; color: #C6FF3D; border: 1px solid #3A3A46; }
+  /* The trap field: off-screen rather than display:none, which some bots skip. */
+  .trap { position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+  #status, #outStatus { min-height: 1.6em; margin: 12px 0 0; color: #F4F4F7; }
+  #status.err, #outStatus.err { color: #FF8A80; }
+  .small { font-size: 13px; color: #93939F; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <p class="nav"><a href="../">&larr; Case study</a> &middot; <a href="../live/">Live board</a> &middot; <a href="../signin/">Sign in</a></p>
+  <h1>Create your account</h1>
+
+  <div id="signedIn" class="card" hidden>
+    <p>You&rsquo;re signed in on this browser, so you already have an account.</p>
+    <p><a href="../live/">Open the live board</a> &middot; <a href="../manage/">Manage your account</a></p>
+    <button id="out" class="plain" type="button">Sign out</button>
+    <p id="outStatus" role="status" aria-live="polite"></p>
+  </div>
+
+  <div id="signUp">
+    <p>There&rsquo;s no password. Your email address is your account:</p>
+    <ol class="steps">
+      <li>Enter your email address below.</li>
+      <li>We email you a confirmation link.</li>
+      <li>Open it and press <b>Confirm</b>. That creates your account and signs you in on that browser.</li>
+    </ol>
+    <form id="f" method="post" action="/api/subscribe">
+      <label class="field" for="email">Your email address</label>
+      <div class="row">
+        <input id="email" name="email" type="email" autocomplete="email" required maxlength="254" placeholder="you@example.com" />
+        <button id="go" type="submit">Create account</button>
+      </div>
+      <div class="trap">
+        <label for="website">Leave this field empty (it is a trap for automated sign-ups)</label>
+        <input id="website" name="website" type="text" tabindex="-1" autocomplete="off" />
+      </div>
+    </form>
+    <p id="status" role="status" aria-live="polite"></p>
+    <p class="small">Already have an account? <a href="../signin/">Sign in</a> with a link sent to your email.</p>
+  </div>
+
+  <p class="small">Your account includes the free daily email: the travel-industry problems found in the last 24 hours, once a day. Unsubscribing from it deletes the account.</p>
+  <p class="small">We store your email address and the dates you signed up and confirmed. Confirming or signing in sets one cookie on that browser so the site knows it&rsquo;s you; it holds no address and lasts 30 days, or until you sign out. Questions or a deletion request: email <a href="mailto:hello@pehchanthetraveller.com">hello@pehchanthetraveller.com</a>.</p>
+  <p class="small">Gathered by an AI model with web search. Items are not verified; check each source link.</p>
+</main>
+<script>
+(function () {
+  var form = document.getElementById("f");
+  var statusEl = document.getElementById("status"), outStatus = document.getElementById("outStatus");
+  var btn = document.getElementById("go"), out = document.getElementById("out");
+  function say(el, text, isErr) { el.textContent = text; el.className = isErr ? "err" : ""; }
+  function showSignedIn(yes) {
+    document.getElementById("signedIn").hidden = !yes;
+    document.getElementById("signUp").hidden = yes;
+  }
+  fetch("/api/session?action=me").then(function (r) { return r.json(); })
+    .then(function (b) { showSignedIn(Boolean(b && b.signedIn)); })
+    .catch(function () { /* stay on the form */ });
+
+  form.addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    btn.disabled = true;
+    say(statusEl, "Sending…", false);
+    fetch("/api/subscribe", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: form.email.value, website: form.website.value })
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (b) { return { status: r.status, body: b }; });
+    }).then(function (x) {
+      if (x.status === 503) say(statusEl, "Sign-up isn’t open yet.", true);
+      else if (x.status === 429) say(statusEl, "Too many tries from your connection. Please try again in a few minutes.", true);
+      else if (x.status === 200 && x.body.message) { say(statusEl, x.body.message, false); form.email.value = ""; }
+      else if (x.body && x.body.error) say(statusEl, x.body.error.charAt(0).toUpperCase() + x.body.error.slice(1) + ".", true);
+      else say(statusEl, "Something went wrong. Please try again in a minute.", true);
+    }).catch(function () {
+      say(statusEl, "Couldn’t reach the server. Please try again in a minute.", true);
+    }).then(function () { btn.disabled = false; });
+  });
+
+  out.addEventListener("click", function () {
+    out.disabled = true;
+    fetch("/api/session", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "signout" })
+    }).then(function (r) {
+      if (r.status === 200) { showSignedIn(false); say(statusEl, "You’re signed out on this browser.", false); }
+      else say(outStatus, "Something went wrong. Please try again in a minute.", true);
+    }).catch(function () {
+      say(outStatus, "Couldn’t reach the server. Please try again in a minute.", true);
+    }).then(function () { out.disabled = false; });
+  });
+})();
+</script>
+</body>
+</html>

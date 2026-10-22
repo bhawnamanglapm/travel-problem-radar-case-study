@@ -281,7 +281,8 @@ export function makeConfirmHandler({ env, storage, fetchFn = fetch, now, randomB
           if (secret) res.setHeader("set-cookie", sessionCookie(signSession(rec, { secret, now: t })));
           return sendPage(res, 200, {
             title: "You're subscribed",
-            body: `<p>You'll get the daily digest after the first sweep of the UTC day (about 05:47 IST).</p>`
+            body: (secret ? `<p>Your account is ready, and you're signed in on this browser.</p>` : "")
+              + `<p>You'll get the daily digest after the first sweep of the UTC day (about 05:47 IST).</p>`
               + (effectivePlan(rec, t) === "pro" ? ""
                 : rec.proRequestedAt ? `<p>You asked for Pro (an email after every sweep). You'll be switched over shortly; until then you get the daily digest.</p>`
                 : `<p>Want an email after every sweep instead? <a href="${esc(managePath(params.id, params.t))}">Request Pro</a></p>`)
