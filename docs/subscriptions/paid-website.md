@@ -70,7 +70,8 @@ an account are the same thing.
   `SESSION_SECRET` (at least 32 characters; shorter counts as unset, and then nobody can sign in).
 - The signature also covers the record's `createdAt`, which is not in the cookie. Someone who unsubscribes and signs
   up again gets a new record under the same id but a new `createdAt`, so a cookie from before stops working.
-- `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, 30 days.
+- `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, and no `Max-Age`: it ends when the browser closes. The signed
+  expiry is 12 hours (`SESSION_HOURS`), for browsers that restore session cookies. (It was 30 days until 2026-10-22.)
 - Checked on every use against the stored record: a deleted record, or a record whose `sessionVer` has moved on,
   makes the cookie worthless. Bumping `sessionVer` ("sign out everywhere") is how to end every session for an
   account.
@@ -156,7 +157,7 @@ on `/manage/`. Not in Razorpay's docs: what the form asks for after "Yes" (T15 S
 ## Still open (OWNER INPUT NEEDED)
 
 1. Prices, currency, trial and refund rule (the T15 pricing worksheet).
-2. How long a sign-in lasts: 30 days is built (T16); say if it should change.
+2. How long a sign-in lasts: decided 2026-10-22, until the browser closes, 12 hours at most.
 3. Whether the teaser shows headlines from every category, or only counts for some.
 4. Whether turning on the paywall before payments is wanted (only hand-granted Pro could see the board).
 5. Not checked: whether a locked board with no way to pay counts as commercial use under Vercel Hobby's terms.

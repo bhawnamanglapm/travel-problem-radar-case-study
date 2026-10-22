@@ -1874,7 +1874,7 @@ const iso = (ms) => new Date(ms).toISOString();
 // ---- T16: accounts and sign-in (the login cookie, /api/session, Confirm signs in, /manage/ by cookie)
 {
   const { makeSessionHandler, makeAccountHandler, SIGNIN_MINUTES, SIGNIN_GAP_MINUTES } = await import("../api/_lib/subscription-handlers.js");
-  const { SESSION_DAYS, clearCookie, originOk, parseCookies, readSession, sessionCookie, signSession } = await import("../api/_lib/session.js");
+  const { SESSION_HOURS, clearCookie, originOk, parseCookies, readSession, sessionCookie, signSession } = await import("../api/_lib/session.js");
   const { buildSignInEmail } = await import("../api/_lib/email.js");
   const admin = await import("./subscribers.mjs");
   const SECRET = "test-session-secret-0123456789abcdef";
@@ -1921,7 +1921,7 @@ const iso = (ms) => new Date(ms).toISOString();
     const [id, exp, ver, sig] = value.split(".");
     check(await read(`${id}.${exp}.${ver}.${(sig[0] === "A" ? "B" : "A") + sig.slice(1)}`) === null, "cookie: a changed signature is refused");
     check(await read(`${id}.${Number(exp) + 999}.${ver}.${sig}`) === null && await read(`${id}.${exp}.1.${sig}`) === null, "cookie: a changed expiry or version is refused");
-    check(await read(value, { now: T0 + SESSION_DAYS * DAY + 1000 }) === null && await read(value, { now: T0 + (SESSION_DAYS - 1) * DAY }) !== null, `cookie: refused after ${SESSION_DAYS} days, accepted before`);
+    check(await read(value, { now: T0 + SESSION_HOURS * HOUR + 1000 }) === null && await read(value, { now: T0 + (SESSION_HOURS - 1) * HOUR }) !== null, `cookie: refused after ${SESSION_HOURS} hours, accepted before`);
     check(await read(value, { env: {} }) === null && await read(value, { env: { SESSION_SECRET: "short" } }) === null, "cookie: no secret, or one under 32 characters, signs nobody in");
     check(await read(signSession(w.rec, { secret: "another-secret-of-enough-length-000", now: T0 })) === null, "cookie: one signed with another secret (say, Preview's) is refused");
     await putSubscriber(w.st, { ...w.rec, sessionVer: 1 });
@@ -1934,8 +1934,8 @@ const iso = (ms) => new Date(ms).toISOString();
     check(await read(value) === null, "cookie: a deleted record is refused");
     check(await read("garbage") === null && await readSession({ headers: {} }, { env: w.env, storage: w.st, now: T0 }) === null, "cookie: a malformed or missing cookie is refused");
     check(!value.includes("@") && !value.includes("tok-secret") && !value.includes("free"), "cookie: holds no address, token or plan");
-    check(sessionCookie("v") === `tpr_session=v; Max-Age=${SESSION_DAYS * 86400}; Path=/; HttpOnly; Secure; SameSite=Lax` && /^tpr_session=; Max-Age=0; .*HttpOnly; Secure; SameSite=Lax$/.test(clearCookie()),
-      "cookie: HttpOnly, Secure, SameSite=Lax, Path=/, 30 days; sign-out sets Max-Age=0");
+    check(sessionCookie("v") === "tpr_session=v; Path=/; HttpOnly; Secure; SameSite=Lax" && /^tpr_session=; Max-Age=0; .*HttpOnly; Secure; SameSite=Lax$/.test(clearCookie()),
+      "cookie: HttpOnly, Secure, SameSite=Lax, Path=/, no Max-Age (ends when the browser closes); sign-out sets Max-Age=0");
     check(JSON.stringify(parseCookies("a=1; tpr_session=x.y; a=2; junk")) === '{"a":"1","tpr_session":"x.y"}', "parseCookies: name=value pairs, the first of a repeated name wins");
     const o = (origin) => originOk({ headers: { host: "site.example", ...(origin === undefined ? {} : { origin }) } });
     check(o(undefined) && o("https://site.example") && !o("https://evil.example") && !o("null") && !o("https://site.example.evil.example"), "originOk: no Origin or this host passes; another host or \"null\" doesn't");

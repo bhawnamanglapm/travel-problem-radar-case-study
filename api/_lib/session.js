@@ -6,7 +6,9 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { getSubscriber } from "./subscribers.js";
 
 export const SESSION_COOKIE = "tpr_session";
-export const SESSION_DAYS = 30;
+// A sign-in ends when the browser closes (the cookie has no Max-Age). The signed expiry is a backstop
+// for browsers that restore their tabs, and with them session cookies.
+export const SESSION_HOURS = 12;
 export const MIN_SECRET_LENGTH = 32;
 
 const COOKIE_RE = /^([0-9a-f]{64})\.(\d{1,12})\.(\d{1,9})\.([A-Za-z0-9_-]{43})$/;
@@ -21,9 +23,9 @@ const sessionVer = (record) => (Number.isInteger(record.sessionVer) && record.se
 
 const mac = (secret, payload, createdAt) => createHmac("sha256", secret).update(`${payload}.${createdAt}`).digest("base64url");
 
-// The cookie's value for this record, valid SESSION_DAYS from now (ms).
+// The cookie's value for this record, valid SESSION_HOURS from now (ms).
 export function signSession(record, { secret, now }) {
-  const exp = Math.floor(now / 1000) + SESSION_DAYS * 24 * 3600;
+  const exp = Math.floor(now / 1000) + SESSION_HOURS * 3600;
   const payload = `${record.id}.${exp}.${sessionVer(record)}`;
   return `${payload}.${mac(secret, payload, record.createdAt)}`;
 }
@@ -59,7 +61,7 @@ export async function readSession(req, { env, storage, now }) {
 }
 
 const ATTRS = "Path=/; HttpOnly; Secure; SameSite=Lax";
-export const sessionCookie = (value) => `${SESSION_COOKIE}=${value}; Max-Age=${SESSION_DAYS * 24 * 3600}; ${ATTRS}`;
+export const sessionCookie = (value) => `${SESSION_COOKIE}=${value}; ${ATTRS}`;
 export const clearCookie = () => `${SESSION_COOKIE}=; Max-Age=0; ${ATTRS}`;
 
 // For a POST that a cookie authenticates: an Origin header, when the browser sends one, must name

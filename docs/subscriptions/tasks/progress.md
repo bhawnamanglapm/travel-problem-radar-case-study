@@ -396,6 +396,13 @@ working in a real inbox; that is T12's staged launch.
 - Checked in production on 2026-10-22 (see T16 above). The sign-up page said a confirmation link had already gone out
   in the last 24 hours, since that address had an unconfirmed sign-up, and that earlier link was used.
 
+### Customer home page and session-length sign-in (2026-10-22, branch `feat/customer-home`)
+- `index.html` is now a customer product page on both copies; the audit is in `docs/site/homepage-review.md`.
+- While signed out, a sign-up / sign-in popup opens on every visit; closing it isn't remembered. On GitHub Pages it
+  links to the Vercel pages.
+- The login cookie has no `Max-Age` (it ends when the browser closes); the signed expiry is 12 hours, not 30 days.
+- `npm test` and `npm run check` pass. Not yet checked in production.
+
 ### Account-flow fix #9 (2026-10-22, branch `fix/confirm-resend-wait`)
 The owner hit #9: a lost confirmation and "already sent in the last 24 hours".
 - A pending address can get its confirmation again after 10 minutes (was 24 hours), from `/signup/` or `/signin/`.

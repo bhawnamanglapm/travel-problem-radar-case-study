@@ -32,7 +32,7 @@ flowchart TD
   E --> H["Opens link in email"]
   H --> I["Page with a Confirm button<br/>(stops mail scanners)"]
   I --> J["Presses Confirm"]
-  J --> K["Account active + signed in<br/>on this browser (30-day cookie)"]
+  J --> K["Account active + signed in<br/>on this browser (until it closes,<br/>12 h at most)"]
   K --> L["Page: Your account is ready<br/>→ Open the live board"]
   H -. "after 7 days" .-> X["Link invalid,<br/>address deleted"]
   G --> M["Continues as Flow 2:<br/>Sign in button → /live/"]
@@ -60,7 +60,7 @@ flowchart TD
   E --> F["Opens link"]
   F --> G["Page with a Sign in button"]
   G --> H["Presses Sign in"]
-  H --> I["30-day cookie set<br/>→ always lands on /live/"]
+  H --> I["Cookie set (until the browser<br/>closes, 12 h at most)<br/>→ always lands on /live/"]
   F -. "used before / expired" .-> Z["This link isn't valid<br/>→ ask for a new one"]
 ```
 
@@ -73,7 +73,7 @@ flowchart LR
   M --> O["Sign out"]
   S --> O
   O --> P["Cookie cleared → /manage/<br/>sends you to /signin/"]
-  S -. "30 days pass, or owner<br/>signs everyone out" .-> P
+  S -. "browser closed, 12 h pass,<br/>or owner signs everyone out" .-> P
   M --> U["Unsubscribe link in any email<br/>→ account deleted"]
 ```
 
@@ -94,7 +94,7 @@ Flow 2's emailed link is not checked yet, and neither are the #4 and #5 changes.
 | A button after every link | Mail scanners open links automatically. Requiring a press means they can't confirm or sign anyone in |
 | Confirming signs you in | A new user never has to sign in separately right after signing up |
 | Short, single-use sign-in links | 15 minutes, once. A forwarded or old email can't be reused |
-| The cookie | Signed, `HttpOnly`, 30 days, holds no address, and a `POST` from another site is refused |
+| The cookie | Signed, `HttpOnly`, ends when the browser closes (12 hours at most), holds no address, and a `POST` from another site is refused |
 | Limits and a bot trap | Daily caps, a per-connection limit and a hidden field stop bots from using up the email quota |
 
 ## What should change

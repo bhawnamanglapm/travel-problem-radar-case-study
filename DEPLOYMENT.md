@@ -4,7 +4,7 @@ This guide covers deploying and running the **live page** on Vercel: the server 
 read-only data feed and the `/live/` dashboard. It is for the person who owns the Vercel project, or anyone running
 their own copy. It assumes you can use a terminal and the Vercel dashboard; no earlier Vercel experience is needed.
 
-The case study and the sample demo are also served by **GitHub Pages** from `main`. Nothing in this guide changes that.
+The home page and the sample demo are also served by **GitHub Pages** from `main`. Nothing in this guide changes that.
 The 5-hour schedule runs on **GitHub Actions**, because Vercel's Hobby plan allows a cron job at most once a day
 (see 4.7).
 
@@ -61,13 +61,13 @@ Vercel Cron: daily,      │                                                    
 Visitor ──▶ /live/  ──▶  │  /api/data?key=…  (api/data.js, read-only, allow-listed) │
            (static)      │     CDN-cached for 5 minutes                             │
                          │                                                          │
-           /, /demo/     │  static copies of the case study and demo                │
+           /, /demo/     │  static copies of the home page and demo                 │
                          └──────────────────────────────────────────────────────────┘
 ```
 
 | Piece | Source in this repo | Served at |
 |---|---|---|
-| Case study (copy) | `index.html` | `/` |
+| Home page (copy) | `index.html` | `/` |
 | Sample demo (copy) | `demo/index.html`, `demo/radar.js` | `/demo/` |
 | Live page | `live/index.html`, `live/radar-live.js` | `/live/` |
 | Sweep function | `api/sweep.js` → `api/_lib/` | `/api/sweep` (secret required) |
@@ -256,7 +256,7 @@ Run these against your domain. None of them calls the Anthropic API.
 ```bash
 BASE=https://travel-problem-radar.vercel.app
 
-curl -s -o /dev/null -w '%{http_code}\n' $BASE/            # 200  case study
+curl -s -o /dev/null -w '%{http_code}\n' $BASE/            # 200  home page
 curl -s -o /dev/null -w '%{http_code}\n' $BASE/demo/       # 200  demo
 curl -s -o /dev/null -w '%{http_code}\n' $BASE/live/       # 200  live page
 curl -s -o /dev/null -w '%{http_code}\n' $BASE/live/radar-live.js   # 200  live bundle
@@ -833,7 +833,8 @@ yet: the live board stays open to everyone until T17.
 **The cookie.** `tpr_session` holds the subscriber id, an expiry and a version, signed with HMAC-SHA256 using
 `SESSION_SECRET`. The signature also covers the record's creation time, so after someone unsubscribes and signs up
 again, the old cookie stops working. It holds no address and no plan (the plan is read from the record each time).
-`HttpOnly; Secure; SameSite=Lax`, 30 days. A cookie-authenticated `POST` whose `Origin` names another site is refused.
+`HttpOnly; Secure; SameSite=Lax`, with no `Max-Age`, so it ends when the browser closes; the signed expiry is 12 hours.
+A cookie-authenticated `POST` whose `Origin` names another site is refused.
 
 **Limits on sign-in emails.** At most one per address every 5 minutes, at most `MAX_SIGNINS_PER_DAY` a day (default
 50), and the sign-up limit of `MAX_SIGNUPS_PER_IP_HOUR` per connection, counted together with sign-ups. Over any of
