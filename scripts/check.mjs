@@ -32,7 +32,7 @@ const page = readFileSync("index.html", "utf8");
 check(!/href="#"/.test(page), 'index.html has no placeholder href="#" links');
 check(/id="back"/.test(page) && /if \(!\/\\.github\\.io\$\/\.test\(location\.hostname\)\) document\.getElementById\("back"\)\.remove\(\);/.test(page),
   "index.html shows Back to portfolio only on the GitHub Pages copy");
-const local = [...page.matchAll(/href="([^"#:]+)(#[^"]*)?"/g)].map((m) => m[1]);
+const local = [...page.matchAll(/href="([^"#:]+)(#[^"]*)?"/g)].map((m) => m[1]).filter((h) => !h.startsWith("/api/")); // /api/ is served by functions
 const missing = local.filter((h) => !existsSync(h.endsWith("/") ? h + "index.html" : h));
 check(local.length > 0 && missing.length === 0, `local links resolve (${local.join(", ")})${missing.length ? " missing: " + missing : ""}`);
 // The owner confirmed the Slack connector and the daily trigger worked in Claude's app;
@@ -102,6 +102,17 @@ check(/href="\.\.\/signin\/"/.test(upPage) && /href="\.\.\/signup\/"/.test(inPag
 const slashFix = 'if (!/(\\/|\\.html)$/.test(location.pathname)) location.replace(location.pathname + "/" + location.search + location.hash);';
 check(livePage.includes(slashFix), "live/index.html adds the trailing slash (/live would load /radar-live.js, a 404)");
 check(demo.includes(slashFix), "demo/index.html adds the trailing slash (/demo would load /radar.js, a 404)");
+// "Continue with Google" (account-flows.md): hidden until /api/session?action=me says google:true.
+for (const [f, t] of [["index.html", page], ["signin/index.html", inPage], ["signup/index.html", upPage]]) {
+  check(/<div class="gwrap" hidden>\s*<a class="gbtn" id="\w+" href="\/api\/session\?action=google">/.test(t) && /b\.google/.test(t) && /New here\? This creates a free account and starts the daily email\./.test(t),
+    `${f} has a Continue with Google button, hidden until me says google:true, with the new-account note`);
+}
+check((page.match(/<div class="gwrap" hidden>/g) || []).length === 2 && /\$\("upPro"\)\.checked \? "&pro=1"/.test(page), "index.html: the Google button on both tabs; the Create account tab takes its Pro box along");
+check(/form\.wantsPro\.checked \? "&pro=1"/.test(upPage), "signup/index.html: Continue with Google takes the Pro box along");
+check([inPage, upPage].every((t) => /If you continue with Google, we receive only your email address from it\./.test(t)), "signin and signup say Google gives us only the email address");
+const privacyPage = readFileSync("legal/privacy/index.html", "utf8");
+check(/if you continue with Google: only the email address/.test(privacyPage) && /<code>tpr_oauth<\/code>/.test(privacyPage) && /<b>Google<\/b>, only if you choose/.test(privacyPage),
+  "legal/privacy: what Google gives us, the tpr_oauth cookie, and Google as a provider");
 // T13: the Resend webhook, the firewall rule's 429, and Hobby's 12-function limit (no framework).
 check(existsSync("api/resend-webhook.js"), "api/resend-webhook.js exists (bounces and complaints from Resend)");
 check(/x\.status === 429/.test(upPage), "signup/index.html shows a message on 429 (the firewall rate limit)");
