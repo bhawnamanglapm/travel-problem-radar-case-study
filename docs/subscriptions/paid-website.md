@@ -4,7 +4,8 @@
 > email" with "Pro pays for the live board". Until the `BOARD_PAYWALL` switch is turned on, the board stays open
 > and the emails work as described in [email-signup.md](email-signup.md). Payments themselves are
 > [payments-razorpay.md](payments-razorpay.md) and tasks T19 to T22; this page covers what comes before them:
-> accounts, sign-in, the locked board and the teaser email.
+> accounts, sign-in, the locked board and the teaser email. The flows as built, with proposed changes:
+> [account-flows.md](account-flows.md).
 
 ## Goal
 
