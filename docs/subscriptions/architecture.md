@@ -57,7 +57,7 @@ flowchart LR
   SWEEP --> RES
   SWEEP --> SLK
   V --> LIVE --> DATA --> BLOB
-  V --> SUBP --> SUBS
+  V --> SUBP --> SUP
   V --> SUP --> SUBS
   SUBS --> BLOB
   SUBS --> RES
@@ -77,7 +77,7 @@ flowchart LR
 ```mermaid
 sequenceDiagram
   actor U as Visitor
-  participant P as Subscribe page
+  participant P as Sign-up page
   participant S as api/subscribe
   participant B as Blob
   participant R as Resend
@@ -166,13 +166,13 @@ flowchart LR
 
 | Kind | Name | Used by | Status | Defined in |
 |---|---|---|---|---|
-| Page | `/subscribe/` | Visitors | Built | [email-signup.md](email-signup.md) |
+| Page | `/subscribe/` | Visitors: the plans page (Free and Pro), links to `/signup/` | Built | [email-signup.md](email-signup.md) |
 | Page | `/manage/` | Subscribers: plan and Request Pro now, checkout later | Built (checkout later) | [email-signup.md](email-signup.md), [payments-razorpay.md](payments-razorpay.md) |
-| Endpoint | `POST /api/subscribe` | Subscribe page | Built | [email-signup.md](email-signup.md) |
+| Endpoint | `POST /api/subscribe` | Sign-up page | Built | [email-signup.md](email-signup.md) |
 | Endpoint | `GET` and `POST /api/confirm` | Link in the confirmation email | Built | [email-signup.md](email-signup.md) |
 | Endpoint | `GET` and `POST /api/unsubscribe` | Link and one-click header in every email | Built | [email-signup.md](email-signup.md) |
 | Page | `/signin/` | Subscribers: sign in by an emailed link, sign out | Built (T16) | [paid-website.md](paid-website.md) |
-| Page | `/signup/` | Visitors: "Create your account", the same form and `POST /api/subscribe` as `/subscribe/`, email only | Built | [paid-website.md](paid-website.md) |
+| Page | `/signup/` | Visitors: "Create your account", the one sign-up form (`POST /api/subscribe`), email and the Pro box | Built | [paid-website.md](paid-website.md) |
 | Endpoint | `GET` and `POST /api/account` | Manage page, by email link or login cookie | Built | [email-signup.md](email-signup.md) |
 | Endpoint | `GET` and `POST /api/session` | Sign-in page and sign-in link: request a link, sign in, sign out, "who am I" | Built (T16) | [paid-website.md](paid-website.md) |
 | Cookie | `tpr_session` (signed with `SESSION_SECRET`, 30 days) | Confirm and sign-in set it; account and session read it | Built (T16) | [paid-website.md](paid-website.md) |

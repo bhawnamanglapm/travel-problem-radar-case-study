@@ -30,6 +30,9 @@ const OK_REPLY = { ok: true, message: "If that address can be subscribed, a conf
 // most once every NOTICE_HOURS.
 const ALREADY_EMAILED = { ok: true, already: true, message: "This address is already subscribed. We've emailed it a link to manage the subscription." };
 const ALREADY = { ok: true, already: true, message: "This address is already subscribed. Use the Manage link in any digest email to change it." };
+// Row 7 with sign-in set up (T16): the way back in is a sign-in link, so that is what goes.
+const ALREADY_SIGNIN = { ok: true, already: true, message: "This address already has an account. We've emailed it a sign-in link. Not in your inbox within a few minutes? Check your spam or junk folder." };
+const ALREADY_HELD = { ok: true, already: true, message: "This address already has an account. Sign in with a link from the sign-in page, or use the Manage link in any digest email." };
 const PENDING_REPLY = { ok: true, message: "A confirmation link was already sent to this address in the last 24 hours. Check your inbox and spam or junk folder." };
 export const NOTICE_HOURS = 24;
 const HOUR_MS = 3600 * 1000;
@@ -123,6 +126,22 @@ async function notifyOwnerProRequest({ env, fetchFn, at, source, log }) {
   }
 }
 
+// Stores a pending record whose confirmSentAt is now and emails it the confirmation link. Records
+// "subscribed" for a new one and "confirmsent" always. The caller has checked MAX_CONFIRMS_PER_DAY.
+async function sendConfirmation({ record, isNew, env, storage, fetchFn, t, randomBytes, log, logAs }) {
+  const site = siteUrl(env);
+  await putSubscriber(storage, record);
+  if (isNew) await recordEvent(storage, "subscribed", { now: t, randomBytes, plan: "free" });
+  await recordEvent(storage, "confirmsent", { now: t, randomBytes, plan: "free" });
+
+  const mail = buildConfirmEmail({ confirmUrl: `${site}/api/confirm?id=${record.id}&t=${record.token}`, siteUrl: site });
+  const result = await sendOne({ apiKey: env.RESEND_API_KEY, from: env.EMAIL_FROM }, { to: record.email, ...mail }, {
+    fetchFn,
+    idempotencyKey: `confirm-${record.id.slice(0, 24)}-${Date.parse(record.confirmSentAt)}`,
+  });
+  if (result !== "sent") log(logAs, result);
+}
+
 export function makeSubscribeHandler({ env, storage, fetchFn, now, randomBytes = cryptoRandomBytes, log = console.log }) {
   return async function subscribe(req, res) {
     if (!allowMethods(req, res, ["POST"])) return;
@@ -156,6 +175,11 @@ export function makeSubscribeHandler({ env, storage, fetchFn, now, randomBytes =
 
       const existing = await findSubscriber(storage, email);
       if (existing && existing.status === "active") { // row 7
+        if (sessionSecret(env)) {
+          const sent = await sendSignInLink({ record: existing, env, storage, fetchFn, t, randomBytes, log, already: true });
+          return sendJson(res, 200, sent === "sent" ? ALREADY_SIGNIN : ALREADY_HELD);
+        }
+        // Without sign-in (no SESSION_SECRET), the manage link instead.
         // A notice at most once every NOTICE_HOURS, and only under the day's cap.
         if (existing.noticeSentAt && t - Date.parse(existing.noticeSentAt) < NOTICE_HOURS * HOUR_MS) return sendJson(res, 200, ALREADY);
         let sentToday;
@@ -203,16 +227,7 @@ export function makeSubscribeHandler({ env, storage, fetchFn, now, randomBytes =
         record = { ...record, confirmSentAt: new Date(t).toISOString() };
       }
       if (wantsPro && !record.proRequestedAt) record = { ...record, proRequestedAt: new Date(t).toISOString() };
-      await putSubscriber(storage, record);
-      if (!existing) await recordEvent(storage, "subscribed", { now: t, randomBytes, plan: "free" });
-      await recordEvent(storage, "confirmsent", { now: t, randomBytes, plan: "free" });
-
-      const mail = buildConfirmEmail({ confirmUrl: `${site}/api/confirm?id=${record.id}&t=${record.token}`, siteUrl: site });
-      const result = await sendOne({ apiKey: env.RESEND_API_KEY, from: env.EMAIL_FROM }, { to: record.email, ...mail }, {
-        fetchFn,
-        idempotencyKey: `confirm-${record.id.slice(0, 24)}-${Date.parse(record.confirmSentAt)}`,
-      });
-      if (result !== "sent") log("subscribe confirm-email", result);
+      await sendConfirmation({ record, isNew: !existing, env, storage, fetchFn, t, randomBytes, log, logAs: "subscribe confirm-email" });
       return reply();
     } catch (e) {
       log("subscribe", "error: " + ((e && e.name) || "Error"));
@@ -224,7 +239,7 @@ export function makeSubscribeHandler({ env, storage, fetchFn, now, randomBytes =
 // ---- confirm and unsubscribe links (T06, T07)
 
 const PAUSED = { title: "Subscriptions are paused", body: "<p>Subscriptions are paused right now. Your link stays valid: try it again later.</p>" };
-const INVALID = { title: "This link isn't valid", body: `<p>It may have expired. <a href="/subscribe/">Sign up again</a>.</p>` };
+const INVALID = { title: "This link isn't valid", body: `<p>It may have expired. <a href="/signup/">Sign up again</a>.</p>` };
 
 // The id and token from the query string (GET), or from the form (POST) unless `queryOnly`: a
 // mail app's one-click unsubscribe POSTs to the link itself, with only a fixed body. Anything not a string is "".
@@ -444,8 +459,37 @@ function signinOk(record, code, t) {
   return got.length === want.length && timingSafeEqual(got, want);
 }
 
+// Emails an active record a sign-in link, unless one went in the last SIGNIN_GAP_MINUTES (the newest
+// link replaces the last) or the day's MAX_SIGNINS_PER_DAY is reached. Returns "sent", "held", or
+// how the send failed. The caller has already checked the per-IP limit. `already`: the address
+// tried to sign up again (row 7), which changes the email's first line.
+async function sendSignInLink({ record, env, storage, fetchFn, t, randomBytes, log, already = false }) {
+  if (record.signin && t - Date.parse(record.signin.sentAt) < SIGNIN_GAP_MINUTES * MINUTE_MS) return "held";
+  const raw = String(env.MAX_SIGNINS_PER_DAY ?? "").trim();
+  const maxPerDay = raw === "0" ? 0 : positiveInt(raw) ?? DEFAULT_MAX_SIGNINS_PER_DAY;
+  let sentToday;
+  try { sentToday = await countEvents(storage, { day: utcDay(t), type: "signinsent" }); } catch (e) { sentToday = Infinity; }
+  if (sentToday >= maxPerDay) return "held";
+
+  const site = siteUrl(env);
+  const code = Buffer.from(randomBytes(32)).toString("base64url");
+  await putSubscriber(storage, {
+    ...record,
+    signin: { hash: codeHash(code), exp: new Date(t + SIGNIN_MINUTES * MINUTE_MS).toISOString(), sentAt: new Date(t).toISOString() },
+  });
+  await recordEvent(storage, "signinsent", { now: t, randomBytes, plan: effectivePlan(record, t) });
+  const mail = buildSignInEmail({ signInUrl: `${site}/api/session?id=${record.id}&c=${code}`, siteUrl: site, already });
+  const result = await sendOne({ apiKey: env.RESEND_API_KEY, from: env.EMAIL_FROM }, { to: record.email, ...mail }, {
+    fetchFn,
+    idempotencyKey: `signin-${record.id.slice(0, 24)}-${t}`,
+  });
+  if (result !== "sent") log(already ? "subscribe signin-email" : "session signin-email", result);
+  return result;
+}
+
 // One endpoint, /api/session:
-//   POST {action: "request", email, website}  emails a sign-in link to a confirmed address
+//   POST {action: "request", email, website}  emails a sign-in link to a confirmed address, or the
+//                                              confirmation link again to one never confirmed
 //   GET  ?id&c                                 the link: a Sign in button (mail scanners open links)
 //   POST id, c                                 the button: uses the code, sets the cookie, 303 to /live/
 //   GET  ?action=me                            {signedIn, plan} for the pages
@@ -491,27 +535,16 @@ export function makeSessionHandler({ env, storage, fetchFn = fetch, now, randomB
       try {
         if (await ipLimitReached({ req, env, storage, t, randomBytes })) return reply();
         const record = await findSubscriber(storage, email);
-        if (!record || record.status !== "active") return reply();
-        // One email per address every SIGNIN_GAP_MINUTES; the newest link replaces the last.
-        if (record.signin && t - Date.parse(record.signin.sentAt) < SIGNIN_GAP_MINUTES * MINUTE_MS) return reply();
-        const raw = String(env.MAX_SIGNINS_PER_DAY ?? "").trim();
-        const maxPerDay = raw === "0" ? 0 : positiveInt(raw) ?? DEFAULT_MAX_SIGNINS_PER_DAY;
-        let sentToday;
-        try { sentToday = await countEvents(storage, { day: utcDay(t), type: "signinsent" }); } catch (e) { sentToday = Infinity; }
-        if (sentToday >= maxPerDay) return reply();
-
-        const code = Buffer.from(randomBytes(32)).toString("base64url");
-        await putSubscriber(storage, {
-          ...record,
-          signin: { hash: codeHash(code), exp: new Date(t + SIGNIN_MINUTES * MINUTE_MS).toISOString(), sentAt: new Date(t).toISOString() },
-        });
-        await recordEvent(storage, "signinsent", { now: t, randomBytes, plan: effectivePlan(record, t) });
-        const mail = buildSignInEmail({ signInUrl: `${site}/api/session?id=${record.id}&c=${code}`, siteUrl: site });
-        const result = await sendOne({ apiKey: env.RESEND_API_KEY, from: env.EMAIL_FROM }, { to: record.email, ...mail }, {
-          fetchFn,
-          idempotencyKey: `signin-${record.id.slice(0, 24)}-${t}`,
-        });
-        if (result !== "sent") log("session signin-email", result);
+        if (record && record.status === "active") await sendSignInLink({ record, env, storage, fetchFn, t, randomBytes, log });
+        // Never confirmed: the confirmation link again (confirming signs you in), on sign-up's own
+        // limits: once every CONFIRM_RESEND_HOURS, within MAX_CONFIRMS_PER_DAY.
+        if (record && record.status === "pending" && !(t - Date.parse(record.confirmSentAt) < CONFIRM_RESEND_HOURS * HOUR_MS)) {
+          let sentToday;
+          try { sentToday = await signupEmailsToday(storage, t); } catch (e) { sentToday = Infinity; }
+          if (sentToday < maxConfirmsPerDay(env.MAX_CONFIRMS_PER_DAY)) {
+            await sendConfirmation({ record: { ...record, confirmSentAt: new Date(t).toISOString() }, isNew: false, env, storage, fetchFn, t, randomBytes, log, logAs: "session confirm-email" });
+          }
+        }
         return reply();
       } catch (e) {
         log("session", "error: " + ((e && e.name) || "Error"));

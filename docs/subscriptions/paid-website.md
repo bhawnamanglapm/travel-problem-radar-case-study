@@ -27,16 +27,20 @@ an account are the same thing.
 
 ## Flow
 
-1. **Sign up.** `/signup/` ("Create your account", email only) or `/subscribe/` as today: both post to
-   `/api/subscribe`, so they create the same record. Enter an address, get a confirmation email, press **Confirm**.
+1. **Sign up.** `/signup/` ("Create your account") is the one form: an email address and an optional "I'd also like
+   Pro" box, posted to `/api/subscribe`. `/subscribe/` is the plans page and links to it. Enter an address, get a
+   confirmation email, press **Confirm**.
    Confirming now also **signs you in** in that browser (sets the login cookie). It stays on the "You're subscribed"
    page, which says you're signed in and links to `/live/`, so the confirmation still shows. An account is the
-   subscriber record, so it comes with the free daily email; `/signup/` says so.
-2. **Sign in.** New `/signin/` page with one email field, linked from `/subscribe/` and from `/manage/` when not
-   signed in (`/live/` links to it from its panel in T17).
+   subscriber record, so it comes with the free daily email; `/signup/` says so. Signing up again with an address
+   that already has an account emails a sign-in link instead.
+2. **Sign in.** New `/signin/` page with one email field, linked from the home page, `/subscribe/`, `/signup/`,
+   and `/manage/` when not signed in. The live board's strip shows "Sign in", or "Account" when signed in (T17 adds
+   its panel).
    - `POST /api/session` with `action: "request"` and the address. If the address has a confirmed record, the
      record gets a sign-in code (only its hash is stored, valid for 15 minutes, usable once), and the inbox gets an
-     email with a sign-in link.
+     email with a sign-in link. An address that never pressed Confirm gets its confirmation link again instead,
+     on sign-up's limits (once every 24 hours, within `MAX_CONFIRMS_PER_DAY`).
    - The reply is the same whether or not the address has an account. Sign-up already shows whether an address
      subscribes (the owner's choice, decision log), so this hides nothing new; it just keeps the form simple.
    - Sign-in emails have their own limits, so a burst of bot sign-ups can't use up the day's emails and stop paying
@@ -146,7 +150,7 @@ Free, see the board after `grant-pro` (owner's OK), sign out, unsubscribe as Pro
 
 ## Razorpay's "login to complete a payment?"
 
-Yes. For the reviewer: sign up at `/subscribe/` with any address, press Confirm (which signs you in), then Upgrade
+Yes. For the reviewer: sign up at `/signup/` with any address, press Confirm (which signs you in), then Upgrade
 on `/manage/`. Not in Razorpay's docs: what the form asks for after "Yes" (T15 Step 2, row 10).
 
 ## Still open (OWNER INPUT NEEDED)

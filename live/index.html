@@ -30,9 +30,19 @@
       <a href="../">&larr; Case study</a>
       <a href="../demo/">Sample demo</a>
       <a href="../subscribe/">Get it by email</a>
+      <a id="acct" href="../signin/">Sign in</a>
       <a href="https://github.com/bhawnamanglapm/travel-problem-radar-case-study">Source</a>
     </span>
   </div>
+  <script>
+    // Signed in on this browser: the link goes to the account page instead.
+    fetch("/api/session?action=me").then(function (r) { return r.ok ? r.json() : {}; }).then(function (b) {
+      if (!b || !b.signedIn) return;
+      var a = document.getElementById("acct");
+      a.textContent = "Account";
+      a.href = "../manage/";
+    }).catch(function () {});
+  </script>
   <div id="root"></div>
   <noscript>This page needs JavaScript.</noscript>
   <script src="radar-live.js"></script>

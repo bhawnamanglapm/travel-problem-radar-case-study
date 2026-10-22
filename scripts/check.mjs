@@ -51,17 +51,15 @@ check(/<script src="radar-live.js"><\/script>/.test(livePage), "live/index.html 
 const liveBundle = existsSync("live/radar-live.js") ? readFileSync("live/radar-live.js", "utf8") : "";
 check(liveBundle.includes("/api/data"), "live/radar-live.js is built and reads /api/data");
 
-// 4b. Subscribe page (Vercel): self-contained, posts to the API, and is copied into the deployment.
+// 4b. Subscribe page (Vercel): the plans page. One sign-up form only, on /signup/ (4c3).
 const subPage = existsSync("subscribe/index.html") ? readFileSync("subscribe/index.html", "utf8") : "";
-check(/fetch\("\/api\/subscribe"/.test(subPage) && /action="\/api\/subscribe"/.test(subPage), "subscribe/index.html posts to /api/subscribe (script and no-JavaScript form)");
-check(/name="email"/.test(subPage) && /name="website"/.test(subPage), "subscribe/index.html has the email field and the website honeypot field");
-check(/We store your email address and the dates you subscribed and confirmed/.test(subPage) && /Unsubscribing deletes it/.test(subPage), "subscribe/index.html has the privacy note");
+check(subPage.length > 0 && !/<form|\/api\/subscribe/.test(subPage), "subscribe/index.html has no sign-up form of its own (the one form is on /signup/)");
+check(/<a class="btn" href="\.\.\/signup\/">Create your account<\/a>/.test(subPage) && /href="\.\.\/signup\/\?pro=1"/.test(subPage), "subscribe/index.html links to the sign-up page, and to it with Pro ticked");
 check(/Gathered by an AI model with web search\. Items are not verified/.test(subPage), "subscribe/index.html has the AI notice");
 check(/Questions or a deletion request: email <a href="mailto:hello@pehchanthetraveller\.com">/.test(subPage) && !/will be added here/.test(subPage), "subscribe/index.html has a real contact address, not the placeholder");
 check(subPage.length > 0 && !/<script[^>]*\ssrc=|<link[^>]*rel=["']?stylesheet|@import|url\(\s*["']?https?:/i.test(subPage), "subscribe/index.html is self-contained (no external script, stylesheet, import or font URL)");
 const vercelJson = JSON.parse(readFileSync("vercel.json", "utf8"));
 check(/\bcp -r [^&]*\bsubscribe\b[^&]* public\//.test(vercelJson.buildCommand || ""), "vercel.json's buildCommand copies subscribe into public/");
-check(/name="wantsPro"/.test(subPage) && /wantsPro: form\.wantsPro\.checked/.test(subPage), "subscribe/index.html has the \"I'd also like Pro\" box and sends it");
 
 // 4c. Manage page (Vercel): self-contained, talks to /api/account, never leaks its token link.
 const manPage = existsSync("manage/index.html") ? readFileSync("manage/index.html", "utf8") : "";
@@ -93,6 +91,9 @@ check(/name="email"/.test(upPage) && /name="website"/.test(upPage), "signup/inde
 check(!/\.innerHTML\s*=/.test(upPage), "signup/index.html never uses innerHTML");
 check(upPage.length > 0 && !/<script[^>]*\ssrc=|<link[^>]*rel=["']?stylesheet|@import|url\(\s*["']?https?:/i.test(upPage), "signup/index.html is self-contained (no external script, stylesheet, import or font URL)");
 check(/\bcp -r [^&]*\bsignup\b[^&]* public\//.test(vercelJson.buildCommand || ""), "vercel.json's buildCommand copies signup into public/");
+check(/name="wantsPro"/.test(upPage) && /wantsPro: form\.wantsPro\.checked/.test(upPage) && /pro=1/.test(upPage), "signup/index.html has the \"I'd also like Pro\" box, sends it, and ticks it for ?pro=1");
+check(/We store your email address, the dates you signed up and confirmed, and whether you asked for Pro/.test(upPage), "signup/index.html has the privacy note");
+check(/Questions or a deletion request: email <a href="mailto:hello@pehchanthetraveller\.com">/.test(upPage) && /Gathered by an AI model with web search\. Items are not verified/.test(upPage), "signup/index.html has the contact address and the AI notice");
 check(/includes the free daily email/.test(upPage) && /Unsubscribing from it deletes the account/.test(upPage), "signup/index.html says the account includes the daily email and how to delete it");
 check(/href="\.\.\/signin\/"/.test(upPage) && /href="\.\.\/signup\/"/.test(inPage), "signup and signin pages link to each other");
 // /live and /demo without the trailing slash load their script from the site root (a 404): each page adds the slash.
@@ -101,7 +102,7 @@ check(livePage.includes(slashFix), "live/index.html adds the trailing slash (/li
 check(demo.includes(slashFix), "demo/index.html adds the trailing slash (/demo would load /radar.js, a 404)");
 // T13: the Resend webhook, the firewall rule's 429, and Hobby's 12-function limit (no framework).
 check(existsSync("api/resend-webhook.js"), "api/resend-webhook.js exists (bounces and complaints from Resend)");
-check(/x\.status === 429/.test(subPage), "subscribe/index.html shows a message on 429 (the firewall rate limit)");
+check(/x\.status === 429/.test(upPage), "signup/index.html shows a message on 429 (the firewall rate limit)");
 check(/Check your spam or junk folder/.test(readFileSync("api/_lib/subscription-handlers.js", "utf8")), "the sign-up reply tells people to check spam or junk (the new domain's confirmation email is often filtered)");
 const fns = readdirSync("api").filter((f) => f.endsWith(".js"));
 check(fns.length <= 12, `at most 12 functions in api/, Hobby's limit (${fns.length}: ${fns.join(", ")})`);
@@ -134,6 +135,9 @@ check(legalShipped || !LEGAL.some((s) => /href="[^"]*legal\//.test(subPage + man
 const subLinks = [...page.matchAll(/href="([^"]*subscribe[^"]*)"/g)].map((m) => m[1]);
 check(subLinks.length > 0 && subLinks.every((h) => h.startsWith("https://travel-problem-radar.vercel.app/subscribe/")), `index.html links to the subscribe page, only by the absolute Vercel URL (GitHub Pages has no /api/)${subLinks.length ? " (" + subLinks.join(", ") + ")" : " (no link)"}`);
 check(/<a href="\.\.\/subscribe\/">Get it by email<\/a>/.test(livePage), "live/index.html links to the subscribe page");
+// Account pages are findable: the home page links sign-in (absolute, as above); the board shows Sign in or Account.
+check(/<a class="btn sec" href="https:\/\/travel-problem-radar\.vercel\.app\/signin\/">Sign in<\/a>/.test(page), "index.html links to the sign-in page by the absolute Vercel URL");
+check(/<a id="acct" href="\.\.\/signin\/">Sign in<\/a>/.test(livePage) && /fetch\("\/api\/session\?action=me"\)/.test(livePage) && /a\.href = "\.\.\/manage\/"/.test(livePage) && !/\.innerHTML\s*=/.test(livePage), "live/index.html links Sign in, and Account when signed in (no innerHTML)");
 check(/\| \*\*Get it by email\*\* \| https:\/\/travel-problem-radar\.vercel\.app\/subscribe\/[ .]/.test(readFileSync("README.md", "utf8")), "README.md's top table links to the subscribe page");
 
 // 5. The server copy of the prompt and categories must match the Claude artifact.

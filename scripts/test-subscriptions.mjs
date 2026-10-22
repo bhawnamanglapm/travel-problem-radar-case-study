@@ -1876,7 +1876,7 @@ const iso = (ms) => new Date(ms).toISOString();
     };
     const env = { ...ENV, ...envOver };
     const deps = { env, storage: st, fetchFn, now: () => clock, randomBytes: seeded(7), log: (...a) => logs.push(a.join(" ")) };
-    const handlers = { sess: makeSessionHandler(deps), acct: makeAccountHandler(deps), conf: makeConfirmHandler(deps) };
+    const handlers = { sess: makeSessionHandler(deps), acct: makeAccountHandler(deps), conf: makeConfirmHandler(deps), sub: makeSubscribeHandler(deps) };
     let ipN = 0;
     const call = async (name, { method = "GET", query = {}, body, cookie, origin, ip } = {}) => {
       const headers = { host: "site.example", "content-type": "application/json", "x-forwarded-for": ip || "203.0.113." + ++ipN };
@@ -1887,9 +1887,10 @@ const iso = (ms) => new Date(ms).toISOString();
       return res;
     };
     const ask = (email, opts = {}) => call("sess", { method: "POST", body: { action: "request", email, ...(opts.body || {}) }, ip: opts.ip });
+    const signUp = (email, opts = {}) => call("sub", { method: "POST", body: { email, ...(opts.body || {}) }, ip: opts.ip });
     const codeIn = (mail) => { const m = /[?&]c=([A-Za-z0-9_-]+)/.exec(mail.text); return m ? m[1] : ""; };
     const evs = (type) => [...st.m.keys()].filter((k) => k.startsWith("radar:event:") && k.includes(`-${type}-`));
-    return { st, rec, env, sent, logs, call, ask, codeIn, evs, now: () => getSubscriber(st, rec.id), tick: (ms) => { clock += ms; } };
+    return { st, rec, env, sent, logs, call, ask, signUp, codeIn, evs, now: () => getSubscriber(st, rec.id), tick: (ms) => { clock += ms; } };
   };
   const cookieOf = (res) => { const m = /^tpr_session=([^;]*)/.exec(res.headers["set-cookie"] || ""); return m && m[1] ? `tpr_session=${m[1]}` : ""; };
   const REPLY = "If that address has an account, a sign-in link is on its way. Not in your inbox within a few minutes? Check your spam or junk folder.";
@@ -1931,6 +1932,9 @@ const iso = (ms) => new Date(ms).toISOString();
     let threw = 0;
     for (const bad of ["", "javascript:alert(1)"]) { try { buildSignInEmail({ signInUrl: bad }); } catch (e) { threw++; } }
     check(threw === 2, "buildSignInEmail: refuses a missing or non-http link");
+    const a = buildSignInEmail({ signInUrl: "https://s.example/api/session?id=a&c=b", already: true });
+    check(/tried to sign up .* already has an account, so here is a sign-in link instead/.test(a.text) && a.text.includes("Sign in: https://s.example/api/session?id=a&c=b") && /expires in 15 minutes/.test(a.text) && a.subject === m.subject,
+      "buildSignInEmail({ already }): says the address already has an account; same subject, link and expiry");
   }
 
   // asking for a link
@@ -1955,9 +1959,25 @@ const iso = (ms) => new Date(ms).toISOString();
     r = await w.ask("me@gmail.com");
     check(w.sent.length === 2 && (await w.now()).signin.hash !== after.signin.hash, "sign-in request: after 5 minutes a new link replaces the old one");
 
+    // never confirmed: the confirmation link again, on sign-up's limits (account-flows #5)
     w = await world({}, { status: "pending" });
     r = await w.ask("me@gmail.com");
-    check(r.json().message === REPLY && w.sent.length === 0 && !(await w.now()).signin, "sign-in request: an unconfirmed address gets the same reply and no email");
+    let p = await w.now();
+    check(r.json().message === REPLY && w.sent.length === 1 && w.sent[0].to[0] === "me@gmail.com" && w.sent[0].text.includes(`https://site.example/api/confirm?id=${w.rec.id}&t=tok-secret-1`) && !p.signin,
+      "sign-in request: an address never confirmed (last link over 24 h ago) gets the same reply and its confirmation link again, not a sign-in link");
+    check(p.confirmSentAt === iso(T0) && p.status === "pending" && w.evs("confirmsent").length === 1 && w.evs("subscribed").length === 0 && w.evs("signinsent").length === 0,
+      "sign-in request: the re-send moves confirmSentAt and counts as confirmsent");
+    r = await w.call("conf", { method: "POST", body: { id: w.rec.id, t: "tok-secret-1" } });
+    check(r.code === 200 && cookieOf(r) && (await w.now()).status === "active", "sign-in request: confirming that link activates the account and signs the browser in");
+    w = await world({}, { status: "pending" });
+    await w.ask("me@gmail.com");
+    w.tick(23 * HOUR);
+    r = await w.ask("me@gmail.com");
+    check(r.json().message === REPLY && w.sent.length === 1, "sign-in request: a never-confirmed address gets at most one confirmation every 24 hours");
+    w = await world({ MAX_CONFIRMS_PER_DAY: "1" }, { status: "pending" });
+    await w.st.set(`radar:event:${utcDay(T0)}-000000000-confirmsent-aaaaaa`, "{}");
+    r = await w.ask("me@gmail.com");
+    check(r.json().message === REPLY && w.sent.length === 0 && (await w.now()).confirmSentAt === w.rec.confirmSentAt, "sign-in request: MAX_CONFIRMS_PER_DAY reached, no confirmation re-sent and nothing stored");
     w = await world();
     r = await w.ask("me@gmail.com", { body: { website: "bot" } });
     check(r.json().message === REPLY && w.sent.length === 0, "sign-in request: the honeypot gets the usual reply and no email");
@@ -2017,6 +2037,37 @@ const iso = (ms) => new Date(ms).toISOString();
     const off = await world({ SESSION_SECRET: "" });
     r = await off.call("sess", { query: { id: off.rec.id, c: "x" } });
     check(r.code === 503 && /isn(&#39;|')t set up yet/.test(r.body), "sign-in link: with no SESSION_SECRET, a 503 page");
+  }
+
+  // signing up again with an existing account gets a sign-in link (account-flows #4)
+  {
+    const SENT = "This address already has an account. We've emailed it a sign-in link. Not in your inbox within a few minutes? Check your spam or junk folder.";
+    const HELD = "This address already has an account. Sign in with a link from the sign-in page, or use the Manage link in any digest email.";
+    let w = await world();
+    let r = await w.signUp("M.E+x@gmail.com");
+    check(r.code === 200 && r.json().already === true && r.json().message === SENT, "sign up again: an existing account is told a sign-in link was emailed");
+    check(w.sent.length === 1 && w.sent[0].to[0] === "me@gmail.com" && w.sent[0].subject === "Your Travel Problem Radar sign-in link" && /already has an account/.test(w.sent[0].text) && !/manage\/\?id=|tok-secret/.test(w.sent[0].text),
+      "sign up again: one sign-in email to the stored address, with no manage link or token");
+    check((await w.now()).signin && w.evs("signinsent").length === 1 && w.evs("noticesent").length === 0 && w.evs("confirmsent").length === 0 && !(await w.now()).noticeSentAt,
+      "sign up again: counted as a sign-in email (signinsent), not a notice or a confirmation");
+    check(!r.body.includes(w.rec.id) && !r.body.includes("@") && !w.logs.some((l) => /@|tok-secret/.test(l)), "sign up again: no id or address in the reply or the logs");
+    const code = w.codeIn(w.sent[0]);
+    r = await w.call("sess", { method: "POST", body: { id: w.rec.id, c: code } });
+    check(r.code === 303 && r.headers.location === "/live/" && cookieOf(r), "sign up again: the emailed link signs the browser in");
+    w = await world();
+    await w.signUp("me@gmail.com");
+    w.tick((SIGNIN_GAP_MINUTES - 1) * MIN);
+    r = await w.signUp("me@gmail.com");
+    const r2 = await w.ask("me@gmail.com");
+    check(r.json().message === HELD && r2.json().message === REPLY && w.sent.length === 1, "sign up again: within 5 minutes of a sign-in link, nothing more is sent, from either form");
+    w = await world({ MAX_SIGNINS_PER_DAY: "1" });
+    await w.st.set(`radar:event:${utcDay(T0)}-000000000-signinsent-aaaaaa`, "{}");
+    r = await w.signUp("me@gmail.com");
+    check(r.json().message === HELD && w.sent.length === 0, "sign up again: MAX_SIGNINS_PER_DAY reached, no email and the held reply");
+    w = await world({ SESSION_SECRET: "" });
+    r = await w.signUp("me@gmail.com");
+    check(r.json().already === true && /already subscribed/.test(r.json().message) && w.sent.length === 1 && /already subscribed/.test(w.sent[0].subject) && w.evs("signinsent").length === 0,
+      "sign up again: with no SESSION_SECRET, the manage-link notice as before");
   }
 
   // Confirm signs you in
