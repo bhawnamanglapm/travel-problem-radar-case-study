@@ -30,6 +30,8 @@ check(new Set(titles).size === titles.length, "no duplicate titles within a cate
 // 2. Case-study page: no dead buttons, and every local link points at a real file.
 const page = readFileSync("index.html", "utf8");
 check(!/href="#"/.test(page), 'index.html has no placeholder href="#" links');
+check(/id="back"/.test(page) && /if \(!\/\\.github\\.io\$\/\.test\(location\.hostname\)\) document\.getElementById\("back"\)\.remove\(\);/.test(page),
+  "index.html shows Back to portfolio only on the GitHub Pages copy");
 const local = [...page.matchAll(/href="([^"#:]+)(#[^"]*)?"/g)].map((m) => m[1]);
 const missing = local.filter((h) => !existsSync(h.endsWith("/") ? h + "index.html" : h));
 check(local.length > 0 && missing.length === 0, `local links resolve (${local.join(", ")})${missing.length ? " missing: " + missing : ""}`);
