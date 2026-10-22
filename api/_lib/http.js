@@ -98,13 +98,15 @@ small{color:#93939F}`;
 
 // A minimal HTML page. `title` is escaped here. `body` is HTML the caller built, so every value
 // that came from a request must already have gone through esc(). The page is never cached or
-// indexed, and sends no Referer, because the links that lead here carry tokens.
+// indexed, and sends no Referer to other sites, because the links that lead here carry tokens. Not
+// "no-referrer": with it, a form posted from the page (the sign-in button) carries Origin: null, and
+// originOk refuses that. "same-origin" sends the real Origin to this site and nothing to others.
 export function sendPage(res, code, { title, body }) {
   res.statusCode = code;
   res.setHeader("content-type", "text/html; charset=utf-8");
   res.setHeader("cache-control", "no-store");
   res.setHeader("x-robots-tag", "noindex");
-  res.setHeader("referrer-policy", "no-referrer");
+  res.setHeader("referrer-policy", "same-origin");
   res.end(`<!doctype html>
 <html lang="en">
 <head>
