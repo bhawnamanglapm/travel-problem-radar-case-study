@@ -224,7 +224,7 @@ export function makeSubscribeHandler({ env, storage, fetchFn, now, randomBytes =
 // ---- confirm and unsubscribe links (T06, T07)
 
 const PAUSED = { title: "Subscriptions are paused", body: "<p>Subscriptions are paused right now. Your link stays valid: try it again later.</p>" };
-const INVALID = { title: "This link isn't valid", body: `<p>It may have expired. <a href="/subscribe/">Sign up again</a>.</p>` };
+const INVALID = { title: "This link isn't valid", body: `<p>It may have expired. <a href="/signup/">Sign up again</a>.</p>` };
 
 // The id and token from the query string (GET), or from the form (POST) unless `queryOnly`: a
 // mail app's one-click unsubscribe POSTs to the link itself, with only a fixed body. Anything not a string is "".
