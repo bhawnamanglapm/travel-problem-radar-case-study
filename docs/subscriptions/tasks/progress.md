@@ -28,9 +28,13 @@ working in a real inbox; that is T12's staged launch.
 | One subscription per inbox (fix, not in the original task list) | done, live on production and checked | merged as #19 (33d1ef1, 3af6403) | 485 pass (417 subscriber + 68 sweep; +31 new); 46 `npm run check` checks | See "One subscription per inbox" below |
 | Old unsubscribe links say "no longer active" (fix) | done, live on production | merged as #23 (f43e25f) | 486 pass (418 subscriber + 68 sweep; +1 new); 46 `npm run check` checks | An old link's page said the address was off the list when it wasn't |
 | [T15](T15-phase2-gate-and-accounts.md) Gate and accounts | in progress: gate skipped by the owner; prerequisites started | | | See "T15" below |
-| [T20](T20-accounts-and-sign-in.md) Accounts and sign-in | todo | | | Paid website ([paid-website.md](../paid-website.md)) |
-| [T21](T21-locked-board.md) Locked board | todo | | | Behind `BOARD_PAYWALL`, off |
-| [T22](T22-teaser-email.md) Free email becomes a teaser | todo | | | Same switch |
+| [T16](T16-accounts-and-sign-in.md) Accounts and sign-in | todo | | | Paid website ([paid-website.md](../paid-website.md)) |
+| [T17](T17-locked-board.md) Locked board | todo | | | Behind `BOARD_PAYWALL`, off |
+| [T18](T18-teaser-email.md) Free email becomes a teaser | todo | | | Same switch |
+| [T19](T19-razorpay-library.md) Razorpay library | todo | | | Needs T15's prices and Razorpay test keys |
+| [T20](T20-manage-page-and-checkout.md) `/manage/` page, checkout, cancel | todo | | | Needs T16 and T19 |
+| [T21](T21-razorpay-webhook.md) Razorpay webhook | todo | | | Needs T19 and T20 |
+| [T22](T22-pro-lifecycle-and-go-live.md) Pro expiry, paid unsubscribe, go-live | todo | | | Needs Vercel Pro (T15 Step 2, row 3) |
 
 ## Notes per task
 
@@ -65,7 +69,7 @@ working in a real inbox; that is T12's staged launch.
   `request.body` is an object when the request has a supported `Content-Type`, otherwise `undefined`. Docs show a
   signed-webhook function reading the raw bytes by exporting `config = { api: { bodyParser: false } }` and reading
   the stream (their example uses the `raw-body` package). **Not confirmed:** whether touching `req.body` first
-  consumes the stream. For T18 (Razorpay, Phase 2) the raw route must be tested on a Preview deployment before
+  consumes the stream. For T21 (Razorpay, Phase 2) the raw route must be tested on a Preview deployment before
   relying on it; `readBody` already handles both a pre-read body and a stream.
 
 ### T04
@@ -120,7 +124,7 @@ working in a real inbox; that is T12's staged launch.
   id and token are read from the query string on POST too (a mail app's one-click POST has only a fixed body, which
   is never read); it ignores `SUBSCRIPTIONS_ENABLED`; and an unknown id or wrong token gives `200` "You're not
   subscribed" instead of 404.
-- A still-paid `proSource: "razorpay"` record is kept on POST, with a page pointing to `/subscribe/` (T19 will
+- A still-paid `proSource: "razorpay"` record is kept on POST, with a page pointing to `/subscribe/` (T22 will
   provide the manage page). The explanation shows on POST only; GET shows the normal page.
 - One test builds the link with `withSubscriberFooter` (T04) and POSTs it, so the two tasks agree.
 - **Verify item (Gmail/Yahoo one-click rules), only partly checked:** a web search (no official Google or Yahoo
@@ -220,7 +224,7 @@ working in a real inbox; that is T12's staged launch.
 
 ### Request Pro (branch `feat/pro-request`, not in the original task list)
 - Asked for by the owner during the T12 launch: let a subscriber ask for Pro, the owner grants it, and payments slot
-  in at the same point later (T17/T18).
+  in at the same point later (T20/T21).
 - Two places to ask: the "I'd also like Pro" box on `/subscribe/` (stored as `proRequestedAt` on the pending record;
   the event and the owner email happen only at Confirm), and a "Request Pro" button on the new `/manage/` page.
 - `/api/account` (the sixth function): `GET` returns the plan without the address or token; `POST`
@@ -363,5 +367,5 @@ working in a real inbox; that is T12's staged launch.
 - **2026-10-22: Pro pays for the website, not email** (decision log; design in
   [paid-website.md](../paid-website.md)). The whole live board becomes paid; the free
   email becomes a teaser; sign-up and sign-in by email link, no passwords. Planned PRs: accounts and sign-in, the
-  locked board behind `BOARD_PAYWALL` (off), the teaser email. pricing.md, T16 to T19 and the draft terms updated.
+  locked board behind `BOARD_PAYWALL` (off), the teaser email. pricing.md, T19 to T22 and the draft terms updated.
   Step 2 row 10: Razorpay's "login to complete a payment?" is answered Yes.

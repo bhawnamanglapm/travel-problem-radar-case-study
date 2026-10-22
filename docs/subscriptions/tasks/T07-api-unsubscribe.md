@@ -27,7 +27,7 @@ The link in every email and the `List-Unsubscribe` header are both `<site>/api/u
 |---|---|---|---|
 | `GET ?id&t` | Token matches | Nothing | Page: "Unsubscribe from Travel Problem Radar?" with an **Unsubscribe** button (a form that `POST`s to the same URL) |
 | `POST ?id&t` (from the page, or a mail app's one-click with body `List-Unsubscribe=One-Click`) | Token matches, plan isn't paid Pro | Delete the record; record `unsubscribed` with its plan | Page: "You're unsubscribed. Your address has been deleted." (`200`) |
-| `POST` | Token matches, `proSource: "razorpay"` and still paid | Don't delete (Phase 2, T19) | Page explaining they must cancel on the manage page first, with the link |
+| `POST` | Token matches, `proSource: "razorpay"` and still paid | Don't delete (Phase 2, T22) | Page explaining they must cancel on the manage page first, with the link |
 | `GET` or `POST` | Unknown id or wrong token | Nothing | `200` page "You're not subscribed" |
 | other method | — | — | `405` |
 

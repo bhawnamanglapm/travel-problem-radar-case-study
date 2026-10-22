@@ -31,7 +31,7 @@ Stored at `radar:sub:<id>` (Blob path `radar/radar-sub-<id>.json`).
   confirmSentAt: "<ISO>",        // last confirmation email, for the once-a-day limit
   confirmedAt: null | "<ISO>",
   cats: null,                    // T14: null = all categories
-  rzp: null                      // T17/T18: { subscriptionId, status }
+  rzp: null                      // T20/T21: { subscriptionId, status }
 }
 ```
 

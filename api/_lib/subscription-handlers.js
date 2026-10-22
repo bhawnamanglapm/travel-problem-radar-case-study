@@ -92,7 +92,7 @@ export const senderOk = (from) => Boolean(from) && from !== DEFAULT_FROM && !/@r
 // A ticked checkbox ("on"), the page script's "1", or JSON true.
 const isYes = (v) => v === true || v === "1" || v === "on";
 
-// Where a subscriber sees their plan and asks for Pro (T17 adds checkout to the same page).
+// Where a subscriber sees their plan and asks for Pro (T20 adds checkout to the same page).
 export const managePath = (id, t) => `/manage/?id=${encodeURIComponent(id)}&t=${encodeURIComponent(t)}`;
 
 // Tells the owner (EMAIL_TO) that someone asked for Pro. Names nobody. Never throws, and a
@@ -346,7 +346,7 @@ const accountView = (record, t) => ({
 });
 
 // GET ?id&t: the plan. POST {id, t, action: "request-pro"}: ask for Pro. Until payments exist
-// (T17, T18) the owner grants it with the admin script; this records the request and tells them.
+// (T20, T21) the owner grants it with the admin script; this records the request and tells them.
 // POST {id, t, action: "set-cats", cats: [...]}: a Pro subscriber picks their categories (T14).
 export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomBytes = cryptoRandomBytes, log = console.log }) {
   return async function account(req, res) {

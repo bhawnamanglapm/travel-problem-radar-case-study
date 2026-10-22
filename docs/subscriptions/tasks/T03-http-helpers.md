@@ -6,7 +6,7 @@
 | Who | Developer |
 | Size | S |
 | Depends on | — |
-| Unblocks | T05, T06, T07, T17, T18 |
+| Unblocks | T05, T06, T07, T20, T21 |
 
 ## Why
 
@@ -43,8 +43,8 @@ Pages never echo back anything from the request except through `esc()`.
 ## Verify at build time
 
 - How Vercel's Node.js runtime exposes the body for a plain `(req, res)` function: whether `req.body` is parsed
-  automatically, and whether the raw stream can still be read afterwards. The Razorpay webhook (T18) needs the
-  **exact raw bytes**; if the platform only gives a parsed body, T18 must find another way (see that task)
+  automatically, and whether the raw stream can still be read afterwards. The Razorpay webhook (T21) needs the
+  **exact raw bytes**; if the platform only gives a parsed body, T21 must find another way (see that task)
 
 ## Out of scope
 

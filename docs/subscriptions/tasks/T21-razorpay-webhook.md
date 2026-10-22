@@ -1,12 +1,12 @@
-# T18 · Razorpay webhook
+# T21 · Razorpay webhook
 
 | | |
 |---|---|
 | Phase | 2, paid Pro |
 | Who | Developer |
 | Size | M |
-| Depends on | T16, T17 |
-| Unblocks | T19 |
+| Depends on | T19, T20 |
+| Unblocks | T22 |
 
 > **Changed 2026-10-22 ([decision log](../../decisions.md)):** Pro now pays for the live board on the website, not
 > for email ([paid-website.md](../paid-website.md)). Accounts and sign-in (email link, login cookie) and the locked board come first, behind a
@@ -44,7 +44,7 @@ fails, and keeps arriving after the subscriber has closed the tab.
 | `subscription.charged` | `plan: "pro"` | `current_end` | Each renewal moves the date forward |
 | `subscription.pending` | none (stay Pro) | unchanged | A renewal failed and Razorpay is retrying |
 | `subscription.halted` | `plan: "free"` | `null` | Retries used up |
-| `subscription.cancelled` | none now | keep `current_end` | Pro ends when `proUntil` passes (T19); if Razorpay cancelled immediately and `current_end` is past, set Free now |
+| `subscription.cancelled` | none now | keep `current_end` | Pro ends when `proUntil` passes (T22); if Razorpay cancelled immediately and `current_end` is past, set Free now |
 | `subscription.completed` | as cancelled | keep `current_end` | All `total_count` cycles done |
 | `subscription.paused` / `resumed` | treat paused as halted, resumed as charged | | Only if pausing is enabled; otherwise ignore |
 | anything else | none | — | Reply `200` |

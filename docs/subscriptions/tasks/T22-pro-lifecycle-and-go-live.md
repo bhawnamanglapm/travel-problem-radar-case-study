@@ -1,11 +1,11 @@
-# T19 · Pro expiry, paid unsubscribe and go-live
+# T22 · Pro expiry, paid unsubscribe and go-live
 
 | | |
 |---|---|
 | Phase | 2, paid Pro |
 | Who | Developer (code, docs) and owner (go-live) |
 | Size | M |
-| Depends on | T17, T18, T21, T22 |
+| Depends on | T17, T18, T20, T21 |
 | Unblocks | — |
 
 > **Changed 2026-10-22 ([decision log](../../decisions.md)):** Pro now pays for the live board on the website, not
@@ -41,7 +41,7 @@ T07 deliberately didn't delete a paid record. Now:
   `radar:rzpsub:` index. If the cancel call fails, **don't delete** (otherwise they keep being charged with no way to
   manage it); show "Something went wrong; please try again or write to <contact>".
 - List-Unsubscribe one-click (RFC 8058) on a paid record does the same.
-- Later webhooks for that subscription find no record and reply `200` (T18 step 5).
+- Later webhooks for that subscription find no record and reply `200` (T21 step 5).
 
 ### 3. Key safety
 

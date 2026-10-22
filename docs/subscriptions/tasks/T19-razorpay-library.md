@@ -1,4 +1,4 @@
-# T16 · Razorpay library
+# T19 · Razorpay library
 
 | | |
 |---|---|
@@ -6,7 +6,7 @@
 | Who | Developer |
 | Size | M |
 | Depends on | T15 (test-mode account, plan id) |
-| Unblocks | T17, T18 |
+| Unblocks | T20, T21 |
 
 > **Changed 2026-10-22 ([decision log](../../decisions.md)):** Pro now pays for the live board on the website, not
 > for email ([paid-website.md](../paid-website.md)). Accounts and sign-in (email link, login cookie) and the locked board come first, behind a
@@ -27,7 +27,7 @@ paths, field names, header names, event names and the signature formats.
 | Export | What it does |
 |---|---|
 | `razorpayConfigured(env)` | True only if `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` and `RAZORPAY_PLAN_ID` are all set |
-| `isTestKey(env)` | True if `RAZORPAY_KEY_ID` starts with `rzp_test_`. Used by T19 to refuse test keys on Production and live keys on Preview |
+| `isTestKey(env)` | True if `RAZORPAY_KEY_ID` starts with `rzp_test_`. Used by T22 to refuse test keys on Production and live keys on Preview |
 | `verifyWebhook(rawBody, signatureHeader, secret)` | HMAC-SHA256 of the **raw body bytes** with the webhook secret, hex, compared with `timingSafeEqual` (lengths checked first). Header: `x-razorpay-signature` (**verify**) |
 | `verifyCheckout({paymentId, subscriptionId, signature}, keySecret)` | HMAC-SHA256 of `paymentId + "|" + subscriptionId` with the key secret (**verify** the order). Same comparison |
 | `createSubscription({env, fetchFn, planId, subscriberId, totalCount})` | `POST https://api.razorpay.com/v1/subscriptions` with `plan_id`, `total_count`, `customer_notify`, and `notes: {sid: subscriberId}`. Returns `{id, status, shortUrl}` or `{error}`. **No email in `notes`**; the subscriber id is enough to find the record |

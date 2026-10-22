@@ -5,7 +5,7 @@
 | Phase | 1d, after launch, **only if the owner picks it in D6** |
 | Who | Developer |
 | Size | M |
-| Depends on | T12. Easiest after T17 (the manage page); otherwise needs its own small preferences page |
+| Depends on | T12. Easiest after T20 (the manage page); otherwise needs its own small preferences page |
 | Status | **Built** on 2026-10-22 (owner's choice). Offline tests pass. It uses the existing `/manage/` page and `/api/account`, so there is no `/api/preferences`. Not yet seen in a real inbox |
 
 ## Why
@@ -17,7 +17,7 @@ convenience and personalisation, not access. This is one of the few Pro features
 
 - **Record:** `cats` holds `null` (all) or a non-empty subset of the four category keys from `CATS` in
   `api/_lib/radar.js` (`traveler_pain`, `gov_policy`, `web_app`, `industry`). Reject unknown keys.
-- **Preferences page:** a form on the manage page (T17), or until then `GET /api/preferences?id&t` showing four
+- **Preferences page:** a form on the manage page (T20), or until then `GET /api/preferences?id&t` showing four
   checkboxes and `POST` to save. Only `effectivePlan === "pro"` can save; Free sees a note that it's a Pro feature.
 - **Delivery (T09):** at the single place where a recipient's items are chosen, filter `problems` by `cats`. The
   counts in the subject and heading are recalculated per recipient, so the body is no longer built once for the
