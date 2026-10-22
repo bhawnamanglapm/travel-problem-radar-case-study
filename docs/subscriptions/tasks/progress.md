@@ -25,7 +25,7 @@ working in a real inbox; that is T12's staged launch.
 | [T12](T12-docs-and-launch.md) Staged launch | in progress | | | Steps recorded under "T12" below |
 | [T13](T13-optional-hardening.md) Bounces, complaints, per-IP limit | done, live on production (webhook and firewall rule) | merged as #12 | 423 pass (355 subscriber + 68 sweep; +49 new) and 3 new `npm run check` checks | See "T13" below |
 | [T14](T14-optional-pro-categories.md) Pro chooses categories | done (offline); not deployed yet | branch `feat/t14-pro-categories` | 454 pass (386 subscriber + 68 sweep; +29 new); 46 `npm run check` checks (+1) | See "T14" below |
-| One subscription per inbox (fix, not in the original task list) | done (offline); not deployed yet | branch `fix/one-subscription-per-inbox` (33d1ef1, 3af6403) | 485 pass (417 subscriber + 68 sweep; +31 new); 46 `npm run check` checks | See "One subscription per inbox" below |
+| One subscription per inbox (fix, not in the original task list) | done, live on production and checked | merged as #19 (33d1ef1, 3af6403) | 485 pass (417 subscriber + 68 sweep; +31 new); 46 `npm run check` checks | See "One subscription per inbox" below |
 
 ## Notes per task
 
@@ -297,5 +297,15 @@ working in a real inbox; that is T12's staged launch.
 - A pending address with a confirmation sent in the last 24 hours is told so, and nothing is sent.
 - The honeypot, the per-IP limit, a full or closed list and the confirmation cap keep the generic reply.
 - **Owner's choice (2026-10-22):** accept that the reply shows whether an address subscribes.
-- **Not checked yet:** a real sign-up of an already-subscribed address on production, and the notice email's
-  arrival.
+- **Checked on production, 2026-10-22 (about 07:45 UTC), by the owner signing up their confirmed Gmail
+  address again, typed exactly as subscribed (no dot or `+tag` variant):**
+  1. `/subscribe/` replied "This address is already subscribed. We've emailed it a link to manage the
+     subscription."
+  2. "You're already subscribed to Travel Problem Radar" arrived from `hello@pehchanthetraveller.com` in Gmail's
+     **Inbox** (not spam, unlike the confirmation emails in T12). Its Manage subscription link opened `/manage/`
+     with the record's plan (Pro) and categories.
+  3. A second try straight after replied "Use the Manage link in any digest email to change it", and no second
+     email came.
+  4. `stats` for 2026-10-22: 1 notice and 0 sign-ups, so no new record was made.
+- Not checked on production: a dot or `+tag` variant (Gmail or another listed provider) finding the same record;
+  the offline tests cover it. Also not checked: the Unsubscribe link in the notice.
