@@ -5,6 +5,9 @@
 > **check current price** and must be looked up before relying on it. All prices and thresholds are
 > **OWNER INPUT NEEDED**: the repo holds no market data or user research. How the parts connect:
 > [architecture.md](architecture.md).
+>
+> **Costs checked 2026-10-23:** [costing.md](costing.md) has the measured and sourced cost of a sweep, an email, a
+> live-board view and a payment, and a break-even table. The cost rows below now use it.
 
 ## Why a subscription at all
 
@@ -48,17 +51,17 @@ IST), though GitHub can start scheduled runs late.
 
 | Item | Amount | Source |
 |---|---|---|
-| Anthropic API, 5 scheduled sweeps a day | About $32 (about $0.21 a sweep, from one local test of all four categories) | DEPLOYMENT.md section 3; real production usage still to be confirmed |
-| Vercel Pro (needed to charge money; the free Hobby plan is for non-commercial use) | **check current price** and the current terms | vercel.com/pricing |
-| A domain (needed to send email to anyone but the owner) | **check current price** | Registrar |
-| Resend beyond the free plan (100 emails a day, 3,000 a month) | **check current price** | resend.com/pricing |
+| Anthropic API, 5 scheduled sweeps a day | $31.92 a month ($0.210 a sweep, the average of 5 production runs) | [costing.md](costing.md#one-sweep) |
+| Vercel Pro (needed to charge money; the free Hobby plan is for non-commercial use) | $20 a month per seat, with $20 of usage credit | [costing.md](costing.md#prices-used) |
+| A domain (needed to send email to anyone but the owner) | **OWNER INPUT NEEDED** (yearly renewal ÷ 12) | Registrar |
+| Resend beyond the free plan (100 emails a day, 3,000 a month) | Pro: $20 a month for 50,000 emails | [costing.md](costing.md#one-email) |
 
 ### Costs that grow with subscribers
 
 | Item | How it grows |
 |---|---|
 | Email | One email per recipient per digest. Confirmation emails count too. |
-| Razorpay fees | A percentage and/or fixed fee on each payment and GST on the fee: **check current price** |
+| Razorpay fees | 3.42% of each card subscription charge: 2% + 0.9% for subscriptions, plus 18% GST on the fee. UPI AutoPay: "on request" ([costing.md](costing.md#one-payment)) |
 | Support and refunds | Owner time |
 
 ### Two formulas
@@ -69,8 +72,9 @@ IST), though GitHub can start scheduled runs late.
 Pro subscribers needed = F / p
 ```
 
-Fill in `F` and `p` once the "check current price" figures above are looked up. Free subscribers add cost and no income, so keep the
-free list within the email quota below.
+With Resend Pro, `F` is about ₹6,797 a month; [costing.md](costing.md#break-even) works the formula out for four prices,
+with GST on top and inside the price. Free subscribers add cost and no income, so keep the free list within the email
+quota below.
 
 **Email quota** (Resend free plan, 100 a day): the owner's copy goes out up to 5 times a day, each free subscriber gets
 1 a day and each Pro subscriber up to 5 a day.
