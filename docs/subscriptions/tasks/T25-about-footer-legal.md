@@ -66,6 +66,8 @@ policy page.
 
 - "Who runs it" (input 6) is filled from the owner's resume, so `/about/` is in the build and **About** leads
   every shipped footer: About · Plans · Contact · Privacy.
+- **Home** added at the start of every footer (owner's request, 2026-10-23), linking the home page as "← Home" at
+  the top already does: Home · About · Plans · Contact · Privacy. Drafts list all seven.
 - The refund rule (input 4) is in `plan.json`: the first payment back within 7 days, no refund for a started month
   after that, mistakes always refunded, within 14 days. `legal/refunds` is still a draft (date, and the decision to
   ship policies before a legal read).

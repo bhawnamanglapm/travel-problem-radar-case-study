@@ -5,6 +5,8 @@ grouped by date.
 
 ## 2026-10-23
 
+- Every footer now starts with **Home**: Home · About · Plans · Contact · Privacy, on every page and draft.
+  `npm run check` requires it.
 - The pages that call Pro "free while it's being tested" (home, `/subscribe/`, `/signup/`, the live board's locked
   panels, `/manage/`) now also hold the paid wording: price, GST, "renews automatically every month until you
   cancel", and links to `/pricing/`. `plan.json`'s `paid` picks one at build time; it stays `false`, so the live
