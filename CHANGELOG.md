@@ -5,6 +5,10 @@ grouped by date.
 
 ## 2026-10-23
 
+- `costing.md` revised after a second audit: Pro gets 5 or 6 emails a day (the Vercel cron sweep sends one too),
+  so email volumes are shown at both, and the 1,000-user example passes Resend's 50,000 once sign-ins are counted.
+  Card fees are split into three GST cases (break-even unchanged). The $1.07 sweep is now a high-cost scenario, not
+  a limit. The manual-sweep cap and `MAX_SUBSCRIBERS` (set in production) are marked done.
 - Manual sweeps are capped at 3 a UTC day (`MAX_MANUAL_SWEEPS_PER_DAY`; `0` stops them). A call past the cap gets
   `429` and runs nothing, so a leaked `CRON_SECRET` can't run up the Anthropic bill. Scheduled sweeps are unchanged.
 - New `docs/subscriptions/costing.md`: what a sweep ($0.21, measured over 5 production runs), an email, a live-board
