@@ -5,6 +5,17 @@ grouped by date.
 
 ## 2026-10-23
 
+- A scheduled sweep that saves nothing now starts the 2-hour gap too, so a run of failed or empty scheduled calls
+  (which may still be billed) can't repeat back to back. The start time is kept in `radar:lastScheduled`, which
+  `/api/data` doesn't serve. Manual runs are unchanged.
+- `costing.md` revised after a third audit: "GST on top" now uses the net after Razorpay's fee on price plus GST
+  (₹190.96 at ₹199), which raises some stress-test counts by 1 or 2; break-even at `F` is unchanged. Added a
+  rounding rule, a section for the business costs `F` leaves out, and a provisional ₹199/₹299/₹499 comparison that
+  says demand is untested. The 15-sweeps-a-day limit is marked approximate, and a few rounding slips are fixed.
+- `costing.md` revised after a second audit: Pro gets 5 or 6 emails a day (the Vercel cron sweep sends one too),
+  so email volumes are shown at both, and the 1,000-user example passes Resend's 50,000 once sign-ins are counted.
+  Card fees are split into three GST cases (break-even unchanged). The $1.07 sweep is now a high-cost scenario, not
+  a limit. The manual-sweep cap and `MAX_SUBSCRIBERS` (set in production) are marked done.
 - Manual sweeps are capped at 3 a UTC day (`MAX_MANUAL_SWEEPS_PER_DAY`; `0` stops them). A call past the cap gets
   `429` and runs nothing, so a leaked `CRON_SECRET` can't run up the Anthropic bill. Scheduled sweeps are unchanged.
 - New `docs/subscriptions/costing.md`: what a sweep ($0.21, measured over 5 production runs), an email, a live-board

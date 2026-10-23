@@ -354,7 +354,7 @@ automatically after every production deploy, call the same URL from a GitHub Act
 |---|---|---|---|
 | 200 | `{"model":…,"trigger":"manual","status":"saved","id":…,"total":N,"newCount":N,"perCat":{…},"usage":{…}}` | Saved. `perCat` shows items per category, `usage` the real token and search counts | Open `/live/` |
 | 200 | `{"trigger":"scheduled","status":"skipped","reason":"last scheduled sweep … is under 2 h old"}` | A scheduled call came within 2 hours of the last scheduled sweep, for example Vercel's backstop after the 00:17 run. Manual calls never get this | Nothing; this stops duplicate scheduled calls |
-| 502 | `{"status":"empty","perCat":{…}}` | All four categories failed; nothing was saved | Read `perCat` and see [Troubleshooting](#10-troubleshooting) |
+| 502 | `{"status":"empty","perCat":{…}}` | All four categories failed; nothing was saved. A scheduled one still holds back the next scheduled call for 2 hours | Read `perCat` and see [Troubleshooting](#10-troubleshooting) |
 | 500 | `{"error":"ANTHROPIC_API_KEY is not set; …"}` | Key missing in this deployment | Add it (4.3) and redeploy (4.5) |
 | 500 | `{"error":"sweep failed: …"}` | Storage or another unexpected error | Read the message; usually storage (see Troubleshooting) |
 | 401 | `{"error":"unauthorized"}` | Secret missing or wrong, or `CRON_SECRET` not set in this deployment | Check the value; redeploy after changing it |
@@ -397,7 +397,7 @@ and an `x-vercel-cron-schedule` header. The GitHub Actions schedule sends `X-Swe
 
 | Call | 2-hour rule | Counts toward the 2 hours |
 |---|---|---|
-| **Scheduled:** the GitHub Actions schedule or Vercel's timer | Skipped if a scheduled sweep ran less than 2 hours ago, so a duplicate delivery, or the backstop firing soon after the 00:17 run, costs nothing | Yes |
+| **Scheduled:** the GitHub Actions schedule or Vercel's timer | Skipped if a scheduled sweep started less than 2 hours ago, so a duplicate delivery, or the backstop firing soon after the 00:17 run, costs nothing. A scheduled sweep that saved nothing (`502 empty`) counts too, since it may still be billed | Yes |
 | **Manual:** any other call with the secret, such as the `curl` in 5.1 or **Run workflow** | Never skipped: it always sweeps | No, so it never cancels the next scheduled sweep |
 
 Manual runs are marked `"manual": true` in the history. Keep in mind:
@@ -532,6 +532,7 @@ not a letter or digit with `-`.
 | `radar:history` | `radar/radar-history.json` | Index of saved sweeps (id, time, counts), last 60 | Yes |
 | `radar:sweep:<id>` | `radar/radar-sweep-<id>.json` | One sweep's items | Yes |
 | `radar:seenIds` | `radar/radar-seenIds.json` | Up to 800 item IDs already seen, used for the New flag | No |
+| `radar:lastScheduled` | `radar/radar-lastScheduled.json` | When the last scheduled sweep started, saved or not; the 2-hour rule reads it | No |
 | `radar:sub:<id>` | `radar/radar-sub-<id>.json` | One subscriber: address, status, plan, token, dates, and chosen categories (`cats`, Pro only). Since T16 also `signin` (the SHA-256 of an unused sign-in code, its expiry and when it was sent; `null` once used) and, optionally, `sessionVer` (raising it by hand signs that subscriber out on every browser). Since T17, a Pro record whose emails stopped has `emailOff`: `unsubscribed`, `bounced` or `complained`. `<id>` is the SHA-256 of the canonical address (Gmail without dots or `+tags`, and `+tags` dropped for the big providers; see [email-signup.md](docs/subscriptions/email-signup.md#flow)). Records made before 2026-10-22 keep the SHA-256 of the lowercased address | No |
 | `radar:event:<YYYYMMDD>-<time>-<type>-<random>` | `radar/radar-event-….json` | One sign-up, confirmation, sign-in email, unsubscribe, emails-off, account-deleted, Pro, bounce or complaint event: type, time and plan, **no address or id**. Kept until `prune-events` deletes it | No |
 | `radar:deliveries:<YYYYMMDD>` | `radar/radar-deliveries-<YYYYMMDD>.json` | Record ids already sent that day's Free digest. Deleted by the sweep after 7 days | No |

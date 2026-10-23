@@ -86,6 +86,32 @@ const sweepOpts = (storage, byCat, now) => ({
   check(dup.status === "skipped", "a repeat scheduled run within 2 h is still skipped");
 }
 
+// ---- a scheduled sweep that saves nothing still starts the 2-hour gap
+{
+  const st = memStorage();
+  const t0 = Date.UTC(2026, 9, 18, 1, 30);
+  const allFail = { traveler_pain: "http", gov_policy: "http", web_app: "http", industry: "http" };
+  const one = { traveler_pain: [item(1)], gov_policy: [], web_app: [], industry: [] };
+  const empty = await runDailySweep(sweepOpts(st, allFail, () => t0));
+  check(empty.status === "empty" && JSON.parse(st.m.get("radar:lastScheduled")) === new Date(t0).toISOString(), "an empty scheduled sweep records when it started");
+  const soon = await runDailySweep(sweepOpts(st, one, () => t0 + 1 * 3600 * 1000));
+  check(soon.status === "skipped" && !st.m.has("radar:history"), "a scheduled run 1 h after an empty one is skipped");
+  const manual = await runDailySweep({ ...sweepOpts(st, one, () => t0 + 1.5 * 3600 * 1000), manual: true });
+  check(manual.status === "saved" && JSON.parse(st.m.get("radar:lastScheduled")) === new Date(t0).toISOString(),
+    "a manual run still goes ahead and doesn't move the scheduled start time");
+  const later = await runDailySweep(sweepOpts(st, one, () => t0 + 2.5 * 3600 * 1000));
+  check(later.status === "saved", "a scheduled run 2.5 h after the empty one goes ahead");
+  const repeat = await runDailySweep(sweepOpts(st, one, () => t0 + 3 * 3600 * 1000));
+  check(repeat.status === "skipped", "and the gap then counts from that run");
+
+  // a history saved before this change, with no start time stored, still holds back the next run
+  const old = memStorage();
+  await runDailySweep(sweepOpts(old, one, () => t0));
+  old.m.delete("radar:lastScheduled");
+  const afterOld = await runDailySweep(sweepOpts(old, one, () => t0 + 1 * 3600 * 1000));
+  check(afterOld.status === "skipped", "with no start time stored, the last saved scheduled sweep still sets the gap");
+}
+
 // ---- partial and total failure
 {
   const st = memStorage();
@@ -97,7 +123,7 @@ const sweepOpts = (storage, byCat, now) => ({
 
   const st2 = memStorage();
   const none = await runDailySweep(sweepOpts(st2, { traveler_pain: "http", gov_policy: "http", web_app: "http", industry: "http" }, () => 1_800_000_000_000));
-  check(none.status === "empty" && st2.m.size === 0, "all four failed: nothing saved");
+  check(none.status === "empty" && [...st2.m.keys()].join() === "radar:lastScheduled", "all four failed: nothing saved but the start time");
 
   const cut = await runDailySweep(sweepOpts(memStorage(), { traveler_pain: "cutoff", gov_policy: [item(1)], web_app: [], industry: [] }, () => 1_800_000_000_000));
   check(cut.perCat.traveler_pain === "failed: empty (stop_reason: max_tokens)", "a failed category says why the model stopped");
@@ -377,6 +403,7 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   check(r1.code === 200 && r1.json().value === "[1]" && /s-maxage/.test(r1.headers["cache-control"]), "history is served with a CDN cache header");
   check((await call("/api/data?key=radar:sweep:1800000000000")).code === 200, "a sweep is served");
   check((await call("/api/data?key=radar:seenIds")).code === 400, "seenIds is not exposed");
+  check((await call("/api/data?key=radar:lastScheduled")).code === 400, "lastScheduled is not exposed");
   check((await call("/api/data?key=../../etc/passwd")).code === 400, "path-like keys are rejected");
   check((await call("/api/data")).code === 400, "missing key is rejected");
   check((await call("/api/data?key=radar:sweep:1700000000000")).code === 404, "unknown sweep: 404");
