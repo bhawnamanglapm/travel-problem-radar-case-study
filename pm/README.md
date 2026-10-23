@@ -48,8 +48,8 @@ Source: [TECHNICAL.md](../docs/TECHNICAL.md), [paid-website.md](../docs/subscrip
 |---|---|---|
 | 1. Discovery | Problem framing, assumptions with their evidence, what building taught, research gaps, an interview plan (not run), and the alternatives a PM uses today | [discovery-log.md](01-discovery/discovery-log.md), [alternatives.md](01-discovery/alternatives.md) |
 | 2. Product definition | PRD v2 for the product as it is today, backlog by epic, requirement-to-test traceability, KPI catalogue | [prd.md](02-product-definition/prd.md), [backlog.md](02-product-definition/backlog.md), [traceability.md](02-product-definition/traceability.md), [kpis.md](02-product-definition/kpis.md) |
-| 3. Design | Live screens, user flows, display rules | Next pull request |
-| 4. Planning and governance | Roadmap, RAID log, change requests, stakeholders | Next pull request |
+| 3. Design | Live screens, the journey end to end, display rules, design trade-offs and gaps | [flows-and-screens.md](03-design/flows-and-screens.md) |
+| 4. Planning and governance | Roadmap, RAID log, revised decisions as change requests, stakeholders and RACI | [roadmap.md](04-planning-and-governance/roadmap.md), [raid-log.md](04-planning-and-governance/raid-log.md), [change-log.md](04-planning-and-governance/change-log.md), [stakeholders.md](04-planning-and-governance/stakeholders.md) |
 | 5. Business case and launch | Cost model, break-even, launch and rollback plan | Later pull request |
 | 6. Executive communication | One-page review that ends in the owner's decisions | Later pull request |
 | 7. Data and metrics | Data model and how each KPI is computed | Later pull request |
@@ -79,9 +79,10 @@ The IDs link the stages, as in a larger programme:
 | `REQ-` | Requirement. `REQ-01` to `REQ-11` are R1 to R11 of the [v1 PRD](../docs/PRD.md) | [prd.md](02-product-definition/prd.md) |
 | `EP-` | Epic, grouping the build tasks `T00` to `T27` | [backlog.md](02-product-definition/backlog.md) |
 | `KPI-` | Measure of success | [kpis.md](02-product-definition/kpis.md) |
-| `R-` `A-` `I-` `D-` | Risk, assumption, issue, dependency | Stage 4 (next pull request) |
-| `CR-` | Change request: a decision later revised | Stage 4 (next pull request) |
-| `RM-`, `LR-` | Roadmap item, launch-readiness check | Stages 4 and 5 |
+| `R-` `A-` `I-` `D-` | Risk, assumption, issue, dependency | [raid-log.md](04-planning-and-governance/raid-log.md) |
+| `CR-` | Change request: a decision later revised | [change-log.md](04-planning-and-governance/change-log.md) |
+| `RM-` | Roadmap item | [roadmap.md](04-planning-and-governance/roadmap.md) |
+| `LR-` | Launch-readiness check | Stage 5 (later pull request) |
 
 ## Known gaps
 
