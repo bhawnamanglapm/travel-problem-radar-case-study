@@ -1,12 +1,12 @@
-# T22 · Pro expiry, paid unsubscribe and go-live
+# T22 · Pro expiry, paid unsubscribe and key safety
 
 | | |
 |---|---|
 | Phase | 2, paid Pro |
-| Who | Developer (code, docs) and owner (go-live) |
+| Who | Developer |
 | Size | M |
 | Depends on | T17, T18, T20, T21 |
-| Unblocks | — |
+| Unblocks | T27 |
 
 > **Changed 2026-10-22 ([decision log](../../decisions.md)):** Pro now pays for the live board on the website, not
 > for email ([paid-website.md](../paid-website.md)). Accounts and sign-in (email link, login cookie) and the locked board come first, behind a
@@ -14,8 +14,8 @@
 
 ## Why
 
-The pieces now exist; this task closes the gaps between them and switches to live keys only after a full test-mode
-run.
+The pieces now exist; this task closes the gaps between them. The test-mode run and the switch to live keys are
+T27.
 
 ## What to build
 
@@ -55,41 +55,13 @@ T07 deliberately didn't delete a paid record. Now:
   `fetchSubscription`.
 - `revoke-pro` keeps refusing `razorpay` records and prints "cancel it in the Razorpay dashboard".
 
-## Test-mode end-to-end run (before go-live)
+## Test run and go-live
 
-Run on the Preview or test project with test keys and Razorpay's test cards (**verify** the current test card
-numbers in Razorpay's docs):
-
-| Step | Check |
-|---|---|
-| Subscribe, confirm | Free |
-| Upgrade, pay with a test card | Page says received; webhook arrives; record Pro; Pro email after the next scheduled sweep |
-| Wait for or simulate a renewal (Razorpay test mode may allow it, **verify**) | `proUntil` moves forward |
-| Simulate a failed renewal | `pending` keeps Pro; `halted` moves to Free |
-| Cancel at period end | Pro until the date, then Free after grace |
-| Upgrade again, then unsubscribe | Subscription cancelled in Razorpay; record gone |
-| Replay a webhook from the Razorpay dashboard | No change |
-
-Write the results and date in the pull request.
-
-## Go-live (owner)
-
-1. Razorpay live activation approved (T15).
-2. Create the live Plan(s); set live `RAZORPAY_*` variables for **Production only**; set the live webhook to the
-   production URL with a new secret.
-3. Change the Pro line on `/subscribe/` from "owner-granted, on request" to the price and an Upgrade link, and update
-   pricing.md's tiers table.
-4. Do one real payment with the owner's own card, check it end to end, then refund it in the dashboard if wanted.
-5. Announce.
-
-**Roll back:** unset `RAZORPAY_KEY_ID` (checkout and upgrade disappear; `razorpayConfigured` is false). Existing
-paid subscribers keep Pro until `proUntil`; cancel their Razorpay subscriptions in the dashboard if billing must stop.
-The webhook endpoint keeps working only while its secret is set, so leave `RAZORPAY_WEBHOOK_SECRET` until the last
-period ends.
+Moved to [T27](T27-razorpay-test-run-and-go-live.md) on 2026-10-23, so going live also waits for the pricing page,
+the policy pages and the new Pro wording (T23 to T26). The unsubscribe wording in step 2 follows T23's refund rule.
 
 ## Acceptance criteria
 
-- [ ] Every row of the test-mode run passes, recorded with the date
 - [ ] Unsubscribing a paid record cancels billing before deleting; a failed cancel keeps the record
 - [ ] Test keys can't work on Production, live keys can't work on Preview
 - [ ] Docs updated: DEPLOYMENT.md (Razorpay section, roll back), TECHNICAL.md, README.md "What's next",
