@@ -2790,4 +2790,198 @@ const iso = (ms) => new Date(ms).toISOString();
   check(unset.every((o) => o.error === "config") && f.calls.length === 0, "razorpay: missing keys give { error: \"config\" } without calling Razorpay");
 }
 
+// T20: checkout, checkout-return and cancel on /api/account, against a fake Razorpay. Only the
+// webhook (T21) grants Pro, so nothing here may change the plan.
+{
+  const { makeAccountHandler, KEY_RZPSUB_PREFIX, paymentsReady } = await import("../api/_lib/subscription-handlers.js");
+  const { signSession } = await import("../api/_lib/session.js");
+  const SECRET = "test-session-secret-0123456789abcdef";
+  // Fixture key values are built here so scripts/check.mjs's Razorpay pattern doesn't see a key and a secret in this file.
+  const KEY_ID = "rzp_" + "test_" + "Fixture000002";
+  const KEY_SECRET = "fixture" + "-key-" + "secret-2";
+  const RZP = { RAZORPAY_KEY_ID: KEY_ID, RAZORPAY_KEY_SECRET: KEY_SECRET, RAZORPAY_WEBHOOK_SECRET: "whsec_fixture_2", RAZORPAY_PLAN_ID: "plan_00000000000009", RAZORPAY_TOTAL_COUNT: "12" };
+  const BASE = { SUBSCRIPTIONS_ENABLED: "1", RESEND_API_KEY: "re_k", EMAIL_FROM: "Radar <hello@pehchanthetraveller.com>", EMAIL_TO: "owner@example.com", SITE_URL: "https://site.example", SESSION_SECRET: SECRET };
+  const MIN = 60_000;
+  const sig = (paymentId, subscriptionId, secret = KEY_SECRET) => createHmac("sha256", secret).update(`${paymentId}|${subscriptionId}`).digest("hex");
+
+  const world = async (envOver = {}) => {
+    const st = memStorage();
+    const rzpCalls = []; const mail = []; const logs = [];
+    let nextSub = 1;
+    let rzpReply = null; // null: a good reply; otherwise the fake response to give
+    let clock = T0;
+    const fetchFn = async (url, init) => {
+      if (!String(url).startsWith("https://api.razorpay.com/")) { mail.push(init); return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ id: "m" }) }; }
+      rzpCalls.push({ url, ...init, json: init.body ? JSON.parse(init.body) : null });
+      if (rzpReply) return rzpReply;
+      const id = url.endsWith("/cancel") ? url.split("/").at(-2) : "sub_T20" + String(nextSub++).padStart(9, "0");
+      return { ok: true, status: 200, json: async () => ({ id, status: url.endsWith("/cancel") ? "active" : "created", short_url: "https://rzp.io/x", customer_email: "payer@example.com" }) };
+    };
+    const env = { ...BASE, ...RZP, ...envOver };
+    const acct = makeAccountHandler({ env, storage: st, fetchFn, now: () => clock, randomBytes: seeded(31), log: (...a) => logs.push(a.join(" ")) });
+    const add = async (email, over = {}) => {
+      const r = { ...newPending(email, { now: T0 - 3600_000, randomBytes: seeded(300 + email.length) }), status: "active", confirmedAt: iso(T0 - 1800_000), ...over };
+      await putSubscriber(st, r);
+      return r;
+    };
+    const replies = [];
+    const call = async ({ method = "POST", query = {}, body, cookie, origin } = {}) => {
+      const headers = { host: "site.example", "content-type": "application/json" };
+      if (cookie) headers.cookie = cookie;
+      if (origin !== undefined) headers.origin = origin;
+      const res = mockRes();
+      await acct({ method, headers, query, body }, res);
+      replies.push(res.body);
+      return res;
+    };
+    const act = (rec, action, extra = {}) => call({ body: { id: rec.id, t: rec.token, action, ...extra } });
+    const get = (rec) => call({ method: "GET", query: { id: rec.id, t: rec.token } });
+    const stored = (rec) => getSubscriber(st, rec.id);
+    const evs = (type) => [...st.m.keys()].filter((k) => k.startsWith("radar:event:") && k.includes(`-${type}-`));
+    return { st, env, rzpCalls, mail, logs, replies, add, call, act, get, stored, evs, setReply: (r) => { rzpReply = r; }, tick: (ms) => { clock += ms; } };
+  };
+
+  // payments on or off
+  check(paymentsReady({ ...RZP }) && !paymentsReady({}) && ["", "0", "-1", "1.5", "twelve", " "].every((v) => !paymentsReady({ ...RZP, RAZORPAY_TOTAL_COUNT: v }))
+    && !paymentsReady({ ...RZP, RAZORPAY_PLAN_ID: "" }), "payments: on only with the four Razorpay settings and a whole RAZORPAY_TOTAL_COUNT of 1 or more");
+  {
+    const w = await world({ RAZORPAY_KEY_ID: "", RAZORPAY_KEY_SECRET: "", RAZORPAY_WEBHOOK_SECRET: "", RAZORPAY_PLAN_ID: "", RAZORPAY_TOTAL_COUNT: "" });
+    const free = await w.add("off@example.com");
+    let r = await w.get(free);
+    check(r.code === 200 && r.json().payments === false && r.json().paymentPending === false && r.json().cancelAtPeriodEnd === false, "account GET: payments off says payments: false");
+    let all = true;
+    for (const a of ["checkout", "checkout-return", "cancel"]) { r = await w.act(free, a); all = all && r.code === 503 && r.json().error === "payments_off"; }
+    check(all && w.rzpCalls.length === 0, "checkout, checkout-return and cancel: 503 payments_off with no Razorpay call while payments are off");
+    r = await w.act(free, "request-pro");
+    check(r.code === 200 && r.json().proRequestedAt === iso(T0), "request-pro: still works while payments are off");
+    const w2 = await world({ RAZORPAY_TOTAL_COUNT: "0" });
+    const f2 = await w2.add("count@example.com");
+    r = await w2.act(f2, "checkout");
+    check(r.code === 503 && r.json().error === "payments_off" && w2.rzpCalls.length === 0, "checkout: a RAZORPAY_TOTAL_COUNT of 0 keeps payments off");
+  }
+
+  // checkout
+  {
+    const w = await world();
+    const free = await w.add("buyer@example.com");
+    let r = await w.get(free);
+    check(r.code === 200 && r.json().payments === true, "account GET: payments on says payments: true");
+    r = await w.act(free, "checkout");
+    const c = w.rzpCalls[0];
+    check(r.code === 200 && r.json().keyId === KEY_ID && r.json().subscriptionId === "sub_T20000000001", "checkout: replies with the key id and the new subscription id");
+    check(w.rzpCalls.length === 1 && c.method === "POST" && c.url === "https://api.razorpay.com/v1/subscriptions"
+      && JSON.stringify(c.json) === JSON.stringify({ plan_id: "plan_00000000000009", total_count: 12, customer_notify: true, notes: { sid: free.id } }),
+      "checkout: one create call with the plan, RAZORPAY_TOTAL_COUNT and the subscriber id in notes, and no address");
+    let s = await w.stored(free);
+    check(s.plan === "free" && JSON.stringify(s.rzp) === JSON.stringify({ subscriptionId: "sub_T20000000001", status: "created", createdAt: iso(T0), currentEnd: null, cancelAtPeriodEnd: false, lastEventAt: null }),
+      "checkout: the record keeps plan free and gains rzp with status created");
+    check(w.st.m.get(KEY_RZPSUB_PREFIX + "sub_T20000000001") === JSON.stringify({ id: free.id }) && w.evs("checkoutstarted").length === 1, "checkout: writes the radar:rzpsub: index and one checkoutstarted event");
+    w.tick(30 * MIN);
+    r = await w.act(free, "checkout");
+    check(r.code === 200 && r.json().subscriptionId === "sub_T20000000001" && w.rzpCalls.length === 1 && w.evs("checkoutstarted").length === 1, "checkout: a second click within an hour reopens the same subscription with no new call");
+    w.tick(31 * MIN);
+    r = await w.act(free, "checkout");
+    s = await w.stored(free);
+    check(r.code === 200 && r.json().subscriptionId === "sub_T20000000002" && w.rzpCalls.length === 2 && s.rzp.subscriptionId === "sub_T20000000002" && s.rzp.status === "created",
+      "checkout: after an hour a new subscription is made and stored");
+
+    // refusals
+    const pend = { ...newPending("pend2@example.com", { now: T0, randomBytes: seeded(320) }) };
+    await putSubscriber(w.st, pend);
+    const pro = await w.add("owner-pro@example.com", { plan: "pro", proSource: "owner" });
+    const waiting = await w.add("paid@example.com", { rzp: { subscriptionId: "sub_T20WAIT", status: "authenticated", createdAt: iso(T0 - 5 * MIN), currentEnd: null, cancelAtPeriodEnd: false, lastEventAt: null } });
+    const before = w.rzpCalls.length;
+    r = await w.act(pend, "checkout");
+    check(r.code === 409 && r.json().error === "not_confirmed", "checkout: a pending address gets 409 not_confirmed");
+    r = await w.act(pro, "checkout");
+    check(r.code === 409 && r.json().error === "already_pro", "checkout: a Pro subscriber gets 409 already_pro");
+    r = await w.act(waiting, "checkout");
+    check(r.code === 409 && r.json().error === "payment_pending" && w.rzpCalls.length === before, "checkout: a paid checkout waiting for the webhook gets 409 payment_pending, so nobody pays twice");
+    r = await w.get(waiting);
+    check(r.json().paymentPending === true && r.json().effectivePlan === "free", "account GET: paymentPending while the webhook hasn't arrived");
+
+    // Razorpay fails
+    const unlucky = await w.add("unlucky@example.com");
+    w.setReply({ ok: false, status: 500, json: async () => { throw new Error("not json"); } });
+    r = await w.act(unlucky, "checkout");
+    s = await w.stored(unlucky);
+    check(r.code === 502 && r.json().error === "payment_provider" && !s.rzp && w.evs("checkoutstarted").length === 2, "checkout: a Razorpay 500 gives 502 and saves nothing");
+    check(w.logs.some((l) => l === "account checkout: razorpay error 500") && w.logs.every((l) => !l.includes("@") && !l.includes(KEY_SECRET)), "checkout: the failure is logged as a status code only");
+    w.setReply(null);
+    check(w.replies.every((b) => !b.includes("@") && !b.includes(free.token) && !b.includes(KEY_SECRET)), "checkout: no reply holds an address, a token or the key secret");
+  }
+
+  // checkout-return
+  {
+    const w = await world();
+    const free = await w.add("returner@example.com");
+    let r = await w.act(free, "checkout-return", { paymentId: "pay_A1", subscriptionId: "sub_T20000000001", signature: sig("pay_A1", "sub_T20000000001") });
+    check(r.code === 400 && r.json().error === "bad_signature", "checkout-return: no open checkout is 400 bad_signature");
+    await w.act(free, "checkout");
+    const SUB = "sub_T20000000001";
+    const tries = [
+      ["a tampered signature", { paymentId: "pay_A1", subscriptionId: SUB, signature: sig("pay_A1", SUB).replace(/^./, (ch) => (ch === "0" ? "1" : "0")) }],
+      ["a signature made with another secret", { paymentId: "pay_A1", subscriptionId: SUB, signature: sig("pay_A1", SUB, "other-secret") }],
+      ["another subscription id from Checkout", { paymentId: "pay_A1", subscriptionId: "sub_OTHER", signature: sig("pay_A1", "sub_OTHER") }],
+      ["a missing signature", { paymentId: "pay_A1", subscriptionId: SUB }],
+      ["a payment id that isn't one", { paymentId: "x|y", subscriptionId: SUB, signature: sig("x|y", SUB) }],
+    ];
+    for (const [label, body] of tries) {
+      r = await w.act(free, "checkout-return", body);
+      check(r.code === 400 && r.json().error === "bad_signature" && (await w.stored(free)).rzp.status === "created", `checkout-return: ${label} is 400 and changes nothing`);
+    }
+    r = await w.act(free, "checkout-return", { paymentId: "pay_A1", subscriptionId: SUB, signature: sig("pay_A1", SUB) });
+    let s = await w.stored(free);
+    check(r.code === 200 && /Payment received; Pro starts in a minute or two/.test(r.json().message) && r.json().paymentPending === true, "checkout-return: a good signature is 200 with the payment-received message");
+    check(s.rzp.status === "authenticated" && s.plan === "free" && !s.proSource && effectivePlan(s, T0) === "free", "checkout-return: the record is authenticated and still free; only the webhook grants Pro");
+    // The webhook got there first: its status stays.
+    await putSubscriber(w.st, { ...s, plan: "pro", proSource: "razorpay", proUntil: iso(T0 + 30 * 24 * 3600_000), rzp: { ...s.rzp, status: "active" } });
+    r = await w.act(free, "checkout-return", { paymentId: "pay_A1", subscriptionId: SUB, signature: sig("pay_A1", SUB) });
+    s = await w.stored(free);
+    check(r.code === 200 && s.rzp.status === "active" && s.plan === "pro", "checkout-return: never moves a status the webhook set back to authenticated");
+    check(w.mail.length === 0 && w.replies.every((b) => !b.includes("@") && !b.includes(free.token)), "checkout-return: sends no email; no reply holds an address or a token");
+  }
+
+  // cancel
+  {
+    const w = await world();
+    const until = iso(T0 + 20 * 24 * 3600_000);
+    const owner = await w.add("granted@example.com", { plan: "pro", proSource: "owner" });
+    const paid = await w.add("payer@example.com", { plan: "pro", proSource: "razorpay", proUntil: until, rzp: { subscriptionId: "sub_T20PAID", status: "active", createdAt: iso(T0 - 10 * 24 * 3600_000), currentEnd: until, cancelAtPeriodEnd: false, lastEventAt: iso(T0 - 10 * 24 * 3600_000) } });
+    const free = await w.add("nopay@example.com");
+    let r = await w.act(owner, "cancel");
+    check(r.code === 409 && r.json().error === "not_paid_pro", "cancel: an owner-granted Pro gets 409 not_paid_pro");
+    r = await w.act(free, "cancel");
+    check(r.code === 409 && r.json().error === "not_paid_pro" && w.rzpCalls.length === 0, "cancel: a Free subscriber gets 409 with no Razorpay call");
+    r = await w.act(paid, "cancel");
+    const c = w.rzpCalls[0];
+    let s = await w.stored(paid);
+    check(r.code === 200 && c.url === "https://api.razorpay.com/v1/subscriptions/sub_T20PAID/cancel" && c.body === '{"cancel_at_cycle_end":true}', "cancel: cancels the stored subscription at the end of the cycle");
+    check(s.rzp.cancelAtPeriodEnd === true && s.plan === "pro" && s.proUntil === until && r.json().cancelAtPeriodEnd === true && r.json().effectivePlan === "pro", "cancel: sets cancelAtPeriodEnd and Pro lasts until proUntil");
+    r = await w.act(paid, "cancel");
+    check(r.code === 200 && w.rzpCalls.length === 1, "cancel: a repeat is 200 with no new call");
+    r = await w.act(paid, "delete-account");
+    check(r.code === 409 && r.json().error === "cancel_first", "delete-account: a paid Pro still gets cancel_first");
+    const paid2 = await w.add("payer2@example.com", { plan: "pro", proSource: "razorpay", proUntil: until, rzp: { subscriptionId: "sub_T20PAID2", status: "active", createdAt: iso(T0), currentEnd: until, cancelAtPeriodEnd: false, lastEventAt: null } });
+    w.setReply({ ok: false, status: 400, json: async () => ({ error: { code: "BAD_REQUEST_ERROR", description: "nope" } }) });
+    r = await w.act(paid2, "cancel");
+    s = await w.stored(paid2);
+    check(r.code === 502 && r.json().error === "payment_provider" && s.rzp.cancelAtPeriodEnd === false, "cancel: a Razorpay error gives 502 and changes nothing");
+    check(w.replies.every((b) => !b.includes("@") && !b.includes(paid.token)), "cancel: no reply holds an address or a token");
+  }
+
+  // the login cookie
+  {
+    const w = await world();
+    const free = await w.add("cookie@example.com");
+    const cookie = "tpr_session=" + signSession(free, { secret: SECRET, now: T0 });
+    let r = await w.call({ body: { action: "checkout" }, cookie, origin: "https://evil.example" });
+    check(r.code === 403 && r.json().error === "wrong_origin" && w.rzpCalls.length === 0, "checkout: a cookie POST from another site is 403 with no Razorpay call");
+    r = await w.call({ body: { action: "checkout" }, cookie, origin: "https://site.example" });
+    check(r.code === 200 && r.json().subscriptionId === "sub_T20000000001" && (await w.stored(free)).rzp.status === "created", "checkout: works signed in with the login cookie");
+    r = await w.call({ body: { id: free.id, t: "wrong-token", action: "checkout" } });
+    check(r.code === 404 && w.rzpCalls.length === 1, "checkout: a wrong token is 404 with no Razorpay call");
+  }
+}
+
 finish("subscription tests");
