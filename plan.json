@@ -1,0 +1,12 @@
+{
+  "paid": false,
+  "currency": "INR",
+  "monthly": null,
+  "yearly": null,
+  "gst": null,
+  "trialDays": null,
+  "refund": null,
+  "refundDays": null,
+  "methods": null,
+  "contact": "hello@pehchanthetraveller.com"
+}
