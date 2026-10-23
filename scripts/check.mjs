@@ -262,6 +262,9 @@ check(backPages.every((d) => readFileSync(`${d}/index.html`, "utf8").includes("&
 check(!/Sample demo|github\.com/.test(livePage), "live/index.html has no Sample demo or repo link");
 // Account pages are findable: the home page links sign-in (absolute, as above); the board shows Sign in or Account.
 check(/<a id="acct" class="btn sec small" href="https:\/\/travel-problem-radar\.vercel\.app\/signin\/" data-open="in">Sign in<\/a>/.test(page), "index.html links to the sign-in page by the absolute Vercel URL");
+// Signed in, the home page mustn't keep offering "Create free account": the hero and plan buttons are relinked.
+check(["heroCta", "heroNote", "freeBtn"].every((id) => page.includes(`id="${id}"`)) && (page.match(/id="proBtn"/g) || []).length === 2 && page.includes('setSignedIn(b.plan === "pro");'),
+  "index.html relinks the hero and plan buttons once signed in (Your account / Open the live board / Your plan / Request Pro)");
 // The home page's sign-up / sign-in dialog: the same posts as /signup/ and /signin/, shown while signed out.
 check(/fetch\(url, \{ method: "POST"/.test(page) && /"\/api\/subscribe"/.test(page) && /action: "request"/.test(page) && /wantsPro: up\.wantsPro\.checked/.test(page),
   "index.html's dialog posts sign-up to /api/subscribe (with wantsPro) and sign-in to /api/session");
