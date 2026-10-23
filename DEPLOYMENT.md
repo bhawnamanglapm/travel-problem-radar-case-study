@@ -455,7 +455,7 @@ Do not commit the `.vercel/` folder that `vercel link` creates. It is already in
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "buildCommand": "rm -rf public && mkdir public && cp -r index.html demo live subscribe manage signin signup public/ && rm -rf public/demo/src public/live/src && mkdir -p public/legal && cp -r legal/privacy public/legal/ && node scripts/fill-plan.mjs public && node scripts/fill-legal.mjs public",
+  "buildCommand": "npm run build:site",
   "outputDirectory": "public",
   "crons": [{ "path": "/api/sweep", "schedule": "30 1 * * *" }],
   "functions": {
@@ -467,7 +467,7 @@ Do not commit the `.vercel/` folder that `vercel link` creates. It is already in
 | Key | What it does |
 |---|---|
 | `framework: null` | No framework preset; Vercel treats this as a plain static site plus functions |
-| `buildCommand` | Copies `index.html`, `demo/`, `live/`, `subscribe/`, `manage/`, `signin/`, `signup/` and the policy pages that are ready (`legal/privacy` today) into `public/`, then removes the JSX sources. Then `scripts/fill-plan.mjs` fills Pro's price and the rest from `plan.json` (below), and `scripts/fill-legal.mjs` fills the owner's details into the policy pages. It does **not** run `npm run build`. A new page folder must be added here, or Vercel won't serve it (`npm run check` tests for `subscribe`, `manage`, `signin` and `signup`). `pricing/` is written but not added yet: `npm run check` fails if it ships before `plan.json` has its values |
+| `buildCommand` | Runs `npm run build:site` from `package.json`. The steps live there because Vercel allows `buildCommand` only 256 characters (the deploy fails before building if it's longer). `build:site` copies `index.html`, `demo/`, `live/`, `subscribe/`, `manage/`, `signin/`, `signup/` and the policy pages that are ready (`legal/privacy` today) into `public/`, then removes the JSX sources. Then `scripts/fill-plan.mjs` fills Pro's price and the rest from `plan.json` (below), and `scripts/fill-legal.mjs` fills the owner's details into the policy pages. It does **not** run `npm run build`. A new page folder must be added to `build:site`, or Vercel won't serve it (`npm run check` tests for `subscribe`, `manage`, `signin` and `signup`). `pricing/` is written but not added yet: `npm run check` fails if it ships before `plan.json` has its values. To build locally on Windows, run `npm run build:site --script-shell=bash` |
 | `outputDirectory` | Serves `public/` as the static site |
 | `crons` | The daily backstop: calls `/api/sweep` at 01:30 UTC (07:00 IST), within the hour on Hobby |
 | `functions["api/sweep.js"].maxDuration` | Lets the sweep run for up to 300 s, the Hobby maximum |

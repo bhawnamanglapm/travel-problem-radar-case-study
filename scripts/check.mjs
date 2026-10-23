@@ -64,7 +64,10 @@ check(/Gathered by an AI model with web search\. Items are not verified/.test(su
 check(/Questions or a deletion request: email <a href="mailto:hello@pehchanthetraveller\.com">/.test(subPage) && !/will be added here/.test(subPage), "subscribe/index.html has a real contact address, not the placeholder");
 check(subPage.length > 0 && !/<script[^>]*\ssrc=|<link[^>]*rel=["']?stylesheet|@import|url\(\s*["']?https?:/i.test(subPage), "subscribe/index.html is self-contained (no external script, stylesheet, import or font URL)");
 const vercelJson = JSON.parse(readFileSync("vercel.json", "utf8"));
-check(/\bcp -r [^&]*\bsubscribe\b[^&]* public\//.test(vercelJson.buildCommand || ""), "vercel.json's buildCommand copies subscribe into public/");
+// The site build lives in package.json's build:site: Vercel caps vercel.json's buildCommand at 256 characters.
+const siteBuild = JSON.parse(readFileSync("package.json", "utf8")).scripts["build:site"] || "";
+check(vercelJson.buildCommand === "npm run build:site" && siteBuild.length > 0, "vercel.json's buildCommand runs package.json's build:site (Vercel allows 256 characters, too few for the list)");
+check(/\bcp -r [^&]*\bsubscribe\b[^&]* public\//.test(siteBuild), "build:site copies subscribe into public/");
 
 // 4c. Manage page (Vercel): self-contained, talks to /api/account, never leaks its token link.
 const manPage = existsSync("manage/index.html") ? readFileSync("manage/index.html", "utf8") : "";
@@ -75,7 +78,7 @@ const manBoxes = [...manPage.matchAll(/<input type="checkbox" value="([a-z_]+)"/
 check(/action: "set-cats"/.test(manPage) && JSON.stringify(manBoxes) === JSON.stringify(CATS), "manage/index.html posts set-cats and has one checkbox per category, in order");
 check(!/\.innerHTML\s*=/.test(manPage), "manage/index.html writes server data with textContent only, never innerHTML");
 check(manPage.length > 0 && !/<script[^>]*\ssrc=|<link[^>]*rel=["']?stylesheet|@import|url\(\s*["']?https?:/i.test(manPage), "manage/index.html is self-contained (no external script, stylesheet, import or font URL)");
-check(/\bcp -r [^&]*\bmanage\b[^&]* public\//.test(vercelJson.buildCommand || ""), "vercel.json's buildCommand copies manage into public/");
+check(/\bcp -r [^&]*\bmanage\b[^&]* public\//.test(siteBuild), "build:site copies manage into public/");
 check(existsSync("api/account.js"), "api/account.js exists (the manage page's endpoint)");
 check(/fetch\("\/api\/session"/.test(manPage) && /action: "signout"/.test(manPage), "manage/index.html has a Sign out button that posts to /api/session");
 check(/action: "delete-account"/.test(manPage) && />Delete my account</.test(manPage) && /This can’t be undone/.test(manPage) && /action: "email-on"/.test(manPage),
@@ -97,7 +100,7 @@ check(/fetch\("\/api\/session"/.test(inPage) && /action="\/api\/session"/.test(i
 check(/name="email"/.test(inPage) && /name="website"/.test(inPage), "signin/index.html has the email field and the website honeypot field");
 check(!/\.innerHTML\s*=/.test(inPage), "signin/index.html never uses innerHTML");
 check(inPage.length > 0 && !/<script[^>]*\ssrc=|<link[^>]*rel=["']?stylesheet|@import|url\(\s*["']?https?:/i.test(inPage), "signin/index.html is self-contained (no external script, stylesheet, import or font URL)");
-check(/\bcp -r [^&]*\bsignin\b[^&]* public\//.test(vercelJson.buildCommand || ""), "vercel.json's buildCommand copies signin into public/");
+check(/\bcp -r [^&]*\bsignin\b[^&]* public\//.test(siteBuild), "build:site copies signin into public/");
 check(existsSync("api/session.js"), "api/session.js exists (sign-in and the login cookie)");
 check(/href="\.\.\/signin\/"/.test(subPage), "subscribe/index.html links to the sign-in page");
 
@@ -107,7 +110,7 @@ check(/fetch\("\/api\/subscribe"/.test(upPage) && /action="\/api\/subscribe"/.te
 check(/name="email"/.test(upPage) && /name="website"/.test(upPage), "signup/index.html has the email field and the website honeypot field");
 check(!/\.innerHTML\s*=/.test(upPage), "signup/index.html never uses innerHTML");
 check(upPage.length > 0 && !/<script[^>]*\ssrc=|<link[^>]*rel=["']?stylesheet|@import|url\(\s*["']?https?:/i.test(upPage), "signup/index.html is self-contained (no external script, stylesheet, import or font URL)");
-check(/\bcp -r [^&]*\bsignup\b[^&]* public\//.test(vercelJson.buildCommand || ""), "vercel.json's buildCommand copies signup into public/");
+check(/\bcp -r [^&]*\bsignup\b[^&]* public\//.test(siteBuild), "build:site copies signup into public/");
 check(/name="wantsPro"/.test(upPage) && /wantsPro: form\.wantsPro\.checked/.test(upPage) && /pro=1/.test(upPage), "signup/index.html has the \"I'd also like Pro\" box, sends it, and ticks it for ?pro=1");
 check(/We store your email address, the dates you signed up and confirmed, and whether you asked for Pro/.test(upPage), "signup/index.html has the privacy note");
 check(/Questions or a deletion request: email <a href="mailto:hello@pehchanthetraveller\.com">/.test(upPage) && /Gathered by an AI model with web search\. Items are not verified/.test(upPage), "signup/index.html has the contact address and the AI notice");
@@ -146,7 +149,7 @@ for (const f of ["subscribe/index.html", "manage/index.html", "signin/index.html
 }
 // 4d. Policy pages (T15): drafts with marked gaps until the owner fills them; only then may the build ship them.
 const LEGAL = ["privacy", "terms", "refunds", "contact"];
-const buildCmd = JSON.parse(readFileSync("vercel.json", "utf8")).buildCommand;
+const buildCmd = siteBuild;
 const shippedLegal = LEGAL.filter((s) => buildCmd.includes(`legal/${s}`)); // pages go live one at a time
 const draftLegal = LEGAL.filter((s) => !shippedLegal.includes(s));
 const legalShipped = shippedLegal.length > 0;
@@ -168,7 +171,7 @@ check(SLOTS.every((s) => slotsUsed.includes(s)) && slotsUsed.every((s) => SLOTS.
 check(!/\b\d{10}\b|\+91/.test(legalText), "the policy pages hold no phone number (it comes from LEGAL_PHONE at build time)");
 const filled = fill("{{LEGAL_NAME}} {{LEGAL_ADDRESS}}", { LEGAL_NAME: "A & <b>", LEGAL_ADDRESS: "1\n2" });
 check(filled.out === "A &amp; &lt;b&gt; 1<br />2" && filled.missing.length === 0 && fill("{{LEGAL_PHONE}}", {}).missing[0] === "LEGAL_PHONE", "fill-legal escapes values, turns newlines into line breaks, and reports an unset variable");
-if (legalShipped) check(/node scripts\/fill-legal\.mjs public/.test(JSON.parse(readFileSync("vercel.json", "utf8")).buildCommand), "the build fills the policy pages from Vercel variables (scripts/fill-legal.mjs)");
+if (legalShipped) check(/node scripts\/fill-legal\.mjs public/.test(buildCmd), "the build fills the policy pages from Vercel variables (scripts/fill-legal.mjs)");
 check(!draftLegal.some((s) => [page, subPage, manPage, inPage, upPage].some((t) => t.includes(`legal/${s}/`))), `no page links a policy page the build doesn't ship (drafts: ${draftLegal.join(", ")})`);
 if (shippedLegal.includes("privacy")) check([inPage, upPage].every((t) => t.includes('href="../legal/privacy/"')) && page.includes('href="https://travel-problem-radar.vercel.app/legal/privacy/"'), "the home, sign-in and sign-up pages link the privacy policy");
 if (legalShipped) check(/^scripts\/\*$/m.test(readFileSync(".vercelignore", "utf8")) && /^!scripts\/fill-legal\.mjs$/m.test(readFileSync(".vercelignore", "utf8")), ".vercelignore keeps scripts/fill-legal.mjs, which the build runs");

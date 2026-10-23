@@ -1,5 +1,5 @@
 // Fills the owner's name, address and phone into the built policy pages, so they live in Vercel's
-// environment variables and never in the public repo. Run by vercel.json's buildCommand once it ships legal/:
+// environment variables and never in the public repo. Run by package.json's build:site (vercel.json runs it):
 //   node scripts/fill-legal.mjs public
 // Fails the build if a page still has a {{SLOT}} whose variable is unset, so a page never goes live half-filled.
 import { readdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";

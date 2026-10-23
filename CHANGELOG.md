@@ -10,7 +10,9 @@ grouped by date.
   "free while it's being tested" wording and the paid wording on `paid` (false). `scripts/check-plan.mjs` (run by the
   owner with the keys) compares the Razorpay Plan with it. New `/pricing/` page, written but not shipped until
   `plan.json` has its values. `npm run check` now enforces T23's rules: no urgency words, no pre-ticked Pro box,
-  `<th scope>` on every table, and "renews" next to any price. The built site is unchanged (T24).
+  `<th scope>` on every table, and "renews" next to any price. The build steps moved from `vercel.json`'s
+  `buildCommand` to `package.json`'s `build:site`, because Vercel caps `buildCommand` at 256 characters and the
+  longer command failed the preview deploy. The built site is unchanged (T24).
 - Added `scripts/compare-models.mjs` and its plan, `docs/subscriptions/haiku-test.md`. It's a local test of Haiku
   5.5 against Sonnet 5.5 on the sweep, which could lower `F` and so the price. It doesn't touch Blob storage, email
   or Slack. It runs only with `--yes` and an API key, and it hasn't been run yet.

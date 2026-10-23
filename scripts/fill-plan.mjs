@@ -1,5 +1,5 @@
 // Fills Pro's price, GST line, refund rule and the rest into the built pages from plan.json, the one
-// place those facts live (T24). Run by vercel.json's buildCommand before fill-legal:
+// place those facts live (T24). Run by package.json's build:site (vercel.json runs it) before fill-legal:
 //   node scripts/fill-plan.mjs public
 // Two kinds of block switch with plan.json's "paid":
 //   <template data-when="paid">…</template>        unwrapped when paid is true, removed when false
