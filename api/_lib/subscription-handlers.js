@@ -5,10 +5,10 @@ import { createHash, createHmac, randomBytes as cryptoRandomBytes, timingSafeEqu
 import { DEFAULT_FROM, buildAlreadySubscribedEmail, buildConfirmEmail, buildProRequestEmail, buildSignInEmail, sendEmail, sendOne } from "./email.js";
 import { BodyTooLargeError, allowMethods, esc, readFields, sendJson, sendPage } from "./http.js";
 import { OAUTH_COOKIE, OAUTH_MINUTES, clearOAuthCookie, googleConfigured, googleFinish, googleStart, readOAuthCookie, readSignupCookie, signupCookie } from "./google.js";
-import { cancelSubscription, createSubscription, razorpayConfigured, verifyCheckout } from "./razorpay.js";
+import { cancelSubscription, createSubscription, razorpayConfigured, verifyCheckout, verifyWebhook } from "./razorpay.js";
 import { clearCookie, originOk, parseCookies, readSession, sessionCookie, sessionSecret, signSession } from "./session.js";
 import {
-  CONFIRM_RESEND_MINUTES, MAX_CONFIRMS_PER_ADDRESS, PENDING_TTL_DAYS, countEvents, deleteSubscriber, effectivePlan, findSubscriber, getSubscriber, newPending, normaliseCats, normaliseEmail, putSubscriber,
+  CONFIRM_RESEND_MINUTES, KEY_SUB_PREFIX, MAX_CONFIRMS_PER_ADDRESS, PENDING_TTL_DAYS, countEvents, deleteSubscriber, effectivePlan, findSubscriber, getSubscriber, newPending, normaliseCats, normaliseEmail, putSubscriber,
   recordEvent, tokenOk, utcDay,
 } from "./subscribers.js";
 
@@ -904,6 +904,118 @@ export function makeResendWebhookHandler({ env, storage, now, randomBytes = cryp
       return jsonResponse(200, { ok: true });
     } catch (e) {
       log("resend-webhook", "error: " + ((e && e.name) || "Error"));
+      return jsonResponse(500, { error: "could not process the event; try again later" });
+    }
+  };
+}
+
+// ---- subscription events from Razorpay (T21)
+
+// Razorpay delivers at least once and in no set order. Each applied event leaves a marker,
+// radar:rzp-event:<YYYYMMDD of the event>-<x-razorpay-event-id>, so a redelivery is a no-op; a
+// redelivery has the same created_at, so its key is known without listing. The sweep deletes markers
+// after RZP_EVENT_KEEP_DAYS (Razorpay stops retrying after 24 hours).
+export const KEY_RZPEVENT_PREFIX = "radar:rzp-event:";
+export const RZP_EVENT_KEEP_DAYS = 30;
+const RZP_EVENT_ID = /^[A-Za-z0-9_]{1,64}$/;
+const RZP_SUB_ID = /^sub_[A-Za-z0-9]{1,40}$/;
+const RECORD_ID = /^[0-9a-f]{64}$/;
+const RZP_STATUS = /^[a-z_]{1,20}$/;
+const RZP_GRANT = new Set(["activated", "charged", "resumed"]);
+const RZP_REVOKE = new Set(["halted", "paused"]);
+const RZP_ENDING = new Set(["cancelled", "completed"]);
+const secondsIso = (s) => (Number.isInteger(s) && s > 0 && s < 1e11 ? new Date(s * 1000).toISOString() : null);
+
+// The record after one subscription event (kind: "activated", "halted", ...). Only a paid Pro
+// (proSource "razorpay") is ever taken away, so an owner-granted Pro survives a failed payment;
+// a paid activation takes an owner-granted Pro over. A Pro needs current_end, so it always ends.
+export function applyRzpEvent(record, kind, entity, eventAt, t) {
+  const rzp = rzpOf(record);
+  const currentEnd = secondsIso(entity.current_end) || rzp.currentEnd || null;
+  let status = typeof entity.status === "string" && RZP_STATUS.test(entity.status) ? entity.status : rzp.status || null;
+  if (kind === "authenticated" && rzp.status && rzp.status !== "created") status = rzp.status; // never back from active
+  let next = { ...record, rzp: { ...rzp, status, currentEnd, lastEventAt: eventAt } };
+  const paid = record.proSource === "razorpay";
+  if (RZP_GRANT.has(kind) && currentEnd) next = { ...next, plan: "pro", proSource: "razorpay", proUntil: currentEnd, proRequestedAt: null };
+  else if (RZP_REVOKE.has(kind) && paid) next = { ...next, plan: "free", proSource: null, proUntil: null };
+  else if (RZP_ENDING.has(kind) && paid) {
+    next = Date.parse(currentEnd) > t ? { ...next, proUntil: currentEnd } : { ...next, plan: "free", proSource: null, proUntil: null };
+  }
+  return next;
+}
+
+// The record a subscription belongs to: through the radar:rzpsub: index, else the sid that checkout
+// put in the subscription's notes. A storage failure throws (so Razorpay retries); a record whose
+// own subscription is a different one (an abandoned checkout) counts as not found.
+async function findRzpRecord(storage, entity) {
+  let id = null;
+  const idx = await storage.get(KEY_RZPSUB_PREFIX + entity.id);
+  if (idx !== null) { try { id = JSON.parse(idx).id; } catch (e) { /* unreadable index: try notes */ } }
+  if (!id && entity.notes && typeof entity.notes.sid === "string") id = entity.notes.sid;
+  if (typeof id !== "string" || !RECORD_ID.test(id)) return null;
+  const v = await storage.get(KEY_SUB_PREFIX + id);
+  if (v === null) return null;
+  let record;
+  try { record = JSON.parse(v); } catch (e) { return null; }
+  return record && record.id === id && rzpOf(record).subscriptionId === entity.id ? record : null;
+}
+
+// POST /api/razorpay-webhook. Signed with RAZORPAY_WEBHOOK_SECRET (HMAC-SHA256 of the raw body, hex,
+// in x-razorpay-signature). Answers 2xx for anything it has handled or chosen to ignore, and 500 only
+// when storage fails, so Razorpay retries just those.
+export function makeRazorpayWebhookHandler({ env, storage, now, randomBytes = cryptoRandomBytes, log = console.log }) {
+  return async function razorpayWebhook(request) {
+    if (request.method !== "POST") return new Response(null, { status: 405, headers: { allow: "POST" } });
+    const secret = String(env.RAZORPAY_WEBHOOK_SECRET || "").trim();
+    if (!secret) {
+      log("rzp-webhook", "not configured");
+      return jsonResponse(503, { error: "not configured" });
+    }
+    const declared = Number(request.headers.get("content-length"));
+    if (declared > WEBHOOK_MAX_BYTES) return jsonResponse(413, { error: "request too large" });
+    const raw = await request.text();
+    if (Buffer.byteLength(raw) > WEBHOOK_MAX_BYTES) return jsonResponse(413, { error: "request too large" });
+    if (!verifyWebhook(raw, request.headers.get("x-razorpay-signature"), secret)) return jsonResponse(401, { error: "invalid signature" });
+
+    let event;
+    try { event = JSON.parse(raw); } catch (e) { return jsonResponse(400, { error: "malformed body" }); }
+    const name = event && typeof event.event === "string" ? event.event : "";
+    const kind = name.startsWith("subscription.") ? name.slice("subscription.".length) : "";
+    const entity = event && event.payload && event.payload.subscription && event.payload.subscription.entity;
+    const eventAt = secondsIso(event && event.created_at);
+    if (!kind || !entity || typeof entity !== "object" || !RZP_SUB_ID.test(String(entity.id)) || !eventAt) {
+      log("rzp-webhook", "ignored: " + (RZP_STATUS.test(kind) ? kind : "not a subscription event"));
+      return jsonResponse(200, { ok: true, ignored: true });
+    }
+    const eventId = String(request.headers.get("x-razorpay-event-id") || "");
+    const marker = RZP_EVENT_ID.test(eventId) ? `${KEY_RZPEVENT_PREFIX}${eventAt.slice(0, 10).replace(/-/g, "")}-${eventId}` : null;
+
+    const t = now();
+    try {
+      if (marker && (await storage.get(marker)) !== null) {
+        log("rzp-webhook", `${kind}: duplicate`);
+        return jsonResponse(200, { ok: true, duplicate: true });
+      }
+      const record = await findRzpRecord(storage, entity);
+      if (!record) {
+        log("rzp-webhook", `${kind}: unknown subscription`);
+        return jsonResponse(200, { ok: true, unknown: true });
+      }
+      const last = Date.parse(rzpOf(record).lastEventAt);
+      if (Number.isFinite(last) && Date.parse(eventAt) < last) {
+        log("rzp-webhook", `${kind}: stale, a newer event was applied`);
+        return jsonResponse(200, { ok: true, stale: true });
+      }
+      const before = effectivePlan(record, t);
+      const next = applyRzpEvent(record, kind, entity, eventAt, t);
+      const after = effectivePlan(next, t);
+      await putSubscriber(storage, next);
+      if (before !== after) await recordEvent(storage, after === "pro" ? "progranted" : "prorevoked", { now: t, randomBytes, plan: after });
+      if (marker) await storage.set(marker, JSON.stringify({ at: new Date(t).toISOString() }));
+      log("rzp-webhook", `${kind}: plan ${before} -> ${after}`);
+      return jsonResponse(200, { ok: true });
+    } catch (e) {
+      log("rzp-webhook", "error: " + ((e && e.name) || "Error"));
       return jsonResponse(500, { error: "could not process the event; try again later" });
     }
   };

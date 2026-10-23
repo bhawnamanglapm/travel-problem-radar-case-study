@@ -73,6 +73,7 @@ Email has been sent through a real Resend account since 21 Oct 2026, from the ve
 | `api/data.js` | Read-only feed the live page uses (allow-listed keys only) |
 | `api/subscribe.js`, `api/confirm.js`, `api/unsubscribe.js`, `api/account.js` | Sign-up, the Confirm button, unsubscribe (also one-click from mail apps), and the manage page's data and actions: Request Pro, and checkout, checkout-return and cancel when payments are on |
 | `api/resend-webhook.js` | Resend's signed bounce and complaint events: a hard bounce or a spam complaint deletes the address |
+| `api/razorpay-webhook.js` | Razorpay's signed subscription events (T21): activated or charged makes the account Pro until the paid period ends; halted makes a paid Pro Free; cancelled lets it run out. Duplicates and out-of-order events change nothing |
 | `api/_lib/radar.js`, `handlers.js` | Sweep logic and the sweep and data handlers |
 | `api/_lib/storage.js` | The private Blob store: `get`, `set`, `del`, `list`; reads skip Blob's CDN cache except for `/api/data` |
 | `api/_lib/slack.js`, `email.js` | The Slack post; every email (owner digest, subscriber digest, confirmation, Pro request) and Resend sending |

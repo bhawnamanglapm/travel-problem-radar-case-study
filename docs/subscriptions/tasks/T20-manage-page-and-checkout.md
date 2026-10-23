@@ -117,8 +117,9 @@ on the other pages today), it must allow those (**verify** the domains).
 
 ## Acceptance criteria
 
-- [ ] Free subscriber → Upgrade → Razorpay test checkout → page says payment received; record has
-  `rzp.status: "authenticated"` and is **still Free** until the webhook arrives
+- [x] Free subscriber → Upgrade → Razorpay test checkout → page says payment received; record has
+  `rzp.status: "authenticated"` and is **still Free** until the webhook arrives. Checked 2026-10-23 on the `staging`
+  Preview with its own Blob store, a test-mode plan and the domestic test card 4718 6091 0820 4366
 - [x] Pending, already-Pro and paid-but-waiting cases refused with the right code and no new Razorpay subscription;
   an open checkout under an hour old is reused
 - [x] Cancel sets `cancelAtPeriodEnd` and leaves the plan Pro
