@@ -34,6 +34,7 @@ working in a real inbox; that is T12's staged launch.
 | [T19](T19-razorpay-library.md) Razorpay library | done; not used yet | branch `feat/razorpay-library` | 742 pass (674 subscriber + 68 sweep; +39 new); 110 `npm run check` checks (+2) | See "T19" below |
 | [T20](T20-manage-page-and-checkout.md) `/manage/` page, checkout, cancel | done; test checkout passed on `staging` (2026-10-23) | branch `feat/checkout` | 782 pass (714 subscriber + 68 sweep; +40 new); 113 `npm run check` checks (+3) | See "T20" below |
 | [T21](T21-razorpay-webhook.md) Razorpay webhook | done; staging check passed (2026-10-23) | branch `feat/razorpay-webhook` | 834 pass (766 subscriber + 68 sweep; +43 new); 114 `npm run check` checks (+1) | See "T21" below |
+| Pricing and About pages (Razorpay's site review) | planned; costs measured ([costing.md](../costing.md)); waits for owner inputs | branch `docs/costing-and-pages-plan` | docs only | Plan: [pricing-and-about-pages.md](../pricing-and-about-pages.md) |
 | [T22](T22-pro-lifecycle-and-go-live.md) Pro expiry, paid unsubscribe, go-live | todo | | | Needs Vercel Pro (T15 Step 2, row 3) |
 
 ## Notes per task

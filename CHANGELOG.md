@@ -5,6 +5,14 @@ grouped by date.
 
 ## 2026-10-23
 
+- New `docs/subscriptions/costing.md`: what a sweep ($0.21, measured over 5 production runs), an email, a live-board
+  view and a card payment (3.42%) cost, the fixed monthly bill (about ₹6,797 with Vercel Pro and Resend Pro) and how
+  many Pro subscribers cover it at four prices. New plan for the Pricing and About pages Razorpay's review needs;
+  it found that the build ships only the Privacy page of `legal/`.
+- `costing.md` revised after an audit against the code: failed runs so far cost nothing, the Vercel backstop cron
+  probably sweeps daily, and Resend Pro has no daily limit. Added the worst-case sweep (about $1.07), costs at 10 to
+  1,000 users, stress tests, pricing options, risks and safeguards, tax questions for a CA, and measurement and
+  pre-launch checklists.
 - Paying now makes an account Pro: the new `/api/razorpay-webhook` takes Razorpay's signed subscription events.
   Activated or charged gives Pro until the paid period ends, a failed payment (halted) makes it Free, and a
   cancelled subscription runs to the end of the period. Repeated or late events change nothing. Owner-granted Pro
