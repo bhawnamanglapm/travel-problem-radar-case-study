@@ -3,6 +3,14 @@
 Built from the git history. Dates are commit dates. The project has no version numbers or releases, so entries are
 grouped by date.
 
+## 2026-10-24
+
+- A product-management case study in [`pm/`](pm/README.md), in seven stages: discovery, product definition,
+  design, planning and governance, business case and launch, executive communication, data and metrics, with a
+  summary in [`pm/CASE_STUDY.md`](pm/CASE_STUDY.md). It summarises and links the existing docs; every figure names
+  its source, and gaps are marked **OWNER INPUT NEEDED** or **Not measured**. Stages 5 to 7 are plans, since
+  payments haven't opened. The README links it, and the v1 PRD points to v2.
+
 ## 2026-10-23
 
 - `/pricing/`, the contact page and the cancellation and refunds page are live. Every footer now reads Home · About ·
