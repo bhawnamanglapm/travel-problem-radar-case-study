@@ -116,7 +116,7 @@ changed:
 | Every category fails | Nothing is saved, and the run reports an error so the failure is visible | `npm test` |
 | The model returns text that isn't clean JSON | Code fences are stripped; a reply cut off mid-list keeps the complete items; an empty or unreadable reply fails that category | `npm test`; `extractProblems()` |
 | A link that isn't a web address | Dropped from the item | Code: `normalize()` in `api/_lib/radar.js` |
-| Someone calls the sweep to run up costs | Refused without the secret (401); a repeat scheduled call within 2 hours is skipped. A manual call with the secret always runs, so if the secret leaks the Anthropic spend limit is the cap | `npm test`; preview deployment returned 401 |
+| Someone calls the sweep to run up costs | Refused without the secret (401); a repeat scheduled call within 2 hours is skipped. A manual call with the secret runs at most 3 times a UTC day (`MAX_MANUAL_SWEEPS_PER_DAY`), then gets 429; the Anthropic spend limit stays the final cap | `npm test`; preview deployment returned 401 |
 | Someone reads other stored data | The data feed serves only history and sweep keys and refuses writes | `npm test` |
 | Storage grows forever | Only the last 60 sweeps are kept | `npm test` |
 | A reader treats AI findings as fact | The live page says: "Gathered every 5 hours by an AI model with web search. Check each source link; items are not verified." The demo says it replays a saved sample. | `live/index.html`; demo banner |

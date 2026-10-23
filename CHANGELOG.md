@@ -5,6 +5,8 @@ grouped by date.
 
 ## 2026-10-23
 
+- Manual sweeps are capped at 3 a UTC day (`MAX_MANUAL_SWEEPS_PER_DAY`; `0` stops them). A call past the cap gets
+  `429` and runs nothing, so a leaked `CRON_SECRET` can't run up the Anthropic bill. Scheduled sweeps are unchanged.
 - Paying now makes an account Pro: the new `/api/razorpay-webhook` takes Razorpay's signed subscription events.
   Activated or charged gives Pro until the paid period ends, a failed payment (halted) makes it Free, and a
   cancelled subscription runs to the end of the period. Repeated or late events change nothing. Owner-granted Pro

@@ -218,6 +218,7 @@ Open **Settings → Environment Variables** and add:
 | `MAX_SIGNUPS_PER_IP_HOUR` | A whole number | **Production only** | No. Defaults to 5 sign-ups per connection per UTC hour |
 | `SESSION_SECRET` | A random string of at least 32 characters (see [Signing in](#signing-in-t16)) | **Production and Preview, a different value for each** | Only for sign-in. Without it `/signin/` answers "not set up yet" and Confirm signs nobody in |
 | `MAX_SIGNINS_PER_DAY` | A whole number | **Production only** | No. Defaults to 50 sign-in emails a day; `0` stops them |
+| `MAX_MANUAL_SWEEPS_PER_DAY` | A whole number | **Production only** | No. Defaults to 3 manual sweeps a UTC day (5.5); `0` stops them. Scheduled sweeps aren't limited by it |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | The OAuth client from Google Cloud (see [Google sign-in](#google-sign-in-optional)) | **Production only**, the secret marked Sensitive | No. Both, with `SESSION_SECRET`, show "Continue with Google" |
 | `BOARD_PAYWALL` | `1` | **Production only**, at go-live | No. Locks the live board to signed-in Pro accounts; see [The locked board](#the-locked-board-t17). Leave it unset until then |
 | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `RAZORPAY_PLAN_ID`, `RAZORPAY_TOTAL_COUNT` | Razorpay test-mode keys, a webhook secret, a plan id and the number of billing cycles (see [Paid Pro checkout](#paid-pro-checkout-t20)) | **Preview only** while testing, the two secrets marked Sensitive. Never test keys on Production; live keys go there at T22 | No. All five turn on **Upgrade to Pro** on `/manage/`; with any of them unset the page keeps Request Pro |
@@ -357,6 +358,8 @@ automatically after every production deploy, call the same URL from a GitHub Act
 | 500 | `{"error":"ANTHROPIC_API_KEY is not set; …"}` | Key missing in this deployment | Add it (4.3) and redeploy (4.5) |
 | 500 | `{"error":"sweep failed: …"}` | Storage or another unexpected error | Read the message; usually storage (see Troubleshooting) |
 | 401 | `{"error":"unauthorized"}` | Secret missing or wrong, or `CRON_SECRET` not set in this deployment | Check the value; redeploy after changing it |
+| 429 | `{"trigger":"manual","status":"limited","error":"manual sweep limit reached: …"}` | The day's manual runs are used up (5.5). Nothing was run | Wait until 00:00 UTC, or raise `MAX_MANUAL_SWEEPS_PER_DAY` and redeploy |
+| 503 | `{"trigger":"manual","error":"couldn't record the manual run; …"}` | Storage didn't accept the manual run's record, so it didn't run | Check storage (see Troubleshooting) |
 
 If some categories fail and others succeed, the run still saves (status `saved`), and `perCat` marks the failed
 ones as `failed: …`.
@@ -399,8 +402,11 @@ and an `x-vercel-cron-schedule` header. The GitHub Actions schedule sends `X-Swe
 
 Manual runs are marked `"manual": true` in the history. Keep in mind:
 
-- **Each manual run costs a full sweep.** Anyone who has `CRON_SECRET` can run as many as they like, so keep the
-  secret private and keep the Anthropic spend limit in place: that limit is the cap.
+- **Each manual run costs a full sweep, so there are at most 3 a UTC day.** A call past that answers `429` and runs
+  nothing. Set `MAX_MANUAL_SWEEPS_PER_DAY` to change the number; `0` stops manual runs. A run counts when it starts,
+  so one that fails still uses one up. Two calls at the same moment can both get through, so treat the limit as
+  approximate. With a leaked secret, the most it allows is about 15 sweeps a day (12 scheduled-looking calls 2
+  hours apart, plus the manual ones), so keep the Anthropic spend limit in place as the final cap.
 - **A manual run uses up New flags.** Items it finds are no longer flagged New in the next scheduled digest.
 - **Vercel's own run options may count as scheduled.** `vercel crons run` and the dashboard's run option may send
   the timer's headers. If one answers `skipped`, use the `curl` command in 5.1 instead.

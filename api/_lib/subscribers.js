@@ -16,7 +16,7 @@ export const MAX_CONFIRMS_PER_ADDRESS = 5;
 
 // Letters only, so an event's key round-trips through storage.js's path().
 export const EVENT_TYPES = ["subscribed", "confirmsent", "confirmed", "unsubscribed", "expired",
-  "bounced", "complained", "progranted", "prorevoked", "prorequested", "noticesent", "signinsent", "emailoff", "deleted", "checkoutstarted"];
+  "bounced", "complained", "progranted", "prorevoked", "prorequested", "noticesent", "signinsent", "emailoff", "deleted", "checkoutstarted", "manualsweep"];
 
 const ID_RE = /^[0-9a-f]{64}$/;
 
