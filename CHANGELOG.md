@@ -5,6 +5,9 @@ grouped by date.
 
 ## 2026-10-23
 
+- Added `scripts/compare-models.mjs` and its plan, `docs/subscriptions/haiku-test.md`. It's a local test of Haiku
+  5.5 against Sonnet 5.5 on the sweep, which could lower `F` and so the price. It doesn't touch Blob storage, email
+  or Slack. It runs only with `--yes` and an API key, and it hasn't been run yet.
 - A scheduled sweep that saves nothing now starts the 2-hour gap too, so a run of failed or empty scheduled calls
   (which may still be billed) can't repeat back to back. The start time is kept in `radar:lastScheduled`, which
   `/api/data` doesn't serve. Manual runs are unchanged.

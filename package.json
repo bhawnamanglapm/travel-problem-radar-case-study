@@ -7,7 +7,7 @@
     "build:demo": "esbuild demo/src/main.jsx --bundle --minify --jsx=automatic --loader:.js=jsx --define:process.env.NODE_ENV='\"production\"' --outfile=demo/radar.js --legal-comments=none",
     "build:live": "esbuild live/src/main.jsx --bundle --minify --jsx=automatic --loader:.js=jsx --define:process.env.NODE_ENV='\"production\"' --outfile=live/radar-live.js --legal-comments=none",
     "check": "node scripts/check.mjs",
-    "test": "node scripts/test-sweep.mjs && node scripts/test-subscriptions.mjs"
+    "test": "node scripts/test-sweep.mjs && node scripts/test-subscriptions.mjs && node scripts/test-compare.mjs"
   },
   "devDependencies": {
     "esbuild": "0.23.1",
