@@ -85,7 +85,8 @@ rebuild is needed.
 
 `scripts/check.mjs` gets four more checks:
 - `pricing/index.html` and `about/index.html` exist and resolve their local links;
-- every page in the list above links all six footer pages;
+- every page in the list above links all six footer pages; as built in T25, a shipped page links only the pages that
+  ship, in this order, and a draft links all six;
 - `vercel.json`'s build copies `pricing`, `about` and all four `legal/` folders;
 - neither new page contains a phone number or postal-address pattern. This is the same idea as the existing
   secret checks.

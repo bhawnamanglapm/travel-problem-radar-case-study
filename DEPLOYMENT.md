@@ -467,7 +467,7 @@ Do not commit the `.vercel/` folder that `vercel link` creates. It is already in
 | Key | What it does |
 |---|---|
 | `framework: null` | No framework preset; Vercel treats this as a plain static site plus functions |
-| `buildCommand` | Runs `npm run build:site` from `package.json`. The steps live there because Vercel allows `buildCommand` only 256 characters (the deploy fails before building if it's longer). `build:site` copies `index.html`, `demo/`, `live/`, `subscribe/`, `manage/`, `signin/`, `signup/` and the policy pages that are ready (`legal/privacy` today) into `public/`, then removes the JSX sources. Then `scripts/fill-plan.mjs` fills Pro's price and the rest from `plan.json` (below), and `scripts/fill-legal.mjs` fills the owner's details into the policy pages. It does **not** run `npm run build`. A new page folder must be added to `build:site`, or Vercel won't serve it (`npm run check` tests for `subscribe`, `manage`, `signin` and `signup`). `pricing/` is written but not added yet: `npm run check` fails if it ships before `plan.json` has its values. To build locally on Windows, run `npm run build:site --script-shell=bash` |
+| `buildCommand` | Runs `npm run build:site` from `package.json`. The steps live there because Vercel allows `buildCommand` only 256 characters (the deploy fails before building if it's longer). `build:site` copies `index.html`, `demo/`, `live/`, `subscribe/`, `manage/`, `signin/`, `signup/` and the policy pages that are ready (`legal/privacy` today) into `public/`, then removes the JSX sources. Then `scripts/fill-plan.mjs` fills Pro's price and the rest from `plan.json` (below), and `scripts/fill-legal.mjs` fills the owner's details into the policy pages. It does **not** run `npm run build`. A new page folder must be added to `build:site`, or Vercel won't serve it (`npm run check` tests for `subscribe`, `manage`, `signin` and `signup`). `pricing/` and `about/` are written but not added yet: `npm run check` fails if `pricing/` ships before `plan.json` has its values, or `about/` ships with a gap left. Adding a page also changes the footer on every shipped page (About · Pricing · Contact · Terms · Privacy · Refunds, only the pages that ship; `npm run check` prints the links each page should have). To build locally on Windows, run `npm run build:site --script-shell=bash` |
 | `outputDirectory` | Serves `public/` as the static site |
 | `crons` | The daily backstop: calls `/api/sweep` at 01:30 UTC (07:00 IST), within the hour on Hobby |
 | `functions["api/sweep.js"].maxDuration` | Lets the sweep run for up to 300 s, the Hobby maximum |
@@ -514,6 +514,9 @@ It isn't secret and isn't served (the build reads it from the repository root).
 | `refundDays` | Days a refund takes, as a number | `{{PRO_REFUND_DAYS}}` |
 | `methods` | The payment methods switched on in Razorpay, as a list | `{{PRO_METHODS}}` ("cards and UPI AutoPay") |
 | `contact` | The address for billing questions | `{{PRO_CONTACT}}` |
+
+`pricing/`, `legal/terms/` and `legal/refunds/` use these slots, so the price and the refund rule read the same on
+each (T23 A4).
 
 **The switch.** A page puts the paid wording in `<template data-when="paid">…</template>` and today's wording in
 `<!-- when:free-test -->…<!-- /when -->`. With `paid: false` the build drops the first and keeps the second; with
