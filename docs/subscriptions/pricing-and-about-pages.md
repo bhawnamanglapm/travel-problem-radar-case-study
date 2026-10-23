@@ -110,10 +110,10 @@ Then `npm run check` and `npm test`.
 | # | Question | Where it's used |
 |---|---|---|
 | 1 | Pro price a month in ₹, and a year if offered. **Answered 2026-10-23: ₹299 a month, monthly only**, the candidate [costing.md](costing.md#199-299-and-499-compared-provisional) names to test first. In `plan.json` | `/pricing/`, the live Razorpay Plan(s) |
-| 2 | GST: registered or not; price includes it or adds it | `/pricing/` wording; break-even in [costing.md](costing.md#break-even) |
-| 3 | Free trial: none, or how many days | `/pricing/`; a trial changes checkout, so it would be T22 code |
+| 2 | GST: registered or not; price includes it or adds it. **Answered 2026-10-23: not registered, no GST charged.** In `plan.json` | `/pricing/` wording; break-even in [costing.md](costing.md#break-even) |
+| 3 | Free trial: none, or how many days. **Answered 2026-10-23: none** (`trialDays: 0`) | `/pricing/`; a trial changes checkout, so it would be T22 code |
 | 4 | Refund rule (for example: none for a part-used period, a double charge always refunded). **Answered 2026-10-23: the first payment back within 7 days, no refund for a started month after that, mistakes always refunded; within 14 days.** In `plan.json` | `/pricing/` and `legal/refunds/` |
-| 5 | International cards: accept or not | `/pricing/` payment methods; Razorpay activation |
+| 5 | International cards: accept or not. Still open; the methods are set to cards and UPI AutoPay (2026-10-23, **verify** after activation) | `/pricing/` payment methods; Razorpay activation |
 | 6 | Brand name and one or two lines about who runs it. **Answered 2026-10-23** from the owner's resume; `/about/` ships | `/about/` |
 | 7 | Domain renewal price a year | [costing.md](costing.md#fixed-monthly-cost) |
 

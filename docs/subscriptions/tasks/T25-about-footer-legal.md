@@ -74,6 +74,16 @@ policy page.
 - Still to write: the manual refund step needs to say how to tell a first payment from a renewal in the Razorpay
   dashboard.
 
+## Shipped (2026-10-23)
+
+- `/pricing/`, `legal/contact/` and `legal/refunds/` are in the build. Contact and refunds lost the draft notice
+  and `noindex`, are dated 23 October 2026, and have the top links privacy has (Home, Create account, Sign in).
+- Every shipped footer: Home · About · Pricing · Contact · Privacy · Refunds. Terms is the only draft, so it's the
+  only page listing all seven.
+- Terms: the renewal notice (at least 24 hours ahead, by the bank for cards; **verify**) and what happens if the
+  service stops (30 days' notice, unused part refunded) are filled. Still open: liability (waits for an adviser) and
+  the date.
+
 ## Acceptance criteria
 
 - [ ] No `[OWNER INPUT NEEDED]` left in any shipped page

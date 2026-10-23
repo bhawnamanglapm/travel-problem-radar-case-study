@@ -5,6 +5,11 @@ grouped by date.
 
 ## 2026-10-23
 
+- `/pricing/`, the contact page and the cancellation and refunds page are live. Every footer now reads Home · About ·
+  Pricing · Contact · Privacy · Refunds. `plan.json` has the owner's answers: no GST charged (not registered), cards
+  and UPI AutoPay, no free trial. `paid` stays `false`, so Pro still reads as free while it's being tested and no
+  payment button shows. The terms (still a draft) now say how the renewal notice works and what happens if the service
+  stops; the liability clause waits for an adviser.
 - Signed in, the home page no longer offers **Create free account**. The hero button becomes **Your account**
   (Free) or **Open the live board** (Pro), the "No password" note is hidden, the current plan's button reads
   **Your plan**, and Free accounts get **Request Pro** (to `/manage/`) instead of the sign-up form. `npm run check`
