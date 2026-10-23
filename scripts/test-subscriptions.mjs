@@ -372,6 +372,11 @@ const iso = (ms) => new Date(ms).toISOString();
   r = await w.post({ email: "a@example.com" });
   check(r.code === 200 && w.sent[0].text.includes("https://radar.vercel.app/api/confirm?id="), "subscribe: SITE_URL falls back to the Vercel production URL");
   check(siteUrl({ SITE_URL: "javascript:x" }) === "" && siteUrl({ SITE_URL: "https://s.example///" }) === "https://s.example", "siteUrl: rejects a non-http link and trims slashes");
+  const pv = { VERCEL_ENV: "preview", VERCEL_PROJECT_PRODUCTION_URL: "radar.vercel.app" };
+  check(siteUrl({ ...pv, VERCEL_BRANCH_URL: "radar-git-staging-team.vercel.app" }) === "https://radar-git-staging-team.vercel.app", "siteUrl on a Preview: the branch's own URL, not production");
+  check(siteUrl(pv) === "" && siteUrl({ ...pv, VERCEL_BRANCH_URL: "bad url/x" }) === "", "siteUrl on a Preview without a usable branch URL: nothing (so no email), never production");
+  check(siteUrl({ ...pv, SITE_URL: "https://set.example" }) === "https://set.example", "siteUrl on a Preview: SITE_URL still wins when set");
+  check(siteUrl({ VERCEL_ENV: "production", VERCEL_PROJECT_PRODUCTION_URL: "radar.vercel.app", VERCEL_BRANCH_URL: "radar-git-main-team.vercel.app" }) === "https://radar.vercel.app", "siteUrl in production: the production URL, never the branch URL");
   w = world();
   r = await w.post("email=" + "x".repeat(9000), { type: "application/x-www-form-urlencoded" });
   check(r.code === 413, "subscribe row 4: a body over 8 KB gets 413");
@@ -1212,8 +1217,29 @@ const iso = (ms) => new Date(ms).toISOString();
   r = await run(st, ["prune-events", "--yes"]);
   check(r.code === 2, "prune-events without --older-than: usage error");
 
+  // recount
+  ({ st, mk } = await world());
+  await mk(1); await mk(2, { status: "pending", confirmedAt: null }); await mk(3, { plan: "pro", proSource: "owner", emailOff: "bounced" }); await mk(4, { status: "unsubscribed" });
+  r = await run(st, ["recount"]);
+  check(r.code === 1 && /none -> 3/.test(r.err) && /add --yes/.test(r.err) && !st.m.has(KEY_SUBSCRIBER_COUNT), "recount without --yes: reports the count, writes nothing");
+  r = await run(st, ["recount", "--yes"]);
+  const cnt = JSON.parse(st.m.get(KEY_SUBSCRIBER_COUNT));
+  check(r.code === 0 && cnt.count === 3 && cnt.at === iso(T0) && Object.keys(cnt).sort().join() === "at,count", "recount --yes: writes {count, at} counting pending and active records (emails off too), like the sweep");
+  st.m.set(KEY_SUBSCRIBER_COUNT, JSON.stringify({ count: 40, at: iso(T0 - DAY) }));
+  r = await run(st, ["recount", "--yes"]);
+  check(r.code === 0 && /40 -> 3/.test(r.out) && JSON.parse(st.m.get(KEY_SUBSCRIBER_COUNT)).count === 3, "recount --yes: corrects a stale count and says what it was");
+  check(!/@|secret-token/.test(r.all), "recount: prints no address or token");
+  {
+    const st2 = memStorage();
+    for (const [n, over] of [[1, {}], [2, { status: "pending", confirmedAt: null }], [3, { emailOff: "unsubscribed", plan: "pro", proSource: "owner" }]]) await putSubscriber(st2, { ...newPending(`c${n}@example.com`, { now: T0 - DAY, randomBytes: seeded(300 + n) }), token: "t" + n, status: "active", confirmedAt: iso(T0 - DAY), ...over });
+    await admin.recount(st2, { apply: true, now: T0 });
+    const mine = JSON.parse(st2.m.get(KEY_SUBSCRIBER_COUNT)).count;
+    await deliverToSubscribers({ env: { SUBSCRIPTIONS_ENABLED: "1", RESEND_API_KEY: "re_k", EMAIL_FROM: "Radar <hello@pehchanthetraveller.com>", SITE_URL: "https://site.example" }, storage: st2, fetchFn: async (u, init) => ({ ok: true, status: 200, headers: { get: () => null }, json: async () => ({ data: JSON.parse(init.body).map((_, i) => ({ id: "m" + i })) }) }), now: () => T0, randomBytes: seeded(9), sweep: null, scheduled: true, log: () => {} });
+    check(mine === 3 && JSON.parse(st2.m.get(KEY_SUBSCRIBER_COUNT)).count === mine, "recount: gives the same count a sweep writes");
+  }
+
   // usage and failures
-  const bads = [[], ["nope"], ["show"], ["show", "a@b.com", "extra"], ["show", "not an email"], ["stats", "--wat"], ["stats", "--yes"], ["grant-pro", "a@b.com", "--until"], ["list", "--plan"]];
+  const bads = [[], ["nope"], ["show"], ["show", "a@b.com", "extra"], ["show", "not an email"], ["stats", "--wat"], ["stats", "--yes"], ["grant-pro", "a@b.com", "--until"], ["list", "--plan"], ["recount", "extra"], ["recount", "--days", "3"]];
   const codes = [];
   for (const argv of bads) codes.push((await run(memStorage(), argv)).code);
   check(codes.every((c) => c === 2), `bad usage exits 2 (${codes.join(",")})`);

@@ -85,7 +85,7 @@ Email has been sent through a real Resend account since 21 Oct 2026, from the ve
 | `travel-problem-radar.jsx` | The dashboard component (live in Claude's app, demo on the web) |
 | `sampleData.json` | 8 saved items, two per category, each with a source link |
 | `scripts/check.mjs` | Offline checks: sample data, page links, bundles, the subscribe and manage pages, prompt drift, secrets (Razorpay key secrets too), Hobby's 12-function limit |
-| `scripts/subscribers.mjs` | Owner admin tool, run on your own machine: `stats`, `list`, `show`, `grant-pro`, `revoke-pro`, `delete`, `prune-events`. Not deployed |
+| `scripts/subscribers.mjs` | Owner admin tool, run on your own machine: `stats`, `list`, `show`, `grant-pro`, `revoke-pro`, `delete`, `prune-events`, `recount`. Not deployed |
 | `.github/workflows/sweep.yml` | Calls `/api/sweep` every 5 hours, and on demand from the Actions tab |
 | `scripts/test-sweep.mjs` | Offline tests for the sweep, the Slack post, the email and the data feed (no network, no key) |
 | `scripts/test-subscriptions.mjs` | Offline tests for the subscriber features: storage, records, emails, every endpoint (the Resend webhook's signature check too), the per-IP limit, delivery, the sweep wiring and the admin script (fake Resend, no network) |

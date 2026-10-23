@@ -511,7 +511,7 @@ needed at runtime.
 | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `RAZORPAY_PLAN_ID` | You (for paid Pro) | `/api/account` (and T21's webhook, once built) | The Razorpay API keys, the webhook's signing secret and the subscription plan. The key id is public: Checkout needs it in the browser. The two secrets never leave the server. Test keys start `rzp_test_`, and test and live are separate in Razorpay, so a test plan id doesn't work with live keys |
 | `RAZORPAY_TOTAL_COUNT` | You (for paid Pro) | `/api/account` | Razorpay's `total_count`: how many billing cycles a subscription runs before it ends. A whole number of 1 or more. Payments count as on only when this and the four above are all set; otherwise `/manage/` shows Request Pro and the payment actions answer `503` |
 | `RESEND_WEBHOOK_SECRET` | You (optional) | `/api/resend-webhook` | The Resend webhook's signing secret. If it is unset, the endpoint answers `503` and does nothing |
-| `SITE_URL` | You (optional) | The subscriber endpoints, `/api/sweep` | Base of the links in subscriber emails. If unset, `https://` plus `VERCEL_PROJECT_PRODUCTION_URL`. With neither, subscriber email is off |
+| `SITE_URL` | You (optional) | The subscriber endpoints, `/api/sweep` | Base of the links in subscriber emails. If unset, `https://` plus `VERCEL_PROJECT_PRODUCTION_URL`; **on a Preview**, `https://` plus `VERCEL_BRANCH_URL` instead, never the production domain. With neither, subscriber email is off |
 | `LEGAL_NAME`, `LEGAL_ADDRESS`, `LEGAL_PHONE` | You (`LEGAL_NAME` now; the rest once their pages ship) | The build (`scripts/fill-legal.mjs`) | Filled into the `{{LEGAL_…}}` slots of the policy pages at build time, HTML-escaped; a newline in the address becomes a line break. Kept out of the repository so they are not in its history. If `legal/` is built and one is unset, the build fails |
 | `VERCEL_PROJECT_PRODUCTION_URL` | Vercel, automatically | `/api/sweep`, the subscriber endpoints | Builds the "Open the live board" link in the Slack message, and the subscriber links when `SITE_URL` is unset. If it is missing, the Slack link is left out |
 | `BLOB_STORE_ID` or `BLOB_READ_WRITE_TOKEN` | Vercel, when the store is connected | `api/_lib/storage.js` | Do not set by hand unless running outside Vercel |
@@ -568,7 +568,8 @@ committed bundle is stale.
 **Preview deploys.** Each pull request gets a preview URL. Cron jobs do not run on previews, and with the secrets set
 to Production only, a preview's `/api/sweep` always answers 401. By default Vercel also puts previews behind
 **Vercel Authentication**: a `curl` to a preview URL gets Vercel's own login page (HTML, status 401), not this app's
-JSON. Open previews in a browser where you are signed in to Vercel.
+JSON. Open previews in a browser where you are signed in to Vercel. To try sign-up or payments on a preview, see
+[Testing payments on Preview](#testing-payments-on-preview).
 
 **Rollbacks.** **Deployments → ⋯ → Instant Rollback** (or *Promote* an older deployment) restores the previous
 static files, functions and cron definition. Stored sweeps are not touched.
@@ -986,17 +987,74 @@ appear in live mode, and each has its own keys ([test and live modes][rzp-modes]
 2. Make a random webhook secret and keep it in your password manager. T21 uses the same one when the webhook is
    added in Razorpay; T20 only needs it set.
 3. Choose `RAZORPAY_TOTAL_COUNT` (how many months a subscription runs).
-4. Add the five variables to **Preview only** (the key secret and webhook secret marked Sensitive), never to
-   Production, and redeploy the Preview.
-5. Before the first test checkout, check what the Preview deployment uses for the Blob store, `SESSION_SECRET` and
-   `SITE_URL`. Then sign up there, press Upgrade and pay with a test card, for example 5104 0600 0000 0008 with any
-   CVV and a future expiry ([integration guide][rzp-subs]). The record should show `rzp.status: "authenticated"`
-   and still be Free.
+4. Add the five variables to **Preview only**, branch `staging` (the key secret and webhook secret marked
+   Sensitive), never to Production. The whole Preview setup is in the next section.
 
 To turn payments off again, remove any one of the five variables and redeploy.
 
 [rzp-modes]: https://razorpay.com/docs/payments/dashboard/test-live-modes/
 [rzp-subs]: https://razorpay.com/docs/payments/subscriptions/integration-guide/
+
+### Testing payments on Preview
+
+A test checkout needs a deployment that can sign people up, send email and take test payments without touching
+production's subscribers. Out of the box a Preview can't: it has no subscription, email or session variables, and if
+the Blob store is connected to Preview as well as Production, a test sign-up lands in the real list. The setup below
+gives Preview its own empty store and turns subscriptions on for **one branch, `staging`**, so other branches'
+previews stay inert.
+
+| # | Who | Step |
+|---|---|---|
+| 1 | Owner, dashboard | **Storage → the production store → its project connection**: untick **Preview** (keep Production and Development), so production's token leaves Preview |
+| 2 | CLI | `vercel blob create-store radar-preview --access private -e preview --yes`: a new, empty private store whose token is on Preview only. Then `vercel env ls production` should be unchanged |
+| 3 | CLI | Create branch `staging` from `main` and push it. Its preview keeps the same branch URL across deploys, which the webhook needs |
+| 4 | CLI | Preview variables for branch `staging` only (`vercel env add NAME preview staging`): `SUBSCRIPTIONS_ENABLED=1`, `MAX_SUBSCRIBERS=5`, `MAX_CONFIRMS_PER_DAY=5`, and a fresh random `SESSION_SECRET` (Sensitive), different from production's |
+| 5 | Owner, dashboard | Same scope: `RESEND_API_KEY` (a separate Resend key, Sensitive), `EMAIL_FROM` (the production sender), and the five `RAZORPAY_*` test-mode values |
+| 6 | Owner, dashboard | **Settings → Deployment Protection → Protection Bypass for Automation**: generate a secret for Razorpay's webhook (below) and keep it in your password manager |
+| 7 | CLI | Redeploy `staging`. Then run `recount --yes` against the preview store (see [Managing subscribers](#managing-subscribers), with the preview store's token in a gitignored env file): a new store has no `radar:subscriberCount`, and sign-up treats a missing count as a full list |
+
+Notes:
+
+- **Links in emails** sent from Preview point at the branch's own URL (`VERCEL_BRANCH_URL`), never production,
+  unless `SITE_URL` is set for Preview.
+- **Vercel Authentication** still guards the preview, so open it in a browser signed in to Vercel. Email links work
+  in that same browser.
+- **Google sign-in** stays off on Preview: its variables are Production only and its redirect URI is production's.
+  Use the emailed sign-in link.
+- **Cron jobs don't run on previews**, so no sweep or daily email goes out from `staging`.
+
+**The test checkout.** On the `staging` URL, sign up at `/subscribe/` with your own address; the confirm link must
+open `staging`. Confirm, open `/manage/` and press **Upgrade to Pro**. Pay with test card 5104 0600 0000 0008, any CVV
+and a future expiry ([integration guide][rzp-subs]). The page should say "Payment received; Pro starts in a minute or
+two" and the plan stays **Free**. `show <your email>` against the preview store should give
+`rzp.status: "authenticated"`. Pro itself waits for the webhook (T21).
+
+### Razorpay ↔ Vercel
+
+Three connections, each in its own direction:
+
+1. **Server → Razorpay.** `/api/account` calls `https://api.razorpay.com` over HTTPS to create and cancel
+   subscriptions, signing in with `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` from that deployment's variables.
+   Nothing to allow-list on either side.
+2. **Browser ↔ Razorpay Checkout.** `/manage/` loads `https://checkout.razorpay.com/v1/checkout.js` with the public
+   key id and the subscription id. After payment, Checkout gives the browser a signature, which the page sends to
+   `/api/account` (`checkout-return`) to check with the key secret.
+3. **Razorpay → Vercel (the webhook, T21).** Razorpay posts subscription events to a URL on the site. In the Razorpay
+   dashboard (**Test Mode** first): **Accounts & Settings → Webhooks → + Add New Webhook**.
+   - **URL**, for `staging`:
+     `https://<staging branch URL>/api/<webhook path from T21>?x-vercel-protection-bypass=<bypass secret>`.
+     Vercel Authentication would otherwise answer Razorpay with a login page; the query parameter is Vercel's
+     documented way through for services that can't send headers ([protection bypass][vercel-bypass]).
+   - **Secret**: the same value as `RAZORPAY_WEBHOOK_SECRET`.
+   - **Active events**: the ones T21 lists.
+   - Test mode asks for an OTP when saving; Razorpay documents `754081` for test mode ([webhooks][rzp-webhooks]).
+   - Test and live webhooks are separate, like the keys and plans.
+
+**Going live (T22).** Live keys, a live plan and a live webhook secret go on **Production only**. The production
+domain isn't behind Vercel Authentication, so the live webhook URL needs no bypass parameter.
+
+[vercel-bypass]: https://vercel.com/docs/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation
+[rzp-webhooks]: https://razorpay.com/docs/webhooks/
 
 ### Managing subscribers
 
@@ -1017,6 +1075,7 @@ node --env-file=.env.local scripts/subscribers.mjs grant-pro <email> [--until 20
 node --env-file=.env.local scripts/subscribers.mjs revoke-pro <email> [--yes]
 node --env-file=.env.local scripts/subscribers.mjs delete <email> [--yes]
 node --env-file=.env.local scripts/subscribers.mjs prune-events --older-than 400 [--yes]
+node --env-file=.env.local scripts/subscribers.mjs recount [--yes]
 ```
 
 | Command | What it does |
@@ -1028,6 +1087,7 @@ node --env-file=.env.local scripts/subscribers.mjs prune-events --older-than 400
 | `revoke-pro` | Back to Free, clearing the end date. Refuses a Razorpay record |
 | `delete` | Deletes the record. This is the answer to a deletion request. Event records hold no address or id. The one place the record's hashed id (not the address) can remain is a `radar:deliveries:<date>` file, which the sweep deletes after 7 days |
 | `prune-events` | Deletes event records older than N days |
+| `recount` | Counts pending and active records and writes `radar:subscriberCount`, as the sweep does. For a store that has never swept (sign-up treats a missing count as full), or after deleting records. Unlike the sweep it doesn't expire old pending sign-ups, so it may count a few more |
 
 Every write only describes what it would change until you add `--yes` (and then exits 0). Exit codes: `0` done,
 `1` not found, refused or not applied, `2` bad usage. A granted Pro starts at the next scheduled sweep, because Pro
