@@ -75,7 +75,7 @@ and R-01 has no other mitigation that measures quality.
 
 | Option | Effect |
 |---|---|
-| A. Now | About ₹3,780 a month more while sweeps are failing and nothing is charged |
+| A. Now | About ₹3,780 a month more (2 × ₹1,890) while sweeps are failing and nothing is charged |
 | **B. When go-live is next**: after LR-01 and LR-03 pass, before the test-mode run (LR-07) | Spend starts when it can lead to revenue. T22 (LR-06) needs Vercel Pro first ([progress.md](../../docs/subscriptions/tasks/progress.md)) |
 | C. Not at all: stay free (business case option A) | About ₹3,017 a month; tests whether people sign up and read, not whether they pay |
 
