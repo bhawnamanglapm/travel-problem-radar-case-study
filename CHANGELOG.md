@@ -5,6 +5,10 @@ grouped by date.
 
 ## 2026-10-23
 
+- Paying now makes an account Pro: the new `/api/razorpay-webhook` takes Razorpay's signed subscription events.
+  Activated or charged gives Pro until the paid period ends, a failed payment (halted) makes it Free, and a
+  cancelled subscription runs to the end of the period. Repeated or late events change nothing. Owner-granted Pro
+  is never taken away by a payment problem.
 - Emails sent from a Vercel Preview link to that preview's own URL, never to production. New admin command
   `recount` writes the subscriber count, so a fresh store can take sign-ups. DEPLOYMENT.md explains how to test
   payments on a `staging` preview and how Razorpay connects to Vercel.

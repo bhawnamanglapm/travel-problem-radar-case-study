@@ -137,8 +137,9 @@ check(/x\.status === 429/.test(upPage), "signup/index.html shows a message on 42
 check(/Check your spam or junk folder/.test(readFileSync("api/_lib/subscription-handlers.js", "utf8")), "the sign-up reply tells people to check spam or junk (the new domain's confirmation email is often filtered)");
 const fns = readdirSync("api").filter((f) => f.endsWith(".js"));
 check(fns.length <= 12, `at most 12 functions in api/, Hobby's limit (${fns.length}: ${fns.join(", ")})`);
-// Checkout and cancel are actions on /api/account (T20), so payments add no function before the webhook (T21).
-check(fns.length === 8, `T20 added no function: still 8 in api/ (${fns.length})`);
+// Checkout and cancel are actions on /api/account (T20); the Razorpay webhook (T21) is the one payments function.
+check(existsSync("api/razorpay-webhook.js"), "api/razorpay-webhook.js exists (subscription events from Razorpay)");
+check(fns.length === 9, `9 functions in api/ after T21 (${fns.length})`);
 for (const f of ["subscribe/index.html", "manage/index.html", "signin/index.html", "signup/index.html", "live/index.html"]) {
   const t = existsSync(f) ? readFileSync(f, "utf8") : "";
   check(t.includes('if (/\\.github\\.io$/.test(location.hostname)) location.replace("https://travel-problem-radar.vercel.app" + location.pathname'), `${f} sends a GitHub Pages visit to the Vercel copy (Pages has no /api/)`);

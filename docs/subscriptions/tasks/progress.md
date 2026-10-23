@@ -33,7 +33,7 @@ working in a real inbox; that is T12's staged launch.
 | [T18](T18-teaser-email.md) Free email becomes a teaser | done; live with the switch | branch `feat/teaser-email` | 703 pass (635 subscriber + 68 sweep; +27 new); 108 `npm run check` checks (+1) | See "T18" below |
 | [T19](T19-razorpay-library.md) Razorpay library | done; not used yet | branch `feat/razorpay-library` | 742 pass (674 subscriber + 68 sweep; +39 new); 110 `npm run check` checks (+2) | See "T19" below |
 | [T20](T20-manage-page-and-checkout.md) `/manage/` page, checkout, cancel | done; test checkout passed on `staging` (2026-10-23) | branch `feat/checkout` | 782 pass (714 subscriber + 68 sweep; +40 new); 113 `npm run check` checks (+3) | See "T20" below |
-| [T21](T21-razorpay-webhook.md) Razorpay webhook | todo | | | Needs T19 and T20 |
+| [T21](T21-razorpay-webhook.md) Razorpay webhook | built; staging check waits for the webhook in Razorpay test mode | branch `feat/razorpay-webhook` | 834 pass (766 subscriber + 68 sweep; +43 new); 114 `npm run check` checks (+1) | See "T21" below |
 | [T22](T22-pro-lifecycle-and-go-live.md) Pro expiry, paid unsubscribe, go-live | todo | | | Needs Vercel Pro (T15 Step 2, row 3) |
 
 ## Notes per task
@@ -387,6 +387,20 @@ working in a real inbox; that is T12's staged launch.
   in"; after Sign out, `/manage/` went to `/signin/`.
 - **Not checked yet:** a sign-in link requested at `/signin/` (lands on `/live/` signed in), and that the same link is
   refused the second time.
+
+### T21
+- `api/razorpay-webhook.js` (function 9 of 12) with `makeRazorpayWebhookHandler` and `applyRzpEvent` in
+  `subscription-handlers.js`. Facts from Razorpay's docs, 2026-10-23: at-least-once delivery, `x-razorpay-event-id`
+  unique per event, no ordering promise, retries for 24 hours and then the webhook is disabled, a 5-second timeout.
+  The docs don't state the unit of `created_at`; the 10-digit values are read as Unix seconds.
+- Duplicate markers are `radar:rzp-event:<event day>-<event id>`: a redelivery has the same `created_at`, so its key
+  is known without listing, and the sweep prunes by name after 30 days.
+- Choices beyond the task file: `halted`/`paused`/`cancelled`/`completed` only touch a paid (`razorpay`) Pro, so an
+  owner-granted Pro survives a payment problem; Pro needs a `current_end`, so it always ends; a same-second
+  `authenticated` never moves `rzp.status` back from `active`; a record whose own subscription is a different one
+  (an abandoned checkout) counts as unknown; the record is read with `storage.get`, so a storage failure is `500`
+  (retried) rather than "unknown".
+- Not checked yet: the webhook on `staging` with a test payment.
 
 ### T20
 - `/api/account` gains `checkout`, `checkout-return` and `cancel`; no new function (still 8). They answer `503` unless

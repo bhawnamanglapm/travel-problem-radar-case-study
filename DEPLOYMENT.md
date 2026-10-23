@@ -508,7 +508,7 @@ needed at runtime.
 | `MAX_SIGNINS_PER_DAY` | You (optional) | `/api/session` | Sign-in emails per UTC day, across all addresses. Default 50; `0` stops them. Separate from `MAX_CONFIRMS_PER_DAY`, so a burst of sign-ups can't stop subscribers signing in |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | You (optional) | `/api/session` | The Google OAuth client. With both and `SESSION_SECRET`, the pages show "Continue with Google"; with either unset the button stays hidden and `?action=google` answers `503`. The secret never leaves the server |
 | `BOARD_PAYWALL` | You (at go-live) | `/api/data` | `1` locks the board: not signed in `401`, Free or lapsed Pro `402`, Pro the data, and every reply `private, no-store`. Anything else, or unset, means off: the replies and their public cache header are as before. Needs `SESSION_SECRET`, or nobody can sign in to see it. Read only by a new deployment |
-| `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `RAZORPAY_PLAN_ID` | You (for paid Pro) | `/api/account` (and T21's webhook, once built) | The Razorpay API keys, the webhook's signing secret and the subscription plan. The key id is public: Checkout needs it in the browser. The two secrets never leave the server. Test keys start `rzp_test_`, and test and live are separate in Razorpay, so a test plan id doesn't work with live keys |
+| `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `RAZORPAY_PLAN_ID` | You (for paid Pro) | `/api/account`; `/api/razorpay-webhook` (the webhook secret only; without it the endpoint answers `503`) | The Razorpay API keys, the webhook's signing secret and the subscription plan. The key id is public: Checkout needs it in the browser. The two secrets never leave the server. Test keys start `rzp_test_`, and test and live are separate in Razorpay, so a test plan id doesn't work with live keys |
 | `RAZORPAY_TOTAL_COUNT` | You (for paid Pro) | `/api/account` | Razorpay's `total_count`: how many billing cycles a subscription runs before it ends. A whole number of 1 or more. Payments count as on only when this and the four above are all set; otherwise `/manage/` shows Request Pro and the payment actions answer `503` |
 | `RESEND_WEBHOOK_SECRET` | You (optional) | `/api/resend-webhook` | The Resend webhook's signing secret. If it is unset, the endpoint answers `503` and does nothing |
 | `SITE_URL` | You (optional) | The subscriber endpoints, `/api/sweep` | Base of the links in subscriber emails. If unset, `https://` plus `VERCEL_PROJECT_PRODUCTION_URL`; **on a Preview**, `https://` plus `VERCEL_BRANCH_URL` instead, never the production domain. With neither, subscriber email is off |
@@ -531,6 +531,8 @@ not a letter or digit with `-`.
 | `radar:deliveries:<YYYYMMDD>` | `radar/radar-deliveries-<YYYYMMDD>.json` | Record ids already sent that day's Free digest. Deleted by the sweep after 7 days | No |
 | `radar:subscriberCount` | `radar/radar-subscriberCount.json` | Pending plus active records at the last saved sweep; the sign-up cap reads it | No |
 | `radar:iphit:<YYYYMMDDHH>-<16 hex>-<6 hex>` | `radar/radar-iphit-….json` | One sign-up attempt: its time only. The 16 hex are from a SHA-256 of the client IP; **the IP itself is not stored**. Deleted by the sweep after 2 hours | No |
+| `radar:rzpsub:<subscription id>` | `radar/radar-rzpsub-sub-….json` | `{ id }`: the subscriber record a Razorpay subscription belongs to, written at checkout (T20) so the webhook finds the record without listing | No |
+| `radar:rzp-event:<YYYYMMDD>-<event id>` | `radar/radar-rzp-event-….json` | One Razorpay event already applied (`{ at }`), so a redelivery changes nothing. `<YYYYMMDD>` is the event's day. Deleted by the sweep after 30 days | No |
 
 `/api/data` allows only `radar:history` and `radar:sweep:<id>`; the tests check that every subscriber key is refused.
 
@@ -689,7 +691,7 @@ How it behaves:
 ### Subscriber email (optional)
 
 Anyone can sign up for the digest by email at `/subscribe/`. This is separate from the owner's email above, which is
-unchanged. Code: `api/subscribe.js`, `api/confirm.js`, `api/unsubscribe.js`, `api/account.js` and `api/resend-webhook.js`, with the logic in
+unchanged. Code: `api/subscribe.js`, `api/confirm.js`, `api/unsubscribe.js`, `api/account.js`, `api/resend-webhook.js` and `api/razorpay-webhook.js`, with the logic in
 `api/_lib/subscription-handlers.js`, `api/_lib/subscribers.js` and `api/_lib/subscriber-delivery.js`. Design notes:
 [docs/subscriptions/email-signup.md](docs/subscriptions/email-signup.md).
 
@@ -973,11 +975,11 @@ With payments on:
 | `502 payment_provider` | Razorpay refused or didn't answer. The log line holds the error code only |
 
 A second Upgrade click within an hour reopens the same subscription instead of making another. Each new one writes
-`radar:rzpsub:<subscription id>` → `{ id }`, which T21's webhook will use to find the record, and a
+`radar:rzpsub:<subscription id>` → `{ id }`, which the webhook uses to find the record, and a
 `checkoutstarted` event.
 
-**Known gap until T21:** an account that paid but whose webhook never arrives stays `authenticated` and gets
-`payment_pending` on every Upgrade. T21 or the owner has to settle it; there is no admin command for that yet.
+**Known gap:** an account that paid but whose webhook never arrives stays `authenticated` and gets
+`payment_pending` on every Upgrade. See "Paid but still Free" below; there is no admin command for it yet.
 
 **Setting up a test (owner).** Test and live mode are separate in Razorpay: what you make in test mode doesn't
 appear in live mode, and each has its own keys ([test and live modes][rzp-modes]). So this plan is only for testing.
@@ -1044,13 +1046,44 @@ Three connections, each in its own direction:
 3. **Razorpay → Vercel (the webhook, T21).** Razorpay posts subscription events to a URL on the site. In the Razorpay
    dashboard (**Test Mode** first): **Accounts & Settings → Webhooks → + Add New Webhook**.
    - **URL**, for `staging`:
-     `https://<staging branch URL>/api/<webhook path from T21>?x-vercel-protection-bypass=<bypass secret>`.
+     `https://<staging branch URL>/api/razorpay-webhook?x-vercel-protection-bypass=<bypass secret>`.
      Vercel Authentication would otherwise answer Razorpay with a login page; the query parameter is Vercel's
      documented way through for services that can't send headers ([protection bypass][vercel-bypass]).
    - **Secret**: the same value as `RAZORPAY_WEBHOOK_SECRET`.
-   - **Active events**: the ones T21 lists.
+   - **Active events**: under Subscriptions, tick `subscription.authenticated`, `activated`, `charged`, `pending`,
+     `halted`, `cancelled`, `completed`, `paused` and `resumed`. Others are answered `200` and ignored.
    - Test mode asks for an OTP when saving; Razorpay documents `754081` for test mode ([webhooks][rzp-webhooks]).
    - Test and live webhooks are separate, like the keys and plans.
+   - Razorpay retries any answer that isn't `2xx` for 24 hours, and then **disables the webhook** until you
+     re-enable it in the dashboard ([best practices][rzp-webhook-bp]). A changed bypass secret or webhook secret
+     does that within a day, so update the URL or the variable at once.
+
+**What the webhook does.** `POST /api/razorpay-webhook` checks `x-razorpay-signature` (HMAC-SHA256 of the raw body
+with `RAZORPAY_WEBHOOK_SECRET`; `401` if wrong, nothing written), finds the record through
+`radar:rzpsub:<subscription id>` or the `sid` that checkout put in the subscription's notes, and applies:
+
+| Event | Plan |
+|---|---|
+| `activated`, `charged`, `resumed` | Pro from Razorpay until the subscription's `current_end`. An owner-granted Pro becomes a paid one |
+| `halted`, `paused` | Free at once, for a paid Pro only; an owner-granted Pro is left alone |
+| `cancelled`, `completed` | Pro until `current_end`, then Free on its own (Free at once if that is past) |
+| `authenticated`, `pending`, others | No change |
+
+Each applied event leaves a `radar:rzp-event:` marker, so a redelivery is a no-op. An event older than the last
+one applied is ignored, since Razorpay doesn't promise order. An unknown subscription gets `200` and the log line
+`rzp-webhook <event>: unknown subscription`. Only a storage failure answers `500`, so Razorpay retries it. The next
+scheduled sweep sends the new Pro its Pro email. Production has no `RAZORPAY_*` variables until T22, so there the
+endpoint answers `503`.
+
+**Paid but still Free.** In order:
+1. Razorpay dashboard → **Webhooks** → the webhook → its delivery log. No attempts: the event isn't ticked, or the
+   webhook is disabled (re-enable it). Attempts with `401` from Vercel's login page: the bypass parameter is wrong
+   or was regenerated. `401` `invalid signature`: the webhook's secret and `RAZORPAY_WEBHOOK_SECRET` differ.
+   `503`: `RAZORPAY_WEBHOOK_SECRET` isn't set on that deployment.
+2. The function's logs in Vercel: `rzp-webhook activated: plan free -> pro` is a success. `unknown subscription`
+   means no record has that subscription as its own (for example, a second checkout replaced it). `stale` means a
+   newer event was already applied.
+3. `show <address>` with the admin script: `rzp.status`, `rzp.lastEventAt` and `proUntil`.
 
 **Going live (T22).** Live keys, a live plan and a live webhook secret go on **Production only**. The production
 domain isn't behind Vercel Authentication, so the live webhook URL needs no bypass parameter.
@@ -1058,6 +1091,7 @@ domain isn't behind Vercel Authentication, so the live webhook URL needs no bypa
 [rzp-cards]: https://razorpay.com/docs/payments/payments/test-card-details/
 [vercel-bypass]: https://vercel.com/docs/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation
 [rzp-webhooks]: https://razorpay.com/docs/webhooks/
+[rzp-webhook-bp]: https://razorpay.com/docs/webhooks/best-practices/
 
 ### Managing subscribers
 
