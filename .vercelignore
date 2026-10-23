@@ -1,5 +1,6 @@
 scripts/*
 !scripts/fill-legal.mjs
+!scripts/fill-plan.mjs
 .github
 docs
 *.md

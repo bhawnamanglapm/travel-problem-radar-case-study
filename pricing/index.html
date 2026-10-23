@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<script>
+  // GitHub Pages also serves this file but has no /api/: send the visit to the Vercel copy, which does.
+  if (/\.github\.io$/.test(location.hostname)) location.replace("https://travel-problem-radar.vercel.app" + location.pathname.replace(/^\/travel-problem-radar-case-study/, "") + location.search + location.hash);
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Pricing · Travel Problem Radar</title>
+<meta name="description" content="Travel Problem Radar's two plans, Free and Pro: what each includes, what Pro costs, how it renews and how to cancel." />
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #0B0B0D; color: #F4F4F7; }
+  body { font: 16px/1.55 -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 0 16px; }
+  main { max-width: 720px; margin: 0 auto; padding: 40px 0 56px; }
+  h1 { font-size: 26px; line-height: 1.25; margin: 0 0 12px; }
+  h2 { font-size: 18px; margin: 32px 0 10px; }
+  p, li { color: #C9C9D2; }
+  p { margin: 0 0 14px; }
+  ul { margin: 0 0 14px; padding-left: 20px; }
+  a { color: #C6FF3D; }
+  a:focus-visible { outline: 2px solid #C6FF3D; outline-offset: 2px; }
+  .nav { font: 12px/1.5 ui-monospace, 'JetBrains Mono', monospace; color: #93939F; margin: 0 0 28px; }
+  .nav a { color: #F4F4F7; display: inline-block; padding: 4px 0; }
+  .plans { width: 100%; border-collapse: collapse; margin: 20px 0 8px; font-size: 15px; }
+  .plans th, .plans td { text-align: left; vertical-align: top; padding: 12px 14px; border: 1px solid #2A2A34; }
+  .plans thead th { color: #C6FF3D; font-size: 17px; background: #131318; }
+  .plans tbody th { color: #F4F4F7; font-weight: 600; width: 8em; background: #131318; }
+  .plans td { color: #C9C9D2; }
+  .price { font-size: 20px; font-weight: 700; color: #F4F4F7; display: block; }
+  a.btn { display: inline-block; font-weight: 600; border-radius: 6px; padding: 10px 20px; text-decoration: none; min-height: 44px; }
+  a.btn.main { background: #C6FF3D; color: #0B0B0D; }
+  a.btn.main:hover { background: #d8ff6f; }
+  a.btn.sec { border: 1px solid #C6FF3D; color: #C6FF3D; }
+  .renews { font-size: 13px; color: #C9C9D2; margin: 8px 0 0; }
+  .small { font-size: 13px; color: #93939F; }
+  /* Phones: each plan becomes a card, and each cell says which plan it belongs to. */
+  @media (max-width: 560px) {
+    .plans thead { display: none; }
+    .plans, .plans tbody, .plans tr, .plans th, .plans td { display: block; width: 100%; }
+    .plans tr { margin: 0 0 12px; border: 1px solid #2A2A34; }
+    .plans th, .plans td { border: 0; border-top: 1px solid #2A2A34; }
+    .plans tbody th { width: 100%; }
+    .plans td::before { content: attr(data-plan); display: block; font-weight: 600; color: #C6FF3D; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <p class="nav"><a href="../">&larr; Home</a> &middot; <a href="../live/">Live board (Pro)</a> &middot; <a href="../signin/">Sign in</a></p>
+  <h1>Pricing</h1>
+  <p>An AI model with web search looks for travel-industry problems about 5 times a day. Free gets a daily summary by email. Pro gets the live board and an email after every sweep.</p>
+  <!-- when:free-test -->
+  <p><b>Pro is free while it&rsquo;s being tested.</b> Payments aren&rsquo;t open yet: ask for Pro when you create your account, and it&rsquo;s switched on by hand. The price below is what Pro will cost once payments open.</p>
+  <!-- /when -->
+
+  <table class="plans">
+    <thead><tr><td></td><th scope="col">Free</th><th scope="col">Pro</th></tr></thead>
+    <tbody>
+      <tr><th scope="row">Price</th>
+        <td data-plan="Free"><span class="price">₹0</span>No card needed.</td>
+        <td data-plan="Pro"><span class="price">{{PRO_PRICE}}</span>{{PRO_GST}}. Renews automatically every month until you cancel.</td></tr>
+      <tr><th scope="row">Email</th>
+        <td data-plan="Free">One a day, after the first sweep of the UTC day (about 05:47 IST): how many findings in each category in the last 24 hours, and their headlines.</td>
+        <td data-plan="Pro">One after every sweep, about 5 a day.</td></tr>
+      <tr><th scope="row">Categories</th>
+        <td data-plan="Free">All four, in the summary.</td>
+        <td data-plan="Pro">You choose which of the four you get.</td></tr>
+      <tr><th scope="row">Live board</th>
+        <td data-plan="Free">No. The sample demo, any time, shows how it looks.</td>
+        <td data-plan="Pro">Any time.</td></tr>
+      <tr><th scope="row">Start</th>
+        <td data-plan="Free"><a class="btn sec" href="../signup/">Create your account</a></td>
+        <td data-plan="Pro">
+          <!-- when:free-test --><a class="btn main" id="getpro" href="../signup/?pro=1">Ask for Pro</a><!-- /when -->
+          <template data-when="paid"><a class="btn main" id="getpro" href="../signup/?pro=1">Get Pro</a>
+          <p class="renews">{{PRO_PRICE}}, {{PRO_GST}}. Renews automatically every month until you cancel.</p></template>
+        </td></tr>
+    </tbody>
+  </table>
+  <p class="small"><template data-when="paid">{{PRO_TRIAL}} </template>Your account is your email address; there&rsquo;s no password.</p>
+
+  <h2>How billing works</h2>
+  <!-- when:free-test -->
+  <p>Nothing is charged while Pro is being tested. When payments open, this is how they&rsquo;ll work:</p>
+  <!-- /when -->
+  <ul>
+    <li>You pay on your account page, after confirming your email. Payments are handled by Razorpay.</li>
+    <li>Pro renews automatically every month until you cancel. You approve the first payment; later monthly payments are taken under that approval, and you&rsquo;re told before each one.</li>
+    <li>Pro starts a minute or two after you pay, and your account page shows the next renewal date.</li>
+    <li>Cancel any time on your account page: two clicks, no reason asked. Pro stays on until the end of the month you&rsquo;ve paid for, then the account is Free.</li>
+    <li>If a renewal payment fails, Pro stays on while Razorpay tries again. If it stops trying, the account goes back to Free and nothing more is charged.</li>
+  </ul>
+
+  <h2>Refunds</h2>
+  <p>{{PRO_REFUND}} The full policy is on the <a href="../legal/refunds/">refunds page</a>.</p>
+
+  <h2>Payment</h2>
+  <p>Payments are handled by Razorpay. We never see your card or UPI details. You can pay with {{PRO_METHODS}}.</p>
+
+  <h2>What Pro doesn&rsquo;t promise</h2>
+  <ul>
+    <li>Findings are gathered by an AI model with web search and aren&rsquo;t checked by a person. Check each source link before you rely on it.</li>
+    <li>Sweeps run about 5 times a day on a schedule, and can run late when GitHub, which starts them, is delayed.</li>
+    <li>There&rsquo;s no uptime promise.</li>
+  </ul>
+
+  <h2>Questions</h2>
+  <p>Email <a href="mailto:{{PRO_CONTACT}}">{{PRO_CONTACT}}</a>.</p>
+  <p class="small">Gathered by an AI model with web search. Items are not verified; check each source link.</p>
+</main>
+<script>
+  // Signed in, Pro starts on the account page; signed out (or if this check fails), on the sign-up page with Pro ticked.
+  fetch("/api/session?action=me").then(function (r) { return r.ok ? r.json() : {}; }).then(function (b) {
+    if (!b || !b.signedIn) return;
+    var a = document.getElementById("getpro");
+    if (a) a.href = "../manage/";
+  }).catch(function () {});
+</script>
+</body>
+</html>

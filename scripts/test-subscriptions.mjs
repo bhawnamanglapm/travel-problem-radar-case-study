@@ -1250,8 +1250,8 @@ const iso = (ms) => new Date(ms).toISOString();
 
   // the script is kept out of the deployment
   const ignored = readFileSync(new URL("../.vercelignore", import.meta.url), "utf8").split(/\r?\n/);
-  check(ignored.includes("scripts/*") && ignored.filter((l) => l.startsWith("!scripts/")).every((l) => l === "!scripts/fill-legal.mjs"),
-    ".vercelignore keeps scripts/ (and so this tool) out of the deployment; only the build's fill-legal.mjs is let back in");
+  check(ignored.includes("scripts/*") && ignored.filter((l) => l.startsWith("!scripts/")).every((l) => ["!scripts/fill-legal.mjs", "!scripts/fill-plan.mjs"].includes(l)),
+    ".vercelignore keeps scripts/ (and so this tool) out of the deployment; only the build's fill-legal.mjs and fill-plan.mjs are let back in");
 }
 
 // ---- Pro requests: the sign-up box, the confirm step, /api/account (the manage page) and the admin script

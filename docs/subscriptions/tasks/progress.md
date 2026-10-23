@@ -37,7 +37,7 @@ working in a real inbox; that is T12's staged launch.
 | Pricing and About pages (Razorpay's site review) | planned; costs measured ([costing.md](../costing.md)); split into T23 to T26 on 2026-10-23 | branch `docs/costing-and-pages-plan` | docs only | Plan: [pricing-and-about-pages.md](../pricing-and-about-pages.md) |
 | [T22](T22-pro-lifecycle-and-go-live.md) Pro expiry, paid unsubscribe, key safety | todo; test run and go-live moved to T27 | | | Needs Vercel Pro (T15 Step 2, row 3) |
 | [T23](T23-pro-display-standards.md) Display rules, owner inputs | todo; waits for owner inputs 1 to 9 | | | |
-| [T24](T24-pricing-page.md) `/pricing/`, `plan.json` | todo | | | |
+| [T24](T24-pricing-page.md) `/pricing/`, `plan.json` | built; not shipped until the owner fills `plan.json` (T23 inputs 1, 2, 4) | branch `feat/t24-pricing-page` | 37 new plan tests; 162 `npm run check` checks (+48) | Build steps now in `package.json` `build:site` (Vercel's 256-character `buildCommand` limit). Built site unchanged; `check-plan.mjs` not run yet (needs keys) |
 | [T25](T25-about-footer-legal.md) `/about/`, footer, policy pages | todo; needs `LEGAL_*` variables | | | |
 | [T26](T26-pro-copy-and-checkout-summary.md) Pro wording, pre-checkout summary | todo | | | |
 | [T27](T27-razorpay-test-run-and-go-live.md) Test run, go-live | todo; needs Vercel Pro, live activation | | | |
