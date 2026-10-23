@@ -32,7 +32,7 @@ working in a real inbox; that is T12's staged launch.
 | [T17](T17-locked-board.md) Locked board | done; switch on in production since 2026-10-23 | branch `feat/locked-board` | 676 pass (608 subscriber + 68 sweep; +45 new); 107 `npm run check` checks (+3) | See "T17" below |
 | [T18](T18-teaser-email.md) Free email becomes a teaser | done; live with the switch | branch `feat/teaser-email` | 703 pass (635 subscriber + 68 sweep; +27 new); 108 `npm run check` checks (+1) | See "T18" below |
 | [T19](T19-razorpay-library.md) Razorpay library | done; not used yet | branch `feat/razorpay-library` | 742 pass (674 subscriber + 68 sweep; +39 new); 110 `npm run check` checks (+2) | See "T19" below |
-| [T20](T20-manage-page-and-checkout.md) `/manage/` page, checkout, cancel | built; test checkout waits for test keys on Preview | branch `feat/checkout` | 782 pass (714 subscriber + 68 sweep; +40 new); 113 `npm run check` checks (+3) | See "T20" below |
+| [T20](T20-manage-page-and-checkout.md) `/manage/` page, checkout, cancel | done; test checkout passed on `staging` (2026-10-23) | branch `feat/checkout` | 782 pass (714 subscriber + 68 sweep; +40 new); 113 `npm run check` checks (+3) | See "T20" below |
 | [T21](T21-razorpay-webhook.md) Razorpay webhook | todo | | | Needs T19 and T20 |
 | [T22](T22-pro-lifecycle-and-go-live.md) Pro expiry, paid unsubscribe, go-live | todo | | | Needs Vercel Pro (T15 Step 2, row 3) |
 
@@ -399,7 +399,15 @@ working in a real inbox; that is T12's staged launch.
 - **Not checked yet:** a real test-mode checkout on Preview. Needs the owner's test plan, keys and `total_count`.
 - Preview prep (branch `fix/preview-testing`): on a Preview, `siteUrl` uses the branch URL, never production; new
   `recount` admin command for a store that has never swept. 791 tests pass (+9). The Vercel steps are in
-  DEPLOYMENT.md, "Testing payments on Preview"; not done yet.
+  DEPLOYMENT.md, "Testing payments on Preview".
+- **Test checkout, 2026-10-23, on `staging`:** Preview has its own Blob store (`radar-preview`), and the production
+  store's token is now on Production only. Sign-up, email, sign-in and Razorpay test-mode variables are scoped to
+  branch `staging`. The confirm email linked to `staging`, not production. Upgrade opened Checkout in Test Mode
+  (₹99 monthly test plan, 12 payments); the domestic test card 4718 6091 0820 4366 paid. The page said "Payment
+  received" and the record read `status: active`, `plan: free`, `rzp.status: authenticated`, with one `rzpsub`
+  index entry and a `checkoutstarted` event. Production had no Razorpay variables throughout.
+- The international test card 5104 0600 0000 0008, given in the docs before, was refused ("International cards are
+  not supported"); the docs now give the domestic one.
 
 ### T19
 - `api/_lib/razorpay.js`: `createSubscription`, `cancelSubscription`, `fetchSubscription`, `verifyWebhook`,

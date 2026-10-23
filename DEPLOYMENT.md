@@ -1024,10 +1024,12 @@ Notes:
 - **Cron jobs don't run on previews**, so no sweep or daily email goes out from `staging`.
 
 **The test checkout.** On the `staging` URL, sign up at `/subscribe/` with your own address; the confirm link must
-open `staging`. Confirm, open `/manage/` and press **Upgrade to Pro**. Pay with test card 5104 0600 0000 0008, any CVV
-and a future expiry ([integration guide][rzp-subs]). The page should say "Payment received; Pro starts in a minute or
-two" and the plan stays **Free**. `show <your email>` against the preview store should give
-`rzp.status: "authenticated"`. Pro itself waits for the webhook (T21).
+open `staging`. Confirm, open `/manage/` and press **Upgrade to Pro**. Pay with Razorpay's **domestic** subscription
+test card 4718 6091 0820 4366, any CVV and a future expiry, and an OTP of 4 to 10 digits ([test cards][rzp-cards]).
+The international test card 5104 0600 0000 0008 is refused with "International cards are not supported" unless the
+account accepts international cards. The page should say "Payment received; Pro starts in a minute or two" and the
+plan stays **Free**. `show <your email>` against the preview store should give `rzp.status: "authenticated"`. Pro
+itself waits for the webhook (T21). Done this way on 2026-10-23.
 
 ### Razorpay ↔ Vercel
 
@@ -1053,6 +1055,7 @@ Three connections, each in its own direction:
 **Going live (T22).** Live keys, a live plan and a live webhook secret go on **Production only**. The production
 domain isn't behind Vercel Authentication, so the live webhook URL needs no bypass parameter.
 
+[rzp-cards]: https://razorpay.com/docs/payments/payments/test-card-details/
 [vercel-bypass]: https://vercel.com/docs/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation
 [rzp-webhooks]: https://razorpay.com/docs/webhooks/
 
