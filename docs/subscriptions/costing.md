@@ -451,6 +451,9 @@ Members needed at each price, GST on top (case B) / GST inside (case C), both wi
 **Demand has not been tested.** No one has paid, and there are no conversion or retention figures. This table
 compares prices against `F` only. It doesn't choose the price, and it doesn't change `/pricing/` or the Razorpay plan.
 
+**Chosen 2026-10-23:** the owner set **₹299 a month** in `plan.json` as the price to test. GST (on top, inside, or
+not registered) is still open for a CA, so the net per member is ₹243.16 to ₹288.77 and break-even 24 to 28.
+
 | Price a month | Net a member, GST on top / inside | Members to cover `F` | Surplus or shortfall at 20 / 30 / 50 members, GST on top | Read |
 |---|---|---|---|---|
 | ₹199 | ₹190.96 / ₹161.83 | 36 / 42 | −₹2,978 / −₹1,068 / ₹2,751 | Easiest to buy; at 36 to 42 members it only just covers `F`, with nothing left for the costs not included |

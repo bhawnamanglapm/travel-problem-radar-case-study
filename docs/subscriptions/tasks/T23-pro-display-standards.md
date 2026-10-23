@@ -19,7 +19,8 @@ It also collects the owner's choices. Claude doesn't pick the price or the refun
 ## Owner inputs (OWNER INPUT NEEDED)
 
 The 7 inputs in [pricing-and-about-pages.md](../pricing-and-about-pages.md#owner-inputs): price, GST, trial, refund
-rule, international cards, brand and about text, domain renewal. Two more come from this task:
+rule, international cards, brand and about text, domain renewal. Input 1 is answered: ₹299 a month (2026-10-23,
+from [costing.md](../costing.md#199-299-and-499-compared-provisional), now in `plan.json`). Two more come from this task:
 
 | # | Question | Default if not answered | Affects |
 |---|---|---|---|
