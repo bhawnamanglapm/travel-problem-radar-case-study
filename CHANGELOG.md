@@ -5,6 +5,9 @@ grouped by date.
 
 ## 2026-10-23
 
+- A scheduled sweep that saves nothing now starts the 2-hour gap too, so a run of failed or empty scheduled calls
+  (which may still be billed) can't repeat back to back. The start time is kept in `radar:lastScheduled`, which
+  `/api/data` doesn't serve. Manual runs are unchanged.
 - `costing.md` revised after a third audit: "GST on top" now uses the net after Razorpay's fee on price plus GST
   (₹190.96 at ₹199), which raises some stress-test counts by 1 or 2; break-even at `F` is unchanged. Added a
   rounding rule, a section for the business costs `F` leaves out, and a provisional ₹199/₹299/₹499 comparison that

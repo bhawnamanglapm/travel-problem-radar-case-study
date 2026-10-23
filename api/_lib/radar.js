@@ -16,6 +16,8 @@ export const CATS = [
 
 export const KEY_SEEN = "radar:seenIds";
 export const KEY_INDEX = "radar:history";
+// When the last scheduled sweep started, saved or not. Not readable through /api/data.
+export const KEY_LAST_SCHEDULED = "radar:lastScheduled";
 export const sweepKey = (id) => "radar:sweep:" + id;
 
 const SEV_RANK = { High: 3, Medium: 2, Low: 1 };
@@ -126,13 +128,20 @@ async function readJSON(storage, key) {
 // Scheduled runs come every 5 hours from GitHub Actions, plus Vercel's daily cron as a
 // backstop. The 2-hour gap stops them doubling up (a repeated cron delivery, or both
 // schedulers firing close together). A manual run skips the gap and is left out of it, so it
-// never cancels the next scheduled sweep.
+// never cancels the next scheduled sweep. The gap counts from when a scheduled sweep started,
+// so one that saves nothing (still billed) holds back the next one too.
 export async function runDailySweep({ storage, scan, now = () => Date.now(), minGapHours = 2, manual = false, log = () => {} }) {
   const hist0 = await readJSON(storage, KEY_INDEX);
   let hist = Array.isArray(hist0) ? hist0 : [];
-  const last = hist.filter((e) => !e.manual).pop();
-  if (!manual && last && now() - new Date(last.at).getTime() < minGapHours * 3600 * 1000) {
-    return { status: "skipped", reason: `last scheduled sweep ${last.at} is under ${minGapHours} h old` };
+  if (!manual) {
+    const saved = hist.filter((e) => !e.manual).pop();
+    const started = await readJSON(storage, KEY_LAST_SCHEDULED);
+    const last = [saved && saved.at, typeof started === "string" ? started : null]
+      .filter(Boolean).sort((a, b) => new Date(a) - new Date(b)).pop();
+    if (last && now() - new Date(last).getTime() < minGapHours * 3600 * 1000) {
+      return { status: "skipped", reason: `last scheduled sweep ${last} is under ${minGapHours} h old` };
+    }
+    await storage.set(KEY_LAST_SCHEDULED, JSON.stringify(new Date(now()).toISOString()));
   }
 
   const seen0 = await readJSON(storage, KEY_SEEN);

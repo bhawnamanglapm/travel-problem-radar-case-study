@@ -431,10 +431,10 @@ Members needed at each price, GST on top (case B) / GST inside (case C), both wi
   - **Calls faked as scheduled:** one every 2 hours, so 12 a day. Each one that saves also emails every Pro member
     with items in their categories.
   - **About 15 sweeps a day**: about $3.15 a day at the measured average, about $16 at the high-cost scenario.
-  - **These limits are approximate** (`api/_lib/handlers.js`, `api/_lib/radar.js`):
-    - two calls at the same instant can both pass either check;
-    - a scheduled sweep that saves nothing (every category failed or found nothing) doesn't start the 2-hour gap,
-      so the next call isn't held back. Its usage may still be billed.
+  - The 2-hour gap counts from when a scheduled sweep **started**, so one that saves nothing (every category failed
+    or found nothing, still possibly billed) holds back the next one too (`api/_lib/radar.js`).
+  - **These limits are approximate:** two calls at the same instant can both pass either check
+    (`api/_lib/handlers.js`, `api/_lib/radar.js`).
   - They are cost guards in code, not a spending ceiling. **Only the Anthropic spend limit is a ceiling.**
 
 ## Pricing options compared
@@ -560,7 +560,7 @@ Not answered here. Ask a chartered accountant in India:
 | The AI "costs the same for 1 subscriber or 1,000" | **Overstated.** True of AI spend at a set sweep count; Resend steps up and Vercel grows | [Summary](#summary) |
 | A view costs about ₹1 a month for a heavy reader | **Incomplete.** Function calls and Blob reads only | [One live-board view](#one-live-board-view) |
 | $38.30, ₹101 and ₹7,971 | **Rounding.** From unrounded inputs: $38.31, ₹102, ₹7,972. The audit's ₹7,401 for 6 sweeps is ₹7,399.87, so ₹7,400 stays | A rounding rule at the top |
-| "At most 15 sweeps a day" | **Overstated.** Two calls at the same instant both pass; a scheduled sweep that saves nothing doesn't start the gap | "About 15", a cost guard not a ceiling, in [Stress tests](#stress-tests) |
+| "At most 15 sweeps a day" | **Overstated.** Two calls at the same instant both pass; a scheduled sweep that saved nothing didn't start the gap | The gap now counts from a scheduled sweep's start (code fixed). "About 15", a cost guard not a ceiling, in [Stress tests](#stress-tests) |
 | Email counts | **Incomplete.** They are sends the code attempts, not deliveries | Labelled in [One email](#one-email) |
 | Business costs listed in one line | **Incomplete** | [Business costs not included](#business-costs-not-included) |
 | No price comparison | **Missing** | [₹199, ₹299 and ₹499 compared](#199-299-and-499-compared-provisional), with demand marked untested |
