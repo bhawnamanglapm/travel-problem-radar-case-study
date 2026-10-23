@@ -63,6 +63,9 @@ header{position:sticky;top:0;z-index:10;background:rgba(11,11,13,.88);backdrop-f
 .btn.small{min-height:38px;padding:0 14px;font-size:14px;}
 .links .btn.small{color:var(--text);}
 .btn[disabled]{opacity:.6;cursor:wait;}
+.btn.cur{opacity:.7;cursor:default;}
+.btn.cur:hover{border-color:var(--line2);}
+.btn.pri.cur:hover{background:var(--lime);}
 
 /* hero */
 .hero{padding:56px 0 48px;border-bottom:1px solid var(--line);
@@ -194,10 +197,10 @@ dialog::backdrop{background:rgba(0,0,0,.65);}
       <h1>Travel-industry problems, <em>found for you.</em></h1>
       <p class="lede">An AI model with web search looks for recent, real problems in travel: what travelers complain about, new visa and entry rules, broken booking sites and apps, and industry disruptions. Each one comes with its source and a product idea that could solve it.</p>
       <div class="ctas">
-        <a class="btn pri" href="https://travel-problem-radar.vercel.app/signup/" data-open="up">Create free account</a>
+        <a id="heroCta" class="btn pri" href="https://travel-problem-radar.vercel.app/signup/" data-open="up">Create free account</a>
         <a class="btn sec" href="demo/">Try the sample demo</a>
       </div>
-      <p class="note">Free. No password: your email address is your account.</p>
+      <p id="heroNote" class="note">Free. No password: your email address is your account.</p>
       <div class="cats" aria-label="The four categories">
         <div class="cat"><b>Traveler pain</b><span>Booking, airlines, hotels, refunds, loyalty and service failures</span></div>
         <div class="cat"><b>Gov &amp; policy</b><span>Visa rules, entry requirements, travel bans and tourist taxes</span></div>
@@ -243,7 +246,7 @@ dialog::backdrop{background:rgba(0,0,0,.65);}
             <li>How many findings in each category, and their headlines</li>
             <li>The sample demo, any time</li>
           </ul>
-          <a class="btn pri" href="https://travel-problem-radar.vercel.app/signup/" data-open="up">Create free account</a>
+          <a id="freeBtn" class="btn pri" href="https://travel-problem-radar.vercel.app/signup/" data-open="up">Create free account</a>
         </div>
         <div class="plan pro">
           <h3>Pro</h3>
@@ -256,8 +259,8 @@ dialog::backdrop{background:rgba(0,0,0,.65);}
             <!-- when:free-test --><li>Ask for it when you create your account; it&rsquo;s switched on by hand</li><!-- /when -->
             <template data-when="paid"><li>{{PRO_PRICE}}, {{PRO_GST}}. Renews automatically every month until you cancel; cancel any time on your account page</li></template>
           </ul>
-          <!-- when:free-test --><a class="btn sec" href="https://travel-problem-radar.vercel.app/signup/?pro=1" data-open="up" data-pro="1">Ask for Pro</a><!-- /when -->
-          <template data-when="paid"><a class="btn sec" href="https://travel-problem-radar.vercel.app/pricing/">Get Pro</a></template>
+          <!-- when:free-test --><a id="proBtn" class="btn sec" href="https://travel-problem-radar.vercel.app/signup/?pro=1" data-open="up" data-pro="1">Ask for Pro</a><!-- /when -->
+          <template data-when="paid"><a id="proBtn" class="btn sec" href="https://travel-problem-radar.vercel.app/pricing/">Get Pro</a></template>
         </div>
       </div>
       <p class="note"><a href="https://travel-problem-radar.vercel.app/subscribe/">Compare the plans in detail</a></p>
@@ -382,6 +385,24 @@ dialog::backdrop{background:rgba(0,0,0,.65);}
     });
   });
 
+  // Signed in: the sign-up buttons point to the account, or show the plan already held, instead.
+  // An empty data-open stops the click opening the dialog; no href means "Your plan" goes nowhere.
+  function relink(el, text, href) {
+    if (!el) return;
+    el.textContent = text;
+    el.dataset.open = "";
+    if (href) el.href = href;
+    else { el.removeAttribute("href"); el.classList.add("cur"); }
+  }
+  function setSignedIn(pro) {
+    relink($("heroCta"), pro ? "Open the live board" : "Your account", pro ? "live/" : "manage/");
+    $("heroNote").hidden = true;
+    relink($("freeBtn"), pro ? "Your account" : "Your plan", pro ? "manage/" : "");
+    var p = $("proBtn");
+    if (pro) relink(p, "Your plan", "");
+    else if (p && p.dataset.pro === "1") relink(p, "Request Pro", "manage/"); // the paid build's Get Pro stays
+  }
+
   if (onPages) {
     $("fUp").hidden = true; $("fIn").hidden = true;
     $("upLink").hidden = false; $("inLink").hidden = false;
@@ -395,6 +416,7 @@ dialog::backdrop{background:rgba(0,0,0,.65);}
         a.textContent = "Account";
         a.href = "manage/";
         a.dataset.open = "";
+        setSignedIn(b.plan === "pro");
       })
       .catch(function () { open("up"); });
   }
