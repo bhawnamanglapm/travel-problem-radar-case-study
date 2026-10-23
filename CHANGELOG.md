@@ -5,6 +5,9 @@ grouped by date.
 
 ## 2026-10-23
 
+- `/manage/` can sell Pro through Razorpay: Upgrade to Pro opens Razorpay Checkout, and a paid Pro can cancel at the
+  end of the period. Off until the Razorpay variables are set, so production still shows Request Pro. Paying doesn't
+  grant Pro yet; the webhook (T21) will.
 - A Razorpay library for paid Pro: create, cancel and fetch a subscription, and the webhook and Checkout signature
   checks, tested offline. Nothing uses it yet. `npm run check` now also fails on a committed Razorpay key secret.
 - The Free daily email is a summary while the board is locked: the count and headlines per category and a Sign in
