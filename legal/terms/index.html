@@ -27,6 +27,8 @@
   .draft { border: 1px solid #FFB74D; background: #1E1A12; color: #FFD59A; border-radius: 6px; padding: 10px 14px; margin: 0 0 24px; font-size: 14px; }
   .todo { background: #3A2A10; color: #FFD59A; padding: 0 4px; border-radius: 3px; }
   footer { margin-top: 36px; padding-top: 16px; border-top: 1px solid #2A2A34; }
+  .site-foot { font-size: 13px; color: #93939F; }
+  .site-foot a { display: inline-block; min-height: 24px; line-height: 24px; }
 </style>
 </head>
 <body>
@@ -42,14 +44,22 @@
   <p>An AI model with web search looks for travel-industry problems on a schedule. Paying subscribers see the results on the live board, and everyone with an account gets email.</p>
   <ul>
     <li><b>Free account:</b> one email a day with the number of findings and their headlines from the last 24 hours. The live board is not included; a demo with saved sample data is open to everyone.</li>
-    <li><b>Pro:</b> the live board, with every sweep and its history, and the full digest by email after every scheduled sweep that finds something in the categories you choose. <span class="todo">[OWNER INPUT NEEDED: price, currency, billing period (monthly or yearly), and whether there is a free trial]</span></li>
+    <li><b>Pro:</b> the live board, with every sweep and its history, and the full digest by email after every scheduled sweep that finds something in the categories you choose. <!-- when:free-test -->Pro is free while it&rsquo;s being tested; nothing is charged until payments open.<!-- /when --><template data-when="paid">{{PRO_PRICE}}, {{PRO_GST}}. Renews automatically every month until you cancel. {{PRO_TRIAL}}</template></li>
   </ul>
 
   <h2>What the findings are, and aren&rsquo;t</h2>
   <p>The findings are gathered by an AI model and are not verified. They can be wrong, out of date or incomplete. Check each source link before relying on an item. They are not professional, legal or financial advice.</p>
 
   <h2>Paying for Pro</h2>
-  <p><span class="todo">[OWNER INPUT NEEDED: how payment works: Razorpay checkout, automatic renewal, when you are charged, taxes such as GST, and what happens if a payment fails]</span></p>
+  <!-- when:free-test -->
+  <p>Nothing is charged while Pro is being tested. When payments open, this is how they work:</p>
+  <!-- /when -->
+  <ul>
+    <li>Pro costs {{PRO_PRICE}}, {{PRO_GST}}. You pay on your account page, after confirming your email. Payments are handled by Razorpay; we never see your card or UPI details. You can pay with {{PRO_METHODS}}.</li>
+    <li>Pro renews automatically every month until you cancel. You approve the first payment; later monthly payments are taken under that approval, and you&rsquo;re told before each one. <span class="todo">[OWNER INPUT NEEDED: confirm against the RBI e-mandate rules who sends that notice (bank, card network or Razorpay) and how long before the charge]</span></li>
+    <li>Pro starts a minute or two after you pay, and your account page shows the next renewal date.</li>
+    <li>If a renewal payment fails, Pro stays on while Razorpay tries again. If it stops trying, the account goes back to Free and nothing more is charged.</li>
+  </ul>
 
   <h2>Ending it</h2>
   <p>You can unsubscribe at any time from any email. For Pro, cancellation and refunds are covered on the <a href="../refunds/">cancellation and refunds</a> page. We may stop sending to an address that bounces or marks the digest as spam, and we may change or stop the service; <span class="todo">[OWNER INPUT NEEDED: what notice paying subscribers get, and what happens to the paid period]</span></p>
@@ -64,7 +74,7 @@
   <p><a href="mailto:hello@pehchanthetraveller.com">hello@pehchanthetraveller.com</a></p>
 
   <footer>
-    <p class="small"><a href="../privacy/">Privacy</a> &middot; <a href="../terms/">Terms</a> &middot; <a href="../refunds/">Cancellation and refunds</a> &middot; <a href="../contact/">Contact</a></p>
+    <nav class="site-foot" aria-label="Site"><a href="../../about/">About</a> &middot; <a href="../../pricing/">Pricing</a> &middot; <a href="../contact/">Contact</a> &middot; <a href="../terms/">Terms</a> &middot; <a href="../privacy/">Privacy</a> &middot; <a href="../refunds/">Refunds</a></nav>
   </footer>
 </main>
 </body>

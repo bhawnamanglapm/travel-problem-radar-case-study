@@ -19,6 +19,10 @@
   .demo-strip a:hover { color: #C6FF3D; }
   .demo-strip .links { margin-left: auto; display: flex; gap: 16px; }
   noscript { display: block; padding: 40px; color: #F4F4F7; font-family: system-ui, sans-serif; }
+  .board-foot { padding: 16px clamp(14px, 4vw, 40px) 32px; border-top: 1px solid #2A2A34; font: 12px/1.5 'JetBrains Mono', ui-monospace, monospace; color: #93939F; }
+  .board-foot a { color: #F4F4F7; }
+  .board-foot a:hover { color: #C6FF3D; }
+  .site-foot a { display: inline-block; min-height: 24px; line-height: 24px; }
 </style>
 </head>
 <body>
@@ -31,6 +35,7 @@
   </div>
   <div id="root"></div>
   <noscript>This demo needs JavaScript. The sample items are also in sampleData.json in the repository.</noscript>
+  <footer class="board-foot"><nav class="site-foot" aria-label="Site"><a href="../subscribe/">Plans</a> &middot; <a href="mailto:hello@pehchanthetraveller.com">Contact</a> &middot; <a href="../legal/privacy/">Privacy</a></nav></footer>
   <script src="radar.js"></script>
 </body>
 </html>

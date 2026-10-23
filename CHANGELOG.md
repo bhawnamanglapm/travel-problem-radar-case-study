@@ -5,6 +5,13 @@ grouped by date.
 
 ## 2026-10-23
 
+- A footer on every page: About · Pricing · Contact · Terms · Privacy · Refunds, listing only the pages that ship.
+  Today that's Plans (`/subscribe/`, standing in for Pricing), Contact (the email address, standing in for the
+  contact page) and Privacy. It's added to the home, sign-up, sign-in, subscribe, manage, live and demo pages and the
+  privacy policy. New `/about/` page, written but not shipped until the owner writes "Who runs it". The terms and
+  refunds drafts now take Pro's price, GST, trial, payment methods and refund rule from `plan.json`, and say how
+  payment, renewal, cancelling and failed payments work. They stay drafts. `npm run check` checks each page's footer
+  and that no shipped page links a page that doesn't ship (T25).
 - Pro's price set to ₹299 a month in `plan.json`, the candidate `costing.md` names to test first (24 to 28 members
   cover the running costs). GST is left blank for a CA, so `/pricing/` still isn't shipped and the live site doesn't
   change. The live Razorpay Plan must be created at the same amount (`scripts/check-plan.mjs` compares them).

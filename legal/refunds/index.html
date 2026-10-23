@@ -27,6 +27,8 @@
   .draft { border: 1px solid #FFB74D; background: #1E1A12; color: #FFD59A; border-radius: 6px; padding: 10px 14px; margin: 0 0 24px; font-size: 14px; }
   .todo { background: #3A2A10; color: #FFD59A; padding: 0 4px; border-radius: 3px; }
   footer { margin-top: 36px; padding-top: 16px; border-top: 1px solid #2A2A34; }
+  .site-foot { font-size: 13px; color: #93939F; }
+  .site-foot a { display: inline-block; min-height: 24px; line-height: 24px; }
 </style>
 </head>
 <body>
@@ -39,17 +41,20 @@
   <h2>Cancelling</h2>
   <ul>
     <li><b>Free:</b> use the Unsubscribe link in any email. Your address is deleted at once.</li>
-    <li><b>Pro:</b> <span class="todo">[OWNER INPUT NEEDED: how to cancel a paid subscription (for example the Manage page, once checkout exists), and whether Pro runs to the end of the paid period]</span></li>
+    <li><b>Pro:</b> cancel any time on your account page: two clicks, no reason asked. Pro stays on until the end of the month you&rsquo;ve paid for, then the account is Free and nothing more is charged.</li>
   </ul>
 
   <h2>Refunds</h2>
-  <p><span class="todo">[OWNER INPUT NEEDED: the refund rule: for example none, pro-rata, or full within N days; and any cases that are always refunded, such as a double charge]</span></p>
+  <!-- when:free-test -->
+  <p>Nothing is charged while Pro is being tested, so there is nothing to refund yet. Once payments open, this is the rule:</p>
+  <!-- /when -->
+  <p>{{PRO_REFUND}}</p>
 
   <h2>How to ask</h2>
-  <p>Email <a href="mailto:hello@pehchanthetraveller.com">hello@pehchanthetraveller.com</a> from the address you subscribed with. We reply within the same day. <span class="todo">[OWNER INPUT NEEDED: how many days a refund takes to reach the original payment method]</span></p>
+  <p>Email <a href="mailto:hello@pehchanthetraveller.com">hello@pehchanthetraveller.com</a> from the address you subscribed with. We reply within the same day. An approved refund reaches the way you paid within {{PRO_REFUND_DAYS}} days.</p>
 
   <footer>
-    <p class="small"><a href="../privacy/">Privacy</a> &middot; <a href="../terms/">Terms</a> &middot; <a href="../refunds/">Cancellation and refunds</a> &middot; <a href="../contact/">Contact</a></p>
+    <nav class="site-foot" aria-label="Site"><a href="../../about/">About</a> &middot; <a href="../../pricing/">Pricing</a> &middot; <a href="../contact/">Contact</a> &middot; <a href="../terms/">Terms</a> &middot; <a href="../privacy/">Privacy</a> &middot; <a href="../refunds/">Refunds</a></nav>
   </footer>
 </main>
 </body>

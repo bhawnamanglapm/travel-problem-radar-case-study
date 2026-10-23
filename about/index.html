@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<script>
+  // GitHub Pages also serves this file but has no /api/: send the visit to the Vercel copy, which does.
+  if (/\.github\.io$/.test(location.hostname)) location.replace("https://travel-problem-radar.vercel.app" + location.pathname.replace(/^\/travel-problem-radar-case-study/, "") + location.search + location.hash);
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>About · Travel Problem Radar</title>
+<meta name="description" content="What Travel Problem Radar is, how it finds travel-industry problems, and who runs it." />
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #0B0B0D; color: #F4F4F7; }
+  body { font: 16px/1.55 -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 0 16px; }
+  main { max-width: 680px; margin: 0 auto; padding: 40px 0 56px; }
+  h1 { font-size: 26px; line-height: 1.25; margin: 0 0 12px; }
+  h2 { font-size: 18px; margin: 32px 0 10px; }
+  p, li { color: #C9C9D2; }
+  p { margin: 0 0 14px; }
+  ul { margin: 0 0 14px; padding-left: 20px; }
+  li { margin: 0 0 6px; }
+  a { color: #C6FF3D; }
+  a:focus-visible { outline: 2px solid #C6FF3D; outline-offset: 2px; }
+  .nav { font: 12px/1.5 ui-monospace, 'JetBrains Mono', monospace; color: #93939F; margin: 0 0 28px; }
+  .nav a { color: #F4F4F7; display: inline-block; padding: 4px 0; }
+  .small { font-size: 13px; color: #93939F; }
+  .todo { background: #3A2A10; color: #FFD59A; padding: 0 4px; border-radius: 3px; }
+  footer { margin-top: 36px; padding-top: 16px; border-top: 1px solid #2A2A34; }
+  .site-foot { font-size: 13px; color: #93939F; }
+  .site-foot a { display: inline-block; min-height: 24px; line-height: 24px; }
+</style>
+</head>
+<body>
+<main>
+  <p class="nav"><a href="../">&larr; Home</a> &middot; <a href="../live/">Live board (Pro)</a> &middot; <a href="../signin/">Sign in</a></p>
+  <h1>About Travel Problem Radar</h1>
+
+  <h2>What it is</h2>
+  <p>An AI model with web search looks for recent, real problems in travel: what travelers complain about, new visa and entry rules, broken booking sites and apps, and industry disruptions. Each one comes with its source and a product idea that could solve it.</p>
+
+  <h2>How it works</h2>
+  <ul>
+    <li>A sweep runs about 5 times a day on a schedule. GitHub starts each one, so a sweep can run late when GitHub is delayed.</li>
+    <li>Each sweep looks in four categories: traveler pain (booking, airlines, hotels, refunds, loyalty and service failures); government and policy (visa rules, entry requirements, travel bans and tourist taxes); websites and apps (outages, bugs, broken flows and security issues on travel platforms); and industry (strikes, bankruptcies, capacity cuts, overtourism and pricing shocks).</li>
+    <li>Free accounts get one email a day: how many findings in each category, and their headlines. Pro gets the live board any time and an email after every sweep. The <a href="../demo/">sample demo</a>, open to everyone, shows how the board looks.</li>
+  </ul>
+
+  <h2>What it isn&rsquo;t</h2>
+  <p>The findings are gathered by an AI model and aren&rsquo;t checked by a person. They can be wrong, out of date or incomplete. Check each source link before you rely on an item.</p>
+
+  <h2>Who runs it</h2>
+  <p><span class="todo">[OWNER INPUT NEEDED: who runs Travel Problem Radar and why, in a few sentences (input 6). The legal name, address and phone go on the contact page, not here]</span></p>
+
+  <h2>Questions</h2>
+  <p>Email <a href="mailto:hello@pehchanthetraveller.com">hello@pehchanthetraveller.com</a>.</p>
+  <p class="small">Gathered by an AI model with web search. Items are not verified; check each source link.</p>
+  <footer><nav class="site-foot" aria-label="Site"><a href="../about/">About</a> &middot; <a href="../pricing/">Pricing</a> &middot; <a href="../legal/contact/">Contact</a> &middot; <a href="../legal/terms/">Terms</a> &middot; <a href="../legal/privacy/">Privacy</a> &middot; <a href="../legal/refunds/">Refunds</a></nav></footer>
+</main>
+</body>
+</html>

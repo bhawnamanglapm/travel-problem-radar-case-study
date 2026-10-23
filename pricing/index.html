@@ -44,6 +44,9 @@
     .plans tbody th { width: 100%; }
     .plans td::before { content: attr(data-plan); display: block; font-weight: 600; color: #C6FF3D; }
   }
+  footer { margin-top: 36px; padding-top: 16px; border-top: 1px solid #2A2A34; }
+  .site-foot { font-size: 13px; color: #93939F; }
+  .site-foot a { display: inline-block; min-height: 24px; line-height: 24px; }
 </style>
 </head>
 <body>
@@ -109,6 +112,7 @@
   <h2>Questions</h2>
   <p>Email <a href="mailto:{{PRO_CONTACT}}">{{PRO_CONTACT}}</a>.</p>
   <p class="small">Gathered by an AI model with web search. Items are not verified; check each source link.</p>
+  <footer><nav class="site-foot" aria-label="Site"><a href="../about/">About</a> &middot; <a href="../pricing/">Pricing</a> &middot; <a href="../legal/contact/">Contact</a> &middot; <a href="../legal/terms/">Terms</a> &middot; <a href="../legal/privacy/">Privacy</a> &middot; <a href="../legal/refunds/">Refunds</a></nav></footer>
 </main>
 <script>
   // Signed in, Pro starts on the account page; signed out (or if this check fails), on the sign-up page with Pro ticked.

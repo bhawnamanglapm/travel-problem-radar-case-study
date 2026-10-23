@@ -42,8 +42,25 @@ policy page.
 `About · Pricing · Contact · Terms · Privacy · Refunds`
 
 - Links appear only for pages that ship (check.mjs enforces it).
-- The live board's footer is in `travel-problem-radar.jsx`; add it there for the live version only (not the demo).
+- ~~The live board's footer is in `travel-problem-radar.jsx`~~ Built instead in `live/index.html` and
+  `demo/index.html`, outside the app's root, as [pricing-and-about-pages.md](../pricing-and-about-pages.md) has it:
+  no bundle rebuild, and the demo ships too, so it gets the same footer.
 - Plain links, readable contrast, 24 px targets (T23 C2, C4).
+
+## Built (2026-10-23), waiting on the owner
+
+- `about/index.html`: what it is, how it works, what it isn't, from facts already on the home page. "Who runs it" is
+  still `[OWNER INPUT NEEDED]` (input 6), so it isn't in the build.
+- Footer: `<nav class="site-foot">` on every shipped page and every draft. Shipped pages list the pages that ship,
+  in the fixed order; until `/pricing/` and `legal/contact/` ship, **Plans** (`/subscribe/`) and the email address
+  stand in for them. Today that's Plans · Contact · Privacy. Drafts list all six, as they will once everything ships.
+- Policy pages, filled where the code already answers: terms (price, GST, trial, how payment works, renewal, failed
+  payments) and refunds (cancel on `/manage/`, Pro to the end of the paid month, the rule and its days) now use
+  `plan.json`'s slots, with the free-test wording while `paid` is false. The governing law was already filled (India,
+  courts at Patiala). Still open: the "last updated" dates, notice when the service stops, liability, and who sends
+  the notice before each renewal charge (RBI e-mandate, **verify**).
+- `npm run check`: the footer of each page, in order; no shipped page links `about/`, `pricing/` or a draft policy
+  page; terms and refunds use the slots; `about/` refuses to ship with a gap.
 
 ## Acceptance criteria
 
