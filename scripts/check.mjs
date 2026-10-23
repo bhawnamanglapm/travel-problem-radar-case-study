@@ -166,13 +166,12 @@ for (const slug of LEGAL) {
 // The owner's name, address and phone come from Vercel variables at build time (scripts/fill-legal.mjs), never the repo.
 const { fill, SLOTS } = await import("./fill-legal.mjs");
 const legalText = LEGAL.map((s) => (existsSync(`legal/${s}/index.html`) ? readFileSync(`legal/${s}/index.html`, "utf8") : "")).join("\n");
-const slotsUsed = [...new Set([...legalText.matchAll(/\{\{([A-Z_]+)\}\}/g)].map((m) => m[1]))];
+const slotsUsed = [...new Set([...legalText.matchAll(/\{\{(LEGAL_[A-Z_]+)\}\}/g)].map((m) => m[1]))]; // {{PRO_…}} slots are fill-plan's (4e)
 check(SLOTS.every((s) => slotsUsed.includes(s)) && slotsUsed.every((s) => SLOTS.includes(s)), `the policy pages use exactly the build-time slots ${SLOTS.join(", ")} (${slotsUsed.join(", ")})`);
 check(!/\b\d{10}\b|\+91/.test(legalText), "the policy pages hold no phone number (it comes from LEGAL_PHONE at build time)");
 const filled = fill("{{LEGAL_NAME}} {{LEGAL_ADDRESS}}", { LEGAL_NAME: "A & <b>", LEGAL_ADDRESS: "1\n2" });
 check(filled.out === "A &amp; &lt;b&gt; 1<br />2" && filled.missing.length === 0 && fill("{{LEGAL_PHONE}}", {}).missing[0] === "LEGAL_PHONE", "fill-legal escapes values, turns newlines into line breaks, and reports an unset variable");
 if (legalShipped) check(/node scripts\/fill-legal\.mjs public/.test(buildCmd), "the build fills the policy pages from Vercel variables (scripts/fill-legal.mjs)");
-check(!draftLegal.some((s) => [page, subPage, manPage, inPage, upPage].some((t) => t.includes(`legal/${s}/`))), `no page links a policy page the build doesn't ship (drafts: ${draftLegal.join(", ")})`);
 if (shippedLegal.includes("privacy")) check([inPage, upPage].every((t) => t.includes('href="../legal/privacy/"')) && page.includes('href="https://travel-problem-radar.vercel.app/legal/privacy/"'), "the home, sign-in and sign-up pages link the privacy policy");
 if (legalShipped) check(/^scripts\/\*$/m.test(readFileSync(".vercelignore", "utf8")) && /^!scripts\/fill-legal\.mjs$/m.test(readFileSync(".vercelignore", "utf8")), ".vercelignore keeps scripts/fill-legal.mjs, which the build runs");
 
@@ -197,7 +196,7 @@ check(/fetch\("\/api\/session\?action=me"\)/.test(pricePage) && /a\.href = "\.\.
 check(/<th scope="col">Free<\/th><th scope="col">Pro<\/th>/.test(pricePage), "pricing/index.html shows Free and Pro side by side in one table (T23 B1, C1)");
 // T23 rules a script can check, on every shipped page (and pricing, which ships once filled), in both versions.
 const SAMPLE_PLAN = { ...plan, monthly: 299, gst: "GST included", trialDays: 0, refund: "Sample refund rule.", refundDays: 7, methods: ["cards"] }; // only for this check
-const ruled = [...new Set([...shippedPages, "pricing/index.html", "signup/index.html"])].filter((f) => existsSync(f));
+const ruled = [...new Set([...shippedPages, "pricing/index.html", "about/index.html", "signup/index.html"])].filter((f) => existsSync(f));
 for (const f of ruled) {
   const t = readFileSync(f, "utf8");
   const versions = [fillPlan.fill(t, { ...SAMPLE_PLAN, paid: false }).out, fillPlan.fill(t, { ...SAMPLE_PLAN, paid: true }).out];
@@ -207,12 +206,45 @@ for (const f of ruled) {
   check(!/<input[^>]*(name="wantsPro"|id="upPro")[^>]*\schecked\b/.test(t), `${f}: the Pro box is never ticked in the page itself (T23 B6)`);
 }
 check(!pricingShipped || !draftLegal.some((s) => pricePage.includes(`legal/${s}/`)), "pricing/index.html, once shipped, links no policy page the build doesn't ship");
+// The policy pages take Pro's facts from plan.json too, so they say what /pricing/ says (T23 A1, A2, A4).
+const termsPage = readFileSync("legal/terms/index.html", "utf8"), refundsPage = readFileSync("legal/refunds/index.html", "utf8");
+check(termsPage.includes("{{PRO_PRICE}}, {{PRO_GST}}") && termsPage.includes("Renews automatically every month until you cancel"), "legal/terms takes Pro's price and GST from plan.json and says it renews");
+check(refundsPage.includes("<p>{{PRO_REFUND}}</p>") && refundsPage.includes("{{PRO_REFUND_DAYS}}"), "legal/refunds takes the refund rule and its days from plan.json, the same text as /pricing/");
+
+// 4f. About page and site footer (T25). Every shipped page ends with one footer: About, Pricing, Contact, Terms,
+// Privacy, Refunds, in that order, listing only the pages the build ships. Until /pricing/ and the contact page ship,
+// Plans (/subscribe/) and the email address stand in for them. A draft lists all six, as it will once everything ships.
+const SITE = "https://travel-problem-radar.vercel.app/";
+const MAIL = "mailto:hello@pehchanthetraveller.com";
+const aboutPage = existsSync("about/index.html") ? readFileSync("about/index.html", "utf8") : "";
+const aboutShipped = copied.includes("about");
+check(aboutPage.length > 0 && !/<script[^>]*\ssrc=|<link[^>]*rel=["']?stylesheet|@import|url\(\s*["']?https?:/i.test(aboutPage) && aboutPage.includes('if (/\\.github\\.io$/.test(location.hostname)) location.replace("https://travel-problem-radar.vercel.app"'), "about/index.html exists, is self-contained and sends a GitHub Pages visit to the Vercel copy");
+check(/Gathered by an AI model with web search\. Items are not verified/.test(aboutPage) && /aren&rsquo;t checked by a person/.test(aboutPage) && !/\{\{/.test(aboutPage), "about/index.html has the AI notice and no build-time slot (the owner's name and address are on the contact page)");
+if (aboutShipped) check(!/OWNER INPUT NEEDED/.test(aboutPage), "about/index.html is in the build, so it has no gaps left");
+const ships = (p) => (p.startsWith("legal/") ? shippedLegal.includes(p.split("/")[1]) : copied.includes(p.replace("/", "")));
+const FOOT = [["About", "about/"], ["Pricing", "pricing/", "Plans subscribe/"], ["Contact", "legal/contact/", `Contact ${MAIL}`], ["Terms", "legal/terms/"], ["Privacy", "legal/privacy/"], ["Refunds", "legal/refunds/"]];
+const footWanted = (all) => FOOT.flatMap(([label, p, standIn]) => (all || ships(p) ? [`${label} ${p}`] : standIn ? [standIn] : []));
+// Where a link on page f goes, as a path from the site root ("legal/privacy/"); other links come back as they are.
+const target = (f, h) => { if (h.startsWith("mailto:")) return h; const u = new URL(h, SITE + f); return u.origin + "/" === SITE ? u.pathname.slice(1) : h; };
+const footPages = [...new Set([...shippedPages, "pricing/index.html", "about/index.html", ...LEGAL.map((s) => `legal/${s}/index.html`)])].filter((f) => existsSync(f));
+for (const f of footPages) {
+  const shipped = shippedPages.includes(f);
+  const navs = [...readFileSync(f, "utf8").matchAll(/<nav class="site-foot" aria-label="Site">([\s\S]*?)<\/nav>/g)];
+  const links = navs.length === 1 ? [...navs[0][1].matchAll(/<a href="([^"]+)">([^<]+)<\/a>/g)].map((m) => [m[2], m[1]]) : [];
+  const got = links.map(([l, h]) => `${l} ${target(f, h)}`).join(" · ");
+  const want = footWanted(!shipped).join(" · ");
+  check(got === want && (f !== "index.html" || links.every(([, h]) => h.startsWith(SITE) || h === MAIL)), `${f}: one site footer linking ${shipped ? "the pages that ship" : "all six pages (it's a draft)"}, in order (${want}${got === want ? "" : "; found: " + (got || "none")})`);
+}
+// No shipped page links a page the build doesn't ship, in the version the build makes from today's plan.json.
+const drafts = [...draftLegal.map((s) => `legal/${s}/`), ...(aboutShipped ? [] : ["about/"]), ...(pricingShipped ? [] : ["pricing/"])];
+const draftLinks = shippedPages.flatMap((f) => [...fillPlan.fill(readFileSync(f, "utf8"), plan).out.matchAll(/href="([^"]+)"/g)].map((m) => `${f} → ${target(f, m[1])}`).filter((s) => drafts.some((d) => s.endsWith("→ " + d))));
+check(draftLinks.length === 0, `no shipped page links a page the build doesn't ship (drafts: ${drafts.join(", ")})${draftLinks.length ? " (" + draftLinks.join("; ") + ")" : ""}`);
 
 const subLinks = [...page.matchAll(/href="([^"]*subscribe[^"]*)"/g)].map((m) => m[1]);
 check(subLinks.length > 0 && subLinks.every((h) => h.startsWith("https://travel-problem-radar.vercel.app/subscribe/")), `index.html links to the subscribe page, only by the absolute Vercel URL (GitHub Pages has no /api/)${subLinks.length ? " (" + subLinks.join(", ") + ")" : " (no link)"}`);
 check(/<a href="\.\.\/subscribe\/">Plans<\/a>/.test(livePage), "live/index.html links to the subscribe page");
 // Customer pages: the back link says Home (the home page is no longer a case study), and the board has no demo or repo links.
-const backPages = ["live", "demo", "signup", "signin", "subscribe", "manage", "pricing"];
+const backPages = ["live", "demo", "signup", "signin", "subscribe", "manage", "pricing", "about"];
 check(backPages.every((d) => readFileSync(`${d}/index.html`, "utf8").includes("&larr; Home</a>")) && !backPages.some((d) => readFileSync(`${d}/index.html`, "utf8").includes("Case study")), "every sub-page's back link says Home, not Case study");
 check(!/Sample demo|github\.com/.test(livePage), "live/index.html has no Sample demo or repo link");
 // Account pages are findable: the home page links sign-in (absolute, as above); the board shows Sign in or Account.

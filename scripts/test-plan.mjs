@@ -77,6 +77,14 @@ for (const f of ["pricing/index.html"]) {
   check((paid.out.match(/id="getpro"/g) || []).length === 1 && (free.out.match(/id="getpro"/g) || []).length === 1, `${f}: one Get Pro button in either version`);
 }
 
+// The policy pages (T25) take the same facts; their {{LEGAL_…}} slots are left for fill-legal.
+for (const f of ["legal/terms/index.html", "legal/refunds/index.html"]) {
+  const src = readFileSync(new URL("../" + f, import.meta.url), "utf8");
+  const paid = fill(src, PAID), free = fill(src, SAMPLE);
+  check(paid.missing.length === 0 && free.missing.length === 0 && !/\{\{PRO_|when:|data-when/.test(paid.out + free.out), `${f}: every Pro slot filled in either version`);
+  check(/being tested/.test(free.out) && !/being tested/.test(paid.out) && /No refunds &lt;for&gt; part months\.|₹2,999 a month/.test(paid.out), `${f}: the free-test text only while testing; the plan's wording once paid`);
+}
+
 // check-plan, with Razorpay stubbed
 {
   const dir = mkdtempSync(join(tmpdir(), "check-plan-"));
