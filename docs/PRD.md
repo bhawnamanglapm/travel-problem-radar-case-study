@@ -1,5 +1,8 @@
 # Travel Problem Radar PRD
 
+> **A newer version exists:** [PRD v2](../pm/02-product-definition/prd.md) (23 Oct 2026) adds email, accounts and
+> payments. This v1 still describes the radar alone; its R1 to R11 are `REQ-01` to `REQ-11` in v2.
+
 > **Draft for the owner to edit.** No PRD was written before the build. This one was put together on 19 Oct 2026 from
 > the case study (`index.html`), the README and the code. It describes what was built and why, in PRD form. Anything
 > not found in those sources is marked **OWNER INPUT NEEDED**. **Success measures below are proposals; none has been

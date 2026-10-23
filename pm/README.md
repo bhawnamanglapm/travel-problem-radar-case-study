@@ -17,7 +17,7 @@ documents in [`docs/`](../docs/) and links to them, so every fact keeps one home
 | **Role** | Product owner. Built with AI (Claude): the first version in Claude's app, everything since October 2026 with Claude Code ([README](../README.md#how-i-built-it)) |
 | **Domain** | Travel industry: traveler pain, government and policy changes, website and app failures, industry disruption |
 | **Timeline** | First built in July 2026 in Claude's app. Repository started 2026-08-01. Public demo, live page, subscriptions and payments built from 18 to 23 Oct 2026 ([CHANGELOG](../CHANGELOG.md)) |
-| **Status (2026-10-23)** | Live. Free email digest and Pro live board. Pro is granted by hand for now. Checkout is built and passed a test-mode run on staging. Taking real payments waits on Razorpay activation, an adviser's liability clause and Vercel Pro ([progress](../docs/subscriptions/tasks/progress.md)) |
+| **Status (2026-10-24)** | Live MVP, not yet charging. Free email digest and Pro live board; Pro is granted by hand for now. Checkout is built and passed a test-mode run on staging. Taking real payments waits on the [launch checklist](05-business-case-and-launch/launch-plan.md), starting with sweeps, which have failed since 2026-10-23 (I-01) ([progress](../docs/subscriptions/tasks/progress.md)) |
 | **Build record** | 256 commits and 74 merged pull requests. 952 offline tests and 199 offline checks pass (`npm test`, `npm run check`), counted on `main` at `662bded` on 2026-10-23 |
 | **Users** | **None recorded besides the owner.** No interviews, surveys or usage data exist yet ([README](../README.md#problem)) |
 | **Price** | ₹299 a month for Pro, no GST charged. Chosen as a price to test, not a proven one ([decisions](../docs/decisions.md), [costing](../docs/subscriptions/costing.md)) |
@@ -50,9 +50,11 @@ Source: [TECHNICAL.md](../docs/TECHNICAL.md), [paid-website.md](../docs/subscrip
 | 2. Product definition | PRD v2 for the product as it is today, backlog by epic, requirement-to-test traceability, KPI catalogue | [prd.md](02-product-definition/prd.md), [backlog.md](02-product-definition/backlog.md), [traceability.md](02-product-definition/traceability.md), [kpis.md](02-product-definition/kpis.md) |
 | 3. Design | Live screens, the journey end to end, display rules, design trade-offs and gaps | [flows-and-screens.md](03-design/flows-and-screens.md) |
 | 4. Planning and governance | Roadmap, RAID log, revised decisions as change requests, stakeholders and RACI | [roadmap.md](04-planning-and-governance/roadmap.md), [raid-log.md](04-planning-and-governance/raid-log.md), [change-log.md](04-planning-and-governance/change-log.md), [stakeholders.md](04-planning-and-governance/stakeholders.md) |
-| 5. Business case and launch | Cost model, break-even, launch and rollback plan | Later pull request |
-| 6. Executive communication | One-page review that ends in the owner's decisions | Later pull request |
-| 7. Data and metrics | Data model and how each KPI is computed | Later pull request |
+| 5. Business case and launch | **Plans, not results:** cost-floor business case, go-to-market with gates, launch readiness with go/no-go and rollback, post-launch plan | [business-case.md](05-business-case-and-launch/business-case.md), [go-to-market.md](05-business-case-and-launch/go-to-market.md), [launch-plan.md](05-business-case-and-launch/launch-plan.md), [post-launch-plan.md](05-business-case-and-launch/post-launch-plan.md) |
+| 6. Executive communication | One-page review that ends in the owner's decisions | [executive-review.md](06-executive-communication/executive-review.md) |
+| 7. Data and metrics | The stored data, how each KPI is computed, what isn't measured | [data-and-metrics.md](07-data-and-metrics/data-and-metrics.md) |
+
+The portfolio summary of all seven stages is [CASE_STUDY.md](CASE_STUDY.md).
 
 ## Decisions worth discussing
 
@@ -82,7 +84,7 @@ The IDs link the stages, as in a larger programme:
 | `R-` `A-` `I-` `D-` | Risk, assumption, issue, dependency | [raid-log.md](04-planning-and-governance/raid-log.md) |
 | `CR-` | Change request: a decision later revised | [change-log.md](04-planning-and-governance/change-log.md) |
 | `RM-` | Roadmap item | [roadmap.md](04-planning-and-governance/roadmap.md) |
-| `LR-` | Launch-readiness check | Stage 5 (later pull request) |
+| `LR-` | Launch-readiness check | [launch-plan.md](05-business-case-and-launch/launch-plan.md) |
 
 ## Known gaps
 
@@ -98,7 +100,8 @@ These are stated plainly rather than filled in:
 
 ## How this section was built
 
-Written on 2026-10-23 with Claude Code, from this repository's documents, code, tests and git history. The web
+Written on 2026-10-23 (stages 1 to 4) and 2026-10-24 (stages 5 to 7) with Claude Code, from this repository's
+documents, code, tests and git history. The web
 research in [alternatives.md](01-discovery/alternatives.md) names its sources and the date they were read. The
 layout follows the owner's earlier case study,
 [merchant-dispute-hub](https://github.com/bhawnamanglapm/merchant-dispute-hub). That one is a simulation; this one

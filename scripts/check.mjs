@@ -2,6 +2,7 @@
 // Run from the repository root:  node scripts/check.mjs
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { dirname, join, relative, resolve } from "node:path";
 
 const failures = [];
 const check = (ok, label) => {
@@ -310,6 +311,26 @@ check(rzpLeak(`key_id = "${rzpKey}"\nkey_secret = "${rzpSecret}"`) && rzpLeak(`R
       "the Razorpay secret pattern catches a key id with a secret, and not either alone");
 const rzpLeaks = tracked.filter((f) => !/\.(png|jpe?g|gif|ico|zip)$/i.test(f) && existsSync(f) && rzpLeak(readFileSync(f, "utf8")));
 check(rzpLeaks.length === 0, `no Razorpay key secrets in tracked files${rzpLeaks.length ? " (found in " + rzpLeaks.join(", ") + ")" : ""}`);
+
+// 7. The PM case study (pm/) links stages to each other and to docs/ by relative path and #heading, so a renamed
+// file or heading breaks it silently. Anchors follow GitHub's rule: lowercase, punctuation dropped, spaces to "-".
+const mdFiles = (d) => readdirSync(d, { withFileTypes: true }).flatMap((e) =>
+  e.isDirectory() ? mdFiles(join(d, e.name)) : e.name.endsWith(".md") ? [join(d, e.name)] : []);
+const headingSlugs = (f) => new Set([...readFileSync(f, "utf8").matchAll(/^#{1,6}\s+(.*)$/gm)].map((m) =>
+  m[1].trim().toLowerCase().replace(/[^\w\- ]/g, "").replace(/ /g, "-")));
+const pmLinks = [], pmBroken = [];
+for (const f of mdFiles("pm")) {
+  for (const [, url] of readFileSync(f, "utf8").matchAll(/\]\(([^)\s]+)\)/g)) {
+    if (/^(https?|mailto):/.test(url)) continue;
+    pmLinks.push(url);
+    const [p, anchor] = url.split("#");
+    const target = p ? resolve(dirname(f), decodeURIComponent(p)) : resolve(f);
+    if (!existsSync(target)) pmBroken.push(`${relative(".", f)} → ${url} (no such file)`);
+    else if (anchor && target.endsWith(".md") && !headingSlugs(target).has(anchor)) pmBroken.push(`${relative(".", f)} → ${url} (no such heading)`);
+  }
+}
+check(pmLinks.length > 0 && pmBroken.length === 0,
+  `pm/ relative links and #headings resolve (${pmLinks.length} links)${pmBroken.length ? ": " + pmBroken.join("; ") : ""}`);
 
 console.log(failures.length ? `\n${failures.length} failure(s)` : "\nAll checks passed.");
 process.exit(failures.length ? 1 : 0);
