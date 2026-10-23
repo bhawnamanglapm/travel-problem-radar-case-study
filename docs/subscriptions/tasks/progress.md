@@ -397,6 +397,9 @@ working in a real inbox; that is T12's staged launch.
   cancel. Checked locally against a stub API with a fake Razorpay, at desktop and phone width.
 - Deviations from the task file are listed in its "Built" section; two are in the decision log.
 - **Not checked yet:** a real test-mode checkout on Preview. Needs the owner's test plan, keys and `total_count`.
+- Preview prep (branch `fix/preview-testing`): on a Preview, `siteUrl` uses the branch URL, never production; new
+  `recount` admin command for a store that has never swept. 791 tests pass (+9). The Vercel steps are in
+  DEPLOYMENT.md, "Testing payments on Preview"; not done yet.
 
 ### T19
 - `api/_lib/razorpay.js`: `createSubscription`, `cancelSubscription`, `fetchSubscription`, `verifyWebhook`,
