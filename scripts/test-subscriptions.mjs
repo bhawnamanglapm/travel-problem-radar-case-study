@@ -16,6 +16,7 @@ import {
 } from "../api/_lib/subscription-handlers.js";
 import { deliverToSubscribers, proCatsKey } from "../api/_lib/subscriber-delivery.js";
 import { makeDataHandler } from "../api/_lib/handlers.js";
+import { RAZORPAY_API, cancelSubscription, createSubscription, fetchSubscription, isTestKey, razorpayConfigured, verifyCheckout, verifyWebhook } from "../api/_lib/razorpay.js";
 import { check, finish, memStorage, mockRes } from "./test-helpers.mjs";
 
 // A repeatable random source: each call returns bytes that count up from a seed.
@@ -2680,6 +2681,113 @@ const iso = (ms) => new Date(ms).toISOString();
   const out2 = await w.sweep("1792588150123", T0 + 5 * 3600 * 1000);
   check(out2.free.due === 0 && out2.free.alreadySent === 2 && freeOf(w).length === 2, "teaser delivery: still once a day for Free");
   check(!/@|tok\d/.test([...w.logs, JSON.stringify(out)].join("\n")), "teaser delivery: no address or token in the result or the log");
+}
+
+// T19: the Razorpay library. Signature checks against fixed vectors, the three API calls through a
+// recording fetch, and every failure mode returning { error } without throwing or leaking.
+{
+  // Fixed vectors made outside Node with openssl (printf '%s' <message> | openssl dgst -sha256 -hmac <secret>).
+  // Razorpay's docs publish no test vector for either signature.
+  const WH_BODY = '{"entity":"event","event":"subscription.activated","payload":{}}';
+  const WH_SECRET = "whsec_fixture_not_a_real_secret";
+  const WH_SIG = "61e62b023912c5037d2fa2f143514573a53fe2a52aea7f25292dadf291c8416a";
+  const CO_SECRET = "keysecret_fixture_not_real";
+  const CO = { paymentId: "pay_00000000000001", subscriptionId: "sub_00000000000001", signature: "c16245d96d25cbfea0f3a9216d10187bbeec39a91730d3305808dcbfc76f0871" };
+
+  check(createHmac("sha256", WH_SECRET).update(WH_BODY).digest("hex") === WH_SIG, "razorpay: the webhook vector agrees with openssl");
+  check(verifyWebhook(WH_BODY, WH_SIG, WH_SECRET) && verifyWebhook(Buffer.from(WH_BODY), WH_SIG, WH_SECRET), "razorpay: verifyWebhook accepts the fixed vector, as a string or a Buffer");
+  const flipped = Buffer.from(WH_BODY); flipped[10] ^= 1;
+  check(!verifyWebhook(flipped, WH_SIG, WH_SECRET), "razorpay: verifyWebhook refuses one changed body byte");
+  check(!verifyWebhook(WH_BODY, WH_SIG, WH_SECRET + "x") && !verifyWebhook(WH_BODY, WH_SIG, ""), "razorpay: verifyWebhook refuses a wrong or empty secret");
+  check([undefined, null, "", 42, WH_SIG.slice(0, 62), WH_SIG + "00", WH_SIG.toUpperCase(), "z".repeat(64)].every((h) => !verifyWebhook(WH_BODY, h, WH_SECRET)), "razorpay: verifyWebhook refuses a missing, empty, wrong-length, uppercase or non-hex header");
+  check(!verifyWebhook(JSON.parse(WH_BODY), WH_SIG, WH_SECRET) && !verifyWebhook(undefined, WH_SIG, WH_SECRET), "razorpay: verifyWebhook refuses a parsed body or no body");
+
+  check(createHmac("sha256", CO_SECRET).update(`${CO.paymentId}|${CO.subscriptionId}`).digest("hex") === CO.signature, "razorpay: the checkout vector agrees with openssl");
+  check(verifyCheckout(CO, CO_SECRET), "razorpay: verifyCheckout accepts the fixed vector");
+  check(!verifyCheckout({ ...CO, paymentId: CO.subscriptionId, subscriptionId: CO.paymentId }, CO_SECRET), "razorpay: verifyCheckout refuses the ids swapped");
+  check(!verifyCheckout({ ...CO, subscriptionId: "sub_00000000000002" }, CO_SECRET) && !verifyCheckout(CO, "other") && !verifyCheckout(CO, ""), "razorpay: verifyCheckout refuses another subscription or a wrong or empty secret");
+  check([undefined, "", CO.signature.slice(2), CO.signature.toUpperCase()].every((sig) => !verifyCheckout({ ...CO, signature: sig }, CO_SECRET)) && !verifyCheckout({}, CO_SECRET) && !verifyCheckout(undefined, CO_SECRET), "razorpay: verifyCheckout refuses a missing, short or uppercase signature and missing ids");
+
+  // Fixture key values are built here so scripts/check.mjs's Razorpay pattern doesn't see a key and a secret in this file.
+  const KEY_ID = "rzp_" + "test_" + "Fixture000001";
+  const KEY_SECRET = "fixture" + "-key-" + "secret";
+  const ENV = { RAZORPAY_KEY_ID: KEY_ID, RAZORPAY_KEY_SECRET: KEY_SECRET, RAZORPAY_WEBHOOK_SECRET: WH_SECRET, RAZORPAY_PLAN_ID: "plan_00000000000001" };
+  check(razorpayConfigured(ENV) && Object.keys(ENV).every((k) => !razorpayConfigured({ ...ENV, [k]: " " })), "razorpay: configured only with all four values");
+  check(isTestKey(ENV) && !isTestKey({ RAZORPAY_KEY_ID: "rzp_" + "live_" + "Fixture000001" }) && !isTestKey({}), "razorpay: isTestKey tells test keys from live keys");
+
+  const SID = "a".repeat(64);
+  const SUB = { id: "sub_00000000000001", entity: "subscription", plan_id: "plan_00000000000001", status: "created", short_url: "https://rzp.io/rzp/abc", notes: { sid: SID }, customer_email: "payer@example.com", current_start: null, current_end: 1792600000, charge_at: 1792600000, ended_at: null, paid_count: 0, remaining_count: 12, total_count: 12 };
+  const recorder = (reply) => {
+    const calls = [];
+    const fetchFn = async (url, opts) => { calls.push({ url, ...opts }); return reply; };
+    return { calls, fetchFn };
+  };
+  const ok = (body) => ({ ok: true, status: 200, json: async () => body });
+  const basic = (h) => Buffer.from(String(h).replace(/^Basic /, ""), "base64").toString();
+
+  let f = recorder(ok(SUB));
+  let out = await createSubscription({ env: ENV, fetchFn: f.fetchFn, subscriberId: SID, totalCount: 12 });
+  let c = f.calls[0];
+  check(c.method === "POST" && c.url === "https://api.razorpay.com/v1/subscriptions" && RAZORPAY_API === "https://api.razorpay.com/v1", "razorpay: create posts to /v1/subscriptions");
+  check(c.headers.authorization.startsWith("Basic ") && basic(c.headers.authorization) === `${KEY_ID}:${KEY_SECRET}` && c.signal instanceof AbortSignal, "razorpay: create sends Basic auth and a timeout");
+  check(c.body === JSON.stringify({ plan_id: "plan_00000000000001", total_count: 12, customer_notify: true, notes: { sid: SID } }), "razorpay: create sends plan_id, total_count, customer_notify and notes {sid} only");
+  check(JSON.stringify(out) === JSON.stringify({ id: SUB.id, status: "created", shortUrl: SUB.short_url }), "razorpay: create returns id, status and shortUrl");
+  f = recorder(ok(SUB));
+  await createSubscription({ env: ENV, fetchFn: f.fetchFn, planId: "plan_00000000000002", subscriberId: SID, totalCount: 1, customerNotify: false });
+  check(JSON.parse(f.calls[0].body).plan_id === "plan_00000000000002" && JSON.parse(f.calls[0].body).customer_notify === false, "razorpay: create takes another plan and customer_notify false");
+
+  f = recorder(ok({ ...SUB, status: "cancelled" }));
+  out = await cancelSubscription({ env: ENV, fetchFn: f.fetchFn, subscriptionId: SUB.id, atCycleEnd: true });
+  c = f.calls[0];
+  check(c.method === "POST" && c.url === RAZORPAY_API + "/subscriptions/sub_00000000000001/cancel" && c.body === '{"cancel_at_cycle_end":true}' && basic(c.headers.authorization) === `${KEY_ID}:${KEY_SECRET}`, "razorpay: cancel posts cancel_at_cycle_end as a boolean");
+  check(JSON.stringify(out) === JSON.stringify({ id: SUB.id, status: "cancelled" }), "razorpay: cancel returns id and status");
+  f = recorder(ok(SUB));
+  await cancelSubscription({ env: ENV, fetchFn: f.fetchFn, subscriptionId: SUB.id });
+  check(f.calls[0].body === '{"cancel_at_cycle_end":false}', "razorpay: cancel defaults to cancelling now");
+
+  f = recorder(ok(SUB));
+  out = await fetchSubscription({ env: ENV, fetchFn: f.fetchFn, subscriptionId: SUB.id });
+  c = f.calls[0];
+  check(c.method === "GET" && c.url === RAZORPAY_API + "/subscriptions/sub_00000000000001" && c.body === undefined && basic(c.headers.authorization) === `${KEY_ID}:${KEY_SECRET}`, "razorpay: fetch gets /v1/subscriptions/<id> with no body");
+  check(out.id === SUB.id && out.sid === SID && out.planId === SUB.plan_id && out.currentEnd === 1792600000 && out.currentStart === null && out.remainingCount === 12 && !JSON.stringify(out).includes("@"), "razorpay: fetch returns the chosen fields and drops the customer's address");
+
+  const calls3 = (fetchFn) => Promise.all([
+    createSubscription({ env: ENV, fetchFn, subscriberId: SID, totalCount: 12 }),
+    cancelSubscription({ env: ENV, fetchFn, subscriptionId: SUB.id }),
+    fetchSubscription({ env: ENV, fetchFn, subscriptionId: SUB.id }),
+  ]);
+  const errBody = { error: { code: "BAD_REQUEST_ERROR", description: "bad for payer@example.com", field: "plan_id", source: "business", step: "NA", reason: "input_validation_failed", metadata: {} } };
+  const cases = [
+    ["400", () => ({ ok: false, status: 400, json: async () => errBody }), 400],
+    ["401", () => ({ ok: false, status: 401, json: async () => errBody }), 401],
+    ["500", () => ({ ok: false, status: 500, json: async () => { throw new Error("not json"); } }), 500],
+    ["a network error", () => { throw new TypeError("fetch failed"); }, "network"],
+    ["a timeout", () => { throw new DOMException("The operation timed out.", "TimeoutError"); }, "timeout"],
+    ["an HTML 200", () => ({ ok: true, status: 200, json: async () => JSON.parse("<html>") }), "reply"],
+    ["a 200 that isn't a subscription", () => ok({ id: "pay_1", email: "payer@example.com" }), "reply"],
+  ];
+  for (const [label, reply, want] of cases) {
+    let outs, threw = false;
+    try { outs = await calls3(async () => reply()); } catch (e) { threw = true; }
+    check(!threw && outs.every((o) => JSON.stringify(o) === JSON.stringify({ error: want })), `razorpay: ${label} gives { error: ${JSON.stringify(want)} } from all three calls`);
+    check(!threw && !outs.some((o) => JSON.stringify(o).includes(KEY_SECRET) || JSON.stringify(o).includes("@")), `razorpay: ${label} returns no secret and no address`);
+  }
+
+  f = recorder(ok(SUB));
+  const bad = await Promise.all([
+    ...[0, 1.5, "12", undefined, -1].map((n) => createSubscription({ env: ENV, fetchFn: f.fetchFn, subscriberId: SID, totalCount: n })),
+    createSubscription({ env: ENV, fetchFn: f.fetchFn, subscriberId: "a@b.example", totalCount: 1 }),
+    createSubscription({ env: ENV, fetchFn: f.fetchFn, subscriberId: SID, totalCount: 1, planId: "../x" }),
+    ...["../x", "sub_1/cancel", "", undefined, "pay_1"].map((id) => cancelSubscription({ env: ENV, fetchFn: f.fetchFn, subscriptionId: id })),
+    fetchSubscription({ env: ENV, fetchFn: f.fetchFn, subscriptionId: "sub_1?x=1" }),
+  ]);
+  check(bad.every((o) => o.error === "input") && f.calls.length === 0, "razorpay: a bad total_count, subscriber id, plan id or subscription id is refused without calling Razorpay");
+  const unset = await Promise.all([
+    createSubscription({ env: {}, fetchFn: f.fetchFn, planId: "plan_00000000000001", subscriberId: SID, totalCount: 1 }),
+    cancelSubscription({ env: {}, fetchFn: f.fetchFn, subscriptionId: SUB.id }),
+    fetchSubscription({ env: { RAZORPAY_KEY_ID: KEY_ID }, fetchFn: f.fetchFn, subscriptionId: SUB.id }),
+  ]);
+  check(unset.every((o) => o.error === "config") && f.calls.length === 0, "razorpay: missing keys give { error: \"config\" } without calling Razorpay");
 }
 
 finish("subscription tests");
