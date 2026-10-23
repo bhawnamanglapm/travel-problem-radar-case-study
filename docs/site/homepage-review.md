@@ -56,5 +56,6 @@ page still exists at `/demo/`, linked from the README.
 
 ## Still to come
 
-- Privacy, Terms and Refunds links in the footer, once the legal pages ship (T15; they need the `LEGAL_*` env vars).
+- A Terms link in the footer, once the terms ship (they wait for an adviser's liability clause). Pricing, Contact,
+  Privacy and Refunds are linked since 2026-10-23.
 - An Open Graph image (none exists yet).
