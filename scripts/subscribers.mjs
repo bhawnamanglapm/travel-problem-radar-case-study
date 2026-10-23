@@ -8,6 +8,7 @@
 //   node --env-file=.env.local scripts/subscribers.mjs revoke-pro <email> [--yes]
 //   node --env-file=.env.local scripts/subscribers.mjs delete <email> [--yes]
 //   node --env-file=.env.local scripts/subscribers.mjs prune-events --older-than 400 [--yes]
+//   node --env-file=.env.local scripts/subscribers.mjs recount [--yes]
 //
 // Addresses are printed only by `list` and `show`. A token is never printed. Every write changes
 // nothing until --yes is given. Exit codes: 0 done, 1 not found or refused, 2 bad usage.
@@ -17,6 +18,7 @@ import {
   KEY_EVENT_PREFIX, deleteSubscriber, effectivePlan, findSubscriber, getSubscriber, listSubscribers, normaliseEmail,
   putSubscriber, recordEvent, utcDay,
 } from "../api/_lib/subscribers.js";
+import { KEY_SUBSCRIBER_COUNT } from "../api/_lib/subscription-handlers.js";
 
 const DAY_MS = 24 * 3600 * 1000;
 const KEY_DELIVERIES_PREFIX = "radar:deliveries:";
@@ -33,6 +35,7 @@ const COMMANDS = {
   "revoke-pro": { args: 1, flags: ["--yes"] },
   delete: { args: 1, flags: ["--yes"] },
   "prune-events": { args: 0, flags: ["--older-than", "--yes"] },
+  recount: { args: 0, flags: ["--yes"] },
 };
 
 export function parseArgs(argv) {
@@ -226,6 +229,19 @@ export async function pruneEvents(storage, { olderThanDays, apply, now }) {
   return { code: 0, message: `done: deleted ${old.length} event record${old.length === 1 ? "" : "s"} older than ${olderThanDays} days (before ${cutoff})`, changed: old.length > 0 };
 }
 
+// Writes the pending-plus-active count that sign-up checks against MAX_SUBSCRIBERS, in the shape the
+// sweep writes. For a store that has never had a sweep (a Preview), where sign-up otherwise reads "full".
+export async function recount(storage, { apply, now }) {
+  const { records } = await listSubscribers(storage);
+  const count = records.filter((r) => r.status === "pending" || r.status === "active").length;
+  let stored = null;
+  try { const v = JSON.parse(await storage.get(KEY_SUBSCRIBER_COUNT)); stored = v && Number.isInteger(v.count) ? v.count : null; } catch (e) { /* missing or unreadable */ }
+  const summary = `subscriber count ${stored === null ? "none" : stored} -> ${count}`;
+  if (!apply) return { code: 1, message: `would change: ${summary}. Nothing changed; add --yes to apply.`, changed: false };
+  await storage.set(KEY_SUBSCRIBER_COUNT, JSON.stringify({ count, at: new Date(now).toISOString() }));
+  return { code: 0, message: `done: ${summary}`, changed: true };
+}
+
 // ---- the command line
 
 export async function main(argv, { storage, now = Date.now(), rb = randomBytes, out = console.log, err = console.error } = {}) {
@@ -245,6 +261,11 @@ export async function main(argv, { storage, now = Date.now(), rb = randomBytes, 
       return 0;
     }
     if (cmd === "list") { out(formatRows(await listRows(storage, { now, plan: flags.plan || null }))); return 0; }
+    if (cmd === "recount") {
+      const res = await recount(storage, { apply, now });
+      (res.code === 0 ? out : err)(res.message);
+      return res.code;
+    }
     if (cmd === "prune-events") {
       if (!flags["older-than"]) throw new UsageError("prune-events needs --older-than <days>");
       const res = await pruneEvents(storage, { olderThanDays: positiveInt(flags["older-than"], "--older-than"), apply, now });

@@ -121,11 +121,12 @@ async function readSubscriberCount(storage) {
   } catch (e) { return null; }
 }
 
-// Where the links in emails point. SITE_URL, else the Vercel production domain, else nothing.
+// Where the links in emails point. SITE_URL, else the Vercel production domain, else nothing. On a
+// Preview it is the branch's own URL instead, never production, so a test email can't send anyone there.
 export function siteUrl(env) {
   const set = String(env.SITE_URL || "").trim().replace(/\/+$/, "");
   if (set) return /^https?:\/\/[^\s<>"]+$/.test(set) ? set : "";
-  const v = String(env.VERCEL_PROJECT_PRODUCTION_URL || "").trim();
+  const v = String((env.VERCEL_ENV === "preview" ? env.VERCEL_BRANCH_URL : env.VERCEL_PROJECT_PRODUCTION_URL) || "").trim();
   return v && /^[a-z0-9.-]+(:\d+)?$/i.test(v) ? `https://${v}` : "";
 }
 
