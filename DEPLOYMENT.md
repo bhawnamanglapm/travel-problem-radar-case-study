@@ -455,7 +455,7 @@ Do not commit the `.vercel/` folder that `vercel link` creates. It is already in
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "buildCommand": "rm -rf public && mkdir public && cp -r index.html demo live subscribe manage public/ && rm -rf public/demo/src public/live/src",
+  "buildCommand": "rm -rf public && mkdir public && cp -r index.html demo live subscribe manage signin signup public/ && rm -rf public/demo/src public/live/src && mkdir -p public/legal && cp -r legal/privacy public/legal/ && node scripts/fill-plan.mjs public && node scripts/fill-legal.mjs public",
   "outputDirectory": "public",
   "crons": [{ "path": "/api/sweep", "schedule": "30 1 * * *" }],
   "functions": {
@@ -467,7 +467,7 @@ Do not commit the `.vercel/` folder that `vercel link` creates. It is already in
 | Key | What it does |
 |---|---|
 | `framework: null` | No framework preset; Vercel treats this as a plain static site plus functions |
-| `buildCommand` | Copies `index.html`, `demo/`, `live/`, `subscribe/`, `manage/`, `signin/` and `signup/` into `public/`, then removes the JSX sources. It does **not** run `npm run build`. A new page folder must be added here, or Vercel won't serve it (`npm run check` tests for `subscribe`, `manage`, `signin` and `signup`) |
+| `buildCommand` | Copies `index.html`, `demo/`, `live/`, `subscribe/`, `manage/`, `signin/`, `signup/` and the policy pages that are ready (`legal/privacy` today) into `public/`, then removes the JSX sources. Then `scripts/fill-plan.mjs` fills Pro's price and the rest from `plan.json` (below), and `scripts/fill-legal.mjs` fills the owner's details into the policy pages. It does **not** run `npm run build`. A new page folder must be added here, or Vercel won't serve it (`npm run check` tests for `subscribe`, `manage`, `signin` and `signup`). `pricing/` is written but not added yet: `npm run check` fails if it ships before `plan.json` has its values |
 | `outputDirectory` | Serves `public/` as the static site |
 | `crons` | The daily backstop: calls `/api/sweep` at 01:30 UTC (07:00 IST), within the hour on Hobby |
 | `functions["api/sweep.js"].maxDuration` | Lets the sweep run for up to 300 s, the Hobby maximum |
@@ -493,7 +493,46 @@ The URL is written into the file; change it for your own copy or a custom domain
 ### `.vercelignore`
 
 Keeps `scripts/`, `.github/`, `docs/` and all `*.md` files (including this one) out of the upload. They are not
-needed at runtime.
+needed at runtime. The two scripts the build runs, `scripts/fill-legal.mjs` and `scripts/fill-plan.mjs`, are let
+back in.
+
+### `plan.json` (Pro's price, T24)
+
+The one place Pro's price, GST line, refund rule, trial and payment methods are written. Pages never type them;
+they use slots that `scripts/fill-plan.mjs` fills at build time, so the pages can't drift apart or from Razorpay.
+It isn't secret and isn't served (the build reads it from the repository root).
+
+| Field | What it is | Slot on the pages |
+|---|---|---|
+| `paid` | `false` while Pro is free and switched on by hand; `true` at go-live (T27) | Switches the blocks below |
+| `currency` | `"INR"`, the only one the pages are written for | |
+| `monthly` | Whole rupees, or `null` until the owner sets the price | `{{PRO_PRICE}}` ("₹299 a month", Indian digit grouping), `{{PRO_PRICE_SHORT}}` ("₹299") |
+| `yearly` | Must stay `null`: no yearly plan is built (T23 input 8) | |
+| `gst` | The exact line, for example "GST included" | `{{PRO_GST}}` |
+| `trialDays` | `0` for no trial, or the days | `{{PRO_TRIAL}}` ("No free trial." or "A 7-day free trial.") |
+| `refund` | The one or two sentences of the refund rule | `{{PRO_REFUND}}` |
+| `refundDays` | Days a refund takes, as a number | `{{PRO_REFUND_DAYS}}` |
+| `methods` | The payment methods switched on in Razorpay, as a list | `{{PRO_METHODS}}` ("cards and UPI AutoPay") |
+| `contact` | The address for billing questions | `{{PRO_CONTACT}}` |
+
+**The switch.** A page puts the paid wording in `<template data-when="paid">…</template>` and today's wording in
+`<!-- when:free-test -->…<!-- /when -->`. With `paid: false` the build drops the first and keeps the second; with
+`true` it does the opposite. A `<template>` never renders, so GitHub Pages, which serves `index.html` as it is,
+still shows today's text.
+
+**What fails the build.** A shipped page using a slot whose value is `null`; `paid: true` with no `monthly`; a
+`yearly` value; anything malformed. `npm run check` catches the same things before a merge.
+
+**Checking the price against Razorpay.** Before go-live and after any price change, run this in your own shell. It
+reads the Plan with `GET /v1/plans/:id` and compares amount, currency and period with `plan.json`. It prints no key.
+
+```bash
+RAZORPAY_KEY_ID=… RAZORPAY_KEY_SECRET=… RAZORPAY_PLAN_ID=plan_… node scripts/check-plan.mjs
+```
+
+Exit `0` is a match, `1` a difference or a failed call, `2` something not set up. Razorpay's docs don't state the
+amount's unit on that page; it's taken as paise like their other APIs. **Verify** with the first test-mode run: a
+wrong unit shows as amounts 100 times apart.
 
 ### Environment variables
 

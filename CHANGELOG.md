@@ -5,6 +5,12 @@ grouped by date.
 
 ## 2026-10-23
 
+- New `plan.json`, the one place for Pro's price, GST line, refund rule, trial and payment methods, all `null` until
+  the owner sets them. `scripts/fill-plan.mjs` fills them into the pages at build time and switches between today's
+  "free while it's being tested" wording and the paid wording on `paid` (false). `scripts/check-plan.mjs` (run by the
+  owner with the keys) compares the Razorpay Plan with it. New `/pricing/` page, written but not shipped until
+  `plan.json` has its values. `npm run check` now enforces T23's rules: no urgency words, no pre-ticked Pro box,
+  `<th scope>` on every table, and "renews" next to any price. The built site is unchanged (T24).
 - Added `scripts/compare-models.mjs` and its plan, `docs/subscriptions/haiku-test.md`. It's a local test of Haiku
   5.5 against Sonnet 5.5 on the sweep, which could lower `F` and so the price. It doesn't touch Blob storage, email
   or Slack. It runs only with `--yes` and an API key, and it hasn't been run yet.
