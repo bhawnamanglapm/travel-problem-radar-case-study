@@ -5,6 +5,7 @@ import { createHash, createHmac, randomBytes as cryptoRandomBytes, timingSafeEqu
 import { DEFAULT_FROM, buildAlreadySubscribedEmail, buildConfirmEmail, buildProRequestEmail, buildSignInEmail, sendEmail, sendOne } from "./email.js";
 import { BodyTooLargeError, allowMethods, esc, readFields, sendJson, sendPage } from "./http.js";
 import { OAUTH_COOKIE, OAUTH_MINUTES, clearOAuthCookie, googleConfigured, googleFinish, googleStart, readOAuthCookie, readSignupCookie, signupCookie } from "./google.js";
+import { cancelSubscription, createSubscription, razorpayConfigured, verifyCheckout } from "./razorpay.js";
 import { clearCookie, originOk, parseCookies, readSession, sessionCookie, sessionSecret, signSession } from "./session.js";
 import {
   CONFIRM_RESEND_MINUTES, MAX_CONFIRMS_PER_ADDRESS, PENDING_TTL_DAYS, countEvents, deleteSubscriber, effectivePlan, findSubscriber, getSubscriber, newPending, normaliseCats, normaliseEmail, putSubscriber,
@@ -58,6 +59,16 @@ const positiveInt = (v) => {
   const n = Number(String(v ?? "").trim());
   return String(v ?? "").trim() !== "" && Number.isInteger(n) && n > 0 ? n : null;
 };
+
+// Paid Pro (T20). Payments are on only with razorpay.js's four settings and RAZORPAY_TOTAL_COUNT,
+// the number of billing cycles a subscription runs for (the owner's number). The index file
+// radar:rzpsub:<subscription id> holds { id } so the webhook (T21) finds the record without listing.
+// A checkout still in "created" is reused for CHECKOUT_REUSE_MINUTES instead of making another.
+export const KEY_RZPSUB_PREFIX = "radar:rzpsub:";
+export const CHECKOUT_REUSE_MINUTES = 60;
+const totalCount = (env) => positiveInt(env.RAZORPAY_TOTAL_COUNT);
+export const paymentsReady = (env) => razorpayConfigured(env) && totalCount(env) !== null;
+const PAYMENT_ID = /^pay_[A-Za-z0-9]+$/;
 
 // Unset or unreadable gives the default; an explicit 0 closes confirmations.
 const maxConfirmsPerDay = (v) => {
@@ -383,8 +394,11 @@ export function makeUnsubscribeHandler({ env, storage, now, randomBytes = crypto
 
 // ---- the manage page's data (/manage/, linked from every digest)
 
-// What the manage page may show: the plan, never the address.
-const accountView = (record, t) => ({
+// What the manage page may show: the plan, never the address. `payments` says whether the page
+// offers Checkout or the Request Pro button; for a paid Pro, proUntil is the renewal date.
+const rzpOf = (record) => (record.rzp && typeof record.rzp === "object" ? record.rzp : {});
+const paidPro = (record, t) => record.proSource === "razorpay" && effectivePlan(record, t) === "pro";
+const accountView = (record, t, env) => ({
   status: record.status,
   plan: record.plan === "pro" ? "pro" : "free",
   effectivePlan: effectivePlan(record, t),
@@ -393,15 +407,21 @@ const accountView = (record, t) => ({
   proRequestedAt: record.proRequestedAt || null,
   cats: record.cats || null,
   emailOff: record.emailOff || null,
+  payments: paymentsReady(env),
+  paymentPending: rzpOf(record).status === "authenticated" && effectivePlan(record, t) !== "pro",
+  cancelAtPeriodEnd: paidPro(record, t) && rzpOf(record).cancelAtPeriodEnd === true,
 });
 
 // GET ?id&t: the plan. With no id and no token, the login cookie (T16) says whose plan; a POST
 // signed in that way must come from this site (originOk). Replies add `signedIn`, whether this
-// browser holds a valid login cookie. POST {id, t, action: "request-pro"}: ask for Pro. Until payments exist
-// (T20, T21) the owner grants it with the admin script; this records the request and tells them.
+// browser holds a valid login cookie. POST {id, t, action: "request-pro"}: ask for Pro, which the
+// owner grants with the admin script; the page offers it while payments are off.
 // POST {id, t, action: "set-cats", cats: [...]}: a Pro subscriber picks their categories (T14).
 // POST action "email-on" turns emails back on after an unsubscribe (not after a bounce or a
 // complaint), and "delete-account" deletes the record and signs this browser out (T17).
+// With payments on (T20): "checkout" starts a Razorpay subscription and returns what Checkout
+// needs, "checkout-return" records Checkout's signed reply (only the webhook, T21, grants Pro),
+// and "cancel" stops a paid Pro renewing at the end of the period.
 export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomBytes = cryptoRandomBytes, log = console.log }) {
   return async function account(req, res) {
     if (!allowMethods(req, res, ["GET", "POST"])) return;
@@ -430,7 +450,7 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
         if (req.method === "POST" && !originOk(req)) return sendJson(res, 403, { error: "wrong_origin" });
         record = session;
       }
-      const view = (rec) => ({ ...accountView(rec, t), signedIn: Boolean(session) });
+      const view = (rec) => ({ ...accountView(rec, t, env), signedIn: Boolean(session) });
       if (req.method === "GET") return sendJson(res, 200, view(record));
 
       if (action === "set-cats") {
@@ -457,6 +477,53 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
         await recordEvent(storage, "deleted", { now: t, randomBytes, plan: effectivePlan(record, t) });
         res.setHeader("set-cookie", clearCookie());
         return sendJson(res, 200, { ok: true, deleted: true });
+      }
+      if (action === "checkout" || action === "checkout-return" || action === "cancel") {
+        if (!paymentsReady(env)) return sendJson(res, 503, { error: "payments_off" });
+        const rzp = rzpOf(record);
+        const keyId = String(env.RAZORPAY_KEY_ID).trim();
+        if (action === "checkout") {
+          if (record.status !== "active") return sendJson(res, 409, { error: "not_confirmed" });
+          if (effectivePlan(record, t) === "pro") return sendJson(res, 409, { error: "already_pro" });
+          // Paid, and the webhook hasn't arrived: a second checkout would charge twice.
+          if (rzp.status === "authenticated") return sendJson(res, 409, { error: "payment_pending" });
+          const age = t - Date.parse(rzp.createdAt);
+          if (rzp.status === "created" && rzp.subscriptionId && age >= 0 && age < CHECKOUT_REUSE_MINUTES * 60 * 1000) {
+            return sendJson(res, 200, { ok: true, keyId, subscriptionId: rzp.subscriptionId });
+          }
+          const sub = await createSubscription({ env, fetchFn, subscriberId: record.id, totalCount: totalCount(env) });
+          if (sub.error) {
+            log("account", "checkout: razorpay error " + sub.error);
+            return sendJson(res, 502, { error: "payment_provider" });
+          }
+          await storage.set(KEY_RZPSUB_PREFIX + sub.id, JSON.stringify({ id: record.id }));
+          const updated = { ...record, rzp: { subscriptionId: sub.id, status: "created", createdAt: new Date(t).toISOString(), currentEnd: null, cancelAtPeriodEnd: false, lastEventAt: null } };
+          await putSubscriber(storage, updated);
+          await recordEvent(storage, "checkoutstarted", { now: t, randomBytes, plan: "free" });
+          return sendJson(res, 200, { ok: true, keyId, subscriptionId: sub.id });
+        }
+        if (action === "checkout-return") {
+          const f = params.fields || {};
+          // Checked against the subscription saved here, not only the one Checkout sends back.
+          const good = rzp.subscriptionId && f.subscriptionId === rzp.subscriptionId && typeof f.paymentId === "string" && PAYMENT_ID.test(f.paymentId)
+            && verifyCheckout({ paymentId: f.paymentId, subscriptionId: rzp.subscriptionId, signature: f.signature }, String(env.RAZORPAY_KEY_SECRET).trim());
+          if (!good) return sendJson(res, 400, { error: "bad_signature" });
+          // Only "created" moves on: if the webhook got here first, its status stays.
+          const updated = rzp.status === "created" ? { ...record, rzp: { ...rzp, status: "authenticated" } } : record;
+          if (updated !== record) await putSubscriber(storage, updated);
+          return sendJson(res, 200, { ok: true, message: "Payment received; Pro starts in a minute or two.", ...view(updated) });
+        }
+        // cancel: a paid Pro stops renewing; Pro lasts until proUntil, and the webhook (T21) ends it.
+        if (!paidPro(record, t) || !rzp.subscriptionId) return sendJson(res, 409, { error: "not_paid_pro" });
+        if (rzp.cancelAtPeriodEnd === true) return sendJson(res, 200, { ok: true, ...view(record) });
+        const done = await cancelSubscription({ env, fetchFn, subscriptionId: rzp.subscriptionId, atCycleEnd: true });
+        if (done.error) {
+          log("account", "cancel: razorpay error " + done.error);
+          return sendJson(res, 502, { error: "payment_provider" });
+        }
+        const updated = { ...record, rzp: { ...rzp, cancelAtPeriodEnd: true } };
+        await putSubscriber(storage, updated);
+        return sendJson(res, 200, { ok: true, ...view(updated) });
       }
       if (action !== "request-pro") return sendJson(res, 400, { error: "unknown action" });
       if (record.status !== "active") return sendJson(res, 409, { error: "not_confirmed" });

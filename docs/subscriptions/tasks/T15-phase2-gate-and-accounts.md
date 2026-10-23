@@ -80,6 +80,7 @@ Add to Vercel, **Preview only** to start, so test keys never reach Production:
 | `RAZORPAY_KEY_SECRET` | test secret | Yes |
 | `RAZORPAY_WEBHOOK_SECRET` | the secret set on the test webhook | Yes |
 | `RAZORPAY_PLAN_ID` | test plan id (add `RAZORPAY_PLAN_ID_YEARLY` if there's a yearly plan) | No |
+| `RAZORPAY_TOTAL_COUNT` | how many billing cycles a subscription runs (added in T20) | No |
 
 Preview deployments are behind Vercel Authentication by default (DEPLOYMENT.md 8), which blocks Razorpay's webhook
 calls. For webhook testing, use a deployment protection bypass for that path, or test on a separate Vercel project.

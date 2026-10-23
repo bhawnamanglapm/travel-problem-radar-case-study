@@ -7,10 +7,31 @@
 | Size | L |
 | Depends on | T16 (sign-in), T19 |
 | Unblocks | T21 (the record shape it writes), T22 |
+| Status | built (2026-10-23) and tested offline with a fake Razorpay; the end-to-end test checkout waits for test keys on Preview |
 
 > **Changed 2026-10-22 ([decision log](../../decisions.md)):** Pro now pays for the live board on the website, not
 > for email ([paid-website.md](../paid-website.md)). Accounts and sign-in (email link, login cookie) and the locked board come first, behind a
 > `BOARD_PAYWALL` switch. Checkout lives on `/manage/` **while signed in**; the `id`/`t` link still works for email readers.
+
+## Built (2026-10-23), and how it differs from below
+
+- **No new functions.** `checkout`, `checkout-return` and `cancel` are actions on the existing `/api/account`, as the
+  function-count note below allows. The site stays at 8 of Hobby's 12, leaving room for T21's webhook.
+- **Auth** is the existing kind: the email link's `id`/`t`, or the login cookie, where a `POST` must also come from
+  the site's own origin.
+- **An open checkout is reused, not refused.** A `created` subscription under an hour old is handed back with the
+  same id, so a second click reopens Checkout. A paid one waiting for the webhook (`authenticated`) gets
+  `409 payment_pending`, so nobody pays twice.
+- **`RAZORPAY_TOTAL_COUNT`** is a new variable for `total_count`. Payments count as on (`paymentsReady`) only when
+  it is a whole number of 1 or more and `razorpayConfigured` is true. Off means "Request Pro" and `503 payments_off`.
+- **The reply** adds `payments`, `paymentPending` and `cancelAtPeriodEnd`. The renewal date is `proUntil`, which
+  T21 sets from Razorpay's `current_end`; no separate field.
+- **No price on our page**: Razorpay's Checkout shows it. No email is sent to Checkout.
+- **Known gap:** a record stuck in `authenticated` (no webhook) blocks a new checkout until T21 or the owner
+  settles it.
+- Razorpay details checked on 2026-10-23: the script URL, the handler's three field names, and the signature over
+  `payment_id|subscription_id` with our saved id ([integration guide](https://razorpay.com/docs/payments/subscriptions/integration-guide/)).
+  No CSP was added, since no page has one.
 
 ## Why
 
@@ -98,10 +119,11 @@ on the other pages today), it must allow those (**verify** the domains).
 
 - [ ] Free subscriber → Upgrade → Razorpay test checkout → page says payment received; record has
   `rzp.status: "authenticated"` and is **still Free** until the webhook arrives
-- [ ] Pending, already-Pro and open-checkout cases refused with the right code and no new Razorpay subscription
-- [ ] Cancel sets `cancelAtPeriodEnd` and leaves the plan Pro
-- [ ] `/api/account` never returns the email address or the token
-- [ ] All endpoints answer `503` when `razorpayConfigured` is false (except `/api/account`, which still works)
+- [x] Pending, already-Pro and paid-but-waiting cases refused with the right code and no new Razorpay subscription;
+  an open checkout under an hour old is reused
+- [x] Cancel sets `cancelAtPeriodEnd` and leaves the plan Pro
+- [x] `/api/account` never returns the email address or the token
+- [x] All three actions answer `503` when payments are off; `/api/account`'s other actions still work
 
 ## Tests
 

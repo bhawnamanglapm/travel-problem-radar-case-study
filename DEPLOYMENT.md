@@ -220,6 +220,7 @@ Open **Settings → Environment Variables** and add:
 | `MAX_SIGNINS_PER_DAY` | A whole number | **Production only** | No. Defaults to 50 sign-in emails a day; `0` stops them |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | The OAuth client from Google Cloud (see [Google sign-in](#google-sign-in-optional)) | **Production only**, the secret marked Sensitive | No. Both, with `SESSION_SECRET`, show "Continue with Google" |
 | `BOARD_PAYWALL` | `1` | **Production only**, at go-live | No. Locks the live board to signed-in Pro accounts; see [The locked board](#the-locked-board-t17). Leave it unset until then |
+| `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `RAZORPAY_PLAN_ID`, `RAZORPAY_TOTAL_COUNT` | Razorpay test-mode keys, a webhook secret, a plan id and the number of billing cycles (see [Paid Pro checkout](#paid-pro-checkout-t20)) | **Preview only** while testing, the two secrets marked Sensitive. Never test keys on Production; live keys go there at T22 | No. All five turn on **Upgrade to Pro** on `/manage/`; with any of them unset the page keeps Request Pro |
 | `RESEND_WEBHOOK_SECRET` | The signing secret (`whsec_…`) of the Resend webhook | **Production only** | No. Turns on `/api/resend-webhook`; see [Subscriber email](#subscriber-email-optional) |
 | `SITE_URL` | `https://` plus your production domain, no trailing slash | **Production only** | No. Defaults to the Vercel production domain |
 | `LEGAL_NAME`, `LEGAL_ADDRESS`, `LEGAL_PHONE` | The name, postal address and phone shown on the policy pages | Production and Preview | Yes for `LEGAL_NAME`: the build ships `legal/privacy` (since 2026-10-22) and fails without it. The address and phone fill the other policy pages once they ship |
@@ -507,6 +508,8 @@ needed at runtime.
 | `MAX_SIGNINS_PER_DAY` | You (optional) | `/api/session` | Sign-in emails per UTC day, across all addresses. Default 50; `0` stops them. Separate from `MAX_CONFIRMS_PER_DAY`, so a burst of sign-ups can't stop subscribers signing in |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | You (optional) | `/api/session` | The Google OAuth client. With both and `SESSION_SECRET`, the pages show "Continue with Google"; with either unset the button stays hidden and `?action=google` answers `503`. The secret never leaves the server |
 | `BOARD_PAYWALL` | You (at go-live) | `/api/data` | `1` locks the board: not signed in `401`, Free or lapsed Pro `402`, Pro the data, and every reply `private, no-store`. Anything else, or unset, means off: the replies and their public cache header are as before. Needs `SESSION_SECRET`, or nobody can sign in to see it. Read only by a new deployment |
+| `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `RAZORPAY_PLAN_ID` | You (for paid Pro) | `/api/account` (and T21's webhook, once built) | The Razorpay API keys, the webhook's signing secret and the subscription plan. The key id is public: Checkout needs it in the browser. The two secrets never leave the server. Test keys start `rzp_test_`, and test and live are separate in Razorpay, so a test plan id doesn't work with live keys |
+| `RAZORPAY_TOTAL_COUNT` | You (for paid Pro) | `/api/account` | Razorpay's `total_count`: how many billing cycles a subscription runs before it ends. A whole number of 1 or more. Payments count as on only when this and the four above are all set; otherwise `/manage/` shows Request Pro and the payment actions answer `503` |
 | `RESEND_WEBHOOK_SECRET` | You (optional) | `/api/resend-webhook` | The Resend webhook's signing secret. If it is unset, the endpoint answers `503` and does nothing |
 | `SITE_URL` | You (optional) | The subscriber endpoints, `/api/sweep` | Base of the links in subscriber emails. If unset, `https://` plus `VERCEL_PROJECT_PRODUCTION_URL`. With neither, subscriber email is off |
 | `LEGAL_NAME`, `LEGAL_ADDRESS`, `LEGAL_PHONE` | You (`LEGAL_NAME` now; the rest once their pages ship) | The build (`scripts/fill-legal.mjs`) | Filled into the `{{LEGAL_…}}` slots of the policy pages at build time, HTML-escaped; a newline in the address becomes a line break. Kept out of the repository so they are not in its history. If `legal/` is built and one is unset, the build fails |
@@ -939,6 +942,61 @@ can sign in. It is set on Production only, so a Preview with the switch on shows
 - **Delete my account** on `/manage/` (from an email link or signed in) asks once more, then deletes the record,
   records a `deleted` event holding only the plan, and signs that browser out. A paying Razorpay Pro is told to
   cancel first (`409`); there are none until T22.
+
+### Paid Pro checkout (T20)
+
+**Off in production**: none of the `RAZORPAY_*` variables are set there, so `/manage/` shows Request Pro as before.
+Payments count as on only when `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`,
+`RAZORPAY_PLAN_ID` and `RAZORPAY_TOTAL_COUNT` are all set (`paymentsReady` in `api/_lib/subscription-handlers.js`).
+No new function: the three actions below are on `/api/account`, so the site still has 8.
+
+With payments on:
+
+- **A confirmed Free account** sees **Upgrade to Pro** on `/manage/`, from an email link or signed in. The click loads
+  Razorpay's `https://checkout.razorpay.com/v1/checkout.js` (only then), and `action: "checkout"` creates a Razorpay
+  subscription for the plan. Checkout opens; Razorpay shows the price. No email address is sent to Checkout.
+- **After paying**, the page sends Checkout's result to `action: "checkout-return"`. The signature is checked with the
+  key secret against the subscription id we saved, and the record's `rzp.status` becomes `authenticated`. The page
+  says "Payment received; Pro starts in a minute or two". **It does not grant Pro**: only Razorpay's signed webhook
+  does, which is T21 and not built yet. So until T21, a test payment leaves the account Free.
+- **A paid Pro** sees "Renews on DATE" and **Cancel at the end of this period** (asked twice).
+  `action: "cancel"` asks Razorpay to cancel at the end of the cycle; the account stays Pro until then and the page
+  says "Pro until DATE; it won't renew". A Pro given by `grant-pro` has no billing buttons.
+
+| Reply | When |
+|---|---|
+| `503 payments_off` | Any of the three actions while payments are off |
+| `409 not_confirmed`, `already_pro`, `payment_pending` | Checkout for a pending record, a Pro, or one that has paid and is waiting for the webhook |
+| `409 not_paid_pro` | Cancel on anything but a Razorpay Pro |
+| `400 bad_signature` | Checkout-return with a wrong signature, a different subscription id, or no open checkout |
+| `502 payment_provider` | Razorpay refused or didn't answer. The log line holds the error code only |
+
+A second Upgrade click within an hour reopens the same subscription instead of making another. Each new one writes
+`radar:rzpsub:<subscription id>` → `{ id }`, which T21's webhook will use to find the record, and a
+`checkoutstarted` event.
+
+**Known gap until T21:** an account that paid but whose webhook never arrives stays `authenticated` and gets
+`payment_pending` on every Upgrade. T21 or the owner has to settle it; there is no admin command for that yet.
+
+**Setting up a test (owner).** Test and live mode are separate in Razorpay: what you make in test mode doesn't
+appear in live mode, and each has its own keys ([test and live modes][rzp-modes]). So this plan is only for testing.
+
+1. In the Razorpay dashboard, in **Test Mode**: create a monthly plan at any price and note its id; generate a test
+   key pair.
+2. Make a random webhook secret and keep it in your password manager. T21 uses the same one when the webhook is
+   added in Razorpay; T20 only needs it set.
+3. Choose `RAZORPAY_TOTAL_COUNT` (how many months a subscription runs).
+4. Add the five variables to **Preview only** (the key secret and webhook secret marked Sensitive), never to
+   Production, and redeploy the Preview.
+5. Before the first test checkout, check what the Preview deployment uses for the Blob store, `SESSION_SECRET` and
+   `SITE_URL`. Then sign up there, press Upgrade and pay with a test card, for example 5104 0600 0000 0008 with any
+   CVV and a future expiry ([integration guide][rzp-subs]). The record should show `rzp.status: "authenticated"`
+   and still be Free.
+
+To turn payments off again, remove any one of the five variables and redeploy.
+
+[rzp-modes]: https://razorpay.com/docs/payments/dashboard/test-live-modes/
+[rzp-subs]: https://razorpay.com/docs/payments/subscriptions/integration-guide/
 
 ### Managing subscribers
 

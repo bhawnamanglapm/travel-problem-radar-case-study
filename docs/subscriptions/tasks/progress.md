@@ -32,7 +32,7 @@ working in a real inbox; that is T12's staged launch.
 | [T17](T17-locked-board.md) Locked board | done; switch on in production since 2026-10-23 | branch `feat/locked-board` | 676 pass (608 subscriber + 68 sweep; +45 new); 107 `npm run check` checks (+3) | See "T17" below |
 | [T18](T18-teaser-email.md) Free email becomes a teaser | done; live with the switch | branch `feat/teaser-email` | 703 pass (635 subscriber + 68 sweep; +27 new); 108 `npm run check` checks (+1) | See "T18" below |
 | [T19](T19-razorpay-library.md) Razorpay library | done; not used yet | branch `feat/razorpay-library` | 742 pass (674 subscriber + 68 sweep; +39 new); 110 `npm run check` checks (+2) | See "T19" below |
-| [T20](T20-manage-page-and-checkout.md) `/manage/` page, checkout, cancel | todo | | | Needs T16 and T19 |
+| [T20](T20-manage-page-and-checkout.md) `/manage/` page, checkout, cancel | built; test checkout waits for test keys on Preview | branch `feat/checkout` | 782 pass (714 subscriber + 68 sweep; +40 new); 113 `npm run check` checks (+3) | See "T20" below |
 | [T21](T21-razorpay-webhook.md) Razorpay webhook | todo | | | Needs T19 and T20 |
 | [T22](T22-pro-lifecycle-and-go-live.md) Pro expiry, paid unsubscribe, go-live | todo | | | Needs Vercel Pro (T15 Step 2, row 3) |
 
@@ -387,6 +387,16 @@ working in a real inbox; that is T12's staged launch.
   in"; after Sign out, `/manage/` went to `/signin/`.
 - **Not checked yet:** a sign-in link requested at `/signin/` (lands on `/live/` signed in), and that the same link is
   refused the second time.
+
+### T20
+- `/api/account` gains `checkout`, `checkout-return` and `cancel`; no new function (still 8). They answer `503` unless
+  all of `RAZORPAY_KEY_ID`, `_KEY_SECRET`, `_WEBHOOK_SECRET`, `_PLAN_ID` and the new `RAZORPAY_TOTAL_COUNT` are set.
+  None are set in production, so it shows Request Pro as before.
+- Checkout-return marks the record `authenticated` and never grants Pro; T21's webhook does.
+- `/manage/`: Upgrade to Pro (loads Checkout only on click), "Payment received", "Renews on DATE" and a two-step
+  cancel. Checked locally against a stub API with a fake Razorpay, at desktop and phone width.
+- Deviations from the task file are listed in its "Built" section; two are in the decision log.
+- **Not checked yet:** a real test-mode checkout on Preview. Needs the owner's test plan, keys and `total_count`.
 
 ### T19
 - `api/_lib/razorpay.js`: `createSubscription`, `cancelSubscription`, `fetchSubscription`, `verifyWebhook`,

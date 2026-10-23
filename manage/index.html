@@ -54,6 +54,15 @@
       <p>Pro opens the live board and sends an email after every sweep (about 5 a day) instead of one a day. It&rsquo;s free while it&rsquo;s being tested and is switched on by hand, so it can take a day.</p>
       <button id="req" type="button">Request Pro</button>
     </div>
+    <div id="buy" hidden>
+      <p>Pro opens the live board and sends an email after every sweep (about 5 a day) instead of one a day. Payment is handled by Razorpay.</p>
+      <button id="upgrade" type="button">Upgrade to Pro</button>
+    </div>
+    <div id="billing" hidden>
+      <p id="billingLine"></p>
+      <button id="cancelPlan" class="plain" type="button">Cancel at the end of this period</button>
+      <button id="cancelKeep" class="plain" type="button" hidden>Keep Pro</button>
+    </div>
     <p id="emailLine" hidden></p>
     <p id="emailOnRow" hidden><button id="emailOn" class="plain" type="button">Turn emails back on</button></p>
     <p id="status" role="status" aria-live="polite"></p>
@@ -91,6 +100,8 @@
   var id = q.get("id") || "", t = q.get("t") || "";
   var planEl = document.getElementById("plan"), detail = document.getElementById("detail");
   var ask = document.getElementById("ask"), req = document.getElementById("req");
+  var buy = document.getElementById("buy"), upgrade = document.getElementById("upgrade");
+  var billing = document.getElementById("billing"), cancelPlan = document.getElementById("cancelPlan"), cancelKeep = document.getElementById("cancelKeep");
   var statusEl = document.getElementById("status");
   var catsCard = document.getElementById("catsCard"), catsNote = document.getElementById("catsNote");
   var saveCats = document.getElementById("saveCats"), catStatus = document.getElementById("catStatus");
@@ -125,7 +136,7 @@
     document.getElementById("emailOnRow").hidden = a.emailOff !== "unsubscribed";
   }
   function show(a) {
-    ask.hidden = true;
+    ask.hidden = buy.hidden = billing.hidden = true;
     document.getElementById("signOutRow").hidden = !a.signedIn;
     if (a.status !== "active") {
       setPlan("not confirmed yet", "Press Confirm in the email we sent you first; nothing is sent until then.");
@@ -147,7 +158,21 @@
     document.getElementById("deleteCard").hidden = false;
     showCats(a);
     if (isPro) {
-      setPlan("Pro", (a.emailOff ? "The live board" : "The live board and an email after every sweep") + (a.proUntil ? ", until " + day(a.proUntil) + "." : "."));
+      var paid = a.proSource === "razorpay";
+      setPlan("Pro", (a.emailOff ? "The live board" : "The live board and an email after every sweep") + (a.proUntil && !paid ? ", until " + day(a.proUntil) + "." : "."));
+      // Paid through Razorpay (T20): renews each period until cancelled. A Pro the owner granted has no billing.
+      if (paid) {
+        billing.hidden = false;
+        document.getElementById("billingLine").textContent = a.cancelAtPeriodEnd
+          ? "Pro until " + day(a.proUntil) + "; it won’t renew."
+          : "Renews on " + day(a.proUntil) + ".";
+        cancelPlan.hidden = a.cancelAtPeriodEnd;
+      }
+    } else if (a.paymentPending) {
+      setPlan("Free", "Payment received; Pro starts in a minute or two.");
+    } else if (a.payments) {
+      setPlan("Free", "One email a day, after the first sweep of the UTC day (about 05:47 IST).");
+      buy.hidden = false;
     } else if (a.proRequestedAt) {
       setPlan("Free", "One email a day. You asked for Pro on " + day(a.proRequestedAt) + "; it will be switched on shortly.");
     } else {
@@ -189,6 +214,80 @@
     }).catch(function () {
       say("Couldn’t reach the server. Please try again in a minute.", true);
     }).then(function () { req.disabled = false; });
+  });
+
+  // Upgrade to Pro (T20): Razorpay's Checkout script loads only on this click. The checkout's reply
+  // is recorded, but Pro starts when Razorpay's webhook arrives. No address is sent to Checkout.
+  var CHECKOUT_JS = "https://checkout.razorpay.com/v1/checkout.js";
+  var PAY_ERR = "The payment service couldn’t be reached. Please try again in a minute.";
+  function loadCheckout() {
+    return new Promise(function (resolve, reject) {
+      if (window.Razorpay) return resolve();
+      var s = document.createElement("script");
+      s.src = CHECKOUT_JS; s.onload = resolve; s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+  function checkoutDone(resp) {
+    say("Checking the payment…", false);
+    call("POST", { id: id, t: t, action: "checkout-return", paymentId: resp.razorpay_payment_id, subscriptionId: resp.razorpay_subscription_id, signature: resp.razorpay_signature }).then(function (x) {
+      if (x.status === 200) { show(x.body); say("", false); } // show() says the payment was received
+      else if (x.status === 400) { say("The payment couldn’t be checked here. If you were charged, Pro starts when Razorpay confirms it; write to hello@pehchanthetraveller.com if it hasn’t within an hour.", true); }
+      else fail(x);
+    }).catch(function () {
+      say("Couldn’t reach the server. If you were charged, Pro starts when Razorpay confirms it.", true);
+    });
+  }
+  upgrade.addEventListener("click", function () {
+    upgrade.disabled = true;
+    say("Opening the payment window…", false);
+    call("POST", { id: id, t: t, action: "checkout" }).then(function (x) {
+      if (x.status === 200) {
+        return loadCheckout().then(function () {
+          new window.Razorpay({
+            key: x.body.keyId,
+            subscription_id: x.body.subscriptionId,
+            name: "Travel Problem Radar",
+            description: "Pro",
+            handler: checkoutDone
+          }).open();
+          say("", false);
+        }, function () { say(PAY_ERR, true); });
+      }
+      if (x.status === 409 && x.body.error === "already_pro") say("You already have Pro. Reload the page.", false);
+      else if (x.status === 409 && x.body.error === "payment_pending") say("Payment received; Pro starts in a minute or two.", false);
+      else if (x.status === 409) say("Confirm your address first, using the email we sent you.", true);
+      else if (x.status === 502) say(PAY_ERR, true);
+      else if (x.status === 503 && x.body.error === "payments_off") say("Payments aren’t open right now. Reload the page.", true);
+      else fail(x);
+    }).catch(function () {
+      say("Couldn’t reach the server. Please try again in a minute.", true);
+    }).then(function () { upgrade.disabled = false; });
+  });
+
+  // Cancel a paid Pro: the first click asks, the second cancels. Pro lasts until the period ends.
+  var cancelArmed = false;
+  function cancelDisarm() { cancelArmed = false; cancelPlan.textContent = "Cancel at the end of this period"; cancelKeep.hidden = true; }
+  cancelKeep.addEventListener("click", function () { cancelDisarm(); say("", false); });
+  cancelPlan.addEventListener("click", function () {
+    if (!cancelArmed) {
+      cancelArmed = true;
+      cancelPlan.textContent = "Yes, cancel it";
+      cancelKeep.hidden = false;
+      say("Stop Pro renewing? You keep it until the end of this period.", true);
+      return;
+    }
+    cancelPlan.disabled = true;
+    say("Cancelling…", false);
+    call("POST", { id: id, t: t, action: "cancel" }).then(function (x) {
+      cancelDisarm();
+      if (x.status === 200) { show(x.body); say("Cancelled. Pro lasts until " + day(x.body.proUntil) + " and won’t renew.", false); }
+      else if (x.status === 409) say("Only a paid Pro plan can be cancelled here. Reload the page.", true);
+      else if (x.status === 502) say(PAY_ERR, true);
+      else fail(x);
+    }).catch(function () {
+      say("Couldn’t reach the server. Please try again in a minute.", true);
+    }).then(function () { cancelPlan.disabled = false; });
   });
 
   document.getElementById("signOut").addEventListener("click", function () {
@@ -236,13 +335,13 @@
     sayDel("Deleting…", false);
     call("POST", { id: id, t: t, action: "delete-account" }).then(function (x) {
       if (x.status === 200) {
-        ["ask", "catsCard", "deleteCard", "leave", "leaveByLink", "signOutRow", "emailLine", "emailOnRow"].forEach(function (k) { document.getElementById(k).hidden = true; });
+        ["ask", "buy", "billing", "catsCard", "deleteCard", "leave", "leaveByLink", "signOutRow", "emailLine", "emailOnRow"].forEach(function (k) { document.getElementById(k).hidden = true; });
         planEl.textContent = "Your account is deleted";
         detail.textContent = "Your address is gone and nothing more will be sent. You can sign up again any time.";
         say("", false);
       } else if (x.status === 409 && x.body.error === "cancel_first") {
         disarm();
-        sayDel("Your Pro plan is paid, so it has to be cancelled first. Write to hello@pehchanthetraveller.com and it will be done for you.", true);
+        sayDel("Your Pro plan is paid, so the account can be deleted once Pro ends. Cancel it above so it doesn’t renew, or write to hello@pehchanthetraveller.com if you need it deleted sooner.", true);
       } else { disarm(); fail(x); }
     }).catch(function () {
       sayDel("Couldn’t reach the server. Please try again in a minute.", true);
