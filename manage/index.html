@@ -101,8 +101,8 @@
   <p id="leave" hidden><a id="unsub" href="#">Unsubscribe</a> <span class="small" id="unsubNote">(stops every email and deletes your address)</span></p>
   <p id="leaveByLink" class="small" hidden>To unsubscribe, use the Unsubscribe link in any digest email.</p>
   <p id="signOutRow" hidden><button id="signOut" class="plain" type="button">Sign out</button></p>
-  <p class="small">Reached from the link in your emails (don&rsquo;t share it) or by <a href="../signin/">signing in</a>. Questions: <a href="mailto:hello@pehchanthetraveller.com">hello@pehchanthetraveller.com</a>.</p>
-  <footer><nav class="site-foot" aria-label="Site"><a href="../">Home</a> &middot; <a href="../about/">About</a> &middot; <a href="../subscribe/">Plans</a> &middot; <a href="mailto:hello@pehchanthetraveller.com">Contact</a> &middot; <a href="../legal/privacy/">Privacy</a></nav></footer>
+  <p class="small">Reached from the link in your emails (don&rsquo;t share it) or by <a href="../signin/">signing in</a>. Questions: <a href="mailto:pehchanthetraveller19@gmail.com">pehchanthetraveller19@gmail.com</a>.</p>
+  <footer><nav class="site-foot" aria-label="Site"><a href="../">Home</a> &middot; <a href="../about/">About</a> &middot; <a href="../subscribe/">Plans</a> &middot; <a href="mailto:pehchanthetraveller19@gmail.com">Contact</a> &middot; <a href="../legal/privacy/">Privacy</a></nav></footer>
 </main>
 <script>
 (function () {
@@ -136,8 +136,8 @@
   // sending again would go to an address that refused mail.
   var EMAIL_OFF = {
     unsubscribed: "Email: off. You unsubscribed; your account stays.",
-    bounced: "Email: off, because the last one bounced. Write to hello@pehchanthetraveller.com to restart them.",
-    complained: "Email: off, because the last one was marked as spam. Write to hello@pehchanthetraveller.com to restart them."
+    bounced: "Email: off, because the last one bounced. Write to pehchanthetraveller19@gmail.com to restart them.",
+    complained: "Email: off, because the last one was marked as spam. Write to pehchanthetraveller19@gmail.com to restart them."
   };
   function showEmail(a) {
     var line = document.getElementById("emailLine");
@@ -250,7 +250,7 @@
     say("Checking the payment…", false);
     call("POST", { id: id, t: t, action: "checkout-return", paymentId: resp.razorpay_payment_id, subscriptionId: resp.razorpay_subscription_id, signature: resp.razorpay_signature }).then(function (x) {
       if (x.status === 200) { show(x.body); say("", false); } // show() says the payment was received
-      else if (x.status === 400) { say("The payment couldn’t be checked here. If you were charged, Pro starts when Razorpay confirms it; write to hello@pehchanthetraveller.com if it hasn’t within an hour.", true); }
+      else if (x.status === 400) { say("The payment couldn’t be checked here. If you were charged, Pro starts when Razorpay confirms it; write to pehchanthetraveller19@gmail.com if it hasn’t within an hour.", true); }
       else fail(x);
     }).catch(function () {
       say("Couldn’t reach the server. If you were charged, Pro starts when Razorpay confirms it.", true);
@@ -361,7 +361,7 @@
         say("", false);
       } else if (x.status === 409 && x.body.error === "cancel_first") {
         disarm();
-        sayDel("Your Pro plan is paid, so the account can be deleted once Pro ends. Cancel it above so it doesn’t renew, or write to hello@pehchanthetraveller.com if you need it deleted sooner.", true);
+        sayDel("Your Pro plan is paid, so the account can be deleted once Pro ends. Cancel it above so it doesn’t renew, or write to pehchanthetraveller19@gmail.com if you need it deleted sooner.", true);
       } else { disarm(); fail(x); }
     }).catch(function () {
       sayDel("Couldn’t reach the server. Please try again in a minute.", true);

@@ -989,7 +989,7 @@ can sign in. It is set on Production only, so a Preview with the switch on shows
 - A hard bounce or a spam complaint sets `emailOff` to `bounced` or `complained` on a Pro record (see Bounces above).
 - Delivery skips every record with `emailOff`. Sign-in emails still go, because the person asked for them.
 - `/manage/` shows "Email: off" and why. After an unsubscribe, **Turn emails back on** clears it. After a bounce or a
-  complaint the page says to write to hello@pehchanthetraveller.com instead, because sending again to an address
+  complaint the page says to write to pehchanthetraveller19@gmail.com instead, because sending again to an address
   that refused mail hurts the domain. No admin command clears it yet.
 - **Delete my account** on `/manage/` (from an email link or signed in) asks once more, then deletes the record,
   records a `deleted` event holding only the plan, and signs that browser out. A paying Razorpay Pro is told to
