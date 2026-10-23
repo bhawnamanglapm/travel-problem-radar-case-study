@@ -404,7 +404,7 @@ working in a real inbox; that is T12's staged launch.
   with a stub API, at desktop and phone width.
 - **Checked in production, 2026-10-23, with the switch on:** signed out, `/api/data` answers `401` and `/live/` shows
   "The board is for Pro members"; signed in as a Free account, `/live/` shows "The live board is part of Pro";
-  `/demo/` still opens. **Not checked yet:** the Pro account loading the board.
+  `/demo/` still opens; the owner's Pro account, signed in, loads the board.
 - Live now: a Pro account keeps the board when its emails stop (unsubscribe, hard bounce, spam complaint), with
   `emailOff` holding the reason. `/manage/` shows the Email line, **Turn emails back on** (after an unsubscribe only)
   and **Delete my account**.
