@@ -1057,6 +1057,8 @@ Three connections, each in its own direction:
    - Razorpay retries any answer that isn't `2xx` for 24 hours, and then **disables the webhook** until you
      re-enable it in the dashboard ([best practices][rzp-webhook-bp]). A changed bypass secret or webhook secret
      does that within a day, so update the URL or the variable at once.
+   - A changed variable only reaches the site with a new deployment, so redeploy `staging` after changing
+     `RAZORPAY_WEBHOOK_SECRET`.
 
 **What the webhook does.** `POST /api/razorpay-webhook` checks `x-razorpay-signature` (HMAC-SHA256 of the raw body
 with `RAZORPAY_WEBHOOK_SECRET`; `401` if wrong, nothing written), finds the record through
@@ -1079,7 +1081,9 @@ endpoint answers `503`.
 1. Razorpay dashboard → **Webhooks** → the webhook → its delivery log. No attempts: the event isn't ticked, or the
    webhook is disabled (re-enable it). Attempts with `401` from Vercel's login page: the bypass parameter is wrong
    or was regenerated. `401` `invalid signature`: the webhook's secret and `RAZORPAY_WEBHOOK_SECRET` differ.
-   `503`: `RAZORPAY_WEBHOOK_SECRET` isn't set on that deployment.
+   `503`: `RAZORPAY_WEBHOOK_SECRET` isn't set on that deployment. To tell the two `401`s apart from the CLI:
+   `vercel logs requests --since 1h --json --query 'requestPath:"/api/razorpay-webhook"'`. A request that reached
+   the function has `pathType: streaming_func`; one stopped by Vercel Authentication has none.
 2. The function's logs in Vercel: `rzp-webhook activated: plan free -> pro` is a success. `unknown subscription`
    means no record has that subscription as its own (for example, a second checkout replaced it). `stale` means a
    newer event was already applied.
