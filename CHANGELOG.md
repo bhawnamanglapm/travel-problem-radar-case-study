@@ -5,6 +5,9 @@ grouped by date.
 
 ## 2026-10-23
 
+- Pro's price set to ₹299 a month in `plan.json`, the candidate `costing.md` names to test first (24 to 28 members
+  cover the running costs). GST is left blank for a CA, so `/pricing/` still isn't shipped and the live site doesn't
+  change. The live Razorpay Plan must be created at the same amount (`scripts/check-plan.mjs` compares them).
 - New `plan.json`, the one place for Pro's price, GST line, refund rule, trial and payment methods, all `null` until
   the owner sets them. `scripts/fill-plan.mjs` fills them into the pages at build time and switches between today's
   "free while it's being tested" wording and the paid wording on `paid` (false). `scripts/check-plan.mjs` (run by the

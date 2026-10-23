@@ -1,7 +1,7 @@
 {
   "paid": false,
   "currency": "INR",
-  "monthly": null,
+  "monthly": 299,
   "yearly": null,
   "gst": null,
   "trialDays": null,
