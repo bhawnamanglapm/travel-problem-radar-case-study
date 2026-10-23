@@ -64,10 +64,10 @@ the paid `proUntil`.
 
 - [ ] Test checkout → `subscription.activated` → the record is Pro with the right `proUntil`, and the next scheduled
   sweep sends it the Pro email
-- [ ] The same event delivered twice changes nothing the second time
-- [ ] A forged event (bad signature) is refused with `401` and writes nothing
-- [ ] `halted` moves to Free; `pending` doesn't
-- [ ] An older event arriving after a newer one doesn't undo it
+- [x] The same event delivered twice changes nothing the second time (tests)
+- [x] A forged event (bad signature) is refused with `401` and writes nothing (tests)
+- [x] `halted` moves to Free; `pending` doesn't (tests)
+- [x] An older event arriving after a newer one doesn't undo it (tests)
 
 ## Tests (fixture payloads in the test file, signed in the test)
 
