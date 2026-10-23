@@ -5,8 +5,8 @@
   "yearly": null,
   "gst": null,
   "trialDays": null,
-  "refund": null,
-  "refundDays": null,
+  "refund": "If Pro isn’t for you, email us within 7 days of your first payment and we’ll refund it in full, no reason asked. After that, a month that has started isn’t refunded; cancel any time and you won’t be charged again. A charge made by mistake (charged twice, or charged after you cancelled) is always refunded in full.",
+  "refundDays": 14,
   "methods": null,
   "contact": "hello@pehchanthetraveller.com"
 }
