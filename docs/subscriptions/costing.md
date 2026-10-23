@@ -363,7 +363,7 @@ Members needed at each price, GST on top / GST inside. The AI share of `F` scale
 
 | Risk | Effect | Safeguard | Status |
 |---|---|---|---|
-| `CRON_SECRET` leaks | Unlimited manual sweeps: $21 to $107 per 100 | A monthly spend limit and alert in the Anthropic Console; cap manual sweeps a day in code | Console: **owner to check**. Code: needs approval |
+| `CRON_SECRET` leaks | Unlimited manual sweeps: $21 to $107 per 100 | A monthly spend limit and alert in the Anthropic Console; cap manual sweeps a day in code | Console: DEPLOYMENT.md says to set about $50 a month; whether it is set is **not verified**. Code: planned |
 | `RADAR_MODEL` set to a dearer model | Every sweep costs more | Note the cost before changing it; or have the code accept only listed models | Process only |
 | More sweeps than planned (cron overlap, retries) | Up to ₹3,620 a month at 6 a day | Count sweeps for a week (measurement checklist) | Not measured |
 | A worst-case sweep | Up to $1.07 each | A spend alert in the Console; watch `usage` in the run logs | Not set up |
@@ -403,7 +403,8 @@ Not answered here. Ask a chartered accountant in India:
 - [ ] Price chosen, and the GST question answered by a CA.
 - [ ] Vercel Pro (Hobby is non-commercial only).
 - [ ] Resend Pro, or keep Pro under about 15 members.
-- [ ] A monthly spend limit and an alert set in the Anthropic Console.
+- [ ] A monthly spend limit and an alert set in the Anthropic Console. DEPLOYMENT.md suggests about $50 a month. That
+      covers 6 sweeps a day ($38.30), but a month of worst-case sweeps ($163) would hit it and stop the sweeps.
 - [ ] A live Razorpay plan at the chosen price in `RAZORPAY_PLAN_ID` on Production, the same as `/pricing/`. The ₹99
       test plan is not used.
 - [ ] The Razorpay webhook is Enabled for the live account, with `RAZORPAY_WEBHOOK_SECRET` set on Production.
