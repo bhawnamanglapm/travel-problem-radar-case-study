@@ -140,7 +140,7 @@ check(fns.length <= 12, `at most 12 functions in api/, Hobby's limit (${fns.leng
 // Checkout and cancel are actions on /api/account (T20); the Razorpay webhook (T21) is the one payments function.
 check(existsSync("api/razorpay-webhook.js"), "api/razorpay-webhook.js exists (subscription events from Razorpay)");
 check(fns.length === 9, `9 functions in api/ after T21 (${fns.length})`);
-for (const f of ["subscribe/index.html", "manage/index.html", "signin/index.html", "signup/index.html", "live/index.html"]) {
+for (const f of ["subscribe/index.html", "manage/index.html", "signin/index.html", "signup/index.html", "live/index.html", "pricing/index.html"]) {
   const t = existsSync(f) ? readFileSync(f, "utf8") : "";
   check(t.includes('if (/\\.github\\.io$/.test(location.hostname)) location.replace("https://travel-problem-radar.vercel.app" + location.pathname'), `${f} sends a GitHub Pages visit to the Vercel copy (Pages has no /api/)`);
 }
@@ -173,11 +173,43 @@ check(!draftLegal.some((s) => [page, subPage, manPage, inPage, upPage].some((t) 
 if (shippedLegal.includes("privacy")) check([inPage, upPage].every((t) => t.includes('href="../legal/privacy/"')) && page.includes('href="https://travel-problem-radar.vercel.app/legal/privacy/"'), "the home, sign-in and sign-up pages link the privacy policy");
 if (legalShipped) check(/^scripts\/\*$/m.test(readFileSync(".vercelignore", "utf8")) && /^!scripts\/fill-legal\.mjs$/m.test(readFileSync(".vercelignore", "utf8")), ".vercelignore keeps scripts/fill-legal.mjs, which the build runs");
 
+// 4e. Plan facts (T23, T24): Pro's price, GST, refund rule and the rest live in plan.json and are filled in at
+// build time by scripts/fill-plan.mjs. A page ships only once plan.json has every value it uses.
+const fillPlan = await import("./fill-plan.mjs");
+const plan = JSON.parse(readFileSync("plan.json", "utf8"));
+const planErrs = fillPlan.planErrors(plan);
+check(planErrs.length === 0, `plan.json is valid${planErrs.length ? " (" + planErrs.join("; ") + ")" : ""}`);
+check(/node scripts\/fill-plan\.mjs public && node scripts\/fill-legal\.mjs public/.test(buildCmd), "the build fills plan.json's facts (fill-plan) before the policy pages' (fill-legal)");
+check(/^!scripts\/fill-plan\.mjs$/m.test(readFileSync(".vercelignore", "utf8")), ".vercelignore keeps scripts/fill-plan.mjs, which the build runs");
+const copied = ((buildCmd.match(/\bcp -r ([^&]*) public\/(?:\s|&|$)/) || [])[1] || "").split(/\s+/).filter(Boolean);
+const pricingShipped = copied.includes("pricing");
+const shippedPages = [...copied.flatMap((d) => (d.endsWith(".html") ? [d] : [`${d}/index.html`])), ...shippedLegal.map((s) => `legal/${s}/index.html`)].filter((f) => existsSync(f));
+check(shippedPages.includes("index.html") && shippedPages.includes("manage/index.html"), `the shipped pages are worked out from the build command (${shippedPages.length})`);
+const notReady = shippedPages.map((f) => [f, fillPlan.fill(readFileSync(f, "utf8"), plan).missing]).filter(([, m]) => m.length);
+check(planErrs.length > 0 || notReady.length === 0, `every shipped page has plan.json values for the slots it uses${notReady.length ? " (" + notReady.map(([f, m]) => f + ": " + m.join(", ")).join("; ") + ")" : ""}`);
+const pricePage = existsSync("pricing/index.html") ? readFileSync("pricing/index.html", "utf8") : "";
+check(pricePage.length > 0 && !/<script[^>]*\ssrc=|<link[^>]*rel=["']?stylesheet|@import|url\(\s*["']?https?:/i.test(pricePage) && !/\.innerHTML\s*=/.test(pricePage), "pricing/index.html exists, is self-contained and never uses innerHTML");
+check(/Gathered by an AI model with web search\. Items are not verified/.test(pricePage) && /aren&rsquo;t checked by a person/.test(pricePage) && /no uptime promise/.test(pricePage), "pricing/index.html has the AI notice and says what Pro doesn't promise (T23 B2)");
+check(/fetch\("\/api\/session\?action=me"\)/.test(pricePage) && /a\.href = "\.\.\/manage\/"/.test(pricePage) && /id="getpro" href="\.\.\/signup\/\?pro=1"/.test(pricePage), "pricing/index.html: Get Pro goes to sign-up with Pro ticked, or to the account page when signed in");
+check(/<th scope="col">Free<\/th><th scope="col">Pro<\/th>/.test(pricePage), "pricing/index.html shows Free and Pro side by side in one table (T23 B1, C1)");
+// T23 rules a script can check, on every shipped page (and pricing, which ships once filled), in both versions.
+const SAMPLE_PLAN = { ...plan, monthly: 299, gst: "GST included", trialDays: 0, refund: "Sample refund rule.", refundDays: 7, methods: ["cards"] }; // only for this check
+const ruled = [...new Set([...shippedPages, "pricing/index.html", "signup/index.html"])].filter((f) => existsSync(f));
+for (const f of ruled) {
+  const t = readFileSync(f, "utf8");
+  const versions = [fillPlan.fill(t, { ...SAMPLE_PLAN, paid: false }).out, fillPlan.fill(t, { ...SAMPLE_PLAN, paid: true }).out];
+  check(!/\bhurry\b|limited time|most popular|only \d+ left|\bcountdown\b/i.test(t), `${f}: no false urgency or popularity claims (T23 B3, B4)`);
+  check(versions.every((v) => !/₹\s?[1-9]/.test(v) || /renews/i.test(v)), `${f}: a page that shows a price also says it renews (T23 A1, A2)`);
+  check(t.split("<table").slice(1).every((tb) => /scope="(row|col)"/.test(tb.split("</table>")[0])), `${f}: every table has <th scope> headers (T23 C5)`);
+  check(!/<input[^>]*(name="wantsPro"|id="upPro")[^>]*\schecked\b/.test(t), `${f}: the Pro box is never ticked in the page itself (T23 B6)`);
+}
+check(!pricingShipped || !draftLegal.some((s) => pricePage.includes(`legal/${s}/`)), "pricing/index.html, once shipped, links no policy page the build doesn't ship");
+
 const subLinks = [...page.matchAll(/href="([^"]*subscribe[^"]*)"/g)].map((m) => m[1]);
 check(subLinks.length > 0 && subLinks.every((h) => h.startsWith("https://travel-problem-radar.vercel.app/subscribe/")), `index.html links to the subscribe page, only by the absolute Vercel URL (GitHub Pages has no /api/)${subLinks.length ? " (" + subLinks.join(", ") + ")" : " (no link)"}`);
 check(/<a href="\.\.\/subscribe\/">Plans<\/a>/.test(livePage), "live/index.html links to the subscribe page");
 // Customer pages: the back link says Home (the home page is no longer a case study), and the board has no demo or repo links.
-const backPages = ["live", "demo", "signup", "signin", "subscribe", "manage"];
+const backPages = ["live", "demo", "signup", "signin", "subscribe", "manage", "pricing"];
 check(backPages.every((d) => readFileSync(`${d}/index.html`, "utf8").includes("&larr; Home</a>")) && !backPages.some((d) => readFileSync(`${d}/index.html`, "utf8").includes("Case study")), "every sub-page's back link says Home, not Case study");
 check(!/Sample demo|github\.com/.test(livePage), "live/index.html has no Sample demo or repo link");
 // Account pages are findable: the home page links sign-in (absolute, as above); the board shows Sign in or Account.
