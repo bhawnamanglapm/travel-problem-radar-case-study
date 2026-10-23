@@ -522,6 +522,8 @@ Not answered here. Ask a chartered accountant in India:
 - [ ] Contact, Terms and Refunds published. The build ships only Privacy today
       ([pricing-and-about-pages.md](pricing-and-about-pages.md)).
 - [ ] A written manual step for refunds and chargebacks: refund in Razorpay, then revoke Pro with the admin script.
+      The refund rule gives the first payment back within 7 days, so the step says how to tell a first payment from a
+      renewal. Each refund loses Razorpay's fee, about ₹10 of ₹299.
 
 **P1: in the first month**
 - [ ] Count sweeps a day (measurement 1) and read real Anthropic spend (measurement 2).

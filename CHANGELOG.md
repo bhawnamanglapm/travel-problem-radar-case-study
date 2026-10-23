@@ -5,6 +5,9 @@ grouped by date.
 
 ## 2026-10-23
 
+- `/about/` is live, with who runs the site (from the owner's resume). Every shipped footer now starts with About:
+  About · Plans · Contact · Privacy. The refund rule is set in `plan.json` (first payment back within 7 days, mistakes
+  always refunded, within 14 days); it shows once the refunds and pricing pages ship.
 - A footer on every page: About · Pricing · Contact · Terms · Privacy · Refunds, listing only the pages that ship.
   Today that's Plans (`/subscribe/`, standing in for Pricing), Contact (the email address, standing in for the
   contact page) and Privacy. It's added to the home, sign-up, sign-in, subscribe, manage, live and demo pages and the
