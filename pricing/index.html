@@ -63,7 +63,7 @@
     <tbody>
       <tr><th scope="row">Price</th>
         <td data-plan="Free"><span class="price">₹0</span>No card needed.</td>
-        <td data-plan="Pro"><span class="price">{{PRO_PRICE}}</span>{{PRO_GST}}. Renews automatically every month until you cancel.</td></tr>
+        <td data-plan="Pro"><span class="price">{{PRO_PRICE}}</span> The full price, {{PRO_GST}}. Renews automatically every month until you cancel.</td></tr>
       <tr><th scope="row">Email</th>
         <td data-plan="Free">One a day, after the first sweep of the UTC day (about 05:47 IST): how many findings in each category in the last 24 hours, and their headlines.</td>
         <td data-plan="Pro">One after every sweep, about 5 a day.</td></tr>
@@ -90,7 +90,7 @@
   <!-- /when -->
   <ul>
     <li>You pay on your account page, after confirming your email. Payments are handled by Razorpay.</li>
-    <li>Pro renews automatically every month until you cancel. You approve the first payment; later monthly payments are taken under that approval, and you&rsquo;re told before each one.</li>
+    <li>Pro renews automatically every month until you cancel. You approve the first payment; later monthly payments are taken under that approval, and before each one you&rsquo;re notified at least 24 hours ahead, as the RBI&rsquo;s e-mandate rules require (for cards, by your bank).</li>
     <li>Pro starts a minute or two after you pay, and your account page shows the next renewal date.</li>
     <li>Cancel any time on your account page: two clicks, no reason asked. Pro stays on until the end of the month you&rsquo;ve paid for, then the account is Free.</li>
     <li>If a renewal payment fails, Pro stays on while Razorpay tries again. If it stops trying, the account goes back to Free and nothing more is charged.</li>
@@ -112,7 +112,7 @@
   <h2>Questions</h2>
   <p>Email <a href="mailto:{{PRO_CONTACT}}">{{PRO_CONTACT}}</a>.</p>
   <p class="small">Gathered by an AI model with web search. Items are not verified; check each source link.</p>
-  <footer><nav class="site-foot" aria-label="Site"><a href="../">Home</a> &middot; <a href="../about/">About</a> &middot; <a href="../pricing/">Pricing</a> &middot; <a href="../legal/contact/">Contact</a> &middot; <a href="../legal/terms/">Terms</a> &middot; <a href="../legal/privacy/">Privacy</a> &middot; <a href="../legal/refunds/">Refunds</a></nav></footer>
+  <footer><nav class="site-foot" aria-label="Site"><a href="../">Home</a> &middot; <a href="../about/">About</a> &middot; <a href="../pricing/">Pricing</a> &middot; <a href="../legal/contact/">Contact</a> &middot; <a href="../legal/privacy/">Privacy</a> &middot; <a href="../legal/refunds/">Refunds</a></nav></footer>
 </main>
 <script>
   // Signed in, Pro starts on the account page; signed out (or if this check fails), on the sign-up page with Pro ticked.
