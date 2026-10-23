@@ -5,6 +5,8 @@ grouped by date.
 
 ## 2026-10-23
 
+- Manual sweeps are capped at 3 a UTC day (`MAX_MANUAL_SWEEPS_PER_DAY`; `0` stops them). A call past the cap gets
+  `429` and runs nothing, so a leaked `CRON_SECRET` can't run up the Anthropic bill. Scheduled sweeps are unchanged.
 - New `docs/subscriptions/costing.md`: what a sweep ($0.21, measured over 5 production runs), an email, a live-board
   view and a card payment (3.42%) cost, the fixed monthly bill (about ₹6,797 with Vercel Pro and Resend Pro) and how
   many Pro subscribers cover it at four prices. New plan for the Pricing and About pages Razorpay's review needs;

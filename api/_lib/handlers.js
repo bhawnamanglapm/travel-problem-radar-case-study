@@ -7,9 +7,16 @@ import { randomBytes as cryptoRandomBytes } from "node:crypto";
 import { bearerOk, sendJson } from "./http.js";
 import { deliverToSubscribers } from "./subscriber-delivery.js";
 import { readSession } from "./session.js";
-import { effectivePlan } from "./subscribers.js";
+import { countEvents, effectivePlan, recordEvent, utcDay } from "./subscribers.js";
 
 const DEFAULT_MODEL = "claude-sonnet-5-5";
+// Manual runs a UTC day (MAX_MANUAL_SWEEPS_PER_DAY; "0" turns them off). Each costs a full sweep,
+// so a leaked CRON_SECRET can't run up the Anthropic bill. Scheduled calls have the 2-hour gap instead.
+export const DEFAULT_MAX_MANUAL_SWEEPS_PER_DAY = 3;
+const positiveInt = (v) => {
+  const n = Number(String(v ?? "").trim());
+  return String(v ?? "").trim() !== "" && Number.isInteger(n) && n > 0 ? n : null;
+};
 // No subscriber send starts after this long into the run: 60 s short of the 300 s function limit in
 // vercel.json, which leaves time to save state and reply.
 export const SUBSCRIBER_DEADLINE_MS = 240_000;
@@ -26,6 +33,20 @@ export function makeSweepHandler({ env, storage, fetchFn, now, randomBytes = cry
     const scheduled = /^vercel-cron\//.test(req.headers["user-agent"] || "") || Boolean(req.headers["x-vercel-cron-schedule"])
       || req.headers["x-sweep-trigger"] === "scheduled";
     const trigger = scheduled ? "scheduled" : "manual";
+    if (!scheduled) {
+      // Counted before the run, so a failed or empty one (still billed) uses up a run too. Two calls at
+      // the same instant can both get through, so the limit is approximate; it is a cost guard.
+      const raw = String(env.MAX_MANUAL_SWEEPS_PER_DAY ?? "").trim();
+      const maxPerDay = raw === "0" ? 0 : positiveInt(raw) ?? DEFAULT_MAX_MANUAL_SWEEPS_PER_DAY;
+      let ranToday;
+      try { ranToday = await countEvents(storage, { day: utcDay(now()), type: "manualsweep" }); } catch (e) { ranToday = Infinity; }
+      if (ranToday >= maxPerDay) {
+        return sendJson(res, 429, { model, trigger, status: "limited", error: `manual sweep limit reached: ${maxPerDay} a day (UTC); nothing was run. Wait until 00:00 UTC or raise MAX_MANUAL_SWEEPS_PER_DAY` });
+      }
+      if (!(await recordEvent(storage, "manualsweep", { now: now(), randomBytes }))) {
+        return sendJson(res, 503, { model, trigger, error: "couldn't record the manual run; nothing was run" });
+      }
+    }
     const scan = (cat) => scanCategory(cat, { fetchFn, apiKey: env.ANTHROPIC_API_KEY, model });
     const liveUrl = env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${env.VERCEL_PROJECT_PRODUCTION_URL}/live/` : "";
     // Slack and email go out together. Each reports its own outcome and neither ever throws.

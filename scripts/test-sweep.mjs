@@ -171,6 +171,62 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   check(ghButton.res.json().trigger === "manual" && ghButton.res.json().status === "saved", "GitHub Actions \"Run workflow\" counts as manual and sweeps");
 }
 
+// ---- manual runs: at most MAX_MANUAL_SWEEPS_PER_DAY a UTC day (default 3), counted before they run
+{
+  const env = { CRON_SECRET: "abc123", ANTHROPIC_API_KEY: "k", SLACK_WEBHOOK_URL: "https://webhook.example/x" };
+  const day0 = Date.UTC(2027, 0, 15, 8);
+  const one = { traveler_pain: [item(1)], gov_policy: [], web_app: [], industry: [] };
+  const run = async ({ st, headers = { authorization: "Bearer abc123" }, e = env, t = day0, byCat = one }) => {
+    const calls = [];
+    const anthropic = fakeFetch(byCat);
+    const fetchFn = async (url, init) => { calls.push(url); return url === env.SLACK_WEBHOOK_URL ? { ok: true, status: 200, text: async () => "ok" } : anthropic(url, init); };
+    const h = makeSweepHandler({ env: e, storage: st, fetchFn, now: () => t, log: () => {} });
+    const res = mockRes(); await h({ headers }, res); return { res, calls };
+  };
+  const events = (st) => [...st.m.keys()].filter((k) => k.startsWith("radar:event:") && k.includes("-manualsweep-"));
+
+  const st = memStorage();
+  const codes = [];
+  for (let i = 0; i < 3; i++) codes.push((await run({ st, t: day0 + i * 60_000 })).res.code);
+  const fourth = await run({ st, t: day0 + 3 * 60_000 });
+  check(codes.every((c) => c === 200) && events(st).length === 3, "manual: 3 runs on one UTC day sweep, each recorded");
+  check(fourth.res.code === 429 && fourth.res.json().status === "limited" && fourth.calls.length === 0 && events(st).length === 3,
+    "manual: the 4th that day gets 429, calls neither Anthropic nor Slack, and isn't recorded");
+  check(/MAX_MANUAL_SWEEPS_PER_DAY/.test(fourth.res.json().error) && !fourth.res.body.includes("abc123"), "manual: the 429 says how to raise the limit and never echoes the secret");
+  const nextDay = await run({ st, t: day0 + 24 * 3600 * 1000 });
+  check(nextDay.res.code === 200 && nextDay.res.json().status === "saved", "manual: the next UTC day allows runs again");
+
+  const cron = { authorization: "Bearer abc123", "user-agent": "vercel-cron/1.0" };
+  const gh = { authorization: "Bearer abc123", "x-sweep-trigger": "scheduled" };
+  const sched = await run({ st, headers: cron, t: day0 + 4 * 3600 * 1000 });
+  const ghSched = await run({ st, headers: gh, t: day0 + 7 * 3600 * 1000 });
+  check(sched.res.json().status === "saved" && ghSched.res.json().status === "saved" && events(st).length === 4,
+    "scheduled calls (Vercel cron, GitHub schedule) are not limited and not counted");
+
+  const off = await run({ st: memStorage(), e: { ...env, MAX_MANUAL_SWEEPS_PER_DAY: "0" } });
+  check(off.res.code === 429 && off.calls.length === 0, "MAX_MANUAL_SWEEPS_PER_DAY=0 refuses every manual run");
+  const st1 = memStorage();
+  const a = await run({ st: st1, e: { ...env, MAX_MANUAL_SWEEPS_PER_DAY: "1" } });
+  const b = await run({ st: st1, e: { ...env, MAX_MANUAL_SWEEPS_PER_DAY: "1" } });
+  check(a.res.code === 200 && b.res.code === 429, "MAX_MANUAL_SWEEPS_PER_DAY=1 allows one");
+  const st9 = memStorage();
+  const junk = [];
+  for (let i = 0; i < 4; i++) junk.push((await run({ st: st9, e: { ...env, MAX_MANUAL_SWEEPS_PER_DAY: "lots" } })).res.code);
+  check(junk.join() === "200,200,200,429", "an invalid MAX_MANUAL_SWEEPS_PER_DAY falls back to 3");
+
+  const stF = memStorage();
+  const allFail = { traveler_pain: "http", gov_policy: "http", web_app: "http", industry: "http" };
+  const failed = await run({ st: stF, byCat: allFail });
+  check(failed.res.code === 502 && events(stF).length === 1, "manual: a run where every category fails still uses one of the day's runs");
+
+  const noList = { ...memStorage(), list: async () => { throw new Error("list failed"); } };
+  const unlisted = await run({ st: noList });
+  check(unlisted.res.code === 429 && unlisted.calls.length === 0, "manual: if the day's runs can't be counted, nothing runs");
+  const noWrite = { ...memStorage(), set: async () => { throw new Error("write failed"); } };
+  const unrecorded = await run({ st: noWrite });
+  check(unrecorded.res.code === 503 && unrecorded.calls.length === 0, "manual: if the run can't be recorded, nothing runs");
+}
+
 // ---- Slack delivery after the sweep
 {
   const hook = "https://webhook.example/not-a-real-secret"; // fake: real webhooks live only in Vercel
@@ -224,7 +280,7 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   check(/^\*Travel Problem Radar: digest\*/.test(sched.posts[0].text) && /digest \(manual run\)/.test(text), "digest title says whether the timer or a manual run produced it");
 
   const broken = { get: async () => null, set: async () => { throw new Error("Vercel Blob: No blob credentials found"); }, del: async () => {} };
-  const err = await run({ st: broken });
+  const err = await run({ st: broken, headers: cron });
   check(err.res.code === 500 && err.posts.length === 1 && /No blob credentials/.test(err.posts[0].text), "sweep error: failure notice posted, still 500");
 }
 
@@ -305,7 +361,7 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   check(!/manual run/.test(sched.sent[0].body.subject) && /^Travel Problem Radar: digest$/m.test(sched.sent[0].body.text), "scheduled digest is not marked manual");
 
   const broken = { get: async () => null, set: async () => { throw new Error("Vercel Blob: No blob credentials found"); }, del: async () => {} };
-  const err = await run({ st: broken });
+  const err = await run({ st: broken, headers: cron });
   check(err.res.code === 500 && err.res.json().email === "sent" && /No blob credentials/.test(err.sent[0].body.text), "sweep error: failure email sent, still 500");
 }
 
