@@ -27,7 +27,8 @@ The owner's own Slack post and `EMAIL_TO` email stay exactly as they are today.
 
 ## How the work is split
 
-The work is in three phases. Each phase ships on its own and leaves the site working.
+The work is in phases. Each phase ships on its own and leaves the site working. Phase 3 (T23 to T27, added
+2026-10-23) shows Pro's price and terms on the site and takes Razorpay live.
 
 ```mermaid
 flowchart TD
@@ -64,7 +65,14 @@ flowchart TD
     T19["T19 Razorpay library"]
     T20["T20 Manage page, checkout, cancel"]
     T21["T21 Razorpay webhook"]
-    T22["T22 Pro lifecycle, go-live"]
+    T22["T22 Pro expiry, paid unsubscribe, key safety"]
+  end
+  subgraph P3["Phase 3: showing Pro and going live"]
+    T23["T23 Display rules + owner inputs"]
+    T24["T24 /pricing/ + plan.json"]
+    T25["T25 /about/, footer, policy pages"]
+    T26["T26 Pro wording + pre-checkout summary"]
+    T27["T27 Test run + go-live"]
   end
   T00 --> T04
   T01 --> T02
@@ -80,6 +88,9 @@ flowchart TD
   T12 --> T16 --> T17 --> T18
   T16 --> T20
   T17 & T18 --> T22
+  T23 --> T24 & T25
+  T23 & T24 --> T26
+  T22 & T24 & T25 & T26 --> T27
 ```
 
 **Pro before payments.** Phase 1 builds both plans. Until Phase 2, the owner grants Pro by hand with the admin
@@ -112,7 +123,12 @@ themselves. It is built only if the Phase 1 numbers pass the owner's gate ([pric
 | [T19](T19-razorpay-library.md) | `api/_lib/razorpay.js`: signatures and API calls | Dev | M | T15 |
 | [T20](T20-manage-page-and-checkout.md) | `/manage/` page, checkout, cancel | Dev | L | T16, T19 |
 | [T21](T21-razorpay-webhook.md) | `POST /api/razorpay-webhook` | Dev | M | T19, T20 |
-| [T22](T22-pro-lifecycle-and-go-live.md) | Pro expiry, paid unsubscribe, go-live | Dev + Owner | M | T17, T18, T20, T21 |
+| [T22](T22-pro-lifecycle-and-go-live.md) | Pro expiry, paid unsubscribe, key safety | Dev | M | T17, T18, T20, T21 |
+| [T23](T23-pro-display-standards.md) | How Pro is shown: transparency and UI/UX rules, owner inputs | Owner + Dev | S | — |
+| [T24](T24-pricing-page.md) | `/pricing/` page; `plan.json` as the one source for price and refund rule | Dev | M | T23 |
+| [T25](T25-about-footer-legal.md) | `/about/`, footer on every page, ship terms, refunds, contact | Owner + Dev | M | T23 |
+| [T26](T26-pro-copy-and-checkout-summary.md) | Pro wording on existing pages; summary before checkout | Dev | M | T23, T24 |
+| [T27](T27-razorpay-test-run-and-go-live.md) | Razorpay test-mode run and go-live | Owner + Dev | M | T22, T24, T25, T26 |
 
 ## Decisions to settle before or during the build (OWNER INPUT NEEDED)
 

@@ -3,6 +3,11 @@
 > **Plan only, nothing here is built.** Written 2026-10-23. This is step 2 of the order agreed for paid Pro:
 > T21 docs → **Pricing and About pages** → T22 code → go-live by the owner. The build waits for the owner's answers
 > under "Owner inputs".
+>
+> **Split into tasks 2026-10-23:** [T23](tasks/T23-pro-display-standards.md) (rules and owner inputs),
+> [T24](tasks/T24-pricing-page.md) (`/pricing/`), [T25](tasks/T25-about-footer-legal.md) (`/about/`, footer, policy
+> pages), [T26](tasks/T26-pro-copy-and-checkout-summary.md) (Pro wording elsewhere) and
+> [T27](tasks/T27-razorpay-test-run-and-go-live.md) (go-live). Where they differ from this plan, the tasks win.
 
 ## Why
 
@@ -91,7 +96,8 @@ Then `npm run check` and `npm test`.
 
 **The price on `/pricing/` must equal the amount of the live Razorpay Plan in `RAZORPAY_PLAN_ID`.**
 - The test plan on `staging` is ₹99. That is a test amount only.
-- A line saying so goes into T22's go-live checklist, next to creating the live plan.
+- A line saying so goes into the go-live checklist (now [T27](tasks/T27-razorpay-test-run-and-go-live.md)), next to
+  creating the live plan.
 - If the price changes later, these come in this order:
   1. create a new Plan in Razorpay for the new amount;
   2. update `RAZORPAY_PLAN_ID`;
