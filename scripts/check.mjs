@@ -205,6 +205,18 @@ for (const f of ruled) {
   check(t.split("<table").slice(1).every((tb) => /scope="(row|col)"/.test(tb.split("</table>")[0])), `${f}: every table has <th scope> headers (T23 C5)`);
   check(!/<input[^>]*(name="wantsPro"|id="upPro")[^>]*\schecked\b/.test(t), `${f}: the Pro box is never ticked in the page itself (T23 B6)`);
 }
+// T26: once Pro is paid, no page still calls it free or switched on by hand; the account page states the
+// price, the renewal and the refund rule above the pay button; the live board's locked panels get the price.
+const stillFree = ruled.filter((f) => /being tested|switched on by hand/i.test(fillPlan.fill(readFileSync(f, "utf8"), { ...SAMPLE_PLAN, paid: true }).out));
+check(stillFree.length === 0, `with Pro paid, no page says Pro is free while being tested or switched on by hand (T26)${stillFree.length ? " (" + stillFree.join(", ") + ")" : ""}`);
+const manPaid = fillPlan.fill(manPage, { ...SAMPLE_PLAN, paid: true }).out;
+check(manPage.includes("{{PRO_PRICE}}, {{PRO_GST}}.</strong> Renews automatically every month until you cancel") && manPage.includes("<p>{{PRO_REFUND}}</p>")
+  && />Pay with Razorpay</.test(manPaid) && !/id="req"/.test(manPaid) && /if \(req\) req\.addEventListener/.test(manPage),
+  "manage/index.html, with Pro paid: price, GST, renewal and the refund rule above Pay with Razorpay, and no Request Pro (T26)");
+check(manPage.includes('a.billing === "pending"') && manPage.includes('a.billing === "halted"') && /"payment_retrying"/.test(manPage) && /ondismiss/.test(manPage),
+  "manage/index.html explains a failed renewal, offers no second checkout while Razorpay retries, and says when the payment window closes (T26)");
+check(livePage.includes('<template data-when="paid"><meta name="tpr-pro-price" content="{{PRO_PRICE}}, {{PRO_GST}}. Renews automatically') && liveBundle.includes("tpr-pro-price") && liveBundle.includes("../pricing/"),
+  "live: in a paid build the locked panels show Pro's price and renewal, and link /pricing/ (T26)");
 check(!pricingShipped || !draftLegal.some((s) => pricePage.includes(`legal/${s}/`)), "pricing/index.html, once shipped, links no policy page the build doesn't ship");
 // The policy pages take Pro's facts from plan.json too, so they say what /pricing/ says (T23 A1, A2, A4).
 const termsPage = readFileSync("legal/terms/index.html", "utf8"), refundsPage = readFileSync("legal/refunds/index.html", "utf8");
