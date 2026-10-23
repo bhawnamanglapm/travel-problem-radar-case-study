@@ -3,12 +3,15 @@
 What one sweep, one email, one live-board view and one payment cost, what that adds up to at different sizes, and
 what the Pro price has to cover. **The price itself is the owner's decision**; this doc gives the floor and the risks.
 
-- Written 2026-10-23, then **revised the same day after two audits against the code** (see
+- Written 2026-10-23, then **revised the same day after three audits** (see
   [What the audits changed](#what-the-audits-changed)).
 - Every provider price was read from the provider's page on **2026-10-23**, and each one names its source.
 - Dollar figures are converted at **₹94.50 to $1**, the rupee's early-trade rate on 22 Oct 2026
   ([Deccan Herald][dh]). Other quotes that day were 94.3 to 94.8.
 - A month is **30.4 days**.
+- **Rounding.** Sums use unrounded dollar figures. Rupee amounts are converted from those and shown to the nearest
+  rupee. `F`, the monthly budget, is ₹6,796.55 rounded up to **₹6,797**, and every break-even and surplus uses that
+  figure. Member counts are rounded up.
 - Recheck the prices and the rate before setting or changing the price.
 
 **How sure each figure is.** Every figure carries one of these labels:
@@ -25,11 +28,15 @@ what the Pro price has to cover. **The price itself is the owner's decision**; t
 ## Summary
 
 - **The cost is almost all fixed.** About ₹6,797 a month with Vercel Pro and Resend Pro. The AI sweep is ₹3,017 of
-  that, and it costs the same for 1 subscriber or 1,000.
+  that. At a set number of sweeps a day, the AI cost doesn't change with the number of subscribers. The Resend plan
+  steps up with emails, so with users, and Vercel usage grows a little.
 - **No user can make the AI run.** Only the holder of `CRON_SECRET` can trigger a sweep, and manual runs are capped
-  at 3 a UTC day. A heavy reader costs about ₹1 a month. So a flat subscription fits the cost; credits or
-  pay-per-run would charge for something that costs nothing.
-- **Break-even at ₹199 a month is 36 Pro members**, or 42 if GST is inside the price. At ₹299 it is 24 or 28.
+  at about 3 a UTC day. A heavy reader adds about ₹1 a month in function calls and Blob reads; CPU and data transfer
+  aren't measured. So a flat subscription fits the cost; credits or pay-per-run would charge for something that
+  costs nothing.
+- **Break-even at ₹199 a month is 36 Pro members**, or 42 if GST is inside the price. At ₹299 it is 24 or 28. These
+  cover the running costs in `F` only, not the [business costs left out](#business-costs-not-included).
+- **No one has paid yet.** There is no demand data, so these costs set a floor, not the price.
 - **The biggest risks are on the fixed side**: more sweeps than planned, a dearer model, a leaked `CRON_SECRET`, and
   a high-cost sweep, about 5 times the measured one. A 6th daily sweep also sends every Pro member a 6th email.
 - **Not known yet**: tax treatment, the UPI AutoPay fee, chargeback fees, the domain cost, and how many sweeps
@@ -111,7 +118,7 @@ sweep count also sets how many emails each Pro member gets (see [One email](#one
 |---|---|---|---|
 | 4 | 121.6 | 25.54 | 2,413 |
 | **5 (used below)** | **152** | **31.92** | **3,017** |
-| 6 | 182.4 | 38.30 | 3,620 |
+| 6 | 182.4 | 38.31 | 3,620 |
 
 ### High-cost scenario
 
@@ -127,7 +134,7 @@ is a real ceiling.
 | Searches | 12 | Code | $0.120 |
 | Output | 64,000 tokens | Code | $0.640 |
 | Input | ≈ 157,000 tokens: 12 × the measured 13,093 input tokens per search | Estimate | $0.314 |
-| **One sweep** | | | **$1.07 (≈ ₹101)** |
+| **One sweep** | | | **$1.07 (≈ ₹102)** |
 | **A month at 152 sweeps** | | | **$163 (≈ ₹15,430)** |
 
 That's 5 times the measured average. None of the 5 measured runs came close.
@@ -141,7 +148,10 @@ That's 5 times the measured average. None of the 5 measured runs came close.
 - **Code.** A call that gets an HTTP error from Anthropic records no usage. Whether Anthropic bills such a call is
   **unknown**.
 - **Code.** There are no retries. A failure costs at most the sweep it happened in.
-- **Cost per successful sweep** = cost per sweep ÷ the share that succeed. Billed failures so far: 0 of 5.
+- **So far:** of the 2 failed attempts, neither reached Anthropic. The 5 successful runs give the usage sample above.
+  Whether a future failure is billed depends on how it fails (see the HTTP-error point above).
+- **Cost per successful sweep** = total billed spend across all attempts, failed ones included ÷ the number of
+  successful sweeps.
 
 ## One email
 
@@ -155,6 +165,9 @@ That's 5 times the measured average. None of the 5 measured runs came close.
   (`api/_lib/subscription-handlers.js`). In production `MAX_CONFIRMS_PER_DAY` is set, so the confirmation cap there
   may not be 10; its value wasn't read. `MAX_SIGNINS_PER_DAY` isn't set, so sign-ins use the default 50.
 - All of these come from the same Resend account.
+
+**Estimate.** The counts below are the sends the code would attempt, not delivered emails. A Pro member whose
+categories had nothing in a sweep gets no email, and a send can fail. Resend's dashboard has the real count.
 
 | Who | Emails a month, 5 sweeps a day | 6 sweeps a day |
 |---|---|---|
@@ -187,7 +200,8 @@ daily limit**, so budget for it from the first paying member.
 
 ## One live-board view
 
-Estimated from the code. Vercel's usage pages weren't read. With `BOARD_PAYWALL=1`, as in production:
+Estimated from the code. Vercel's usage pages weren't read. **This is the cost of function calls and Blob reads
+only**, not the full cost of a view. With `BOARD_PAYWALL=1`, as in production:
 
 | Page and visitor | Function calls | Blob reads |
 |---|---|---|
@@ -195,8 +209,9 @@ Estimated from the code. Vercel's usage pages weren't read. With `BOARD_PAYWALL=
 | `/live/`, signed-in Pro | 3 (`/api/data` for `seenIds`, history and the latest sweep) | 4 (`seenIds` is refused with `400` before any read) |
 | Any page, signed out | 2 to 3 | 0 (no cookie means nothing is read) |
 
-- A signed-in view costs about 3 × $0.60/M + 5 × $0.40/M ≈ **$0.0000038 (≈ ₹0.00036)**.
-- That's **≈ ₹0.36 per 1,000 views**. A very heavy reader, 100 views a day, costs about **₹1.09 a month**.
+- A signed-in view's function calls and Blob reads cost about 3 × $0.60/M + 5 × $0.40/M ≈ **$0.0000038
+  (≈ ₹0.00036)**.
+- That's **≈ ₹0.36 per 1,000 views**. A very heavy reader, 100 views a day, adds about **₹1.09 a month** of them.
 - Each sweep also reads every subscriber record once. At 1,000 records that's about $0.06 a month.
 - **Not measured:** CPU time, data transfer and static-file requests. At this project's size, all are expected to
   stay inside Vercel Pro's $20 credit. Check that on the usage page after the move to Pro.
@@ -228,9 +243,10 @@ C. GST inside         GST payable = price − price ÷ 1.18
 ```
 
 - Case B with the fee's GST claimed back comes to the same net as case A.
-- Below, "GST on top" uses case A's figure and "GST inside" uses case C without the claim. The break-even counts are
-  the same in every case and with or without the claim, except ₹99 with GST inside: 84 instead of 85 if the claim
-  is allowed.
+- **Below, "GST on top" means case B without the claim** (₹190.96 at ₹199), the lower of the two, and "GST inside"
+  means case C without the claim (₹161.83 at ₹199). If the claim turns out to be allowed, the figures rise slightly.
+- At `F` the break-even counts are the same in cases A and B. In some [stress tests](#stress-tests) case B needs
+  one or two more members than case A. With GST inside, ₹99 needs 84 instead of 85 if the claim is allowed.
 - These are before income tax. The prices only illustrate the formula.
 - ₹99 is the price of the test-mode plan on `staging` and must not go live by accident.
 - The fee is a percentage, so a yearly plan pays the same share as a monthly one.
@@ -260,19 +276,33 @@ C. GST inside         GST payable = price − price ÷ 1.18
 | Vercel Pro, 1 seat | 20.00 | 1,890 |
 | **Without Resend Pro** | **51.92** | **4,907** |
 | Resend Pro, 50,000 emails | 20.00 | 1,890 |
-| **With Resend Pro (`F`, used below)** | **71.92** | **6,797** |
+| **With Resend Pro (`F`, used below)** | **71.92** | **6,797** (6,796.55 rounded up) |
 
 **$0:**
 - GitHub Actions, since the repository is public;
 - Slack alerts.
 
-**Not included. Owner inputs, or questions for a tax adviser:**
-- domain renewal (yearly price ÷ 12);
-- tax, and the bank's forex markup on the dollar invoices from Anthropic, Vercel and Resend;
-- an accountant;
-- marketing;
-- the owner's time;
-- income tax.
+**Not included:** the business costs in the [next section](#business-costs-not-included).
+
+## Business costs not included
+
+`F` covers only the services that run the product. These costs are left out because no source for them exists
+yet. **No amounts are guessed here**; each one needs the owner, a provider or a CA.
+
+| Cost | Who can give the figure | Monthly amount |
+|---|---|---|
+| Domain renewal (yearly price ÷ 12) | The registrar | **Unknown** |
+| Bank forex markup on the dollar invoices (Anthropic, Vercel, Resend) | The card or bank statement | **Unknown** |
+| GST on those imported services (reverse charge), if it applies | A CA | **Unknown** |
+| Accountant or bookkeeping | The owner | **Unknown** |
+| Refunds, chargebacks and failed payments | Razorpay, then real history | **Unknown** |
+| Customer support time | The owner | **Unknown** |
+| Marketing and getting customers | The owner | **Unknown** |
+| The owner's time | The owner | **Unknown** |
+| Income tax and other compliance | A CA | **Unknown** |
+
+Once these are known, full business break-even is `members = (F + these costs) / net per member` (see
+[Break-even](#break-even)).
 
 ## Cost by number of users
 
@@ -300,16 +330,17 @@ emails stopped). Prices are ₹199 a month, with Vercel Pro and Resend Pro in ev
 
 | Users | Pro / Free / inactive | Emails a month | Cost a month | Per paying member | Per active user | Net revenue, GST on top | Surplus or shortfall against `F`, GST on top / GST inside |
 |---|---|---|---|---|---|---|---|
-| 10 | 2 / 6 / 2 | 638 | ₹6,797 | ₹3,398 | ₹850 | ₹384 | −₹6,412 / −₹6,473 |
-| 50 | 10 / 30 / 10 | 2,584 | ₹6,797 | ₹680 | ₹170 | ₹1,922 | −₹4,875 / −₹5,178 |
-| 100 | 20 / 60 / 20 | 5,016 | ₹6,797 | ₹340 | ₹85 | ₹3,844 | −₹2,953 / −₹3,560 |
-| 500 | 100 / 300 / 100 | 24,472 | ₹6,797 | ₹68 | ₹17 | ₹19,219 | ₹12,423 / ₹9,387 |
-| 1,000 | 200 / 600 / 200 | 48,792 | ₹6,797 | ₹34 | ₹8 | ₹38,438 | ₹31,642 / ₹25,570 |
+| 10 | 2 / 6 / 2 | 638 | ₹6,797 | ₹3,399 | ₹850 | ₹382 | −₹6,415 / −₹6,473 |
+| 50 | 10 / 30 / 10 | 2,584 | ₹6,797 | ₹680 | ₹170 | ₹1,910 | −₹4,887 / −₹5,179 |
+| 100 | 20 / 60 / 20 | 5,016 | ₹6,797 | ₹340 | ₹85 | ₹3,819 | −₹2,978 / −₹3,560 |
+| 500 | 100 / 300 / 100 | 24,472 | ₹6,797 | ₹68 | ₹17 | ₹19,096 | ₹12,299 / ₹9,386 |
+| 1,000 | 200 / 600 / 200 | 48,792 | ₹6,797 | ₹34 | ₹8 | ₹38,193 | ₹31,396 / ₹25,570 |
 
-- The table uses 5 sweeps a day and leaves out sign-ins and confirmations.
+- Net revenue uses ₹190.96 a member with GST on top and ₹161.83 with GST inside (see [One payment](#one-payment)).
+- The table uses 5 sweeps a day and leaves out sign-ins and confirmations. Emails are estimated sends.
 - "Per paying member" = cost ÷ Pro. "Per active user" = cost ÷ (Pro + Free).
-- **A surplus here is not profit.** It is measured against `F` only: the domain, accountant, marketing, the owner's
-  time and income tax are not in it (see [Break-even](#break-even)).
+- **A surplus here is not profit.** It is measured against `F` only; the
+  [business costs left out](#business-costs-not-included) are not in it.
 - Inactive records cost about ₹0.006 a month each, from the sweep reading every record.
 - **The 1,000-user row passes Resend Pro's 50,000 emails** once sign-ins or a 6th sweep are counted:
 
@@ -317,7 +348,7 @@ emails stopped). Prices are ₹199 a month, with Vercel Pro and Resend Pro in ev
   |---|---|---|---|
   | 5 sweeps a day | 48,792 | $20 | ₹6,797 |
   | 5 sweeps a day, sign-ins at the caps | 50,616 | $20 + $0.55 overage | ₹6,849 |
-  | 6 sweeps a day, sign-ins at the caps | 56,726 | $20 + $6.05 overage | ₹7,971 (AI ₹3,620) |
+  | 6 sweeps a day, sign-ins at the caps | 56,726 | $20 + $6.05 overage | ₹7,972 (AI ₹3,620) |
 
   Up to about 66,700 emails, the $20 plan plus overage costs less than the $35 plan.
 
@@ -335,11 +366,12 @@ Three different break-evens:
    | ₹499 | 15 | 17 |
 
    ```
-   GST on top:   members = F / (price × (1 − 0.03422))
-   GST inside:   members = F / (price / 1.18 − price × 0.03422)
+   GST on top:      members = F / (price − price × 1.18 × 0.03422)     (case B, fee GST not claimed back)
+   Not registered:  members = F / (price × (1 − 0.03422))              (case A; same counts at F)
+   GST inside:      members = F / (price / 1.18 − price × 0.03422)     (case C, fee GST not claimed back)
    ```
 
-   Each count is rounded up.
+   Each count is rounded up. These are **fixed-cost** counts: they cover `F`, not the whole business.
 
 2. **Contribution break-even.** The point where each member's fee covers the cost that member adds.
    - Inside the Resend plan, a member adds about ₹0 a month: an email costs nothing extra, and a view costs about
@@ -348,8 +380,8 @@ Three different break-evens:
      under any net price above.
    - So in practice break-even equals the fixed-cost count.
 
-3. **Full business break-even.** `F` plus the costs that aren't in this doc yet: domain, accountant, marketing, the
-   owner's time and income tax. **Unknown until the owner gives them.**
+3. **Full business break-even.** `F` plus the [business costs not included](#business-costs-not-included).
+   **Unknown until the owner gives them.**
    - Each extra ₹1,000 a month needs 6 more Pro at ₹199 with GST on top, or 7 with GST inside.
    - Formula: `members = (F + other monthly costs) / net per member`.
 
@@ -358,18 +390,21 @@ Whether GST applies, and whether the price includes it, is for a tax adviser
 
 ## Stress tests
 
-Members needed at each price, GST on top / GST inside. The AI share of `F` scales; Vercel and Resend stay the same.
+Members needed at each price, GST on top (case B) / GST inside (case C), both without the claim. The AI share of
+`F` scales; Vercel and Resend stay at $40 a month, so a Resend step-up isn't in these rows.
 
 | Scenario | `F` a month | ₹99 | ₹199 | ₹299 | ₹499 |
 |---|---|---|---|---|---|
 | Today, 5 sweeps a day | ₹6,797 | 72 / 85 | 36 / 42 | 24 / 28 | 15 / 17 |
-| 4 sweeps a day | ₹6,193 | 65 / 77 | 33 / 39 | 22 / 26 | 13 / 16 |
+| 4 sweeps a day | ₹6,193 | 66 / 77 | 33 / 39 | 22 / 26 | 13 / 16 |
 | 6 sweeps a day | ₹7,400 | 78 / 92 | 39 / 46 | 26 / 31 | 16 / 19 |
-| 1 sweep in 10 fails after being billed | ₹7,132 | 75 / 89 | 38 / 45 | 25 / 30 | 15 / 18 |
-| AI cost +25% | ₹7,551 | 79 / 94 | 40 / 47 | 27 / 32 | 16 / 19 |
-| AI cost +50% | ₹8,305 | 87 / 104 | 44 / 52 | 29 / 35 | 18 / 21 |
-| AI cost +100%, or 10 sweeps a day | ₹9,813 | 103 / 122 | 52 / 61 | 34 / 41 | 21 / 25 |
-| Every sweep at the high-cost scenario | ₹19,210 | 201 / 239 | 100 / 119 | 67 / 80 | 40 / 48 |
+| 1 sweep in 10 fails after being billed | ₹7,132 | 76 / 89 | 38 / 45 | 25 / 30 | 15 / 18 |
+| AI cost +25% | ₹7,551 | 80 / 94 | 40 / 47 | 27 / 32 | 16 / 19 |
+| AI cost +50% | ₹8,305 | 88 / 104 | 44 / 52 | 29 / 35 | 18 / 21 |
+| AI cost +100%, or 10 sweeps a day | ₹9,813 | 104 / 122 | 52 / 61 | 35 / 41 | 21 / 25 |
+| Every sweep at the high-cost scenario | ₹19,210 | 203 / 239 | 101 / 119 | 67 / 80 | 41 / 48 |
+
+`F` here is shown to the nearest rupee. For example, 6 sweeps a day comes to ₹7,399.87, so ₹7,400.
 
 **Other stresses:**
 
@@ -393,28 +428,46 @@ Members needed at each price, GST on top / GST inside. The AI share of `F` scale
 - **Runaway spend.** Anyone holding `CRON_SECRET` can start sweeps. Since PR #60 the code limits what they can run:
   - **Manual runs:** at most 3 a UTC day (`MAX_MANUAL_SWEEPS_PER_DAY`, default 3). A call past the cap gets `429` and
     runs nothing.
-  - **Calls faked as scheduled:** at most one every 2 hours, so 12 a day. Each of these also emails every Pro member.
-  - **At most 15 sweeps a day**: about $3.15 a day at the measured average, about $16 at the high-cost scenario.
-  - The Anthropic spend limit stays the final ceiling.
+  - **Calls faked as scheduled:** one every 2 hours, so 12 a day. Each one that saves also emails every Pro member
+    with items in their categories.
+  - **About 15 sweeps a day**: about $3.15 a day at the measured average, about $16 at the high-cost scenario.
+  - **These limits are approximate** (`api/_lib/handlers.js`, `api/_lib/radar.js`):
+    - two calls at the same instant can both pass either check;
+    - a scheduled sweep that saves nothing (every category failed or found nothing) doesn't start the 2-hour gap,
+      so the next call isn't held back. Its usage may still be billed.
+  - They are cost guards in code, not a spending ceiling. **Only the Anthropic spend limit is a ceiling.**
 
 ## Pricing options compared
 
 | Option | Fits the cost? | Net to the owner | Build work | Verdict |
 |---|---|---|---|---|
-| **Monthly subscription** (one Razorpay plan) | Yes: cost is fixed a month | ₹192.19 at ₹199; ₹288.77 at ₹299 (GST on top) | None: built (T20, T21) | **Recommended** |
-| Yearly plan at 10 × monthly (₹1,990 or ₹2,990) | Yes | ₹1,921.90 or ₹2,887.68 a year, against ₹2,306.28 or ₹3,465.22 for 12 monthly payments: about 17% less a member, paid up front | A second Razorpay plan, a plan choice in checkout, pricing page | Later, only if up-front cash matters |
+| **Monthly subscription** (one Razorpay plan) | Yes: cost is fixed a month | ₹190.96 at ₹199; ₹286.93 at ₹299 (GST on top) | None: built (T20, T21) | **Recommended** |
+| Yearly plan at 10 × monthly (₹1,990 or ₹2,990) | Yes | ₹1,909.64 or ₹2,869.26 a year, against ₹2,291.57 or ₹3,443.12 for 12 monthly payments: about 17% less a member, paid up front | A second Razorpay plan, a plan choice in checkout, pricing page | Later, only if up-front cash matters |
 | Credits or pay-per-run | No: users don't cause the AI cost | Unclear | Large: metering, balances, top-ups | Not recommended |
 | Free tier | Costs about ₹0 a member inside the Resend plan | — | Built | Keep it. It shows the product, and the sample demo already exists |
 
-**What the numbers don't say: what people will pay.**
-- The repository has no demand data and no paying users yet. These costs set a floor, not the price.
-- If 20 to 40 paying members early on is realistic, ₹299 breaks even at 24 to 28, and ₹199 needs 36 to 42.
+### ₹199, ₹299 and ₹499 compared (provisional)
+
+**Demand has not been tested.** No one has paid, and there are no conversion or retention figures. This table
+compares prices against `F` only. It doesn't choose the price, and it doesn't change `/pricing/` or the Razorpay plan.
+
+| Price a month | Net a member, GST on top / inside | Members to cover `F` | Surplus or shortfall at 20 / 30 / 50 members, GST on top | Read |
+|---|---|---|---|---|
+| ₹199 | ₹190.96 / ₹161.83 | 36 / 42 | −₹2,978 / −₹1,068 / ₹2,751 | Easiest to buy; at 36 to 42 members it only just covers `F`, with nothing left for the costs not included |
+| ₹299 | ₹286.93 / ₹243.16 | 24 / 28 | −₹1,058 / ₹1,811 / ₹7,549 | The candidate to test first: more room for the costs not included at a small size. **Not a proven price** |
+| ₹499 | ₹478.85 / ₹405.81 | 15 / 17 | ₹2,780 / ₹7,569 / ₹17,146 | Only if a group of users values it that much; the cost doesn't justify it |
+
+Before choosing:
+- confirm the GST case with a CA, and the fee from Razorpay's first settlement report;
+- count the real sweeps and emails a day;
+- add the [business costs not included](#business-costs-not-included);
+- measure sign-up to paid conversion, retention and cancellations at the price chosen.
 
 ## Risks and safeguards
 
 | Risk | Effect | Safeguard | Status |
 |---|---|---|---|
-| `CRON_SECRET` leaks | Up to 15 sweeps a day (3 manual, 12 faked as scheduled): about $3.15 a day, up to about $16. The 12 also email every Pro member | A monthly spend limit and alert in the Anthropic Console; cap manual sweeps a day in code; rotate the secret | Console: DEPLOYMENT.md says to set about $50 a month; whether it is set is **not verified**. Code: **done** (PR #60, 3 a day) |
+| `CRON_SECRET` leaks | About 15 sweeps a day (3 manual, 12 faked as scheduled): about $3.15 a day, about $16 at the high-cost scenario. Approximate, not a ceiling (see [Stress tests](#stress-tests)). The 12 also email Pro members | A monthly spend limit and alert in the Anthropic Console; cap manual sweeps a day in code; rotate the secret | Console: DEPLOYMENT.md says to set about $50 a month; whether it is set is **not verified**. Code: **done** (PR #60, 3 a day) |
 | `RADAR_MODEL` set to a dearer model | Every sweep costs more | Note the cost before changing it; or have the code accept only listed models | Process only |
 | More sweeps than planned (cron overlap, retries) | Up to ₹3,620 a month at 6 a day, and a 6th email a day for every Pro member | Count sweeps for a week (measurement checklist) | Not measured |
 | A high-cost sweep | About $1.07 each in the scenario; not a hard limit, since input isn't capped | A spend alert in the Console; watch `usage` in the run logs | Not set up |
@@ -441,12 +494,13 @@ Not answered here. Ask a chartered accountant in India:
 | 1 | Sweeps a day | For 7 days, count the sweeps in the History tab on `/live/`. Look for one at about 01:30 UTC (07:00 IST). Or use the Anthropic Console usage page | Sets the AI cost: 4, 5 or 6 a day |
 | 2 | Real Anthropic spend | Console usage and cost for a full month, against 152 × $0.21 | Confirms the per-sweep figure, including Vercel-cron sweeps, which no log shows |
 | 3 | More sweep samples | Read `usage` from 20 or more run logs (see [How to re-measure](#how-to-re-measure)) | 5 runs is a small sample |
-| 4 | Emails a day | The Resend dashboard, including sign-ins and confirmations | Shows when the plan steps up |
+| 4 | Emails a day | The Resend dashboard, including sign-ins and confirmations. Compare with the estimated sends here | Shows when the plan steps up |
 | 5 | Vercel usage | The usage page after moving to Pro: invocations, CPU, Blob operations | Confirms the $20 credit covers it |
 | 6 | Razorpay fee | The settlement report for the first live charges | Confirms 3.42% |
 | 7 | UPI AutoPay fee, chargeback fee, refund fee | Ask Razorpay support | **Unknown** today |
 | 8 | Forex markup | The card or bank statement for one dollar invoice | Adds to Anthropic, Vercel and Resend |
 | 9 | Domain renewal | The registrar | Owner input |
+| 10 | The other business costs | See [Business costs not included](#business-costs-not-included) | Full business break-even |
 
 ## Pre-launch checklist
 
@@ -455,7 +509,10 @@ Not answered here. Ask a chartered accountant in India:
 - [ ] Vercel Pro (Hobby is non-commercial only).
 - [ ] Resend Pro. On Free, the 100-a-day limit fits only 5 to 7 Pro members on a day when sign-ins hit their caps.
 - [ ] A monthly spend limit and an alert set in the Anthropic Console. DEPLOYMENT.md suggests about $50 a month. That
-      covers 6 sweeps a day ($38.30), but a month of high-cost sweeps ($163) would hit it and stop the sweeps.
+      covers 6 sweeps a day ($38.31), but a month of high-cost sweeps ($163) would hit it and stop the sweeps.
+- [ ] Production is deployed from a build that includes PR #60, so the manual-sweep cap is live.
+- [ ] The owner reads the values of `MAX_SUBSCRIBERS` and `MAX_CONFIRMS_PER_DAY` in the Vercel dashboard. Only their
+      names were checked here.
 - [ ] A live Razorpay plan at the chosen price in `RAZORPAY_PLAN_ID` on Production, the same as `/pricing/`. The ₹99
       test plan is not used.
 - [ ] The Razorpay webhook is Enabled for the live account, with `RAZORPAY_WEBHOOK_SECRET` set on Production.
@@ -468,6 +525,8 @@ Not answered here. Ask a chartered accountant in India:
 - [x] Cap manual sweeps a day in code (PR #60).
 - [x] `MAX_SUBSCRIBERS` is set in production. Its value wasn't read; check it is the number intended.
 - [ ] Read emails a day on the Resend dashboard (measurement 4), and recheck the plan if a 6th sweep is confirmed.
+- [ ] Track cost per successful sweep: total billed spend across all attempts ÷ successful sweeps.
+- [ ] Fill in the [business costs not included](#business-costs-not-included).
 - [ ] A weekly manual check: Razorpay's active subscriptions against Pro records.
 
 **P2: later**
@@ -491,6 +550,20 @@ Not answered here. Ask a chartered accountant in India:
 | Re-measure this doc after the first month | Owner and Claude | Low | Keeps the price honest |
 
 ## What the audits changed
+
+**Third audit**, a check of the sums and wording on 2026-10-23. Its code points were rechecked against the code:
+
+| The doc said | Finding | Now |
+|---|---|---|
+| "GST on top" used case A's net (₹192.19 at ₹199) | **Inconsistent.** With GST on top, Razorpay's fee is on the price plus GST. Without the claim, the net is ₹190.96 | Case B in the example mix, the formulas, the stress tests and pricing. 9 stress-test counts rise by 1 or 2; the counts at `F` don't change |
+| "Billed failures so far: 0 of 5" | **Incorrect.** 5 was the successful runs; the 2 failures never reached Anthropic | [Failed runs](#failed-runs), with cost per successful sweep over all attempts |
+| The AI "costs the same for 1 subscriber or 1,000" | **Overstated.** True of AI spend at a set sweep count; Resend steps up and Vercel grows | [Summary](#summary) |
+| A view costs about ₹1 a month for a heavy reader | **Incomplete.** Function calls and Blob reads only | [One live-board view](#one-live-board-view) |
+| $38.30, ₹101 and ₹7,971 | **Rounding.** From unrounded inputs: $38.31, ₹102, ₹7,972. The audit's ₹7,401 for 6 sweeps is ₹7,399.87, so ₹7,400 stays | A rounding rule at the top |
+| "At most 15 sweeps a day" | **Overstated.** Two calls at the same instant both pass; a scheduled sweep that saves nothing doesn't start the gap | "About 15", a cost guard not a ceiling, in [Stress tests](#stress-tests) |
+| Email counts | **Incomplete.** They are sends the code attempts, not deliveries | Labelled in [One email](#one-email) |
+| Business costs listed in one line | **Incomplete** | [Business costs not included](#business-costs-not-included) |
+| No price comparison | **Missing** | [₹199, ₹299 and ₹499 compared](#199-299-and-499-compared-provisional), with demand marked untested |
 
 **Second audit**, checked against the code and the production variable names on 2026-10-23:
 
@@ -517,8 +590,9 @@ Not answered here. Ask a chartered accountant in India:
 | Not in the first version | **Missing**: worst-case sweep; manual-sweep runaway; `RADAR_MODEL`; refunds and chargebacks; reconciliation; tax questions; cost by user count | Added |
 | Per-sweep cost, prices, fee formula, live-view estimate | **Correct.** Re-checked | Kept |
 
-**Limits of both audits:**
+**Limits of all three audits:**
 - no access to the Anthropic Console, the Vercel usage pages or the Resend dashboard;
+- production variable values weren't read, only their names;
 - Vercel Hobby keeps logs under an hour;
 - only 5 measured sweeps.
 

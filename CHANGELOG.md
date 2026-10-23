@@ -5,6 +5,10 @@ grouped by date.
 
 ## 2026-10-23
 
+- `costing.md` revised after a third audit: "GST on top" now uses the net after Razorpay's fee on price plus GST
+  (₹190.96 at ₹199), which raises some stress-test counts by 1 or 2; break-even at `F` is unchanged. Added a
+  rounding rule, a section for the business costs `F` leaves out, and a provisional ₹199/₹299/₹499 comparison that
+  says demand is untested. The 15-sweeps-a-day limit is marked approximate, and a few rounding slips are fixed.
 - `costing.md` revised after a second audit: Pro gets 5 or 6 emails a day (the Vercel cron sweep sends one too),
   so email volumes are shown at both, and the 1,000-user example passes Resend's 50,000 once sign-ins are counted.
   Card fees are split into three GST cases (break-even unchanged). The $1.07 sweep is now a high-cost scenario, not
