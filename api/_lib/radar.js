@@ -95,7 +95,17 @@ export async function scanCategory(cat, { fetchFn = fetch, apiKey, model, maxSea
       tools: [{ type: "web_search_20250305", name: "web_search", max_uses: maxSearches }],
     }),
   });
-  if (!res.ok) throw new Error("http " + res.status);
+  if (!res.ok) {
+    // Say why the API refused, e.g. "http 400 invalid_request_error: <message>", so a failure
+    // notice can be acted on. One line, capped, and the key blanked if it were ever echoed.
+    let why = "";
+    try {
+      const e = (await res.json()).error || {};
+      if (typeof e.type === "string" && /^[a-z_]{1,40}$/.test(e.type)) why += " " + e.type;
+      if (e.message) why += ": " + String(e.message).split(apiKey).join("[key]").replace(/\s+/g, " ").trim().slice(0, 200);
+    } catch (e) {}
+    throw new Error("http " + res.status + why);
+  }
   const data = await res.json();
   const u = data.usage || {};
   const usage = {

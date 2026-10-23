@@ -161,6 +161,22 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   check(seen[0].headers["x-api-key"] === "sekret" && !JSON.stringify(b).includes("sekret"), "key goes in a header, never in the body");
 }
 
+// ---- an API error says why
+{
+  const refuse = (status, body) => async () => ({ ok: false, status, json: async () => body });
+  const why = async (fetchFn) => {
+    try { await scanCategory(CATS[0], { fetchFn, apiKey: "sekret", model: "m" }); return null; } catch (e) { return e.message; }
+  };
+  const credit = await why(refuse(400, { type: "error", error: { type: "invalid_request_error", message: "Your credit balance is too low." } }));
+  check(credit === "http 400 invalid_request_error: Your credit balance is too low.", "a 400 keeps the error type and message");
+  const echoed = await why(refuse(401, { error: { type: "authentication_error", message: "bad key sekret\n  try again " + "x".repeat(300) } }));
+  check(echoed.startsWith("http 401 authentication_error: bad key [key] try again x") && !echoed.includes("sekret") && echoed.length < 260,
+    "the message is one line, capped, and never contains the key");
+  check(await why(refuse(529, {})) === "http 529", "no error body: just the status");
+  check(await why(async () => ({ ok: false, status: 502, json: async () => { throw new Error("not json"); } })) === "http 502", "a body that isn't JSON: just the status");
+  check(await why(refuse(400, { error: { type: "Not A Type!", message: "m" } })) === "http 400: m", "an odd error type is left out");
+}
+
 // ---- /api/sweep
 {
   const env = { CRON_SECRET: "abc123", ANTHROPIC_API_KEY: "k" };

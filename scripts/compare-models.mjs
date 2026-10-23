@@ -39,8 +39,8 @@ export function callCost(model, u) {
 const sweepEstimate = (model, s) =>
   CATS.length * callCost(model, { input: s.input / CATS.length, output: s.output / CATS.length, searches: s.searches / CATS.length });
 
-// One sweep: all four categories at once, as runDailySweep does. The wrapper keeps the stop reason
-// and any API error message, which scanCategory doesn't return.
+// One sweep: all four categories at once, as runDailySweep does. The wrapper keeps the stop reason,
+// which scanCategory doesn't return; an API error's message is already in scanCategory's error.
 export async function runSweep(model, { apiKey, baseFetch = fetch, clock = Date.now }) {
   const t0 = clock();
   const cats = await Promise.all(CATS.map(async (cat) => {
@@ -49,7 +49,6 @@ export async function runSweep(model, { apiKey, baseFetch = fetch, clock = Date.
       const res = await baseFetch(url, init);
       const data = await res.json().catch(() => null);
       meta.stop = (data && data.stop_reason) || null;
-      if (!res.ok) meta.detail = (data && data.error && data.error.message) || null;
       return { ok: res.ok, status: res.status, json: async () => data };
     };
     try {
@@ -57,7 +56,7 @@ export async function runSweep(model, { apiKey, baseFetch = fetch, clock = Date.
       return { cat: cat.key, ok: true, items, usage, cost: callCost(model, usage), stop: meta.stop };
     } catch (e) {
       const usage = e.usage || ZERO;
-      return { cat: cat.key, ok: false, error: e.message + (meta.detail ? ": " + meta.detail : ""), items: [], usage, cost: callCost(model, usage), stop: meta.stop };
+      return { cat: cat.key, ok: false, error: e.message, items: [], usage, cost: callCost(model, usage), stop: meta.stop };
     }
   }));
   const usage = { ...ZERO };
