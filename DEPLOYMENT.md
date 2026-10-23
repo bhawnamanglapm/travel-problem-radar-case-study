@@ -707,7 +707,8 @@ unchanged. Code: `api/subscribe.js`, `api/confirm.js`, `api/unsubscribe.js`, `ap
    and says to ask again after 10 minutes; after that the same link is sent again. One pending address gets at most
    5 confirmation emails, then the reply says a link was already sent several times.
 3. **Free:** one email a day, after the first saved sweep of the UTC day (normally 00:17 UTC, about 05:47 IST),
-   holding everything saved in the last 24 hours. **Pro:** an email after every saved **scheduled** sweep (about 5 a
+   holding everything saved in the last 24 hours. With `BOARD_PAYWALL=1` it is a **summary** instead: per category
+   the count and the headlines, and a Sign in button; no detail or source links (T18). **Pro:** an email after every saved **scheduled** sweep (about 5 a
    day); manual runs send Pro nothing. Pro is switched on by hand for now: see "Handling Pro requests" below.
 4. Every email has an Unsubscribe link and a "Manage subscription" link (`/manage/`), plus `List-Unsubscribe` headers
    so mail apps can offer one-click unsubscribe. Unsubscribing deletes a Free record; a Pro account stays, with its

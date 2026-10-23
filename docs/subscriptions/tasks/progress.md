@@ -30,7 +30,7 @@ working in a real inbox; that is T12's staged launch.
 | [T15](T15-phase2-gate-and-accounts.md) Gate and accounts | in progress: gate skipped by the owner; prerequisites started | | | See "T15" below |
 | [T16](T16-accounts-and-sign-in.md) Accounts and sign-in | done; sign-up half checked in production, sign-in link not yet | branch `feat/t16-accounts-and-sign-in` | 548 pass (480 subscriber + 68 sweep; +62 new); 71 `npm run check` checks (+9) | See "T16" below |
 | [T17](T17-locked-board.md) Locked board | done; switch on in production since 2026-10-23 | branch `feat/locked-board` | 676 pass (608 subscriber + 68 sweep; +45 new); 107 `npm run check` checks (+3) | See "T17" below |
-| [T18](T18-teaser-email.md) Free email becomes a teaser | todo | | | Same switch |
+| [T18](T18-teaser-email.md) Free email becomes a teaser | done; live with the switch | branch `feat/teaser-email` | 703 pass (635 subscriber + 68 sweep; +27 new); 108 `npm run check` checks (+1) | See "T18" below |
 | [T19](T19-razorpay-library.md) Razorpay library | todo | | | Needs T15's prices and Razorpay test keys |
 | [T20](T20-manage-page-and-checkout.md) `/manage/` page, checkout, cancel | todo | | | Needs T16 and T19 |
 | [T21](T21-razorpay-webhook.md) Razorpay webhook | todo | | | Needs T19 and T20 |
@@ -387,6 +387,15 @@ working in a real inbox; that is T12's staged launch.
   in"; after Sign out, `/manage/` went to `/signin/`.
 - **Not checked yet:** a sign-in link requested at `/signin/` (lands on `/live/` signed in), and that the same link is
   refused the second time.
+
+### T18
+- With `BOARD_PAYWALL=1`, the Free daily email is a summary: the count and the headlines per category (New marked),
+  a Sign in button to `/signin/`, no detail or source link; subject "… daily summary …". Switch off (unset, "0",
+  "true"): the full roll-up, byte for byte as before. Pro and the owner's digest are the same either way.
+- The teaser uses its own Resend idempotency key (`…-teaser`); `result.free.teaser` is in the `subscribers` log line.
+- Wording: the home page, `/subscribe/`, `/signup/` and the README say Free gets a daily summary.
+- Owner's choice (open question 3): headlines for all four categories.
+- **Not checked yet:** the first real summary email (the next morning's Free email).
 
 ### T17
 - `BOARD_PAYWALL=1` locks `/api/data`: `401` signed out, `402` Free or lapsed Pro, Pro gets the data, all

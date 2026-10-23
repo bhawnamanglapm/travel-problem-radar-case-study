@@ -36,7 +36,7 @@ A "Team" tier is out of scope until someone other than the owner asks for it.
 
 **The honest value check.** Until 2026-10-22 the board was public, so Pro could only sell convenience. Now Pro sells
 access to the findings themselves. That only works if the free paths don't give them away: the demo shows a saved
-sample, and the free email shows headlines without detail or sources. Whether people pay for AI-gathered, unverified
+sample, and the free email shows headlines without detail or sources (built in T18, on since 2026-10-23). Whether people pay for AI-gathered, unverified
 findings is still unmeasured; no real sweep has been scored yet.
 
 The free daily email goes out after the first saved sweep of the UTC day. The scheduled run is at 00:17 UTC (about 05:47

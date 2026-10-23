@@ -5,6 +5,8 @@ grouped by date.
 
 ## 2026-10-23
 
+- The Free daily email is a summary while the board is locked: the count and headlines per category and a Sign in
+  button, with no detail or source links. Pro emails don't change. The pages now say Free gets a daily summary.
 - The live board can be locked to Pro accounts with `BOARD_PAYWALL=1`, turned on in production the same day. Signed-out visitors see
   a sign-in panel and signed-in Free accounts a Request Pro panel; `/api/data` answers `401` or `402`, never
   publicly cached.

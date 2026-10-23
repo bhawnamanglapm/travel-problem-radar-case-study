@@ -94,7 +94,8 @@ Slack and email and only when the sweep saved. The owner's `EMAIL_TO` path is un
   until payments exist (D1).
 - **Free subscribers:** one email per UTC day, after the first saved sweep of that day (normally 00:17 UTC, about
   05:47 IST; D3). It is a **roll-up** of every item saved in the 24 hours before it, one copy per item, with New flags
-  kept (D2).
+  kept (D2). While the board is locked (`BOARD_PAYWALL=1`, on since 2026-10-23) it is a **summary** (T18): the count
+  and the headlines per category, with a sign-in link instead of detail and sources.
 - Each person gets their own copy with their own links (never everyone on one To line), sent through Resend's batch
   endpoint, up to 100 per call.
 - **Resuming:** the ids sent are written to `radar:deliveries:<day>` after each batch, so a send cut off by the
