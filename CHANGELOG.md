@@ -5,6 +5,8 @@ grouped by date.
 
 ## 2026-10-23
 
+- A Razorpay library for paid Pro: create, cancel and fetch a subscription, and the webhook and Checkout signature
+  checks, tested offline. Nothing uses it yet. `npm run check` now also fails on a committed Razorpay key secret.
 - The Free daily email is a summary while the board is locked: the count and headlines per category and a Sign in
   button, with no detail or source links. Pro emails don't change. The pages now say Free gets a daily summary.
 - The live board can be locked to Pro accounts with `BOARD_PAYWALL=1`, turned on in production the same day. Signed-out visitors see
