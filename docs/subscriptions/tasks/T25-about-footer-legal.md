@@ -62,6 +62,16 @@ policy page.
 - `npm run check`: the footer of each page, in order; no shipped page links `about/`, `pricing/` or a draft policy
   page; terms and refunds use the slots; `about/` refuses to ship with a gap.
 
+## Owner inputs answered (2026-10-23)
+
+- "Who runs it" (input 6) is filled from the owner's resume, so `/about/` is in the build and **About** leads
+  every shipped footer: About · Plans · Contact · Privacy.
+- The refund rule (input 4) is in `plan.json`: the first payment back within 7 days, no refund for a started month
+  after that, mistakes always refunded, within 14 days. `legal/refunds` is still a draft (date, and the decision to
+  ship policies before a legal read).
+- Still to write: the manual refund step needs to say how to tell a first payment from a renewal in the Razorpay
+  dashboard.
+
 ## Acceptance criteria
 
 - [ ] No `[OWNER INPUT NEEDED]` left in any shipped page
