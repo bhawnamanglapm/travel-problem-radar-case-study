@@ -5,6 +5,10 @@ grouped by date.
 
 ## 2026-10-23
 
+- Signed in, the home page no longer offers **Create free account**. The hero button becomes **Your account**
+  (Free) or **Open the live board** (Pro), the "No password" note is hidden, the current plan's button reads
+  **Your plan**, and Free accounts get **Request Pro** (to `/manage/`) instead of the sign-up form. `npm run check`
+  requires it.
 - The contact address for questions is now **pehchanthetraveller19@gmail.com** on every page (footer Contact link,
   `/about/`, the legal pages, `/manage/`'s messages) and in `plan.json`. Emails are still sent from
   `hello@pehchanthetraveller.com`. `npm run check` requires the new address.

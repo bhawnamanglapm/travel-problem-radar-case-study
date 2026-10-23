@@ -31,7 +31,7 @@ page still exists at `/demo/`, linked from the README.
 
 | Item | On the new page |
 |---|---|
-| Product name and nav | Header: Travel Problem Radar · Live board · Plans · Sign in (Account when signed in) |
+| Product name and nav | Header: Travel Problem Radar · Live board · Plans · Sign in (Account when signed in). Signed in, the hero and plan buttons change too: Your account (Free) or Open the live board (Pro), Your plan, Request Pro |
 | One main action | "Create free account" opens the popup; "See the live board" is the second action |
 | Plain value proposition | What it finds, the four categories, about 5 sweeps a day |
 | Real recent findings | Top 6 items of the latest sweep, from `/api/data` (the live board's feed). If it fails, only a link to `/live/` shows; no sample or made-up items |
