@@ -7,6 +7,7 @@
 | Size | M |
 | Depends on | T15 (test-mode account, plan id) |
 | Unblocks | T20, T21 |
+| Status | done (2026-10-23). Built and tested offline; no Razorpay keys used. Nothing calls it until T20 and T21 |
 
 > **Changed 2026-10-22 ([decision log](../../decisions.md)):** Pro now pays for the live board on the website, not
 > for email ([paid-website.md](../paid-website.md)). Accounts and sign-in (email link, login cookie) and the locked board come first, behind a
@@ -21,6 +22,26 @@ of no new npm packages holds: Razorpay's REST API works with plain `fetch` and B
 
 **Everything Razorpay-specific below must be checked against the current Razorpay docs before building**: endpoint
 paths, field names, header names, event names and the signature formats.
+
+## Checked against Razorpay's docs (2026-10-23)
+
+- Create: `POST /v1/subscriptions`; `plan_id` required; `total_count` an integer of 1 or more (either `total_count`
+  or `end_at` is required, not both); `customer_notify` boolean, default true; `notes` at most 15 pairs; unknown
+  fields are refused. The reply has `id`, `status` and `short_url`.
+  ([create](https://razorpay.com/docs/api/payments/subscriptions/create-subscription/))
+- Cancel: `POST /v1/subscriptions/{id}/cancel` with `cancel_at_cycle_end`, a **boolean**; false (the default)
+  cancels now. ([cancel](https://razorpay.com/docs/api/payments/subscriptions/cancel-subscription/))
+- Fetch: `GET /v1/subscriptions/{id}`.
+  ([fetch](https://razorpay.com/docs/api/payments/subscriptions/fetch-subscription-id/))
+- Auth: `Basic base64(key_id:key_secret)`. ([authentication](https://razorpay.com/docs/api/authentication/))
+- Webhook: header `X-Razorpay-Signature`, HMAC-SHA256 hex of the raw body with the webhook secret; don't parse the
+  body first. ([validate webhooks](https://razorpay.com/docs/webhooks/validate-test/))
+- Checkout: `hmac_sha256(razorpay_payment_id + "|" + subscription_id, key_secret)`, payment id first, using **our
+  own saved subscription id**, not the one Checkout returns.
+  ([subscriptions integration](https://razorpay.com/docs/payments/subscriptions/integration-guide/))
+- Key ids: test keys begin `rzp_test_`, live keys `rzp_live_`. ([quickstart](https://razorpay.com/docs/payments/quickstart.md))
+- **No official test vector** is published for either signature, so the tests pin vectors made separately with
+  `openssl dgst -sha256 -hmac`.
 
 ## What to build: `api/_lib/razorpay.js`
 
@@ -50,12 +71,12 @@ so the test file itself doesn't trip it.
 
 ## Acceptance criteria
 
-- [ ] Both verify functions accept the fixed good vectors and refuse: one changed byte of the body, a wrong secret,
+- [x] Both verify functions accept the fixed good vectors and refuse: one changed byte of the body, a wrong secret,
   an empty or missing header, a header of the wrong length
-- [ ] The create, cancel and fetch calls send the right method, path, auth header and body (checked with
+- [x] The create, cancel and fetch calls send the right method, path, auth header and body (checked with
   `fakeFetch`)
-- [ ] No function throws, whatever `fetchFn` does (rejects, times out, returns HTML)
-- [ ] `npm run check` catches a fake committed secret
+- [x] No function throws, whatever `fetchFn` does (rejects, times out, returns HTML)
+- [x] `npm run check` catches a fake committed secret
 
 ## Tests (new block in `test-subscriptions.mjs`)
 

@@ -31,7 +31,7 @@ working in a real inbox; that is T12's staged launch.
 | [T16](T16-accounts-and-sign-in.md) Accounts and sign-in | done; sign-up half checked in production, sign-in link not yet | branch `feat/t16-accounts-and-sign-in` | 548 pass (480 subscriber + 68 sweep; +62 new); 71 `npm run check` checks (+9) | See "T16" below |
 | [T17](T17-locked-board.md) Locked board | done; switch on in production since 2026-10-23 | branch `feat/locked-board` | 676 pass (608 subscriber + 68 sweep; +45 new); 107 `npm run check` checks (+3) | See "T17" below |
 | [T18](T18-teaser-email.md) Free email becomes a teaser | done; live with the switch | branch `feat/teaser-email` | 703 pass (635 subscriber + 68 sweep; +27 new); 108 `npm run check` checks (+1) | See "T18" below |
-| [T19](T19-razorpay-library.md) Razorpay library | todo | | | Needs T15's prices and Razorpay test keys |
+| [T19](T19-razorpay-library.md) Razorpay library | done; not used yet | branch `feat/razorpay-library` | 742 pass (674 subscriber + 68 sweep; +39 new); 110 `npm run check` checks (+2) | See "T19" below |
 | [T20](T20-manage-page-and-checkout.md) `/manage/` page, checkout, cancel | todo | | | Needs T16 and T19 |
 | [T21](T21-razorpay-webhook.md) Razorpay webhook | todo | | | Needs T19 and T20 |
 | [T22](T22-pro-lifecycle-and-go-live.md) Pro expiry, paid unsubscribe, go-live | todo | | | Needs Vercel Pro (T15 Step 2, row 3) |
@@ -387,6 +387,20 @@ working in a real inbox; that is T12's staged launch.
   in"; after Sign out, `/manage/` went to `/signin/`.
 - **Not checked yet:** a sign-in link requested at `/signin/` (lands on `/live/` signed in), and that the same link is
   refused the second time.
+
+### T19
+- `api/_lib/razorpay.js`: `createSubscription`, `cancelSubscription`, `fetchSubscription`, `verifyWebhook`,
+  `verifyCheckout`, `razorpayConfigured`, `isTestKey`. Plain `fetch` and `node:crypto`, no SDK.
+- Every Razorpay detail was checked against Razorpay's docs on 2026-10-23 (links in the task file).
+  `cancel_at_cycle_end` is a boolean; the Checkout signature is `payment_id|subscription_id` with our own saved
+  subscription id.
+- Razorpay publishes no test vector, so the tests use vectors made separately with openssl.
+- The calls return only chosen fields or `{ error }` (status number, `network`, `timeout`, `reply`, `input`,
+  `config`); `fetchSubscription` drops the reply's customer details. Nothing logs.
+- `npm run check` fails on a tracked file with a Razorpay key id and a secret; shown once with a staged fake file,
+  which was then removed.
+- `total_count` is a parameter; its value is still owner input (T15). No Razorpay keys were used and nothing calls
+  the library yet: T20 and T21 do.
 
 ### T18
 - With `BOARD_PAYWALL=1`, the Free daily email is a summary: the count and the headlines per category (New marked),

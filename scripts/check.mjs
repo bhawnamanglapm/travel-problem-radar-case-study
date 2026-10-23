@@ -203,6 +203,19 @@ const leaks = tracked.filter((f) => !/\.(png|jpe?g|gif|ico|zip)$/i.test(f) && ex
 check(tracked.length > 0 && leaks.length === 0,
       `no API keys, Slack webhooks, Blob tokens or private keys in tracked files${leaks.length ? " (found in " + leaks.join(", ") + ")" : ""}`);
 check(!tracked.some((f) => /(^|\/)\.env/.test(f)), "no .env files are tracked");
+// Razorpay (T19): a key id (rzp_test_… or rzp_live_…) isn't secret on its own, so a file fails only if
+// it has one and also a line giving something named "secret" a value of 20 or more characters. The
+// self-test's fixtures are built here so this file doesn't trip its own check.
+const RZP_KEY = /\brzp_(test|live)_[A-Za-z0-9]{8,}/;
+const RZP_SECRET_LINE = /secret\w*["'`]?\s*[:=]\s*["'`]?[A-Za-z0-9]{20,}/i;
+const rzpLeak = (text) => RZP_KEY.test(text) && text.split("\n").some((l) => RZP_SECRET_LINE.test(l));
+const rzpKey = "rzp_" + "live_" + "Ab12Cd34Ef56Gh";
+const rzpSecret = "Zx9".repeat(8);
+check(rzpLeak(`key_id = "${rzpKey}"\nkey_secret = "${rzpSecret}"`) && rzpLeak(`RAZORPAY_KEY_ID=${rzpKey}\nRAZORPAY_KEY_SECRET=${rzpSecret}`)
+      && !rzpLeak(`key_id = "${rzpKey}"`) && !rzpLeak(`key_secret = "${rzpSecret}"`) && !rzpLeak("RAZORPAY_KEY_SECRET: keys start rzp_test_"),
+      "the Razorpay secret pattern catches a key id with a secret, and not either alone");
+const rzpLeaks = tracked.filter((f) => !/\.(png|jpe?g|gif|ico|zip)$/i.test(f) && existsSync(f) && rzpLeak(readFileSync(f, "utf8")));
+check(rzpLeaks.length === 0, `no Razorpay key secrets in tracked files${rzpLeaks.length ? " (found in " + rzpLeaks.join(", ") + ")" : ""}`);
 
 console.log(failures.length ? `\n${failures.length} failure(s)` : "\nAll checks passed.");
 process.exit(failures.length ? 1 : 0);
