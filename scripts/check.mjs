@@ -80,6 +80,14 @@ check(existsSync("api/account.js"), "api/account.js exists (the manage page's en
 check(/fetch\("\/api\/session"/.test(manPage) && /action: "signout"/.test(manPage), "manage/index.html has a Sign out button that posts to /api/session");
 check(/action: "delete-account"/.test(manPage) && />Delete my account</.test(manPage) && /This can’t be undone/.test(manPage) && /action: "email-on"/.test(manPage),
   "manage/index.html has Delete my account (asked twice) and Turn emails back on (T17)");
+// T20: the one script loaded from elsewhere is Razorpay's Checkout, and only on the Upgrade click.
+// Request Pro stays for while payments are off.
+const manSrcs = [...manPage.matchAll(/\.src\s*=\s*([^;]+);/g)].map((m) => m[1].trim());
+check(/var CHECKOUT_JS = "https:\/\/checkout\.razorpay\.com\/v1\/checkout\.js";/.test(manPage) && manSrcs.length === 1 && manSrcs[0] === "CHECKOUT_JS"
+  && /action: "checkout"/.test(manPage) && /action: "checkout-return"/.test(manPage) && /action: "cancel"/.test(manPage),
+  "manage/index.html loads only Razorpay's Checkout script, and posts checkout, checkout-return and cancel (T20)");
+check(/>Request Pro</.test(manPage) && />Upgrade to Pro</.test(manPage) && /a\.payments/.test(manPage) && !/\brzp_(test|live)_/.test(manPage) && !/prefill/.test(manPage),
+  "manage/index.html keeps Request Pro for when payments are off, holds no Razorpay key and sends Checkout no address");
 // The switch is set in Vercel's settings when T22 turns it on, never in the repo.
 check(!JSON.stringify(vercelJson).includes("BOARD_PAYWALL"), "vercel.json does not set BOARD_PAYWALL");
 
@@ -129,6 +137,8 @@ check(/x\.status === 429/.test(upPage), "signup/index.html shows a message on 42
 check(/Check your spam or junk folder/.test(readFileSync("api/_lib/subscription-handlers.js", "utf8")), "the sign-up reply tells people to check spam or junk (the new domain's confirmation email is often filtered)");
 const fns = readdirSync("api").filter((f) => f.endsWith(".js"));
 check(fns.length <= 12, `at most 12 functions in api/, Hobby's limit (${fns.length}: ${fns.join(", ")})`);
+// Checkout and cancel are actions on /api/account (T20), so payments add no function before the webhook (T21).
+check(fns.length === 8, `T20 added no function: still 8 in api/ (${fns.length})`);
 for (const f of ["subscribe/index.html", "manage/index.html", "signin/index.html", "signup/index.html", "live/index.html"]) {
   const t = existsSync(f) ? readFileSync(f, "utf8") : "";
   check(t.includes('if (/\\.github\\.io$/.test(location.hostname)) location.replace("https://travel-problem-radar.vercel.app" + location.pathname'), `${f} sends a GitHub Pages visit to the Vercel copy (Pages has no /api/)`);
