@@ -39,8 +39,7 @@ Open on 2026-10-24:
 
 | ID | Issue | Effect | Next step | Source |
 |---|---|---|---|---|
-| I-01 | Every scheduled sweep since 2026-10-23 15:09 UTC failed: Anthropic answered HTTP 400 for all four categories | Nothing new saved; Pro members get no new findings. The last good sweep was at 10:09 UTC that day | Owner: put a key from the owner's own Anthropic account, with credit, in Vercel Production and redeploy (RM-01). The exact reason is unknown, see I-02 | GitHub Actions run logs; the failure email |
-| I-02 | The failure notice says only `http 400`: the code drops Anthropic's error message | The cause of I-01 has to be guessed | Record the error's type and message (no secrets) (RM-02) | [api/_lib/radar.js](../../api/_lib/radar.js) |
+| I-01 | Every scheduled sweep since 2026-10-23 15:09 UTC failed: Anthropic answered HTTP 400 for all four categories | Nothing new saved; Pro members get no new findings. The last good sweep was at 10:09 UTC that day | Owner: put a key from the owner's own Anthropic account, with credit, in Vercel Production and redeploy (RM-01). The exact reason is unknown; the next failure notice will give it (I-02, closed) | GitHub Actions run logs; the failure email |
 | I-03 | Outlook.com files the emails in Junk; Gmail filed the first confirmation as spam | See R-05 | Recheck as the domain ages; perhaps the owner's own domain for the site (RM-16) | [progress.md](../../docs/subscriptions/tasks/progress.md) |
 | I-04 | Chrome showed a "Dangerous site" warning on the confirm link (2026-10-22) | New visitors may stop there. The cause is unknown | Parked by the owner: move to the owner's own domain, then ask Google for a review | [account-flows.md](../../docs/subscriptions/account-flows.md#what-should-change) #1 |
 | I-05 | The terms page waits for an adviser's liability clause | Razorpay's website review may not pass until terms ships (**verify** the required pages), so live payments wait too | Owner, with an adviser (RM-04) | [decisions.md](../../docs/decisions.md) 2026-10-23 |
@@ -51,6 +50,7 @@ Closed, kept for the record:
 |---|---|---|---|
 | I-06 | The first production sweep saved items from only 1 of 4 categories | The output token limit was raised to 16,000, because thinking counts toward it; a test covers a cut-off reply | `f200a79`; [CHANGELOG](../../CHANGELOG.md) 2026-10-21 |
 | I-07 | One inbox could subscribe several times under different spellings (Gmail dots, `+tags`) | One subscription per inbox, keyed on the canonical address | `33d1ef1`; [decisions.md](../../docs/decisions.md) 2026-10-22 |
+| I-02 | The failure notice said only `http 400`: the code dropped Anthropic's error message, so the cause of I-01 had to be guessed | The notice gives the error's type and message on one line, capped at 200 characters, with the key blanked if it appears (RM-02) | `1ff7825`, PR #79; [CHANGELOG](../../CHANGELOG.md) 2026-10-24 |
 | I-08 | An already-confirmed address was told "a confirmation link is on its way" and then got no email | The reply says the address is subscribed and emails its manage link, at most once a day | `3af6403`; [decisions.md](../../docs/decisions.md) 2026-10-22 |
 
 ## Dependencies

@@ -10,6 +10,8 @@ grouped by date.
   summary in [`pm/CASE_STUDY.md`](pm/CASE_STUDY.md). It summarises and links the existing docs; every figure names
   its source, and gaps are marked **OWNER INPUT NEEDED** or **Not measured**. Stages 5 to 7 are plans, since
   payments haven't opened. The README links it, and the v1 PRD points to v2.
+- A failed sweep now says why Anthropic refused the call (`http 400 <type>: <message>`), not just `http 400`. The
+  message is one line, capped, and never shows the key.
 
 ## 2026-10-23
 

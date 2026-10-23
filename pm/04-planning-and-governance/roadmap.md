@@ -10,7 +10,7 @@
 | ID | Item | Why | Who | Blocked by | Source |
 |---|---|---|---|---|---|
 | RM-01 | Get the sweeps running again | Every scheduled sweep since 2026-10-23 15:09 UTC failed: Anthropic refused all four categories with HTTP 400, and nothing was saved | Owner: put a key from the owner's own Anthropic account in Vercel, with credit, and redeploy | — | GitHub Actions run logs; I-01 in the [RAID log](raid-log.md) |
-| RM-02 | Record why Anthropic refused a call | The failure email says only `http 400`, so the reason has to be guessed | Dev | — | [api/_lib/radar.js](../../api/_lib/radar.js) |
+| RM-02 | Record why Anthropic refused a call | **Done** 2026-10-24 (PR #79, `1ff7825`): the failure email said only `http 400`; it now gives the error's type and message | Dev | — | [api/_lib/radar.js](../../api/_lib/radar.js) |
 | RM-03 | Razorpay live activation | Live payments need it | Owner | RM-04 (Razorpay reviews the website) | [payments-razorpay.md](../../docs/subscriptions/payments-razorpay.md#prerequisites) |
 | RM-04 | Ship the terms page | Razorpay's website review; the footer's last missing page | Owner, with an adviser | The liability clause | [decisions.md](../../docs/decisions.md) 2026-10-23 |
 | RM-05 | Move to Vercel Pro | Hobby is for non-commercial use; T22 and T27 need it | Owner | A decision to spend | [costing.md](../../docs/subscriptions/costing.md#risks-and-safeguards) |
