@@ -72,3 +72,61 @@ reason asked, no offer screen (T23 A3, B5).
   no `checked`; the manage page's pay button text includes the price
 - `npm test`: manage-page state texts for `pending` and `halted` (the session reply already carries `rzp.status`;
   **verify** in `api/_lib/` and add it if not)
+
+## Built (2026-10-23)
+
+Branch `feat/t26-pro-copy`. `plan.json` stays `paid: false`, so the live site doesn't change: a build diffed
+against `main` differs only in blank lines where the paid blocks were dropped, and in the scripts below.
+
+- **Switch.** Each page keeps today's text in `<!-- when:free-test -->…<!-- /when -->` with the paid text beside it in
+  `<template data-when="paid">`, the markers `fill-plan.mjs` already has (T24).
+- **Home.** Pro card: `{{PRO_PRICE}}`, a line with the GST and renewal, and "Get Pro" → `/pricing/`. FAQ: price, GST,
+  renewal, cancel on the account page, a link to `/pricing/`. The sign-up dialog's Pro box: price, GST, "renews
+  automatically every month until you cancel", "you'll pay on your account page after confirming your email".
+- **`/subscribe/`.** The Pro row gets the price, GST, renewal and a `/pricing/` link. No redirect: the page stays.
+- **`/signup/`.** The Pro box as on the home page, still unticked unless `?pro=1`.
+- **Live board.** The price line reaches the bundle through `<meta name="tpr-pro-price">` in `live/index.html`, inside a
+  paid block, so it exists only in a paid build. With it, the locked panels show the price and renewal, "Get Pro" →
+  `/pricing/` and "Go to your account". Without it they read as today. (A meta tag, not a `data-` attribute: a
+  `<template>` block holds whole elements.)
+- **`/manage/`.**
+  - The `buy` block shows the summary above the button: price, GST, renewal, cancel any time with Pro until the
+    period's end, the refund rule (`{{PRO_REFUND}}`), "Payments are handled by Razorpay" and "Pricing details".
+  - The button is **"Pay with Razorpay"**, without the amount: while GST is open, "Pay ₹299" could be wrong if GST is
+    added on top. Checkout's own screen shows the amount; T27 checks it.
+  - The `ask` block stays in the paid build (it shows when Razorpay isn't set up) but says "Payments aren't open right
+    now" and has no Request Pro button. The script skips the button when it's missing.
+  - Closing Checkout says "The payment window was closed." The planned "No payment was made" could be wrong: a payment
+    may finish after the window closes (for example in a UPI app; **verify**), and Pro then starts from the webhook.
+- **Failed renewals (a correction).** The plan's `pending` text said "Pro stays on meanwhile". It doesn't: Razorpay
+  retries after the period has ended, so `effectivePlan()` is already Free, and the page offered **Upgrade**. A
+  second subscription could then charge twice. Now:
+  - `/api/account` returns `billing`: `"pending"` while Razorpay retries, `"halted"` once it has given up, else
+    `null`;
+  - a checkout while `pending` gets `409 payment_retrying`;
+  - the page says "Your renewal payment didn't go through, and Razorpay is trying again. Pro comes back as soon as a
+    payment succeeds" with no pay button (a `charged` event restores Pro, as `applyRzpEvent` does today);
+  - `halted`: "Razorpay stopped trying to take your renewal payment, so you're on Free … You can start Pro again
+    below." The plan's "Nothing more will be charged" is left out: no source says a halted subscription can't be
+    charged again (**verify** in Razorpay's docs at T27).
+- **Not built.** "Start Pro again" while a cancelled period runs: checkout already refuses while Pro is on
+  (`already_pro`). The active line keeps "Renews on DATE." without the price, which the page script doesn't have.
+
+**Checks and tests.**
+- `npm run check`, 188:
+  - with `paid: true`, no page says "being tested" or "switched on by hand";
+  - the manage page's paid summary has the price, GST, renewal and refund rule above "Pay with Razorpay", and no
+    Request Pro;
+  - the page handles `pending`, `halted`, `payment_retrying` and a closed window;
+  - the live page carries the price meta and the bundle reads it.
+  - Each check was tried failing once.
+- `npm test`:
+  - `billing` for each state, and `null` for an owner-granted Pro;
+  - `payment_retrying` with no call to Razorpay;
+  - the five real pages filled both ways: unchanged with `paid: false`, and with the sample plan no `{{`, no
+    free-test text, the price and the renewal.
+
+**Still open.**
+- **Go-live order.** Once paid, these pages link `/pricing/`, so `/pricing/` must ship first. `npm run check` already
+  refuses `paid: true` while `/pricing/` is a draft (tried with a temporary `plan.json`).
+- **Acceptance.** The "`paid: true` on a Preview with test keys" item is T27's run.

@@ -396,7 +396,9 @@ export function makeUnsubscribeHandler({ env, storage, now, randomBytes = crypto
 // ---- the manage page's data (/manage/, linked from every digest)
 
 // What the manage page may show: the plan, never the address. `payments` says whether the page
-// offers Checkout or the Request Pro button; for a paid Pro, proUntil is the renewal date.
+// offers Checkout or the Request Pro button; for a paid Pro, proUntil is the renewal date. `billing`
+// is "pending" while Razorpay retries a failed renewal and "halted" once it has given up, else null.
+const RZP_BILLING = new Set(["pending", "halted"]);
 const rzpOf = (record) => (record.rzp && typeof record.rzp === "object" ? record.rzp : {});
 const paidPro = (record, t) => record.proSource === "razorpay" && effectivePlan(record, t) === "pro";
 const accountView = (record, t, env) => ({
@@ -411,6 +413,7 @@ const accountView = (record, t, env) => ({
   payments: paymentsReady(env),
   paymentPending: rzpOf(record).status === "authenticated" && effectivePlan(record, t) !== "pro",
   cancelAtPeriodEnd: paidPro(record, t) && rzpOf(record).cancelAtPeriodEnd === true,
+  billing: RZP_BILLING.has(rzpOf(record).status) ? rzpOf(record).status : null,
 });
 
 // GET ?id&t: the plan. With no id and no token, the login cookie (T16) says whose plan; a POST
@@ -488,6 +491,8 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
           if (effectivePlan(record, t) === "pro") return sendJson(res, 409, { error: "already_pro" });
           // Paid, and the webhook hasn't arrived: a second checkout would charge twice.
           if (rzp.status === "authenticated") return sendJson(res, 409, { error: "payment_pending" });
+          // Razorpay is still retrying a failed renewal: a new subscription could charge twice too.
+          if (rzp.status === "pending") return sendJson(res, 409, { error: "payment_retrying" });
           const age = t - Date.parse(rzp.createdAt);
           if (rzp.status === "created" && rzp.subscriptionId && age >= 0 && age < CHECKOUT_REUSE_MINUTES * 60 * 1000) {
             return sendJson(res, 200, { ok: true, keyId, subscriptionId: rzp.subscriptionId });

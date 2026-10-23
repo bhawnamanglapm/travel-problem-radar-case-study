@@ -2925,6 +2925,19 @@ const iso = (ms) => new Date(ms).toISOString();
     check(r.code === 409 && r.json().error === "payment_pending" && w.rzpCalls.length === before, "checkout: a paid checkout waiting for the webhook gets 409 payment_pending, so nobody pays twice");
     r = await w.get(waiting);
     check(r.json().paymentPending === true && r.json().effectivePlan === "free", "account GET: paymentPending while the webhook hasn't arrived");
+    // A failed renewal (T26): the period has ended, so the account reads as Free while Razorpay retries.
+    const retrying = await w.add("retry@example.com", { proSource: "razorpay", rzp: { subscriptionId: "sub_T26RETRY", status: "pending", createdAt: iso(T0 - 40 * 24 * 3600_000), currentEnd: iso(T0 - 3600_000), cancelAtPeriodEnd: false, lastEventAt: iso(T0 - 3600_000) } });
+    r = await w.act(retrying, "checkout");
+    check(r.code === 409 && r.json().error === "payment_retrying" && w.rzpCalls.length === before, "checkout: while Razorpay retries a renewal, 409 payment_retrying, so nobody pays twice");
+    r = await w.get(retrying);
+    check(r.json().billing === "pending" && r.json().effectivePlan === "free", "account GET: billing is pending while Razorpay retries a renewal");
+    const gaveUp = await w.add("halted@example.com", { rzp: { subscriptionId: "sub_T26HALT", status: "halted", createdAt: iso(T0 - 40 * 24 * 3600_000), currentEnd: iso(T0 - 3600_000), cancelAtPeriodEnd: false, lastEventAt: iso(T0 - 3600_000) } });
+    r = await w.get(gaveUp);
+    check(r.json().billing === "halted" && r.json().effectivePlan === "free", "account GET: billing is halted once Razorpay gives up");
+    for (const [who, label] of [[waiting, "a checkout waiting for the webhook"], [pro, "an owner-granted Pro"]]) {
+      r = await w.get(who);
+      check(r.json().billing === null, `account GET: billing is null for ${label}`);
+    }
 
     // Razorpay fails
     const unlucky = await w.add("unlucky@example.com");
