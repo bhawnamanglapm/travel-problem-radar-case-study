@@ -223,7 +223,7 @@ const termsPage = readFileSync("legal/terms/index.html", "utf8"), refundsPage = 
 check(termsPage.includes("{{PRO_PRICE}}, {{PRO_GST}}") && termsPage.includes("Renews automatically every month until you cancel"), "legal/terms takes Pro's price and GST from plan.json and says it renews");
 check(refundsPage.includes("<p>{{PRO_REFUND}}</p>") && refundsPage.includes("{{PRO_REFUND_DAYS}}"), "legal/refunds takes the refund rule and its days from plan.json, the same text as /pricing/");
 
-// 4f. About page and site footer (T25). Every shipped page ends with one footer: About, Pricing, Contact, Terms,
+// 4f. About page and site footer (T25). Every shipped page ends with one footer: Home, About, Pricing, Contact, Terms,
 // Privacy, Refunds, in that order, listing only the pages the build ships. Until /pricing/ and the contact page ship,
 // Plans (/subscribe/) and the email address stand in for them. A draft lists all six, as it will once everything ships.
 const SITE = "https://travel-problem-radar.vercel.app/";
@@ -233,8 +233,8 @@ const aboutShipped = copied.includes("about");
 check(aboutPage.length > 0 && !/<script[^>]*\ssrc=|<link[^>]*rel=["']?stylesheet|@import|url\(\s*["']?https?:/i.test(aboutPage) && aboutPage.includes('if (/\\.github\\.io$/.test(location.hostname)) location.replace("https://travel-problem-radar.vercel.app"'), "about/index.html exists, is self-contained and sends a GitHub Pages visit to the Vercel copy");
 check(/Gathered by an AI model with web search\. Items are not verified/.test(aboutPage) && /aren&rsquo;t checked by a person/.test(aboutPage) && !/\{\{/.test(aboutPage), "about/index.html has the AI notice and no build-time slot (the owner's name and address are on the contact page)");
 if (aboutShipped) check(!/OWNER INPUT NEEDED/.test(aboutPage), "about/index.html is in the build, so it has no gaps left");
-const ships = (p) => (p.startsWith("legal/") ? shippedLegal.includes(p.split("/")[1]) : copied.includes(p.replace("/", "")));
-const FOOT = [["About", "about/"], ["Pricing", "pricing/", "Plans subscribe/"], ["Contact", "legal/contact/", `Contact ${MAIL}`], ["Terms", "legal/terms/"], ["Privacy", "legal/privacy/"], ["Refunds", "legal/refunds/"]];
+const ships = (p) => p === "" || (p.startsWith("legal/") ? shippedLegal.includes(p.split("/")[1]) : copied.includes(p.replace("/", "")));
+const FOOT = [["Home", ""], ["About", "about/"], ["Pricing", "pricing/", "Plans subscribe/"], ["Contact", "legal/contact/", `Contact ${MAIL}`], ["Terms", "legal/terms/"], ["Privacy", "legal/privacy/"], ["Refunds", "legal/refunds/"]];
 const footWanted = (all) => FOOT.flatMap(([label, p, standIn]) => (all || ships(p) ? [`${label} ${p}`] : standIn ? [standIn] : []));
 // Where a link on page f goes, as a path from the site root ("legal/privacy/"); other links come back as they are.
 const target = (f, h) => { if (h.startsWith("mailto:")) return h; const u = new URL(h, SITE + f); return u.origin + "/" === SITE ? u.pathname.slice(1) : h; };
@@ -245,7 +245,7 @@ for (const f of footPages) {
   const links = navs.length === 1 ? [...navs[0][1].matchAll(/<a href="([^"]+)">([^<]+)<\/a>/g)].map((m) => [m[2], m[1]]) : [];
   const got = links.map(([l, h]) => `${l} ${target(f, h)}`).join(" · ");
   const want = footWanted(!shipped).join(" · ");
-  check(got === want && (f !== "index.html" || links.every(([, h]) => h.startsWith(SITE) || h === MAIL)), `${f}: one site footer linking ${shipped ? "the pages that ship" : "all six pages (it's a draft)"}, in order (${want}${got === want ? "" : "; found: " + (got || "none")})`);
+  check(got === want && (f !== "index.html" || links.every(([, h]) => h.startsWith(SITE) || h === MAIL)), `${f}: one site footer linking ${shipped ? "the pages that ship" : "all seven pages (it's a draft)"}, in order (${want}${got === want ? "" : "; found: " + (got || "none")})`);
 }
 // No shipped page links a page the build doesn't ship, in the version the build makes from today's plan.json.
 const drafts = [...draftLegal.map((s) => `legal/${s}/`), ...(aboutShipped ? [] : ["about/"]), ...(pricingShipped ? [] : ["pricing/"])];
