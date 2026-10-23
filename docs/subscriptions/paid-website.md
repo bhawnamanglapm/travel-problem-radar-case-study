@@ -115,6 +115,11 @@ category and their headlines, with no detail and no source links, and a "Sign in
 emails don't change. The teaser follows the same switch as the board, so the free email keeps every finding until
 the board is locked.
 
+**Built** (T18, 2026-10-23), headlines for all four categories (owner's choice). Each category shows its count and its
+headlines, New marked; no summary, source, region, date, severity tag or product idea. A **Sign in** button goes to
+`/signin/`. The subject reads "Travel Problem Radar daily summary · <date> · N problems, M new". The teaser has its
+own Resend idempotency key, and the sweep's `subscribers` log line says `"teaser":true` or `false`.
+
 ## The switch
 
 `BOARD_PAYWALL=1` turns on the locked board and the teaser email together; anything else, or unset, means off.
@@ -125,7 +130,8 @@ So it goes on with go-live (T22), unless the owner chooses sooner. On that day, 
 the README and the `/subscribe/` nav also change wording.
 
 **The owner turned it on on 2026-10-23**, before checkout. The board is locked; the Free email stays complete until
-T18 is deployed, and then turns into the teaser at once, because the switch is already on. The wording changes
+T18 is deployed, and then turns into the teaser at once, because the switch is already on (T18 was deployed the
+same day). The wording changes
 above were made the same day: "Live board (Pro)" in the navs, the home page's second button goes to the
 demo, the Free plan no longer lists the board, and the home page's "What it found recently" section (empty for
 anyone without Pro) points to the demo.
@@ -179,7 +185,8 @@ on `/manage/`. Not in Razorpay's docs: what the form asks for after "Yes" (T15 S
 
 1. Prices, currency, trial and refund rule (the T15 pricing worksheet).
 2. How long a sign-in lasts: decided 2026-10-22, until the browser closes, 12 hours at most.
-3. Whether the teaser shows headlines from every category, or only counts for some.
+3. Whether the teaser shows headlines from every category, or only counts for some: decided 2026-10-23, headlines
+   for all four.
 4. Whether turning on the paywall before payments is wanted (only hand-granted Pro could see the board).
 5. Not checked: whether a locked board with no way to pay counts as commercial use under Vercel Hobby's terms.
    Payments themselves need Vercel Pro (T15 Step 2, row 3).

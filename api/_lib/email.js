@@ -13,12 +13,17 @@ const when = (at) => at.slice(0, 16).replace("T", " ") + " UTC";
 const FONT = "font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5;color:#1a1a1a";
 const MUTED = "color:#5f6368";
 const NOTE = "Gathered by an AI model with web search. Items are not verified; check each source link.";
+const TEASER_NOTE = "Gathered by an AI model with web search. Items are not verified.";
+const TEASER_INVITE = "Sign in to see everything: summaries, sources and product ideas are on the live board with Pro.";
 
 // The third argument is for the subscriber emails: `heading` replaces the title, and `subjectLead`
 // (for example "daily") makes the subject "Travel Problem Radar daily · <date> · ...". With no third
 // argument the output is exactly the owner's digest. `cats` (a Pro subscriber's choice, T14) limits
 // the sections and the "Failed this run" line to those categories; the caller filters `problems`.
-export function buildDigestEmail({ at, problems, perCat = {}, manual = false }, liveUrl = "", { heading, subjectLead, cats = null } = {}) {
+// `teaser` (the Free email while the board is locked, T18) keeps the counts and the headlines only,
+// with no detail and no source link, and links to `signInUrl` instead of the board.
+export function buildDigestEmail({ at, problems, perCat = {}, manual = false }, liveUrl = "", { heading, subjectLead, cats = null, teaser = false, signInUrl = "" } = {}) {
+  if (teaser && !LINK_OK.test(signInUrl || "")) throw new Error("buildDigestEmail: bad sign-in link");
   const shown = cats ? CATS.filter((c) => cats.includes(c.key)) : CATS;
   const failed = shown.filter((c) => /^failed/.test(perCat[c.key] || "")).map((c) => c.label);
   const newCount = problems.filter((p) => p.isNew).length;
@@ -45,7 +50,13 @@ export function buildDigestEmail({ at, problems, perCat = {}, manual = false }, 
     text.push(`Failed this run: ${failed.join(", ")}`);
     html.push(`<p style="margin:0 0 12px">Failed this run: ${esc(failed.join(", "))}</p>`);
   }
-  if (liveUrl) {
+  if (teaser) {
+    text.push(TEASER_INVITE, `Sign in: ${signInUrl}`);
+    html.push(
+      `<p style="margin:0 0 8px">${esc(TEASER_INVITE)}</p>`,
+      `<p style="margin:0 0 12px"><a href="${esc(signInUrl)}" style="display:inline-block;padding:8px 16px;background:#1a1a1a;color:#ffffff;text-decoration:none;border-radius:6px">Sign in</a></p>`,
+    );
+  } else if (liveUrl) {
     text.push(`Live board: ${liveUrl}`);
     html.push(`<p style="margin:0 0 12px"><a href="${esc(liveUrl)}">Open the live board</a></p>`);
   }
@@ -54,6 +65,13 @@ export function buildDigestEmail({ at, problems, perCat = {}, manual = false }, 
     if (!items.length) return;
     text.push("", `${c.label.toUpperCase()} (${items.length})`);
     html.push(`<h2 style="font-size:13px;letter-spacing:.04em;text-transform:uppercase;margin:20px 0 8px;${MUTED}">${esc(c.label)} (${items.length})</h2>`);
+    if (teaser) {
+      items.forEach((p) => {
+        text.push(`- ${p.isNew ? "NEW " : ""}${p.title}`);
+        html.push(`<div style="margin:0 0 6px">${p.isNew ? `<strong style="color:#b3261e">NEW</strong> ` : ""}${esc(p.title)}</div>`);
+      });
+      return;
+    }
     items.forEach((p) => {
       const meta = [p.source, p.region, p.date].filter(Boolean).join(" · ");
       text.push(`- [${p.severity}]${p.isNew ? " NEW" : ""} ${p.title}`);
@@ -72,8 +90,9 @@ export function buildDigestEmail({ at, problems, perCat = {}, manual = false }, 
       );
     });
   });
-  text.push("", NOTE);
-  html.push(`<p style="margin:20px 0 0;font-size:12px;${MUTED}">${esc(NOTE)}</p>`, `</div>`);
+  const note = teaser ? TEASER_NOTE : NOTE;
+  text.push("", note);
+  html.push(`<p style="margin:20px 0 0;font-size:12px;${MUTED}">${esc(note)}</p>`, `</div>`);
   return { subject, text: text.join("\n"), html: html.filter(Boolean).join("\n") };
 }
 
@@ -128,7 +147,7 @@ export function withSubscriberFooter(mail, { unsubscribeUrl, manageUrl = "", pla
 export function buildConfirmEmail({ confirmUrl, siteUrl = "" }) {
   if (!LINK_OK.test(confirmUrl || "")) throw new Error("buildConfirmEmail: bad confirm link");
   const subject = "Confirm your Travel Problem Radar subscription";
-  const intro = "You asked to get the Travel Problem Radar digest by email: one email a day with the travel problems an AI model found in the last 24 hours.";
+  const intro = "You asked to get the Travel Problem Radar digest by email: one email a day about the travel problems an AI model found in the last 24 hours.";
   const ignore = "If you didn't ask for this, ignore this email; nothing more will be sent.";
   const stored = "What we keep: your email address and the dates you subscribed and confirmed. Unsubscribing deletes it.";
   return {

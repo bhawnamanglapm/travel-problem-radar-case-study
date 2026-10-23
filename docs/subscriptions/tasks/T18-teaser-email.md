@@ -7,7 +7,7 @@
 | Size | S |
 | Depends on | T17 |
 | Unblocks | T22 |
-| Status | todo. `BOARD_PAYWALL` is already on in production (2026-10-23), so the teaser starts as soon as this is deployed |
+| Status | done (2026-10-23). `BOARD_PAYWALL` is on in production, so Free gets the summary from the first daily email after deploy |
 
 ## Why
 
@@ -25,9 +25,9 @@ Free keeps a daily email, with counts and headlines only and a link to sign in. 
 
 ## Acceptance criteria
 
-- [ ] Switch off: the Free email is unchanged
-- [ ] Switch on: the Free email has counts and headlines, no detail, no source link, and a sign-in link
-- [ ] Pro emails are the same with the switch on and off
+- [x] Switch off: the Free email is unchanged
+- [x] Switch on: the Free email has counts and headlines, no detail, no source link, and a sign-in link
+- [x] Pro emails are the same with the switch on and off
 
 ## Tests
 
@@ -37,5 +37,5 @@ Free keeps a daily email, with counts and headlines only and a link to sign in. 
 ## Docs
 
 - email-signup.md and pricing.md: what Free gets (the draft terms already describe it)
-- Still open (owner): whether some categories show counts only ([paid-website.md](../paid-website.md), open
+- Decided 2026-10-23 (owner): headlines for all four categories ([paid-website.md](../paid-website.md), open
   question 3)
