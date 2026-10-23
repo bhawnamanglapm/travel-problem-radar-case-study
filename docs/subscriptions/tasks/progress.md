@@ -33,7 +33,7 @@ working in a real inbox; that is T12's staged launch.
 | [T18](T18-teaser-email.md) Free email becomes a teaser | done; live with the switch | branch `feat/teaser-email` | 703 pass (635 subscriber + 68 sweep; +27 new); 108 `npm run check` checks (+1) | See "T18" below |
 | [T19](T19-razorpay-library.md) Razorpay library | done; not used yet | branch `feat/razorpay-library` | 742 pass (674 subscriber + 68 sweep; +39 new); 110 `npm run check` checks (+2) | See "T19" below |
 | [T20](T20-manage-page-and-checkout.md) `/manage/` page, checkout, cancel | done; test checkout passed on `staging` (2026-10-23) | branch `feat/checkout` | 782 pass (714 subscriber + 68 sweep; +40 new); 113 `npm run check` checks (+3) | See "T20" below |
-| [T21](T21-razorpay-webhook.md) Razorpay webhook | built; staging check waits for the webhook in Razorpay test mode | branch `feat/razorpay-webhook` | 834 pass (766 subscriber + 68 sweep; +43 new); 114 `npm run check` checks (+1) | See "T21" below |
+| [T21](T21-razorpay-webhook.md) Razorpay webhook | done; staging check passed (2026-10-23) | branch `feat/razorpay-webhook` | 834 pass (766 subscriber + 68 sweep; +43 new); 114 `npm run check` checks (+1) | See "T21" below |
 | [T22](T22-pro-lifecycle-and-go-live.md) Pro expiry, paid unsubscribe, go-live | todo | | | Needs Vercel Pro (T15 Step 2, row 3) |
 
 ## Notes per task
@@ -400,7 +400,17 @@ working in a real inbox; that is T12's staged launch.
   `authenticated` never moves `rzp.status` back from `active`; a record whose own subscription is a different one
   (an abandoned checkout) counts as unknown; the record is read with `storage.get`, so a storage failure is `500`
   (retried) rather than "unknown".
-- Not checked yet: the webhook on `staging` with a test payment.
+- **Staging check, 2026-10-23:** a new sign-up on `staging` paid with the domestic test card. Razorpay sent
+  `authenticated`, `charged` and `activated` in the same second; all three answered `200`, and the log read
+  `charged: plan free -> pro`. The record: `plan: pro`, `proSource: razorpay`, `proUntil` equal to `current_end`
+  (a month ahead), `rzp.status: active`, a `progranted` event and three event markers.
+- On the way there: Razorpay's first deliveries got `401` from **Vercel Authentication**, not from the function,
+  because the bypass value in the webhook URL was wrong. `vercel logs requests` told the two apart: requests that
+  reached the function have `pathType: streaming_func`, the blocked ones have none. After the URL was fixed, a
+  changed `RAZORPAY_WEBHOOK_SECRET` needed a redeploy of `staging` before it applied.
+- Still open: the first test account's `cancelled` event never arrived, so that record stays `authenticated`. A
+  retry at 03:20 UTC, after the URL was fixed, was still blocked by Vercel. Whether Razorpay retries to the URL an
+  event was first sent to isn't checked in its docs. The record is test data and stays as it is.
 
 ### T20
 - `/api/account` gains `checkout`, `checkout-return` and `cancel`; no new function (still 8). They answer `503` unless

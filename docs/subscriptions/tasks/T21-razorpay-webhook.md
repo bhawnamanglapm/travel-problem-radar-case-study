@@ -62,8 +62,10 @@ the paid `proUntil`.
 
 ## Acceptance criteria
 
-- [ ] Test checkout → `subscription.activated` → the record is Pro with the right `proUntil`, and the next scheduled
-  sweep sends it the Pro email
+- [x] Test checkout → `subscription.activated` → the record is Pro with the right `proUntil`, and the next scheduled
+  sweep sends it the Pro email. Checked 2026-10-23 on `staging` up to the Pro record (`proUntil` = the subscription's
+  `current_end`, a month ahead). The email itself can't be checked there, since crons don't run on Preview; the
+  tests cover it
 - [x] The same event delivered twice changes nothing the second time (tests)
 - [x] A forged event (bad signature) is refused with `401` and writes nothing (tests)
 - [x] `halted` moves to Free; `pending` doesn't (tests)
