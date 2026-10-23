@@ -64,7 +64,8 @@ an account are the same thing.
      set (`action=me` reports `google`).
 4. **The board.** `/live/` reads `/api/data` as today. With the switch on (built in T17; on in production since 2026-10-23):
    - not signed in → `401`, and the page shows "Sign in" and "Sign up", plus a link to the demo;
-   - signed in, Free → `402`, and the page shows "Upgrade" (until payments exist: the existing **Request Pro**);
+   - signed in, Free → `402`, and the page shows **Request Pro** while Pro is free; in a paid build (T26) it shows the
+     price and renewal, "Go to your account" and a link to `/pricing/`;
    - signed in, Pro (`effectivePlan()` in `api/_lib/subscribers.js`) → the data.
 5. **Upgrade.** On `/manage/` while signed in (checkout is T20). The `id`/`t` link from the emails keeps working.
 6. **Sign out.** A button on `/manage/` and `/signin/` (`action: "signout"`) clears the cookie in that browser;

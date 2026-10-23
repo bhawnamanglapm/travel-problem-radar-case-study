@@ -5,6 +5,13 @@ grouped by date.
 
 ## 2026-10-23
 
+- The pages that call Pro "free while it's being tested" (home, `/subscribe/`, `/signup/`, the live board's locked
+  panels, `/manage/`) now also hold the paid wording: price, GST, "renews automatically every month until you
+  cancel", and links to `/pricing/`. `plan.json`'s `paid` picks one at build time; it stays `false`, so the live
+  site doesn't change. In the paid version, `/manage/` shows the price, renewal and refund rule above a "Pay with
+  Razorpay" button. Fixed: after a failed renewal the account read as Free and offered a second checkout while Razorpay
+  was still retrying the first, which could charge twice. `/api/account` now refuses that (`payment_retrying`) and
+  reports `billing` (`pending` or `halted`) so the page can say what's happening (T26).
 - `/about/` is live, with who runs the site (from the owner's resume). Every shipped footer now starts with About:
   About · Plans · Contact · Privacy. The refund rule is set in `plan.json` (first payment back within 7 days, mistakes
   always refunded, within 14 days); it shows once the refunds and pricing pages ship.
