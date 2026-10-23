@@ -37,7 +37,8 @@ const missing = local.filter((h) => !existsSync(h.endsWith("/") ? h + "index.htm
 check(local.length > 0 && missing.length === 0, `local links resolve (${local.join(", ")})${missing.length ? " missing: " + missing : ""}`);
 // The owner confirmed the Slack connector and the daily trigger worked in Claude's app;
 // email delivery was not confirmed. Neither is in this repo's code, and the page must say so.
-check(!/Gmail/i.test(page), "no Gmail/email-delivery claim (not confirmed)");
+// The contact address is a Gmail address, so it's left out of this test.
+check(!/Gmail/i.test(page.replaceAll("pehchanthetraveller19@gmail.com", "")), "no Gmail/email-delivery claim (not confirmed)");
 check(!/Slack/.test(page) || /not in this repository&rsquo;s code/.test(page),
       "Slack delivery, if mentioned, is marked as set up in Claude's app, not this repo");
 
@@ -61,7 +62,7 @@ const subPage = existsSync("subscribe/index.html") ? readFileSync("subscribe/ind
 check(subPage.length > 0 && !/<form|\/api\/subscribe/.test(subPage), "subscribe/index.html has no sign-up form of its own (the one form is on /signup/)");
 check(/<a class="btn" href="\.\.\/signup\/">Create your account<\/a>/.test(subPage) && /href="\.\.\/signup\/\?pro=1"/.test(subPage), "subscribe/index.html links to the sign-up page, and to it with Pro ticked");
 check(/Gathered by an AI model with web search\. Items are not verified/.test(subPage), "subscribe/index.html has the AI notice");
-check(/Questions or a deletion request: email <a href="mailto:hello@pehchanthetraveller\.com">/.test(subPage) && !/will be added here/.test(subPage), "subscribe/index.html has a real contact address, not the placeholder");
+check(/Questions or a deletion request: email <a href="mailto:pehchanthetraveller19@gmail\.com">/.test(subPage) && !/will be added here/.test(subPage), "subscribe/index.html has a real contact address, not the placeholder");
 check(subPage.length > 0 && !/<script[^>]*\ssrc=|<link[^>]*rel=["']?stylesheet|@import|url\(\s*["']?https?:/i.test(subPage), "subscribe/index.html is self-contained (no external script, stylesheet, import or font URL)");
 const vercelJson = JSON.parse(readFileSync("vercel.json", "utf8"));
 // The site build lives in package.json's build:site: Vercel caps vercel.json's buildCommand at 256 characters.
@@ -113,7 +114,7 @@ check(upPage.length > 0 && !/<script[^>]*\ssrc=|<link[^>]*rel=["']?stylesheet|@i
 check(/\bcp -r [^&]*\bsignup\b[^&]* public\//.test(siteBuild), "build:site copies signup into public/");
 check(/name="wantsPro"/.test(upPage) && /wantsPro: form\.wantsPro\.checked/.test(upPage) && /pro=1/.test(upPage), "signup/index.html has the \"I'd also like Pro\" box, sends it, and ticks it for ?pro=1");
 check(/We store your email address, the dates you signed up and confirmed, and whether you asked for Pro/.test(upPage), "signup/index.html has the privacy note");
-check(/Questions or a deletion request: email <a href="mailto:hello@pehchanthetraveller\.com">/.test(upPage) && /Gathered by an AI model with web search\. Items are not verified/.test(upPage), "signup/index.html has the contact address and the AI notice");
+check(/Questions or a deletion request: email <a href="mailto:pehchanthetraveller19@gmail\.com">/.test(upPage) && /Gathered by an AI model with web search\. Items are not verified/.test(upPage), "signup/index.html has the contact address and the AI notice");
 check(/includes the free daily summary/.test(upPage) && /Unsubscribing from it deletes the account/.test(upPage), "signup/index.html says the account includes the daily summary and how to delete it");
 check(![page, subPage, upPage].some((s) => /everything found in the last 24 hours/i.test(s)), "home, subscribe and sign-up pages don't promise Free everything (it gets a summary, T18)");
 check(/href="\.\.\/signin\/"/.test(upPage) && /href="\.\.\/signup\/"/.test(inPage), "signup and signin pages link to each other");
@@ -159,8 +160,8 @@ for (const slug of LEGAL) {
   const t = existsSync(f) ? readFileSync(f, "utf8") : "";
   check(t.length > 0 && !/<script[^>]*\ssrc=|<link[^>]*rel=["']?stylesheet|@import|url\(\s*["']?https?:/i.test(t), `${f} exists and is self-contained`);
   check(t.includes('if (/\\.github\\.io$/.test(location.hostname)) location.replace("https://travel-problem-radar.vercel.app" + location.pathname'), `${f} sends a GitHub Pages visit to the Vercel copy`);
-  if (shipped) check(t.includes('href="mailto:hello@pehchanthetraveller.com"') && shippedLegal.every((s) => t.includes(`href="../${s}/"`)) && draftLegal.every((s) => !t.includes(`href="../${s}/"`)), `${f} has the contact address and links only the policy pages that are live`);
-  else check(t.includes('href="mailto:hello@pehchanthetraveller.com"') && LEGAL.every((s) => t.includes(`href="../${s}/"`)), `${f} has the contact address and links all four policy pages`);
+  if (shipped) check(t.includes('href="mailto:pehchanthetraveller19@gmail.com"') && shippedLegal.every((s) => t.includes(`href="../${s}/"`)) && draftLegal.every((s) => !t.includes(`href="../${s}/"`)), `${f} has the contact address and links only the policy pages that are live`);
+  else check(t.includes('href="mailto:pehchanthetraveller19@gmail.com"') && LEGAL.every((s) => t.includes(`href="../${s}/"`)), `${f} has the contact address and links all four policy pages`);
   if (shipped) check(!/OWNER INPUT NEEDED|id="draft-notice"|name="robots" content="noindex"/.test(t), `${f} is in the build, so it has no gaps, draft notice or noindex left`);
 }
 // The owner's name, address and phone come from Vercel variables at build time (scripts/fill-legal.mjs), never the repo.
@@ -227,7 +228,7 @@ check(refundsPage.includes("<p>{{PRO_REFUND}}</p>") && refundsPage.includes("{{P
 // Privacy, Refunds, in that order, listing only the pages the build ships. Until /pricing/ and the contact page ship,
 // Plans (/subscribe/) and the email address stand in for them. A draft lists all six, as it will once everything ships.
 const SITE = "https://travel-problem-radar.vercel.app/";
-const MAIL = "mailto:hello@pehchanthetraveller.com";
+const MAIL = "mailto:pehchanthetraveller19@gmail.com";
 const aboutPage = existsSync("about/index.html") ? readFileSync("about/index.html", "utf8") : "";
 const aboutShipped = copied.includes("about");
 check(aboutPage.length > 0 && !/<script[^>]*\ssrc=|<link[^>]*rel=["']?stylesheet|@import|url\(\s*["']?https?:/i.test(aboutPage) && aboutPage.includes('if (/\\.github\\.io$/.test(location.hostname)) location.replace("https://travel-problem-radar.vercel.app"'), "about/index.html exists, is self-contained and sends a GitHub Pages visit to the Vercel copy");
@@ -269,7 +270,7 @@ check(/<dialog id="dlg" aria-labelledby="dlg-h">/.test(page) && /fetch\("\/api\/
 check(!/\.innerHTML\s*=/.test(page), "index.html never uses innerHTML (findings are written with textContent)");
 check(!/BHAWNA|Bhawna Mangla|More work|Product Manager|case study/i.test(page.replace(/<a class="back"[^>]*>[^<]*<\/a>/, "")),
   "index.html has no portfolio branding outside the Pages-only back link");
-check(/Gathered by an AI model with web search\. Items are not verified/.test(page) && /mailto:hello@pehchanthetraveller\.com/.test(page), "index.html has the AI notice and the contact address");
+check(/Gathered by an AI model with web search\. Items are not verified/.test(page) && /mailto:pehchanthetraveller19@gmail\.com/.test(page), "index.html has the AI notice and the contact address");
 check(/<a id="acct" href="\.\.\/signin\/">Sign in<\/a>/.test(livePage) && /fetch\("\/api\/session\?action=me"\)/.test(livePage) && /a\.href = "\.\.\/manage\/"/.test(livePage) && !/\.innerHTML\s*=/.test(livePage), "live/index.html links Sign in, and Account when signed in (no innerHTML)");
 check(/\| \*\*Get it by email\*\* \| https:\/\/travel-problem-radar\.vercel\.app\/subscribe\/[ .]/.test(readFileSync("README.md", "utf8")), "README.md's top table links to the subscribe page");
 
