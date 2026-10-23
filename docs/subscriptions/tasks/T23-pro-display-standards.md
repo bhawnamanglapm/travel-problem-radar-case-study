@@ -25,7 +25,7 @@ from [costing.md](../costing.md#199-299-and-499-compared-provisional), now in `p
 | # | Question | Default if not answered | Affects |
 |---|---|---|---|
 | 8 | Offer a yearly plan as well as monthly? | Monthly only. One Razorpay Plan, one price to keep in step | T24, T27 |
-| 9 | Contact for billing questions | `hello@pehchanthetraveller.com`, already on `/manage/` | T24, T25, T26 |
+| 9 | Contact for billing questions | `pehchanthetraveller19@gmail.com` (changed from `hello@pehchanthetraveller.com` 2026-10-23, at the owner's request), already on `/manage/` | T24, T25, T26 |
 
 Until 1, 2 and 4 are answered, no page shows a price and T27 can't start.
 

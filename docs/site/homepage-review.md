@@ -38,7 +38,7 @@ page still exists at `/demo/`, linked from the README.
 | How it works | Create an account → confirm by email → get the findings |
 | Plans | Free and Pro, as on `/subscribe/` (Pro free while it's tested) |
 | FAQ | Cost, password, unsubscribing, what's stored, how far to trust it |
-| Honest note and contact | The AI notice and hello@pehchanthetraveller.com in the footer |
+| Honest note and contact | The AI notice and the contact address in the footer (pehchanthetraveller19@gmail.com since 2026-10-23) |
 | Search and sharing | Meta description, canonical URL (the Vercel copy), Open Graph tags, favicon |
 | Accessibility | Skip link, visible focus rings, small text at WCAG AA contrast, a labelled modal dialog |
 | Speed and mobile | Fonts by `<link>` with preconnect, not `@import`; one main button; the popup is a bottom sheet on phones |

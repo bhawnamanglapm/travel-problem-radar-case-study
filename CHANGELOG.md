@@ -5,6 +5,9 @@ grouped by date.
 
 ## 2026-10-23
 
+- The contact address for questions is now **pehchanthetraveller19@gmail.com** on every page (footer Contact link,
+  `/about/`, the legal pages, `/manage/`'s messages) and in `plan.json`. Emails are still sent from
+  `hello@pehchanthetraveller.com`. `npm run check` requires the new address.
 - Every footer now starts with **Home**: Home · About · Plans · Contact · Privacy, on every page and draft.
   `npm run check` requires it.
 - The pages that call Pro "free while it's being tested" (home, `/subscribe/`, `/signup/`, the live board's locked
