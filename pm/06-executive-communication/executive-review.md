@@ -52,7 +52,8 @@ Full list: [RAID log](../04-planning-and-governance/raid-log.md).
 ## Launch status
 
 **No-go today.** None of the items on the [launch plan's go list](../05-business-case-and-launch/launch-plan.md#go--no-go)
-is done yet; two supporting items are (LR-12, the policy pages; LR-18, the cap on manual sweeps). The first to do,
+is done yet; three supporting items are (LR-02, the failure notice's reason; LR-12, the policy pages; LR-18, the cap
+on manual sweeps). The first to do,
 LR-01 (sweeps running), is the owner's step: a key with credit in Vercel Production.
 
 ## Decisions for the owner

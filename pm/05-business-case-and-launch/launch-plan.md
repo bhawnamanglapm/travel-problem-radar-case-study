@@ -16,7 +16,7 @@
 | ID | Item | Who | Status | Blocks | Links |
 |---|---|---|---|---|---|
 | LR-01 | Sweeps run again and save all four categories | Owner: a key with credit in Vercel Production | **Open**: failing since 2026-10-23 15:09 UTC | Go-live: there is nothing new to sell | RM-01, I-01 |
-| LR-02 | The failure notice records Anthropic's reason, not just `http 400` | Dev | Open | Nothing; it speeds up LR-01 | RM-02, I-02 |
+| LR-02 | The failure notice records Anthropic's reason, not just `http 400` | Dev | **Done** (2026-10-24, PR #79) | Nothing; it speeds up LR-01 | RM-02, I-02 |
 | LR-03 | 20 or more live items scored with the draft rubric | Owner | Open | Go-live, **if** the owner keeps pricing.md's rule not to charge first | RM-13, R-01, KPI-01 to KPI-05 |
 | LR-04 | Production checks still open: emailed sign-in link, a Pro email after choosing categories, Gmail's one-click unsubscribe | Owner | Open | Nothing hard; each is a path a paying member uses | RM-10, RM-11, RM-12 |
 
