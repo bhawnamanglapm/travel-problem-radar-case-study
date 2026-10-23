@@ -346,6 +346,13 @@ function groupByDay(entries) {
   return [...map.entries()];
 }
 
+// Pro's price line (T26). live/index.html has this meta tag only in a build where Pro is paid; otherwise
+// the locked panels keep the "ask for Pro" wording.
+const proPriceLine = () => {
+  const m = typeof document !== "undefined" && document.querySelector('meta[name="tpr-pro-price"]');
+  return m ? m.getAttribute("content") || "" : "";
+};
+
 export default function TravelProblemRadar({ sample, remote } = {}) {
   const demo = Array.isArray(sample);
   const live = typeof remote === "string"; // read-only view of the daily server sweep
@@ -741,19 +748,27 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
             live && locked === 401 ? (
               <>
                 <h2>The board is for Pro members</h2>
-                <p>Sign in to read the live board. New here? Create an account, then ask for Pro on your account page.</p>
+                {proPriceLine() ? (
+                  <p>Sign in to read the live board. Pro is {proPriceLine()}</p>
+                ) : (
+                  <p>Sign in to read the live board. New here? Create an account, then ask for Pro on your account page.</p>
+                )}
                 <p className="tpr-locked-actions">
                   <a className="tpr-hview cur" href="../signin/">Sign in</a>
-                  <a className="tpr-hview" href="../signup/">Create account</a>
+                  {proPriceLine() ? (
+                    <a className="tpr-hview" href="../pricing/">Get Pro</a>
+                  ) : (
+                    <a className="tpr-hview" href="../signup/">Create account</a>
+                  )}
                 </p>
                 <p>or <a href="../demo/" style={{ color: "inherit" }}>try the sample demo</a></p>
               </>
             ) : live && locked === 402 ? (
               <>
                 <h2>The live board is part of Pro</h2>
-                <p>You’re signed in on the Free plan, which gets the daily email digest. Pro adds this live board and an email after every sweep.</p>
+                <p>You’re signed in on the Free plan, which gets the daily email digest. Pro adds this live board and an email after every sweep.{proPriceLine() ? " It’s " + proPriceLine() : ""}</p>
                 <p className="tpr-locked-actions">
-                  <a className="tpr-hview cur" href="../manage/">Request Pro</a>
+                  <a className="tpr-hview cur" href="../manage/">{proPriceLine() ? "Go to your account" : "Request Pro"}</a>
                 </p>
                 <p>or <a href="../demo/" style={{ color: "inherit" }}>try the sample demo</a></p>
               </>

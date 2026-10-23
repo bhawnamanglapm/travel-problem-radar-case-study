@@ -54,12 +54,18 @@
     <p class="plan" id="plan">Loading&hellip;</p>
     <p id="detail"></p>
     <div id="ask" hidden>
-      <p>Pro opens the live board and sends an email after every sweep (about 5 a day) instead of one a day. It&rsquo;s free while it&rsquo;s being tested and is switched on by hand, so it can take a day.</p>
-      <button id="req" type="button">Request Pro</button>
+      <!-- when:free-test --><p>Pro opens the live board and sends an email after every sweep (about 5 a day) instead of one a day. It&rsquo;s free while it&rsquo;s being tested and is switched on by hand, so it can take a day.</p>
+      <button id="req" type="button">Request Pro</button><!-- /when -->
+      <template data-when="paid"><p>Pro opens the live board and sends an email after every sweep (about 5 a day) instead of one a day. Payments aren&rsquo;t open right now; please check back later.</p></template>
     </div>
     <div id="buy" hidden>
-      <p>Pro opens the live board and sends an email after every sweep (about 5 a day) instead of one a day. Payment is handled by Razorpay.</p>
-      <button id="upgrade" type="button">Upgrade to Pro</button>
+      <!-- when:free-test --><p>Pro opens the live board and sends an email after every sweep (about 5 a day) instead of one a day. Payment is handled by Razorpay.</p>
+      <button id="upgrade" type="button">Upgrade to Pro</button><!-- /when -->
+      <template data-when="paid"><p>Pro opens the live board and sends an email after every sweep (about 5 a day) instead of one a day.</p>
+      <p><strong>{{PRO_PRICE}}, {{PRO_GST}}.</strong> Renews automatically every month until you cancel. Cancel here any time; Pro stays on until the end of the period you&rsquo;ve paid for.</p>
+      <p>{{PRO_REFUND}}</p>
+      <p>Payments are handled by Razorpay. <a href="../pricing/">Pricing details</a>.</p>
+      <button id="upgrade" type="button">Pay with Razorpay</button></template>
     </div>
     <div id="billing" hidden>
       <p id="billingLine"></p>
@@ -167,15 +173,22 @@
       // Paid through Razorpay (T20): renews each period until cancelled. A Pro the owner granted has no billing.
       if (paid) {
         billing.hidden = false;
-        document.getElementById("billingLine").textContent = a.cancelAtPeriodEnd
+        document.getElementById("billingLine").textContent = a.billing === "pending"
+          ? "Your renewal payment didn’t go through, and Razorpay is trying again."
+          : a.cancelAtPeriodEnd
           ? "Pro until " + day(a.proUntil) + "; it won’t renew."
           : "Renews on " + day(a.proUntil) + ".";
         cancelPlan.hidden = a.cancelAtPeriodEnd;
       }
     } else if (a.paymentPending) {
       setPlan("Free", "Payment received; Pro starts in a minute or two.");
+    } else if (a.billing === "pending") {
+      // The paid period has ended and Razorpay is retrying the renewal (T26): no second checkout.
+      setPlan("Free", "Your renewal payment didn’t go through, and Razorpay is trying again. Pro comes back as soon as a payment succeeds.");
     } else if (a.payments) {
-      setPlan("Free", "One email a day, after the first sweep of the UTC day (about 05:47 IST).");
+      setPlan("Free", a.billing === "halted"
+        ? "Razorpay stopped trying to take your renewal payment, so you’re on Free: one email a day. You can start Pro again below."
+        : "One email a day, after the first sweep of the UTC day (about 05:47 IST).");
       buy.hidden = false;
     } else if (a.proRequestedAt) {
       setPlan("Free", "One email a day. You asked for Pro on " + day(a.proRequestedAt) + "; it will be switched on shortly.");
@@ -207,7 +220,8 @@
   call("GET").then(function (x) { if (x.status === 200) show(x.body); else fail(x); })
     .catch(function () { say("Couldn’t reach the server. Please try again in a minute.", true); });
 
-  req.addEventListener("click", function () {
+  // The paid build has no Request Pro button.
+  if (req) req.addEventListener("click", function () {
     req.disabled = true;
     say("Sending…", false);
     call("POST", { id: id, t: t, action: "request-pro" }).then(function (x) {
@@ -253,13 +267,15 @@
             subscription_id: x.body.subscriptionId,
             name: "Travel Problem Radar",
             description: "Pro",
-            handler: checkoutDone
+            handler: checkoutDone,
+            modal: { ondismiss: function () { say("The payment window was closed.", false); } }
           }).open();
           say("", false);
         }, function () { say(PAY_ERR, true); });
       }
       if (x.status === 409 && x.body.error === "already_pro") say("You already have Pro. Reload the page.", false);
       else if (x.status === 409 && x.body.error === "payment_pending") say("Payment received; Pro starts in a minute or two.", false);
+      else if (x.status === 409 && x.body.error === "payment_retrying") say("Razorpay is still trying to take your renewal payment. Reload the page.", false);
       else if (x.status === 409) say("Confirm your address first, using the email we sent you.", true);
       else if (x.status === 502) say(PAY_ERR, true);
       else if (x.status === 503 && x.body.error === "payments_off") say("Payments aren’t open right now. Reload the page.", true);

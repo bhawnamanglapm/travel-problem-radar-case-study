@@ -77,6 +77,18 @@ for (const f of ["pricing/index.html"]) {
   check((paid.out.match(/id="getpro"/g) || []).length === 1 && (free.out.match(/id="getpro"/g) || []).length === 1, `${f}: one Get Pro button in either version`);
 }
 
+// The pages that mention Pro today (T26): with paid false they are word for word what they were, with paid
+// true they give the price, GST and renewal, and nothing says Pro is free or switched on by hand.
+for (const f of ["index.html", "subscribe/index.html", "signup/index.html", "manage/index.html", "live/index.html"]) {
+  const src = readFileSync(new URL("../" + f, import.meta.url), "utf8");
+  const today = src.replace(/<template data-when="paid">[\s\S]*?<\/template>/g, "").replace(/<!-- when:free-test -->|<!-- \/when -->/g, "");
+  const free = fill(src, EMPTY), paid = fill(src, PAID);
+  check(free.missing.length === 0 && free.out === today, `${f}, free test: unchanged, and needs no price`);
+  check(paid.missing.length === 0 && !/\{\{|when:|data-when/.test(paid.out) && !/being tested|switched on by hand/.test(paid.out) && /₹2,999 a month, GST included/.test(paid.out) && /renews automatically/i.test(paid.out),
+    `${f}, paid: price, GST and renewal filled in, no free-test text`);
+  check([free.out, paid.out].every((o) => (o.match(/id="upgrade"/g) || []).length === (f === "manage/index.html" ? 1 : 0)), `${f}: at most one pay button in either version`);
+}
+
 // The policy pages (T25) take the same facts; their {{LEGAL_…}} slots are left for fill-legal.
 for (const f of ["legal/terms/index.html", "legal/refunds/index.html"]) {
   const src = readFileSync(new URL("../" + f, import.meta.url), "utf8");
