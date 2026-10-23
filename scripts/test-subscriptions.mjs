@@ -3010,4 +3010,253 @@ const iso = (ms) => new Date(ms).toISOString();
   }
 }
 
+// T21: POST /api/razorpay-webhook. Signed events against the memory store: the event table, duplicates,
+// events out of order, unknown subscriptions, an owner-granted Pro, failures, and the sweep's tidy-up.
+{
+  const { makeRazorpayWebhookHandler, applyRzpEvent, KEY_RZPSUB_PREFIX, KEY_RZPEVENT_PREFIX, RZP_EVENT_KEEP_DAYS } = await import("../api/_lib/subscription-handlers.js");
+  const WH_SECRET = "whsec_" + "fixture_21";
+  const S = Math.floor(T0 / 1000); // the event clock, Unix seconds
+  const DAY_S = 24 * 3600;
+  const END = S + 30 * DAY_S; // current_end a month ahead
+  const hmac = (raw, secret = WH_SECRET) => createHmac("sha256", secret).update(raw).digest("hex");
+
+  const world = (envOver = {}) => {
+    const st = memStorage();
+    const logs = [];
+    let clock = T0;
+    const hook = makeRazorpayWebhookHandler({ env: { RAZORPAY_WEBHOOK_SECRET: WH_SECRET, ...envOver }, storage: st, now: () => clock, randomBytes: seeded(21), log: (...a) => logs.push(a.join(" ")) });
+    const replies = [];
+    let n = 0;
+    const send = async (event, { id = "evt_T21" + String(++n).padStart(6, "0"), sig, raw, method = "POST", headers = {} } = {}) => {
+      const body = raw ?? JSON.stringify(event);
+      const h = { "content-type": "application/json", "x-razorpay-signature": sig ?? hmac(body), ...(id ? { "x-razorpay-event-id": id } : {}), ...headers };
+      const res = await hook(new Request("https://site.example/api/razorpay-webhook", method === "GET" ? { method, headers: h } : { method, headers: h, body }));
+      const text = await res.text();
+      replies.push(text);
+      return { code: res.status, text, json: () => JSON.parse(text) };
+    };
+    // A confirmed subscriber who has been through checkout: the index file and rzp as checkout writes them.
+    const add = async (email, { sub = "sub_T21" + email.length + "x", status = "authenticated", ...over } = {}) => {
+      const r = { ...newPending(email, { now: T0 - 3600_000, randomBytes: seeded(400 + email.length) }), status: "active",
+        rzp: { subscriptionId: sub, status, createdAt: iso(T0 - 600_000), currentEnd: null, cancelAtPeriodEnd: false, lastEventAt: null }, ...over };
+      await putSubscriber(st, r);
+      await st.set(KEY_RZPSUB_PREFIX + sub, JSON.stringify({ id: r.id }));
+      return r;
+    };
+    const stored = (r) => getSubscriber(st, r.id);
+    const evs = (type) => [...st.m.keys()].filter((k) => k.startsWith("radar:event:") && k.includes(`-${type}-`));
+    const markers = () => [...st.m.keys()].filter((k) => k.startsWith(KEY_RZPEVENT_PREFIX));
+    return { st, logs, replies, send, add, stored, evs, markers, tick: (ms) => { clock += ms; } };
+  };
+  const ev = (kind, rec, { at = S, end = END, status, sid, sub } = {}) => ({
+    entity: "event", account_id: "acc_T21", event: "subscription." + kind, contains: ["subscription"], created_at: at,
+    payload: { subscription: { entity: { id: sub ?? rec.rzp.subscriptionId, entity: "subscription", status: status ?? kind, current_start: at, current_end: end, ended_at: null,
+      notes: sid === undefined ? { sid: rec.id } : sid === null ? {} : { sid }, created_at: S - 600 } } },
+  });
+  const allReplies = [];
+  const allLogs = [];
+  const done = (w) => { allReplies.push(...w.replies); allLogs.push(...w.logs); };
+
+  // the guards
+  {
+    const w = world();
+    const rec = await w.add("guard@example.com");
+    const before = JSON.stringify([...w.st.m]);
+    let r = await w.send(ev("activated", rec), { sig: hmac(JSON.stringify(ev("activated", rec)), "another-secret") });
+    check(r.code === 401 && JSON.stringify([...w.st.m]) === before, "rzp webhook: a signature made with another secret is 401 and writes nothing");
+    r = await w.send(ev("activated", rec), { sig: "" });
+    check(r.code === 401 && JSON.stringify([...w.st.m]) === before, "rzp webhook: a missing signature is 401 and writes nothing");
+    const body = JSON.stringify(ev("activated", rec));
+    r = await w.send(null, { raw: body.replace('"subscription.activated"', '"subscription.halted"'), sig: hmac(body) });
+    check(r.code === 401 && (await w.stored(rec)).plan === "free", "rzp webhook: a changed body is 401");
+    r = await w.send(null, { method: "GET" });
+    check(r.code === 405, "rzp webhook: GET is 405");
+    r = await w.send(null, { raw: "{not json" });
+    check(r.code === 400, "rzp webhook: a signed body that isn't JSON is 400");
+    r = await w.send(null, { raw: "x".repeat(64 * 1024 + 1) });
+    check(r.code === 413, "rzp webhook: a body over 64 KB is 413");
+    r = await w.send({ event: "payment.captured", created_at: S, payload: {} });
+    check(r.code === 200 && r.json().ignored === true, "rzp webhook: a non-subscription event is 200 and ignored");
+    r = await w.send({ ...ev("activated", rec), created_at: "yesterday" });
+    check(r.code === 200 && r.json().ignored === true && (await w.stored(rec)).plan === "free", "rzp webhook: an event without a usable created_at is ignored");
+    const off = world({ RAZORPAY_WEBHOOK_SECRET: " " });
+    r = await off.send(ev("activated", rec));
+    check(r.code === 503 && off.st.m.size === 0, "rzp webhook: no RAZORPAY_WEBHOOK_SECRET is 503");
+    done(w); done(off);
+  }
+
+  // the event table
+  {
+    const w = world();
+    const rec = await w.add("table@example.com");
+    let r = await w.send(ev("authenticated", rec));
+    let s = await w.stored(rec);
+    check(r.code === 200 && s.plan === "free" && s.rzp.status === "authenticated" && s.rzp.lastEventAt === iso(S * 1000), "authenticated: no plan change; lastEventAt is set");
+    r = await w.send(ev("activated", rec, { status: "active" }));
+    s = await w.stored(rec);
+    check(r.code === 200 && s.plan === "pro" && s.proSource === "razorpay" && s.proUntil === iso(END * 1000) && s.rzp.status === "active" && s.rzp.currentEnd === iso(END * 1000),
+      "activated: Pro from Razorpay, proUntil = current_end as ISO");
+    check(effectivePlan(s, T0) === "pro" && w.evs("progranted").length === 1 && JSON.parse(w.st.m.get(w.evs("progranted")[0])).plan === "pro", "activated: one progranted event");
+    r = await w.send(ev("charged", rec, { at: S + 10, status: "active" }));
+    s = await w.stored(rec);
+    check(r.code === 200 && s.plan === "pro" && w.evs("progranted").length === 1, "charged on a Pro: still Pro, no second progranted");
+    const END2 = END + 30 * DAY_S;
+    r = await w.send(ev("charged", rec, { at: S + 30 * DAY_S, end: END2, status: "active" }));
+    s = await w.stored(rec);
+    check(s.proUntil === iso(END2 * 1000), "charged next month: proUntil moves to the new current_end");
+    r = await w.send(ev("pending", rec, { at: S + 30 * DAY_S + 5, end: END2 }));
+    s = await w.stored(rec);
+    check(r.code === 200 && s.plan === "pro" && s.rzp.status === "pending", "pending: no plan change");
+    r = await w.send(ev("halted", rec, { at: S + 30 * DAY_S + 9, end: END2 }));
+    s = await w.stored(rec);
+    check(s.plan === "free" && s.proUntil === null && s.proSource === null && s.rzp.status === "halted" && w.evs("prorevoked").length === 1, "halted: Free, proUntil null, one prorevoked");
+    r = await w.send(ev("resumed", rec, { at: S + 31 * DAY_S, end: END2, status: "active" }));
+    s = await w.stored(rec);
+    check(s.plan === "pro" && s.proSource === "razorpay" && s.proUntil === iso(END2 * 1000) && w.evs("progranted").length === 2, "resumed: Pro again, like charged");
+    r = await w.send(ev("paused", rec, { at: S + 31 * DAY_S + 1, end: END2 }));
+    s = await w.stored(rec);
+    check(s.plan === "free" && w.evs("prorevoked").length === 2, "paused: Free, like halted");
+    r = await w.send(ev("updated", rec, { at: S + 31 * DAY_S + 2, end: END2, status: "paused" }));
+    s = await w.stored(rec);
+    check(r.code === 200 && s.plan === "free" && s.rzp.lastEventAt === iso((S + 31 * DAY_S + 2) * 1000), "updated (any other event): no plan change, bookkeeping only");
+    done(w);
+  }
+
+  // cancelled and completed
+  {
+    const w = world();
+    const rec = await w.add("cancel@example.com");
+    await w.send(ev("activated", rec, { status: "active" }));
+    let r = await w.send(ev("cancelled", rec, { at: S + 60 }));
+    let s = await w.stored(rec);
+    check(r.code === 200 && s.plan === "pro" && s.proUntil === iso(END * 1000) && s.rzp.status === "cancelled" && w.evs("prorevoked").length === 0,
+      "cancelled with current_end ahead: Pro until current_end, nothing revoked yet");
+    check(effectivePlan(s, END * 1000 + 1) === "free", "cancelled: the plan lapses on its own after current_end");
+    const late = await w.add("late@example.com", { sub: "sub_T21late" });
+    await w.send(ev("activated", late, { status: "active" }));
+    w.tick((END - S + 60) * 1000);
+    r = await w.send(ev("completed", late, { at: END + 30 }));
+    s = await w.stored(late);
+    check(s.plan === "free" && s.proUntil === null && w.evs("prorevoked").length === 0, "completed with current_end past: Free now; no prorevoked, as the plan had already lapsed");
+    done(w);
+  }
+
+  // an owner-granted Pro
+  {
+    const w = world();
+    const owner = await w.add("owner-pro@example.com", { plan: "pro", proSource: "owner", proUntil: null });
+    let r = await w.send(ev("halted", owner));
+    let s = await w.stored(owner);
+    check(r.code === 200 && s.plan === "pro" && s.proSource === "owner" && s.proUntil === null, "halted: an owner-granted Pro is left alone");
+    r = await w.send(ev("cancelled", owner, { at: S + 1, end: S - 10 }));
+    s = await w.stored(owner);
+    check(s.plan === "pro" && s.proSource === "owner", "cancelled: an owner-granted Pro is left alone");
+    r = await w.send(ev("activated", owner, { at: S + 2, status: "active" }));
+    s = await w.stored(owner);
+    check(s.plan === "pro" && s.proSource === "razorpay" && s.proUntil === iso(END * 1000) && w.evs("progranted").length === 0,
+      "activated on an owner-granted Pro: the paid subscription takes over (razorpay, with an end date); no progranted, as it was Pro already");
+    done(w);
+  }
+
+  // duplicates, order, unknown subscriptions
+  {
+    const w = world();
+    const rec = await w.add("dup@example.com");
+    let r = await w.send(ev("activated", rec, { status: "active" }), { id: "evt_DUP000001" });
+    const marker = `${KEY_RZPEVENT_PREFIX}${utcDay(S * 1000)}-evt_DUP000001`;
+    check(r.code === 200 && w.st.m.has(marker), "duplicate: an applied event leaves radar:rzp-event:<day>-<event id>");
+    await w.send(ev("halted", rec, { at: S + 5 }), { id: "evt_DUP000002" });
+    const snap = JSON.stringify([...w.st.m]);
+    // A redelivery repeats the body, including created_at, so it maps to the same marker.
+    r = await w.send(ev("activated", rec, { status: "active" }), { id: "evt_DUP000001" });
+    check(r.code === 200 && r.json().duplicate === true && JSON.stringify([...w.st.m]) === snap && (await w.stored(rec)).plan === "free",
+      "duplicate: a redelivered event is 200 duplicate and changes nothing");
+
+    const o = await w.add("order@example.com", { sub: "sub_T21order" });
+    await w.send(ev("charged", o, { at: S + 100, status: "active" }));
+    r = await w.send(ev("halted", o, { at: S + 50 }));
+    let s = await w.stored(o);
+    check(r.code === 200 && r.json().stale === true && s.plan === "pro" && s.rzp.status === "active", "stale: an older halted arriving after a newer charged doesn't undo it");
+    const same = await w.add("same@example.com", { sub: "sub_T21same" });
+    await w.send(ev("activated", same, { at: S + 200, status: "active" }));
+    r = await w.send(ev("authenticated", same, { at: S + 200 }));
+    s = await w.stored(same);
+    check(r.code === 200 && s.plan === "pro" && s.rzp.status === "active", "same second: authenticated after activated applies but keeps status active");
+
+    const before = w.st.m.size;
+    r = await w.send(ev("activated", rec, { sub: "sub_T21nobody", sid: null }));
+    check(r.code === 200 && r.json().unknown === true && w.st.m.size === before, "unknown: a subscription with no index and no sid is 200, nothing written");
+    r = await w.send(ev("activated", rec, { sub: "sub_T21nobody", sid: "f".repeat(64) }));
+    check(r.code === 200 && r.json().unknown === true && w.st.m.size === before, "unknown: a sid with no record is 200, nothing written");
+    r = await w.send(ev("activated", rec, { sub: "sub_T21abandoned" }));
+    check(r.code === 200 && r.json().unknown === true && w.st.m.size === before && (await w.stored(rec)).plan === "free",
+      "unknown: notes.sid finds a record whose subscription is a different one (an abandoned checkout); nothing changes");
+    check(w.logs.filter((l) => l.includes("unknown subscription")).length === 3, "unknown: logged as 'unknown subscription'");
+    // The index file is missing (a lost write): notes.sid still finds the record.
+    const lost = await w.add("lost@example.com", { sub: "sub_T21lost" });
+    w.st.m.delete(KEY_RZPSUB_PREFIX + "sub_T21lost");
+    r = await w.send(ev("activated", lost, { status: "active" }));
+    check(r.code === 200 && (await w.stored(lost)).plan === "pro", "notes.sid: finds the record when the index file is missing");
+    // No event id header: applied, but without a marker.
+    const noid = await w.add("noid@example.com", { sub: "sub_T21noid" });
+    const m0 = w.markers().length;
+    r = await w.send(ev("activated", noid, { status: "active" }), { id: "" });
+    check(r.code === 200 && (await w.stored(noid)).plan === "pro" && w.markers().length === m0, "no x-razorpay-event-id: applied, no marker");
+    done(w);
+  }
+
+  // storage failures are 500, so Razorpay retries
+  for (const op of ["get", "set"]) {
+    const w = world();
+    const rec = await w.add("fail-" + op + "@example.com");
+    const f = w.st[op];
+    w.st[op] = async () => { throw new Error("blob down for fail-" + op + "@example.com"); };
+    const r = await w.send(ev("activated", rec, { status: "active" }));
+    w.st[op] = f;
+    check(r.code === 500 && w.logs.some((l) => l.endsWith("error: Error")) && w.markers().length === 0, `storage ${op} throws: 500, no marker, and the log has the error name only`);
+    done(w);
+  }
+
+  // nothing private in replies or logs
+  check(allReplies.length > 30 && allReplies.every((b) => !b.includes("@") && !/[0-9a-f]{64}/.test(b) && !b.includes("sub_")), "rzp webhook: no reply holds an address, a record id or a subscription id");
+  check(allLogs.length > 20 && allLogs.every((l) => !l.includes("@") && !/[0-9a-f]{64}/.test(l) && !l.includes("sub_")), "rzp webhook: no log line holds an address, a record id or a subscription id");
+
+  // applyRzpEvent never makes a Pro without an end date
+  {
+    const rec = { id: "a".repeat(64), status: "active", plan: "free", proSource: null, proUntil: null, rzp: { subscriptionId: "sub_X", status: "authenticated" } };
+    const next = applyRzpEvent(rec, "activated", { id: "sub_X", status: "active" }, iso(T0), T0);
+    check(next.plan === "free" && next.rzp.status === "active", "applyRzpEvent: activated without current_end doesn't grant Pro");
+  }
+
+  // the sweep: the next scheduled run mails the new Pro, and tidies markers older than 30 days
+  {
+    const w = world();
+    const rec = await w.add("sweep-pro@example.com");
+    await w.send(ev("activated", rec, { status: "active" }));
+    const old = utcDay(T0 - (RZP_EVENT_KEEP_DAYS + 1) * 86400_000);
+    const edge = utcDay(T0 - RZP_EVENT_KEEP_DAYS * 86400_000);
+    w.st.m.set(`${KEY_RZPEVENT_PREFIX}${old}-evt_OLD`, "{}");
+    w.st.m.set(`${KEY_RZPEVENT_PREFIX}${edge}-evt_EDGE`, "{}");
+    w.st.m.set(KEY_RZPEVENT_PREFIX + "junk", "{}");
+    const prob = { id: "p1", cat: "traveler_pain", title: "Item", summary: "", source: "S", link: "https://example.com/p1", region: "EU", date: "2026-10-20", severity: "Medium", opportunity: "", isNew: false };
+    w.st.m.set("radar:history", JSON.stringify([{ id: "1792570150123", at: iso(T0), total: 1, newCount: 0 }]));
+    w.st.m.set("radar:sweep:1792570150123", JSON.stringify({ at: iso(T0), problems: [prob] }));
+    const mails = [];
+    const fetchFn = async (url, init) => { const body = JSON.parse(init.body); mails.push(...body); return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ data: body.map((_, i) => ({ id: "m" + i })) }) }; };
+    const env = { SUBSCRIPTIONS_ENABLED: "1", RESEND_API_KEY: "re_k", EMAIL_FROM: "Radar <hello@pehchanthetraveller.com>", SITE_URL: "https://site.example" };
+    const out = await deliverToSubscribers({ env, storage: w.st, fetchFn, now: () => T0, randomBytes: seeded(5), scheduled: true, log: () => {},
+      sweep: { id: "1792570150123", at: iso(T0), problems: [prob], perCat: {}, newCount: 0 } });
+    check(out.pro && out.pro.sent === 1 && mails.filter((m) => m.to[0] === "sweep-pro@example.com").length === 1, "sweep: the next scheduled run sends the Pro email to an account the webhook made Pro");
+    const left = w.markers().map((k) => k.slice(KEY_RZPEVENT_PREFIX.length));
+    check(!left.some((k) => k.endsWith("evt_OLD")) && left.some((k) => k.endsWith("evt_EDGE")) && left.includes("junk") && left.length === 3,
+      `sweep: deletes Razorpay event markers older than 30 days, keeps newer ones and anything it doesn't recognise (${left.length} left)`);
+
+    // /api/data never serves the Razorpay keys.
+    const dh = makeDataHandler({ storage: w.st });
+    let refused = 0;
+    for (const k of [KEY_RZPSUB_PREFIX + rec.rzp.subscriptionId, w.markers()[0]]) { const res = mockRes(); await dh({ method: "GET", url: "/api/data?key=" + encodeURIComponent(k), headers: {} }, res); if (res.code === 400) refused++; }
+    check(refused === 2, "/api/data refuses radar:rzpsub: and radar:rzp-event: keys");
+  }
+}
+
 finish("subscription tests");
