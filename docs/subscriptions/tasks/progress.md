@@ -111,7 +111,14 @@ working in a real inbox; that is T12's staged launch.
   - The confirmation email is sent with an idempotency key per record and `confirmSentAt`.
   - The `confirmsent` event is recorded when the send is attempted, so a Resend outage can't turn into a retry storm.
 - **Known race:** two simultaneous first sign-ups of the same address both write a pending record; the later write
-  wins, so the earlier email's link fails and the later one works. Storage has no conditional create.
+  wins, so the earlier email's link fails and the later one works. Creating a record is still a plain write.
+- **Conditional updates (2026-10-24, branch `fix/subscriber-cas`):** every change to an existing record now goes
+  through `updateSubscriber` (`api/_lib/subscribers.js`), on `storage.update`: the write carries the ETag that was
+  read (`ifMatch`), and on a mismatch it re-reads and decides again, up to 5 tries, then the request gets a 500.
+  This fixed the audit's bug #1: an `activated` webhook landing while Checkout's return was handled was written back
+  as Free. It also makes a sign-in link and the Confirm button work once when pressed twice at the same moment.
+  Tested offline against a fake Blob client and the memory store; the real Blob `ifMatch` path is unverified until
+  a Preview run (T27).
 - **Verify items not confirmed:** the Hobby plan's function-count limit (a Vercel docs search this session did not
   answer it; check the Vercel dashboard or limits page when deploying a preview: Phase 1 takes the project from
   2 to 5 functions). The visitor-IP header was not looked up, since the per-IP limit is T13.

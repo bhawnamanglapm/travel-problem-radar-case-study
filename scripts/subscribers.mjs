@@ -16,7 +16,7 @@ import { randomBytes } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import {
   KEY_EVENT_PREFIX, deleteSubscriber, effectivePlan, findSubscriber, getSubscriber, listSubscribers, normaliseEmail,
-  putSubscriber, recordEvent, utcDay,
+  recordEvent, updateSubscriber, utcDay,
 } from "../api/_lib/subscribers.js";
 import { KEY_SUBSCRIBER_COUNT } from "../api/_lib/subscription-handlers.js";
 
@@ -196,7 +196,10 @@ export async function grantPro(storage, email, { until = null, apply, now, rando
   const summary = `plan ${r.plan} -> pro, proSource ${r.proSource || "none"} -> owner, proUntil ${r.proUntil || "none"} -> ${proUntil || "none (no end date)"}${lapsed ? " (already past: the sweep will treat them as Free)" : ""}`;
   if (!apply) return { code: 1, message: `would change: ${summary}. Nothing changed; add --yes to apply.`, changed: false };
   // The request is answered, so it leaves the waiting list (the prorequested event keeps the history).
-  await putSubscriber(storage, { ...r, plan: "pro", proSource: "owner", proUntil, proRequestedAt: null });
+  // Written only if the record is still active and not paid Pro (a payment may land meanwhile).
+  const { changed } = await updateSubscriber(storage, r.id, (cur) => (cur.status === "active" && cur.proSource !== "razorpay"
+    ? { ...cur, plan: "pro", proSource: "owner", proUntil, proRequestedAt: null } : null));
+  if (!changed) return { code: 1, message: "refused: the record changed meanwhile (deleted, or paid Pro now); run it again", changed: false };
   await recordEvent(storage, "progranted", { now, randomBytes: rb, plan: "pro" });
   return { code: 0, message: `done: ${summary}`, changed: true };
 }
@@ -208,7 +211,9 @@ export async function revokePro(storage, email, { apply, now, randomBytes: rb = 
   if (r.plan !== "pro") return { code: 1, message: "nothing to do: the subscriber is already on the Free plan", changed: false };
   const summary = `plan pro -> free, proSource ${r.proSource || "none"} -> none, proUntil ${r.proUntil || "none"} -> none`;
   if (!apply) return { code: 1, message: `would change: ${summary}. Nothing changed; add --yes to apply.`, changed: false };
-  await putSubscriber(storage, { ...r, plan: "free", proSource: null, proUntil: null });
+  const { changed } = await updateSubscriber(storage, r.id, (cur) => (cur.plan === "pro" && cur.proSource !== "razorpay"
+    ? { ...cur, plan: "free", proSource: null, proUntil: null } : null));
+  if (!changed) return { code: 1, message: "refused: the record changed meanwhile (deleted, Free, or paid Pro now); run it again", changed: false };
   await recordEvent(storage, "prorevoked", { now, randomBytes: rb, plan: "pro" });
   return { code: 0, message: `done: ${summary}`, changed: true };
 }
