@@ -5,7 +5,7 @@
 | Phase | 3, showing Pro and going live |
 | Who | Developer |
 | Size | L, in 2 PRs |
-| Depends on | — (the server side is built; the check after deploy waits for one saved sweep, RM-01) |
+| Depends on | — (both PRs are merged; the checks after deploy wait for saved sweeps, RM-01) |
 | Unblocks | T27 (the pages must state the schedule Pro is sold on) |
 
 > Added 2026-10-24 at the owner's request. It **replaces [T28](T28-two-sweeps-a-day.md)**, a fixed move to 2 sweeps a
@@ -56,7 +56,7 @@ the [final Pro plan](../pricing.md#final-pro-plan-2026-10-24) budgets about ₹4
   `sweepsPerDayDefault` and `sweepsPerDayMax`.
 - DEPLOYMENT: the two variables and [Sweeps a day](../../../DEPLOYMENT.md#sweeps-a-day-t32).
 
-## PR 2: the page and the wording (built, in review, 2026-10-25)
+## PR 2: the page and the wording (done, #89, 2026-10-25)
 
 ### The manage page
 

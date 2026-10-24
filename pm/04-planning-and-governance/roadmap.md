@@ -54,7 +54,7 @@
 ```mermaid
 flowchart LR
   RM01["RM-01 Sweeps running"] --> RM07
-  RM01 --> RM26["RM-26 2 sweeps a day"] --> RM07
+  RM01 --> RM26["RM-26 Pro chooses 1 to 5 emails a day"] --> RM07
   RM27["RM-27 Owner launch steps"] -.-> RM03 & RM04 & RM05 & RM08
   RM04["RM-04 Terms"] --> RM03["RM-03 Razorpay activation"] --> RM07["RM-07 Go-live"]
   RM05["RM-05 Vercel Pro"] --> RM06["RM-06 T22"] --> RM07
