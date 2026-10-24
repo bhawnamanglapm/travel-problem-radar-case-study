@@ -178,7 +178,10 @@ export function makeSubscribeHandler({ env, storage, fetchFn, now, randomBytes =
     if (!allowMethods(req, res, ["POST"])) return;
     if (env.SUBSCRIPTIONS_ENABLED !== "1") return sendJson(res, 503, { error: "subscriptions are not open yet" });
     const site = siteUrl(env);
-    if (!env.RESEND_API_KEY || !senderOk(env.EMAIL_FROM) || !site) {
+    // No cap set (MAX_SUBSCRIBERS unset or not a positive whole number) is a setup gap, answered as
+    // one, for every address alike: "a link is on its way" would promise an email that never comes.
+    const maxSubs = positiveInt(env.MAX_SUBSCRIBERS);
+    if (!env.RESEND_API_KEY || !senderOk(env.EMAIL_FROM) || !site || maxSubs === null) {
       log("subscribe", "not configured");
       return sendJson(res, 503, { error: "subscriptions are not open yet" });
     }
@@ -201,7 +204,6 @@ export function makeSubscribeHandler({ env, storage, fetchFn, now, randomBytes =
       const t = now();
       // More than the limit from one IP this hour gets the usual reply and nothing is stored or sent.
       if (await ipLimitReached({ req, env, storage, t, randomBytes })) return reply();
-      const maxSubs = positiveInt(env.MAX_SUBSCRIBERS);
       const maxConfirms = maxConfirmsPerDay(env.MAX_CONFIRMS_PER_DAY);
 
       const existing = await findSubscriber(storage, email);
@@ -244,7 +246,7 @@ export function makeSubscribeHandler({ env, storage, fetchFn, now, randomBytes =
       if (!existing) {
         // Rows 10: a full list, or one we can't measure, takes no new address.
         const count = await readSubscriberCount(storage);
-        if (maxSubs === null || count === null || count >= maxSubs) return reply();
+        if (count === null || count >= maxSubs) return reply();
       }
       // Row 11 (and the same cap on a re-send, which spends quota the same way). A count we
       // can't read counts as reached.
@@ -592,12 +594,24 @@ export const SIGNIN_GAP_MINUTES = 5;
 export const DEFAULT_MAX_SIGNINS_PER_DAY = 50;
 const MINUTE_MS = 60 * 1000;
 
-// The same words whether or not the address has an account, and whether or not a limit held the email back.
+// The same words whether or not the address has an account, and whether or not a limit on that address
+// (or the per-IP one) held the email back.
 const SIGNIN_REPLY = { ok: true, message: "If that address has an account, a sign-in link is on its way. Not in your inbox within a few minutes? Check your spam or junk folder. You can ask for a new link once every 5 minutes." };
+// The day's MAX_SIGNINS_PER_DAY is shared by every address, so saying it was reached tells nothing about this one.
+const SIGNIN_CAPPED = { ok: true, message: "Sign-in emails have hit today's limit. Try again after 00:00 UTC, or use the Manage link in any digest." };
 const NOT_SET_UP = { title: "Sign-in isn't set up yet", body: `<p>Use the Manage link in any digest email instead.</p>` };
 const SIGNIN_INVALID = { title: "This sign-in link isn't valid", body: `<p>It may have expired or been used already. <a href="/signin/">Get a new link</a>.</p>` };
 
 const codeHash = (code) => createHash("sha256").update("radar-signin:" + code).digest("hex");
+
+// Whether today's sign-in emails have reached MAX_SIGNINS_PER_DAY. A count we can't read counts as reached.
+async function signinsCapped(env, storage, t) {
+  const raw = String(env.MAX_SIGNINS_PER_DAY ?? "").trim();
+  const maxPerDay = raw === "0" ? 0 : positiveInt(raw) ?? DEFAULT_MAX_SIGNINS_PER_DAY;
+  let sentToday;
+  try { sentToday = await countEvents(storage, { day: utcDay(t), type: "signinsent" }); } catch (e) { sentToday = Infinity; }
+  return sentToday >= maxPerDay;
+}
 
 // Constant-time: the record's stored hash against the hash of the code given.
 function signinOk(record, code, t) {
@@ -615,11 +629,7 @@ function signinOk(record, code, t) {
 // tried to sign up again (row 7), which changes the email's first line.
 async function sendSignInLink({ record, env, storage, fetchFn, t, randomBytes, log, already = false }) {
   if (record.signin && t - Date.parse(record.signin.sentAt) < SIGNIN_GAP_MINUTES * MINUTE_MS) return "held";
-  const raw = String(env.MAX_SIGNINS_PER_DAY ?? "").trim();
-  const maxPerDay = raw === "0" ? 0 : positiveInt(raw) ?? DEFAULT_MAX_SIGNINS_PER_DAY;
-  let sentToday;
-  try { sentToday = await countEvents(storage, { day: utcDay(t), type: "signinsent" }); } catch (e) { sentToday = Infinity; }
-  if (sentToday >= maxPerDay) return "held";
+  if (await signinsCapped(env, storage, t)) return "held";
 
   const site = siteUrl(env);
   const code = Buffer.from(randomBytes(32)).toString("base64url");
@@ -703,6 +713,8 @@ export function makeSessionHandler({ env, storage, fetchFn = fetch, now, randomB
       if (!email) return sendJson(res, 400, { error: "enter a valid email address" });
       try {
         if (await ipLimitReached({ req, env, storage, t, randomBytes })) return reply();
+        // Checked before the address is looked up, so the reply is the same for every address.
+        if (await signinsCapped(env, storage, t)) return sendJson(res, 200, SIGNIN_CAPPED);
         const record = await findSubscriber(storage, email);
         if (record && record.status === "active") await sendSignInLink({ record, env, storage, fetchFn, t, randomBytes, log });
         // Never confirmed: the confirmation link again (confirming signs you in), on sign-up's own
@@ -764,6 +776,7 @@ const GOOGLE_FAILED = { title: "Google sign-in didn't work", body: `<p>Google di
 const GOOGLE_UNVERIFIED = { title: "Google hasn't verified this address", body: `<p>Use a Google account whose address is verified.</p>${GOOGLE_AGAIN}` };
 const GOOGLE_SIGNUP_EXPIRED = { title: "This sign-up didn't finish", body: `<p>It took longer than ${OAUTH_MINUTES} minutes, or it was started in another browser. Nothing was created.</p><p><a href="/signup/">Start again</a>.</p>` };
 const GOOGLE_CLOSED = { title: "New accounts are closed for now", body: "<p>We can't take new accounts at the moment. Please try again later.</p>" };
+const GOOGLE_NOT_OPEN = { title: "Subscriptions are not open yet", body: "<p>New accounts can't be made yet. Please try again later.</p>" };
 const GOOGLE_BUSY = { title: "Too many new accounts from this network", body: "<p>Please try again in an hour.</p>" };
 
 // Back from Google. The address Google verified signs in its account; a pending one is activated
@@ -785,7 +798,8 @@ async function googleReturn({ req, res, q, env, storage, fetchFn, t, randomBytes
   try {
     const record = await findSubscriber(storage, out.email);
     if (!record) {
-      if (await listFull(env, storage)) return page(503, GOOGLE_CLOSED);
+      const closed = await listClosed(env, storage);
+      if (closed) return page(503, closed);
       res.setHeader("set-cookie", signupCookie({ email: out.email, secret, now: t }));
       return sendPage(res, 200, signupPage(out.email, attempt.pro));
     }
@@ -809,7 +823,8 @@ async function googleSignup({ req, res, fields, env, storage, fetchFn, t, random
     const record = await findSubscriber(storage, email);
     if (record) return await googleSignIn({ res, record, pro, env, storage, fetchFn, t, randomBytes, log, secret, cookies, page });
     if (await ipLimitReached({ req, env, storage, t, randomBytes })) return page(429, GOOGLE_BUSY);
-    if (await listFull(env, storage)) return page(503, GOOGLE_CLOSED);
+    const closed = await listClosed(env, storage);
+    if (closed) return page(503, closed);
     const made = newPending(email, { now: t, randomBytes });
     return await googleSignIn({ res, record: made, isNew: true, pro, env, storage, fetchFn, t, randomBytes, log, secret, cookies, page });
   } catch (e) {
@@ -818,10 +833,13 @@ async function googleSignup({ req, res, fields, env, storage, fetchFn, t, random
   }
 }
 
-const listFull = async (env, storage) => {
+// The page for a new account that can't be made, or null. No cap set is a setup gap ("not open
+// yet"); a full list, or a count that can't be read, is "closed for now".
+const listClosed = async (env, storage) => {
   const maxSubs = positiveInt(env.MAX_SUBSCRIBERS);
+  if (maxSubs === null) return GOOGLE_NOT_OPEN;
   const count = await readSubscriberCount(storage);
-  return maxSubs === null || count === null || count >= maxSubs;
+  return count === null || count >= maxSubs ? GOOGLE_CLOSED : null;
 };
 
 // Signs `record` in: an active account as it is; a pending one (or a new one, `isNew`) is made
