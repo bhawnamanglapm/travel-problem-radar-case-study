@@ -736,8 +736,10 @@ const iso = (ms) => new Date(ms).toISOString();
       return { ok: true, status: 200, headers: h, json: async () => ({ data: body.map((_, i) => ({ id: "m" + i })) }) };
     };
     const deps = (over = {}) => ({ env: { ...ENV, ...env }, storage: st, fetchFn, now: () => clock, randomBytes: seeded(3), log: (...a) => logs.push(a.join(" ")), ...over });
-    const addSub = async (n, { plan = "free", status = "active", proUntil = null, proSource = null, createdAt = t0 } = {}) => {
-      const rec = { ...newPending(`s${n}@example.com`, { now: createdAt, randomBytes: seeded(100 + n) }), token: "tok" + n, status, plan, proUntil, proSource };
+    // Pro here is on 5 a day, so every scheduled sweep is one of its slots, as before T32; the
+    // T32 block below tests the other choices.
+    const addSub = async (n, { plan = "free", status = "active", proUntil = null, proSource = null, createdAt = t0, sweepsPerDay = plan === "pro" ? 5 : null } = {}) => {
+      const rec = { ...newPending(`s${n}@example.com`, { now: createdAt, randomBytes: seeded(100 + n) }), token: "tok" + n, status, plan, proUntil, proSource, sweepsPerDay };
       await putSubscriber(st, rec);
       return rec;
     };
@@ -951,6 +953,7 @@ const iso = (ms) => new Date(ms).toISOString();
   const ENV = {
     CRON_SECRET: "abc123", ANTHROPIC_API_KEY: "k", RESEND_API_KEY: "re_k", EMAIL_TO: "owner@example.com",
     EMAIL_FROM: "Radar <hello@pehchanthetraveller.com>", SUBSCRIPTIONS_ENABLED: "1", SITE_URL: "https://site.example",
+    SWEEPS_PER_DAY_MIN: "5", // every slot sweeps, with or without Pro members (the T32 block tests skipping)
   };
   const PROBS = [{ title: "Problem 1", summary: "s", source: "Src", link: "https://example.com/1", region: "Global", date: "Oct 2026", severity: "High", opportunity: "o" }];
   const answer = JSON.stringify(PROBS);
@@ -982,8 +985,9 @@ const iso = (ms) => new Date(ms).toISOString();
     };
     const handler = makeSweepHandler({ env: { ...ENV, ...env }, storage: st, fetchFn, now: () => clock, randomBytes: seeded(9), log: (...a) => logs.push(a.join(" ")) });
     const call = async (headers = SCHEDULED) => { const res = mockRes(); await handler({ headers }, res); return res; };
+    // Pro on 5 a day, so the 08:09 run (slot 05) sweeps and delivers, as before T32.
     const addSub = async (n, plan) => {
-      const rec = { ...newPending(`s${n}@example.com`, { now: clock, randomBytes: seeded(100 + n) }), token: "tok" + n, status: "active", plan, proSource: plan === "pro" ? "owner" : null };
+      const rec = { ...newPending(`s${n}@example.com`, { now: clock, randomBytes: seeded(100 + n) }), token: "tok" + n, status: "active", plan, proSource: plan === "pro" ? "owner" : null, sweepsPerDay: plan === "pro" ? 5 : null };
       await putSubscriber(st, rec);
       return rec;
     };
@@ -1128,9 +1132,11 @@ const iso = (ms) => new Date(ms).toISOString();
     await w.mk(1); await w.mk(2); await w.mk(3);
     await run(w.st, ["grant-pro", "p1@example.com", "--yes"]);
     await run(w.st, ["grant-pro", "p2@example.com", "--until", "2026-10-01", "--yes"]);
-    const sweep = { id: "1792570150123", at: iso(T0), problems: [{ id: "a", cat: "traveler_pain", title: "T", summary: "", source: "S", link: "https://example.com/a", region: "EU", date: "2026-10-20", severity: "High", opportunity: "", isNew: true }], perCat: {} };
+    // 10:09 UTC: slot 10, one of the default 2 a day (T32)
+    const at10 = T0 + 2 * 3600_000;
+    const sweep = { id: "1792570150123", at: iso(at10), problems: [{ id: "a", cat: "traveler_pain", title: "T", summary: "", source: "S", link: "https://example.com/a", region: "EU", date: "2026-10-20", severity: "High", opportunity: "", isNew: true }], perCat: {} };
     await deliverToSubscribers({ env: { SUBSCRIPTIONS_ENABLED: "1", RESEND_API_KEY: "re_k", EMAIL_FROM: "Radar <hello@pehchanthetraveller.com>", SITE_URL: "https://site.example" },
-      storage: w.st, fetchFn, now: () => T0, randomBytes: seeded(3), sweep, scheduled: true, log: () => {} });
+      storage: w.st, fetchFn, now: () => at10, randomBytes: seeded(3), sweep, scheduled: true, log: () => {} });
     const proMail = sent.filter((m) => /Pro update/.test(m.text)).map((m) => m.to[0]);
     const freeMail = sent.filter((m) => /daily digest/.test(m.text)).map((m) => m.to[0]).sort();
     check(proMail.join() === "p1@example.com" && freeMail.join() === "p2@example.com,p3@example.com", "grant-pro then a scheduled sweep: the granted address gets the Pro email; one with a past --until gets the Free digest");
@@ -1697,7 +1703,9 @@ const iso = (ms) => new Date(ms).toISOString();
   const DENV = { SUBSCRIPTIONS_ENABLED: "1", RESEND_API_KEY: "re_k", EMAIL_FROM: "Radar <hello@pehchanthetraveller.com>", SITE_URL: "https://site.example" };
   const prob = (id, cat, over = {}) => ({ id, cat, title: "Item " + id, summary: "", source: "S", link: "https://example.com/" + id, region: "EU", date: "2026-10-20", severity: "Medium", opportunity: "", isNew: false, ...over });
   const problems = [prob("t1", "traveler_pain", { isNew: true }), prob("t2", "traveler_pain"), prob("g1", "gov_policy", { severity: "High", isNew: true }), prob("w1", "web_app")];
-  const sweep = { id: "1792570150123", at: iso(T0), problems, perCat: { traveler_pain: "2 items", gov_policy: "1 item", web_app: "1 item", industry: "failed: timeout" }, newCount: 2 };
+  // 10:09 UTC: slot 10, one of the default 2 a day, so these members (no choice made) get it (T32)
+  const AT10 = T0 + 2 * 3600_000;
+  const sweep = { id: "1792570150123", at: iso(AT10), problems, perCat: { traveler_pain: "2 items", gov_policy: "1 item", web_app: "1 item", industry: "failed: timeout" }, newCount: 2 };
   const dw = async (subs) => {
     const ds = memStorage();
     for (const [i, s] of subs.entries()) {
@@ -1712,7 +1720,7 @@ const iso = (ms) => new Date(ms).toISOString();
       calls.push({ key: init.headers["idempotency-key"], body });
       return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ data: body.map((_, i) => ({ id: "m" + i })) }) };
     };
-    const out = await deliverToSubscribers({ env: DENV, storage: ds, fetchFn, now: () => T0, randomBytes: seeded(9), sweep, scheduled: true, log: () => {} });
+    const out = await deliverToSubscribers({ env: DENV, storage: ds, fetchFn, now: () => AT10, randomBytes: seeded(9), sweep, scheduled: true, log: () => {} });
     const mails = calls.flatMap((c) => c.body);
     return { out, calls, mails, to: (e) => mails.filter((m) => m.to[0] === e) };
   };
@@ -1759,6 +1767,147 @@ const iso = (ms) => new Date(ms).toISOString();
     fetchFn: async () => ({ ok: false, status: 429, headers: { get: () => null }, json: async () => ({ name: "daily_quota_exceeded" }) }),
   });
   check(out2.stopped === "quota" && out2.pro.sent === 0 && out2.pro.deferred === 2, "pro cats: a quota stop in the first group defers the next group instead of trying it");
+}
+
+// ---- T32: each Pro member's emails a day. Delivery by slot, and POST /api/account set-freq
+{
+  const { makeAccountHandler } = await import("../api/_lib/subscription-handlers.js");
+  const H = 3600_000;
+  const DAY0 = Date.UTC(2026, 9, 21); // today, 00:00 UTC
+  const ENV = { SUBSCRIPTIONS_ENABLED: "1", RESEND_API_KEY: "re_k", EMAIL_FROM: "Radar <hello@pehchanthetraveller.com>", SITE_URL: "https://site.example" };
+  const prob = (id, cat = "traveler_pain") => ({ id, cat, title: "Item " + id, summary: "", source: "S", link: "https://example.com/" + id, region: "EU", date: "2026-10-20", severity: "Medium", opportunity: "", isNew: true });
+  const world = async (members) => {
+    const st = memStorage();
+    for (const [i, m] of members.entries()) {
+      await putSubscriber(st, {
+        ...newPending(m.email, { now: DAY0 - 3 * 24 * H, randomBytes: seeded(500 + i) }), token: "tok" + i, status: "active",
+        plan: "pro", proSource: "owner", cats: m.cats || null, sweepsPerDay: m.f ?? null,
+      });
+    }
+    const calls = [];
+    const fetchFn = async (url, init) => {
+      const body = JSON.parse(init.body);
+      calls.push({ key: init.headers["idempotency-key"], body });
+      return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ data: body.map((_, i) => ({ id: "m" + i })) }) };
+    };
+    // A saved scheduled sweep at hour h of day d (0 today, -1 yesterday), 17 minutes into its slot.
+    const save = (d, h, problems, { manual = false } = {}) => {
+      const at = DAY0 + d * 24 * H + h * H + 17 * 60_000;
+      const id = String(at);
+      const slot = manual ? {} : { slot: Math.floor(h / 5) * 5, slotAt: iso(DAY0 + d * 24 * H + Math.floor(h / 5) * 5 * H) };
+      const hist = JSON.parse(st.m.get("radar:history") || "[]");
+      hist.push({ id, at: iso(at), total: problems.length, newCount: problems.length, ...slot, ...(manual ? { manual: true } : {}) });
+      st.m.set("radar:history", JSON.stringify(hist));
+      st.m.set("radar:sweep:" + id, JSON.stringify({ at: iso(at), ...slot, problems }));
+      return { id, at: iso(at), ...slot, problems, perCat: { traveler_pain: problems.length + " items" } };
+    };
+    const deliver = async (sweep, env = {}) => {
+      const from = calls.length;
+      const out = await deliverToSubscribers({ env: { ...ENV, ...env }, storage: st, fetchFn, now: () => Date.parse(sweep.at) + 60_000, randomBytes: seeded(9), sweep, scheduled: true, log: () => {} });
+      const mine = calls.slice(from);
+      const to = (e) => mine.flatMap((c) => c.body).filter((m) => m.to[0] === e);
+      return { out, keys: mine.map((c) => c.key), to };
+    };
+    return { st, save, deliver };
+  };
+  const has = (m, ids) => ids.every((id) => m.text.includes("Item " + id));
+  const lacks = (m, ids) => ids.every((id) => !m.text.includes("Item " + id));
+
+  const w = await world([{ email: "one@example.com", f: 1 }, { email: "two@example.com", f: 2 }, { email: "dflt@example.com" }, { email: "five@example.com", f: 5 }]);
+  w.save(-1, 0, [prob("y00")]);
+  w.save(-1, 5, [prob("y05")]);
+  w.save(-1, 10, [prob("y10")]);
+  w.save(-1, 15, [prob("y15")]);
+  w.save(-1, 20, [prob("y20")]);
+  w.save(-1, 21, [prob("man")], { manual: true });
+  let d = await w.deliver(w.save(0, 0, [prob("t00")]));
+  const one = d.to("one@example.com")[0];
+  check(one && has(one, ["y05", "y10", "y15", "y20", "t00"]) && lacks(one, ["y00", "man"]), "T32 delivery: at slot 00, a 1-a-day member's roll-up has yesterday's 05 to 20 and today's 00, no manual run");
+  const two = d.to("two@example.com")[0];
+  check(two && has(two, ["y15", "y20", "t00"]) && lacks(two, ["y05", "y10", "man"]), "T32 delivery: at slot 00, a 2-a-day member gets everything since yesterday's slot 10");
+  const five = d.to("five@example.com")[0];
+  check(five && has(five, ["t00"]) && lacks(five, ["y20", "y15"]) && /· 1 problems, 1 new$/.test(five.subject), "T32 delivery: on the site's number (5), only this sweep, as before");
+  check(d.to("dflt@example.com").length === 1 && d.to("dflt@example.com")[0].text.split("\n--\n")[0] === two.text.split("\n--\n")[0], "T32 delivery: no choice is 2 a day, and shares the 2-a-day body");
+  check(d.keys.includes(`${d.keys[0].split("-")[0]}-pro-0`) && d.keys.some((k) => /-pro-f1-0$/.test(k)) && d.keys.some((k) => /-pro-f5-0$/.test(k)) && d.keys.length === 3,
+    "T32 delivery: all categories on the default 2 keep the old key; 1 and 5 a day get -f1 and -f5");
+  check(d.out.pro.slot === 0 && d.out.pro.sent === 4 && d.out.pro.notThisSlot === 0, "T32 delivery: slot 00 reaches every member");
+
+  w.save(0, 5, [prob("t05")]);
+  d = await w.deliver(w.save(0, 10, [prob("t10")]));
+  check(d.to("one@example.com").length === 0 && d.out.pro.notThisSlot === 1, "T32 delivery: at slot 10, a 1-a-day member gets nothing, counted as notThisSlot");
+  check(d.to("two@example.com").length === 1 && has(d.to("two@example.com")[0], ["t05", "t10"]) && lacks(d.to("two@example.com")[0], ["t00"]), "T32 delivery: at slot 10, 2 a day gets 05 and 10, not 00 (already sent)");
+  check(d.to("five@example.com").length === 1 && has(d.to("five@example.com")[0], ["t10"]) && lacks(d.to("five@example.com")[0], ["t05"]), "T32 delivery: at slot 10, 5 a day gets only 10");
+  check(d.out.pro.sent === 3 && d.out.pro.due === 4, "T32 delivery: the counts add up");
+
+  // A sweep with no slot saved (from before T32) is placed by its time.
+  const w2 = await world([{ email: "two@example.com", f: 2 }]);
+  const old = w2.save(-1, 20, [prob("old")]);
+  const hist = JSON.parse(w2.st.m.get("radar:history")).map(({ slot, slotAt, ...e }) => e);
+  w2.st.m.set("radar:history", JSON.stringify(hist));
+  const cur = w2.save(0, 0, [prob("cur")]);
+  d = await w2.deliver({ id: cur.id, at: cur.at, problems: cur.problems, perCat: cur.perCat });
+  check(old && d.to("two@example.com").length === 1 && has(d.to("two@example.com")[0], ["old", "cur"]), "T32 delivery: sweeps without a saved slot are placed by their time");
+
+  // Categories and the number a day together, and the cap lowering a choice.
+  const w3 = await world([{ email: "gov5@example.com", f: 5, cats: ["gov_policy"] }, { email: "gov3@example.com", f: 3, cats: ["gov_policy"] }]);
+  w3.save(0, 10, [prob("g10", "gov_policy")]);
+  d = await w3.deliver(w3.save(0, 15, [prob("g15", "gov_policy"), prob("t15")]));
+  const g3 = d.to("gov3@example.com")[0];
+  check(g3 && has(g3, ["g15"]) && lacks(g3, ["g10", "t15"]) && d.keys.some((k) => /-pro-gov_policy-f3-0$/.test(k)) && d.keys.some((k) => /-pro-gov_policy-f5-0$/.test(k)),
+    "T32 delivery: categories and the number a day are grouped together, each with its own key");
+  d = await w3.deliver(w3.save(0, 20, [prob("g20", "gov_policy")]), { SWEEPS_PER_DAY_MAX: "3" });
+  check(d.to("gov5@example.com").length === 0 && d.to("gov3@example.com").length === 0 && d.out.pro.notThisSlot === 2, "T32 delivery: with SWEEPS_PER_DAY_MAX=3, a choice of 5 is treated as 3");
+
+  // POST /api/account action set-freq
+  const st = memStorage();
+  const sent = [];
+  const mk = (env) => makeAccountHandler({ env, storage: st, fetchFn: async (u, i) => { sent.push(i); return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ id: "m" }) }; }, now: () => T0, randomBytes: seeded(4), log: () => {} });
+  let acct = mk(ENV);
+  const call = async (req) => { const res = mockRes(); await acct({ headers: { "content-type": "application/json" }, ...req }, res); return res; };
+  const post = (rec, sweepsPerDay, t = rec.token) => call({ method: "POST", body: { id: rec.id, t, action: "set-freq", sweepsPerDay } });
+  const add = async (email, over = {}) => {
+    const r = { ...newPending(email, { now: T0 - 3600_000, randomBytes: seeded(600 + email.length) }), status: "active", confirmedAt: iso(T0 - 1800_000), ...over };
+    await putSubscriber(st, r);
+    return r;
+  };
+  const stored = async (rec) => (await getSubscriber(st, rec.id)).sweepsPerDay;
+  const pro = await add("fpro@example.com", { plan: "pro", proSource: "owner" });
+  const free = await add("ffree@example.com");
+  const lapsed = await add("flapsed@example.com", { plan: "pro", proSource: "owner", proUntil: iso(T0 - 1000), sweepsPerDay: 4 });
+  const pend = { ...newPending("fpend@example.com", { now: T0, randomBytes: seeded(650) }) };
+  await putSubscriber(st, pend);
+  const replies = [];
+
+  let r = await call({ method: "GET", query: { id: pro.id, t: pro.token } });
+  check(r.code === 200 && r.json().sweepsPerDay === null && r.json().sweepsPerDayDefault === 2 && r.json().sweepsPerDayMax === 5, "account GET: no choice is null, with the default 2 and the max 5");
+  r = await post(pro, 3);
+  replies.push(r.body);
+  check(r.code === 200 && r.json().ok === true && r.json().sweepsPerDay === 3 && (await stored(pro)) === 3, "set-freq: a Pro member saves 3 and it is stored");
+  r = await post(free, 3);
+  replies.push(r.body);
+  check(r.code === 403 && r.json().error === "pro_only" && (await stored(free)) === null, "set-freq: Free gets 403 pro_only and nothing is stored");
+  r = await post(lapsed, 1);
+  check(r.code === 403 && (await stored(lapsed)) === 4, "set-freq: a lapsed Pro gets 403 and keeps what they chose before");
+  r = await post(pend, 2);
+  check(r.code === 409 && r.json().error === "not_confirmed", "set-freq: a pending address gets 409 not_confirmed");
+  for (const bad of [0, 6, 2.5, "3", null, undefined]) {
+    r = await post(pro, bad);
+    replies.push(r.body);
+    check(r.code === 400 && r.json().error === "unknown frequency" && (await stored(pro)) === 3, `set-freq: ${JSON.stringify(bad) ?? "nothing"} is refused with 400 and nothing changes`);
+  }
+  acct = mk({ ...ENV, SWEEPS_PER_DAY_MAX: "3" });
+  r = await post(pro, 4);
+  check(r.code === 400 && r.json().error === "over the limit" && (await stored(pro)) === 3, "set-freq: above SWEEPS_PER_DAY_MAX is 400 over the limit");
+  r = await call({ method: "GET", query: { id: pro.id, t: pro.token } });
+  check(r.json().sweepsPerDayMax === 3 && r.json().sweepsPerDay === 3, "account GET: the max follows SWEEPS_PER_DAY_MAX");
+  acct = mk({ ...ENV, SWEEPS_PER_DAY_MAX: "2" });
+  r = await call({ method: "GET", query: { id: pro.id, t: pro.token } });
+  check(r.json().sweepsPerDay === null && (await stored(pro)) === 3, "account GET: a stored choice above a lowered max shows as no choice, and stays stored");
+  acct = mk(ENV);
+  r = await post(pro, 2, "wrong-token");
+  check(r.code === 404, "set-freq: a wrong token is 404");
+  check(replies.every((b) => !b.includes("@") && !b.includes(pro.token)) && sent.length === 0, "set-freq: no address or token in any reply, and no email sent");
+  check(newPending("x@example.com", { now: T0, randomBytes: seeded(3) }).sweepsPerDay === null, "newPending: sweepsPerDay starts as null (the default)");
 }
 
 // ---- One inbox, one subscriber: canonicalEmail and findSubscriber
@@ -2574,7 +2723,7 @@ const iso = (ms) => new Date(ms).toISOString();
     const mails = [];
     const fetchFn = async (url, init) => { const body = JSON.parse(init.body); mails.push(...body); return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ data: body.map((_, i) => ({ id: "m" + i })) }) }; };
     const add = async (n, over) => { const r = { ...newPending(`d${n}@example.com`, { now: T0, randomBytes: seeded(200 + n) }), token: "tok" + n, status: "active", ...over }; await putSubscriber(st, r); return r; };
-    await add(1, { plan: "pro", proSource: "owner" });
+    await add(1, { plan: "pro", proSource: "owner", sweepsPerDay: 5 }); // 5 a day: the 08:09 sweep is one of its slots (T32)
     await add(2, { plan: "pro", proSource: "owner", emailOff: "unsubscribed" });
     await add(3, { plan: "pro", proSource: "owner", emailOff: "bounced" });
     await add(4, {});
@@ -2716,7 +2865,7 @@ const iso = (ms) => new Date(ms).toISOString();
       return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ data: body.map((_, i) => ({ id: "m" + i })) }) };
     };
     for (const [n, plan] of [[1, "pro"], [2, "free"], [3, "free"]]) {
-      await putSubscriber(st, { ...newPending(`t${n}@example.com`, { now: T0 - 2 * 24 * 3600 * 1000, randomBytes: seeded(200 + n) }), token: "tok" + n, status: "active", plan, proSource: plan === "pro" ? "owner" : null, proUntil: null });
+      await putSubscriber(st, { ...newPending(`t${n}@example.com`, { now: T0 - 2 * 24 * 3600 * 1000, randomBytes: seeded(200 + n) }), token: "tok" + n, status: "active", plan, proSource: plan === "pro" ? "owner" : null, proUntil: null, sweepsPerDay: plan === "pro" ? 5 : null });
     }
     const sweep = async (id, ms) => {
       const hist = JSON.parse(st.m.get("radar:history") || "[]");
@@ -3299,13 +3448,14 @@ const iso = (ms) => new Date(ms).toISOString();
     w.st.m.set(`${KEY_RZPEVENT_PREFIX}${edge}-evt_EDGE`, "{}");
     w.st.m.set(KEY_RZPEVENT_PREFIX + "junk", "{}");
     const prob = { id: "p1", cat: "traveler_pain", title: "Item", summary: "", source: "S", link: "https://example.com/p1", region: "EU", date: "2026-10-20", severity: "Medium", opportunity: "", isNew: false };
-    w.st.m.set("radar:history", JSON.stringify([{ id: "1792570150123", at: iso(T0), total: 1, newCount: 0 }]));
-    w.st.m.set("radar:sweep:1792570150123", JSON.stringify({ at: iso(T0), problems: [prob] }));
+    // at 10:09 UTC, slot 10: one of the default 2 a day (T32)
+    w.st.m.set("radar:history", JSON.stringify([{ id: "1792570150123", at: iso(T0 + 2 * 3600_000), total: 1, newCount: 0 }]));
+    w.st.m.set("radar:sweep:1792570150123", JSON.stringify({ at: iso(T0 + 2 * 3600_000), problems: [prob] }));
     const mails = [];
     const fetchFn = async (url, init) => { const body = JSON.parse(init.body); mails.push(...body); return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ data: body.map((_, i) => ({ id: "m" + i })) }) }; };
     const env = { SUBSCRIPTIONS_ENABLED: "1", RESEND_API_KEY: "re_k", EMAIL_FROM: "Radar <hello@pehchanthetraveller.com>", SITE_URL: "https://site.example" };
-    const out = await deliverToSubscribers({ env, storage: w.st, fetchFn, now: () => T0, randomBytes: seeded(5), scheduled: true, log: () => {},
-      sweep: { id: "1792570150123", at: iso(T0), problems: [prob], perCat: {}, newCount: 0 } });
+    const out = await deliverToSubscribers({ env, storage: w.st, fetchFn, now: () => T0 + 2 * 3600_000, randomBytes: seeded(5), scheduled: true, log: () => {},
+      sweep: { id: "1792570150123", at: iso(T0 + 2 * 3600_000), problems: [prob], perCat: {}, newCount: 0 } });
     check(out.pro && out.pro.sent === 1 && mails.filter((m) => m.to[0] === "sweep-pro@example.com").length === 1, "sweep: the next scheduled run sends the Pro email to an account the webhook made Pro");
     const left = w.markers().map((k) => k.slice(KEY_RZPEVENT_PREFIX.length));
     check(!left.some((k) => k.endsWith("evt_OLD")) && left.some((k) => k.endsWith("evt_EDGE")) && left.includes("junk") && left.length === 3,

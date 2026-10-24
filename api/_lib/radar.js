@@ -141,12 +141,13 @@ async function readJSON(storage, key) {
 
 // The server twin of runSweep() in the component: scan all four categories, merge,
 // flag what is new, keep the last 60 sweeps. Saves nothing if every category failed.
-// Scheduled runs come every 5 hours from GitHub Actions, plus Vercel's daily cron as a
-// backstop. The 2-hour gap stops them doubling up (a repeated cron delivery, or both
+// Scheduled runs come in up to 5 slots a day from GitHub Actions (the sweep handler skips the
+// slots no Pro member needs, T32), plus Vercel's daily cron as a backstop. A scheduled run passes
+// its `slot` (slotOf in schedule.js), which is saved with the sweep so delivery knows which it was. The 2-hour gap stops them doubling up (a repeated cron delivery, or both
 // schedulers firing close together). A manual run skips the gap and is left out of it, so it
 // never cancels the next scheduled sweep. The gap counts from when a scheduled sweep started,
 // so one that saves nothing (still billed) holds back the next one too.
-export async function runDailySweep({ storage, scan, now = () => Date.now(), minGapHours = 2, manual = false, log = () => {} }) {
+export async function runDailySweep({ storage, scan, now = () => Date.now(), minGapHours = 2, manual = false, slot = null, log = () => {} }) {
   const hist0 = await readJSON(storage, KEY_INDEX);
   let hist = Array.isArray(hist0) ? hist0 : [];
   if (!manual) {
@@ -198,16 +199,18 @@ export async function runDailySweep({ storage, scan, now = () => Date.now(), min
     highCount: merged.filter((p) => p.severity === "High").length,
   };
   if (manual) entry.manual = true;
+  const slotFields = slot ? { slot: slot.hour, slotAt: new Date(slot.at).toISOString() } : {};
+  Object.assign(entry, slotFields);
 
   hist = [...hist, entry];
   const drop = hist.slice(0, Math.max(0, hist.length - MAX_SWEEPS));
   hist = hist.slice(drop.length);
 
   // The new sweep and the index first: old files go only once nothing points at them.
-  await storage.set(sweepKey(id), JSON.stringify({ at, problems: merged }));
+  await storage.set(sweepKey(id), JSON.stringify({ at, ...slotFields, problems: merged }));
   await storage.set(KEY_INDEX, JSON.stringify(hist));
   await storage.set(KEY_SEEN, JSON.stringify(trimSeen(seenBefore, idset)));
   for (const d of drop) { try { await storage.del(sweepKey(d.id)); } catch (e) {} }
 
-  return { status: "saved", id, at, total: entry.total, newCount: entry.newCount, perCat, usage, problems: merged };
+  return { status: "saved", id, at, ...slotFields, total: entry.total, newCount: entry.newCount, perCat, usage, problems: merged };
 }

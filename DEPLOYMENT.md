@@ -549,6 +549,8 @@ wrong unit shows as amounts 100 times apart.
 | `EMAIL_TO` | You (optional) | `/api/sweep`, `/api/confirm`, `/api/account` | Recipients, separated by commas, at most 50. With the default sender, only the Resend account's own address works. Also gets the "Pro request" email. Kept out of the repository and out of every reply |
 | `EMAIL_FROM` | You (optional; required for subscribers) | `/api/sweep`, the subscriber endpoints | Defaults to `Travel Problem Radar <onboarding@resend.dev>`, Resend's shared sender, which is enough for the owner's own digest. Subscriber email refuses that default and any `@resend.dev` sender: it needs a sender on a domain verified in Resend |
 | `SUBSCRIPTIONS_ENABLED` | You (optional) | The subscriber endpoints, `/api/sweep` | `1` turns sign-up and subscriber delivery on together. Anything else, or unset, means off |
+| `SWEEPS_PER_DAY_MIN` | You (optional) | `/api/sweep` | The fewest scheduled sweeps a day, 1 to 5. Default 1. With subscriptions off this is the number; with them on, the site sweeps as often as the most frequent Pro member asks, but never fewer than this. Anything other than a whole number from 1 to 5 means the default. See [Sweeps a day](#sweeps-a-day-t32) |
+| `SWEEPS_PER_DAY_MAX` | You (optional) | `/api/sweep`, `/api/account` | The most scheduled sweeps a day, 1 to 5, and the most a Pro member may choose. Default 5. A choice above it is treated as this number and `/manage/` stops offering it. A `SWEEPS_PER_DAY_MIN` above it is lowered to it. This is the cost cap: each sweep is about $0.21 |
 | `MAX_SUBSCRIBERS` | You (with subscriptions) | `/api/subscribe` | The cap on records (pending and active). Unset or not a positive whole number means **not set up**: sign-up and Google sign-up answer `503` "subscriptions are not open yet", the same for every address, and nothing is stored. A **full** list keeps the usual sign-up reply, so it looks like any other sign-up. The count is the one the last saved sweep wrote |
 | `MAX_CONFIRMS_PER_DAY` | You (optional) | `/api/subscribe` | Emails sign-up sends per UTC day, across all addresses: confirmations and "already subscribed" notices together. Default 10; `0` stops both |
 | `MAX_SIGNUPS_PER_IP_HOUR` | You (optional) | `/api/subscribe`, `/api/session` | Sign-up and sign-in requests per client IP per UTC hour, counted together. Default 5; unset or not a positive whole number means 5. Over it the reply is the same and nothing is stored or sent |
@@ -1200,6 +1202,28 @@ it (`pro.emptyForCats` in the sweep reply). Free subscribers see the boxes disab
 the daily digest. If Pro ends, the choice stays stored but is ignored, so it applies again if Pro is granted again.
 `show <email>` prints it.
 
+### Sweeps a day (T32)
+
+Each Pro member chooses 1 to 5 emails a day on `/manage/` (no choice counts as 2). The GitHub schedule still fires at
+all five slots, 00, 05, 10, 15 and 20 UTC, but a scheduled call only sweeps when its slot is needed:
+
+| Sweeps a day | UTC slots |
+|---|---|
+| 1 | 00 |
+| 2 | 00, 10 |
+| 3 | 00, 10, 15 |
+| 4 | 00, 05, 10, 15 |
+| 5 | 00, 05, 10, 15, 20 |
+
+- The site's number is the highest choice among active Pro members with email on, or 1 with none, kept between
+  `SWEEPS_PER_DAY_MIN` and `SWEEPS_PER_DAY_MAX`. With `SUBSCRIPTIONS_ENABLED` off it is `SWEEPS_PER_DAY_MIN`.
+- A slot that isn't needed answers `200 {"status":"skipped","reason":"slot 05 not needed: 2 a day"}` before any
+  Anthropic call. Nothing is saved and nothing is sent.
+- If the subscriber list can't be read, the slot runs as if the number were `SWEEPS_PER_DAY_MAX`, and the log says why.
+- Slot 00 always runs. The Vercel backstop at 01:30 UTC falls in it.
+- Manual runs are not affected.
+- Each Pro member gets one email at each of their slots, with every scheduled sweep since their previous slot.
+
 ### Changing the schedule
 
 The 5-hour schedule is the `cron` line in `.github/workflows/sweep.yml`, in UTC. Edit it and push to `main`. If you
@@ -1242,7 +1266,7 @@ history, and every item is flagged New again. This cannot be undone.
 
 Both schedulers are best effort. Vercel can miss a run or deliver it twice. GitHub can start a run late, or drop it at
 very busy times. A scheduled call within 2 hours of the last scheduled sweep answers `skipped`, so duplicates cost
-nothing. A missed run is made up at the next slot, at most about 5 hours later. Around midnight, Vercel's backstop
+nothing. A missed run is made up at the next needed slot ([Sweeps a day](#sweeps-a-day-t32)): at most about 5 hours later at 5 a day, up to a day at 1 a day. Around midnight, Vercel's backstop
 covers a missed 00:17 run.
 
 ---
