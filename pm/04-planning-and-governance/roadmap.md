@@ -18,6 +18,7 @@
 | RM-07 | T27: test-mode run on a Preview, then go-live | Switches `paid` to `true` | Owner and dev | RM-03 to RM-06 (T27's own list); RM-08 (costing's) | [T27](../../docs/subscriptions/tasks/T27-razorpay-test-run-and-go-live.md) |
 | RM-08 | Before the first live payment: Resend Pro, an Anthropic spend limit and alert, a live Razorpay plan at ₹299 | Costing's P0 checklist | Owner | — | [costing.md](../../docs/subscriptions/costing.md#pre-launch-checklist) |
 | RM-09 | Answer the open inputs: international cards, a yearly plan, domain renewal | T27 lists cards, the liability clause and a yearly plan as still open; they change what `/pricing/` and the payment methods say | Owner | — | [T27](../../docs/subscriptions/tasks/T27-razorpay-test-run-and-go-live.md#before-starting-owner); [T23](../../docs/subscriptions/tasks/T23-pro-display-standards.md) |
+| RM-25 | Fix what the 2026-10-24 code audit found | **Done** 2026-10-24 (PRs #81 to #84): 9 bugs and 3 design risks, among them a payment that could leave the payer on Free, and a forwarded digest that could sign the reader in. Still unverified: the real Blob conditional write (until T27) and the artifact's model settings (until a sweep runs inside a Claude artifact) | Dev | — | I-09 in the [RAID log](raid-log.md); [CHANGELOG](../../CHANGELOG.md) 2026-10-24 |
 
 ## Next: checks that are still open
 

@@ -450,10 +450,14 @@ const iso = (ms) => new Date(ms).toISOString();
   // row 10: the list cap
   w = world({ MAX_SUBSCRIBERS: "" }, { count: 0 });
   r = await w.post({ email: "a@example.com" });
-  check(r.body === OK && subKeys(w).length === 0 && w.sent.length === 0, "subscribe row 10: MAX_SUBSCRIBERS unset means closed; nothing stored");
+  check(r.code === 503 && r.json().error === "subscriptions are not open yet" && w.logs.includes("subscribe not configured") && w.st.m.size === 1 && w.sent.length === 0,
+    "subscribe row 10: MAX_SUBSCRIBERS unset is not set up: 503, not \"a link is on its way\"; nothing stored or sent");
+  await putSubscriber(w.st, { ...newPending("b@example.com", { now: T0 - DAY, randomBytes: seeded(3) }), status: "active", confirmedAt: iso(T0 - DAY) });
+  const known = await w.post({ email: "b@example.com" });
+  check(known.code === r.code && known.body === r.body && w.sent.length === 0, "subscribe row 10: with MAX_SUBSCRIBERS unset, a subscribed address gets the identical 503");
   w = world({ MAX_SUBSCRIBERS: "abc" }, { count: 0 });
-  await w.post({ email: "a@example.com" });
-  check(subKeys(w).length === 0, "subscribe row 10: MAX_SUBSCRIBERS not a number means closed");
+  r = await w.post({ email: "a@example.com" });
+  check(r.code === 503 && subKeys(w).length === 0, "subscribe row 10: MAX_SUBSCRIBERS not a number is not set up either: 503");
   w = world({ MAX_SUBSCRIBERS: "100" }, { count: 100 });
   r = await w.post({ email: "a@example.com" });
   check(r.body === OK && subKeys(w).length === 0 && w.sent.length === 0, "subscribe row 10: count at the cap: nothing stored, identical reply");
@@ -1159,6 +1163,33 @@ const iso = (ms) => new Date(ms).toISOString();
   check(r.code === 0 && gone.length === 1 && gone[0] === "radar:sub:" + subscriberId("p1@example.com") && st.m.size === keysBefore.length - 1, "delete --yes: removes that record and nothing else");
   r = await run(st, ["delete", "p1@example.com", "--yes"]);
   check(r.code === 1 && /not found/.test(r.err), "delete again: not found");
+
+  // delete and Razorpay: a subscription that will still charge is refused; otherwise its index goes too
+  {
+    const RZPSUB = "radar:rzpsub:";
+    ({ st, mk } = await world());
+    const rzp = (n, over) => ({ subscriptionId: "sub_ADMIN0000000" + n, status: "active", currentEnd: null, cancelAtPeriodEnd: false, lastEventAt: null, ...over });
+    const paid = { plan: "pro", proSource: "razorpay", proUntil: iso(T0 + 9 * DAY) };
+    const recs = [
+      await mk(1, { ...paid, rzp: rzp(1) }),
+      await mk(2, { ...paid, rzp: rzp(2, { cancelAtPeriodEnd: true }) }),
+      await mk(3, { rzp: rzp(3, { status: "authenticated" }) }),
+      await mk(4, { ...paid, proUntil: iso(T0 - DAY), rzp: rzp(4, { status: "cancelled" }) }),
+    ];
+    for (const x of recs) await st.set(RZPSUB + x.rzp.subscriptionId, JSON.stringify({ id: x.id }));
+    r = await run(st, ["delete", "p1@example.com", "--yes"]);
+    check(r.code === 1 && /cancel it first/.test(r.err) && st.m.has("radar:sub:" + recs[0].id) && st.m.has(RZPSUB + recs[0].rzp.subscriptionId), "delete: a renewing Razorpay Pro is refused; record and index kept");
+    r = await run(st, ["delete", "p3@example.com", "--yes"]);
+    check(r.code === 1 && /cancel it first/.test(r.err) && st.m.has("radar:sub:" + recs[2].id), "delete: paid and waiting for the webhook (authenticated) is refused");
+    r = await run(st, ["delete", "p2@example.com"]);
+    check(r.code === 1 && /and its Razorpay index/.test(r.err) && st.m.has("radar:sub:" + recs[1].id), "delete without --yes on a Pro set to end: says the index goes too; nothing deleted");
+    r = await run(st, ["delete", "p2@example.com", "--yes"]);
+    check(r.code === 0 && !st.m.has("radar:sub:" + recs[1].id) && !st.m.has(RZPSUB + recs[1].rzp.subscriptionId), "delete --yes on a Pro set to end: record and its radar:rzpsub: index deleted");
+    r = await run(st, ["delete", "p4@example.com", "--yes"]);
+    check(r.code === 0 && !st.m.has("radar:sub:" + recs[3].id) && !st.m.has(RZPSUB + recs[3].rzp.subscriptionId), "delete --yes on a lapsed Razorpay record: record and index deleted");
+    r = await run(st, ["delete", "p1@example.com", "--yes"], { now: T0 + 10 * DAY });
+    check(r.code === 0 && !st.m.has(RZPSUB + recs[0].rzp.subscriptionId), "delete: judged at the run's time; once the paid period has passed, it goes");
+  }
 
   // show and list
   ({ st, mk } = await world());
@@ -2043,10 +2074,17 @@ const iso = (ms) => new Date(ms).toISOString();
     w = await world({ MAX_SIGNINS_PER_DAY: "1" });
     await w.st.set(`radar:event:${utcDay(T0)}-000000000-signinsent-aaaaaa`, "{}");
     r = await w.ask("me@gmail.com");
-    check(r.json().message === REPLY && w.sent.length === 0, "sign-in request: MAX_SIGNINS_PER_DAY reached, the usual reply and no email");
+    const CAPPED = "Sign-in emails have hit today's limit. Try again after 00:00 UTC, or use the Manage link in any digest.";
+    check(r.code === 200 && r.json().message === CAPPED && w.sent.length === 0, "sign-in request: MAX_SIGNINS_PER_DAY reached says so (not \"a link is on its way\") and sends no email");
+    const stranger = await w.ask("nobody@example.com");
+    check(stranger.code === r.code && stranger.body === r.body, "sign-in request: the day's limit reply is identical for an address with no account");
+    w = await world({ MAX_SIGNINS_PER_DAY: "1" }, { status: "pending" });
+    await w.st.set(`radar:event:${utcDay(T0)}-000000000-signinsent-aaaaaa`, "{}");
+    r = await w.ask("me@gmail.com");
+    check(r.json().message === CAPPED && w.sent.length === 0, "sign-in request: the day's limit is checked before the lookup, so a pending address gets the same reply");
     w = await world({ MAX_SIGNINS_PER_DAY: "0" });
-    await w.ask("me@gmail.com");
-    check(w.sent.length === 0, "sign-in request: MAX_SIGNINS_PER_DAY=0 sends none");
+    r = await w.ask("me@gmail.com");
+    check(w.sent.length === 0 && r.json().message === CAPPED, "sign-in request: MAX_SIGNINS_PER_DAY=0 sends none, with the limit reply");
     w = await world({ MAX_SIGNUPS_PER_IP_HOUR: "1" });
     await w.ask("nobody@example.com", { ip: "198.51.100.7" });
     r = await w.ask("me@gmail.com", { ip: "198.51.100.7" });
@@ -2407,6 +2445,8 @@ const iso = (ms) => new Date(ms).toISOString();
     await refused("a full list (MAX_SUBSCRIBERS): no Create account page", { link: false, code: 503, page: /closed for now/, prep: (x) => x.st.set(KEY_SUBSCRIBER_COUNT, JSON.stringify({ count: 5000 })) });
     await refused("an unreadable count counts as full", { link: false, code: 503, page: /closed for now/, prep: (x) => x.st.set(KEY_SUBSCRIBER_COUNT, "garbage") });
     await refusedSignup("the list filled up before Create account", { prep: (x) => x.st.set(KEY_SUBSCRIBER_COUNT, JSON.stringify({ count: 5000 })), code: 503, page: /closed for now/ });
+    await refused("MAX_SUBSCRIBERS unset: not open yet, no Create account page", { setup: { envOver: { MAX_SUBSCRIBERS: "" } }, link: false, code: 503, page: /Subscriptions are not open yet/ });
+    await refusedSignup("MAX_SUBSCRIBERS unset at Create account", { prep: (x) => { x.env.MAX_SUBSCRIBERS = ""; }, code: 503, page: /Subscriptions are not open yet/ });
     await refusedSignup("the per-IP hourly limit (shared with sign-up)", { setup: { envOver: { MAX_SIGNUPS_PER_IP_HOUR: "1" } }, code: 429, page: /Too many new accounts/,
       prep: (x) => x.st.set(ipHitPrefix("203.0.113.9", T0) + "aaaaaa", "{}") });
     w = await gw({ envOver: { MAX_SIGNUPS_PER_IP_HOUR: "1" } });

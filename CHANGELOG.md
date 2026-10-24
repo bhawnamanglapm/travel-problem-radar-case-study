@@ -12,6 +12,17 @@ grouped by date.
   payments haven't opened. The README links it, and the v1 PRD points to v2.
 - A failed sweep now says why Anthropic refused the call (`http 400 <type>: <message>`), not just `http 400`. The
   message is one line, capped, and never shows the key.
+- Fixes from a code audit (PRs #81 to #84):
+  - The sweep saves the new sweep, the index and the seen list before it deletes old files, and an item found again
+    stays in the seen list. The live board no longer asks for two files it can't read. An unknown key on the
+    paywalled `/api/data` gets its 400 instead of throwing. The artifact uses the server's model settings.
+  - Pressing Confirm on an address that is already active (from a forwarded digest, say) no longer signs anyone in.
+  - Two updates to a subscriber record at the same moment no longer undo each other: each write checks the record
+    is unchanged and otherwise retries. A payment that lands during Checkout's return keeps its Pro, and sign-in
+    links and Confirm work once.
+  - The admin `delete` refuses a Razorpay subscription that will still charge, and deletes its index with the record.
+    With `MAX_SUBSCRIBERS` unset, sign-up answers "subscriptions are not open yet" instead of promising a link.
+    Once the day's sign-in emails run out, `/signin/` says so, for every address alike.
 
 ## 2026-10-23
 

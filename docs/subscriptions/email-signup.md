@@ -103,7 +103,7 @@ Slack and email and only when the sweep saved. The owner's `EMAIL_TO` path is un
 - **Order:** the owner's email goes first, so if Resend's daily quota runs out it is subscriber mail that stops.
 - **One switch:** `SUBSCRIPTIONS_ENABLED=1` turns sign-up and delivery on together. Unset, sign-up answers `503`
   and the sweep reply says `"subscribers": "not configured"`.
-- **The cap:** `MAX_SUBSCRIBERS`. Unset means closed: no number is assumed. Production uses 5000 (D7), but Resend's
+- **The cap:** `MAX_SUBSCRIBERS`. Unset means not set up: no number is assumed, and sign-up answers `503` "subscriptions are not open yet" for every address. Production uses 5000 (D7), but Resend's
   free plan fits only about 90 Free subscribers (the quota formula in [pricing.md](pricing.md)).
 - A failure never fails the sweep, and the reply's `subscribers` field holds counts only.
 
