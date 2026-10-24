@@ -5,6 +5,10 @@ grouped by date.
 
 ## 2026-10-25
 
+- Pro members choose 1 to 5 emails a day on `/manage/` (T32, PR 2, #89): an "Emails a day" card that saves through
+  `set-freq`, greyed out for Free. Every page, the live board, the Pro email footer and the account replies say "1 to 5
+  a day" instead of "every 5 hours"; `check.mjs` fails if the old wording comes back. README, TECHNICAL and the
+  pricing.md email quota follow.
 - [T32](docs/subscriptions/tasks/T32-sweeps-per-day.md) gets its own task file, and [T28](docs/subscriptions/tasks/T28-two-sweeps-a-day.md)
   is marked replaced (its `cron` change would stop 3 to 5 a day from running). T27, T30, the tasks README, progress,
   pricing.md and roadmap RM-26 now point at T32. Docs only.
