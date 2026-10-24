@@ -18,6 +18,8 @@
 | RM-07 | T27: test-mode run on a Preview, then go-live | Switches `paid` to `true` | Owner and dev | RM-03 to RM-06 (T27's own list); RM-08 (costing's) | [T27](../../docs/subscriptions/tasks/T27-razorpay-test-run-and-go-live.md) |
 | RM-08 | Before the first live payment: Resend Pro, an Anthropic spend limit and alert, a live Razorpay plan at ₹299 | Costing's P0 checklist | Owner | — | [costing.md](../../docs/subscriptions/costing.md#pre-launch-checklist) |
 | RM-09 | Answer the open inputs: international cards, a yearly plan, domain renewal | T27 lists cards, the liability clause and a yearly plan as still open; they change what `/pricing/` and the payment methods say | Owner | — | [T27](../../docs/subscriptions/tasks/T27-razorpay-test-run-and-go-live.md#before-starting-owner); [T23](../../docs/subscriptions/tasks/T23-pro-display-standards.md) |
+| RM-26 | T28: move to 2 sweeps a day, and say so on every page | The [final Pro plan](../../docs/subscriptions/pricing.md#final-pro-plan-2026-10-24) sells 2 digests a day; it also cuts sweep credit while no one pays | Dev | RM-01 | [T28](../../docs/subscriptions/tasks/T28-two-sweeps-a-day.md) |
+| RM-27 | T30: the owner's launch steps in one order | RM-03, RM-04, RM-05 and RM-08 are owner steps that wait on others; [T30](../../docs/subscriptions/tasks/T30-owner-launch-checklist.md) orders them: terms first, then Razorpay activation, which reviews the website | Owner | — | [T30](../../docs/subscriptions/tasks/T30-owner-launch-checklist.md) |
 | RM-25 | Fix what the 2026-10-24 code audit found | **Done** 2026-10-24 (PRs #81 to #84): 9 bugs and 3 design risks, among them a payment that could leave the payer on Free, and a forwarded digest that could sign the reader in. Still unverified: the real Blob conditional write (until T27) and the artifact's model settings (until a sweep runs inside a Claude artifact) | Dev | — | I-09 in the [RAID log](raid-log.md); [CHANGELOG](../../CHANGELOG.md) 2026-10-24 |
 
 ## Next: checks that are still open
@@ -43,6 +45,8 @@
 | RM-21 | Handle Razorpay refund and dispute events automatically | [costing.md](../../docs/subscriptions/costing.md#risks-and-safeguards): manual today |
 | RM-22 | An admin command to clear a bounce | [decisions.md](../../docs/decisions.md) 2026-10-23: none yet |
 | RM-23 | A cheaper model for the sweep, after a quality comparison | DSC-08; [haiku-test.md](../../docs/subscriptions/haiku-test.md) (estimated, not run) |
+| RM-28 | T29: usage per category in each saved sweep (optional) | [T29](../../docs/subscriptions/tasks/T29-usage-by-category.md); needed if Plus or Starter is priced by category |
+| RM-29 | T31: measure the first 20 to 30 paying members, then decide on Plus and Starter | [T31](../../docs/subscriptions/tasks/T31-measure-and-add-tiers.md) |
 | RM-24 | An Open Graph image | [homepage-review.md](../../docs/site/homepage-review.md#still-to-come) |
 
 ## Order
@@ -50,11 +54,14 @@
 ```mermaid
 flowchart LR
   RM01["RM-01 Sweeps running"] --> RM07
+  RM01 --> RM26["RM-26 2 sweeps a day"] --> RM07
+  RM27["RM-27 Owner launch steps"] -.-> RM03 & RM04 & RM05 & RM08
   RM04["RM-04 Terms"] --> RM03["RM-03 Razorpay activation"] --> RM07["RM-07 Go-live"]
   RM05["RM-05 Vercel Pro"] --> RM06["RM-06 T22"] --> RM07
   RM08["RM-08 P0 checklist"] --> RM07
   RM07 --> RM13["RM-13 Score quality"]
   RM07 --> RM15["RM-15 Interviews"]
+  RM07 --> RM29["RM-29 Measure, then tiers"]
 ```
 
 pricing.md's rule not to charge before a real sweep is scored ([decisions.md](../../docs/decisions.md), 2026-10-22)
