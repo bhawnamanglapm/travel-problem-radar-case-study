@@ -9,7 +9,7 @@ import { cancelSubscription, createSubscription, razorpayConfigured, verifyCheck
 import { clearCookie, originOk, parseCookies, readSession, sessionCookie, sessionSecret, signSession } from "./session.js";
 import {
   CONFIRM_RESEND_MINUTES, KEY_SUB_PREFIX, MAX_CONFIRMS_PER_ADDRESS, PENDING_TTL_DAYS, countEvents, deleteSubscriber, effectivePlan, findSubscriber, getSubscriber, newPending, normaliseCats, normaliseEmail, putSubscriber,
-  recordEvent, tokenOk, utcDay,
+  recordEvent, tokenOk, updateSubscriber, utcDay,
 } from "./subscribers.js";
 
 // The sweep writes the number of active plus pending records here after each run (T10), so a
@@ -151,9 +151,17 @@ async function notifyOwnerProRequest({ env, fetchFn, at, source, log }) {
 
 // Stores a pending record whose confirmSentAt is now and emails it the confirmation link. Records
 // "subscribed" for a new one and "confirmsent" always. The caller has checked MAX_CONFIRMS_PER_DAY.
+// A re-send is checked again on the stored record: if it was confirmed, or another request re-sent
+// the link, in the meantime, nothing is written or sent.
 async function sendConfirmation({ record, isNew, env, storage, fetchFn, t, randomBytes, log, logAs }) {
   const site = siteUrl(env);
-  await putSubscriber(storage, record);
+  if (isNew) await putSubscriber(storage, record);
+  else {
+    const { changed } = await updateSubscriber(storage, record.id, (r) => (r.status === "pending" && !confirmHeld(r, t)
+      ? { ...r, confirmSentAt: record.confirmSentAt, confirmSends: record.confirmSends, proRequestedAt: r.proRequestedAt || record.proRequestedAt }
+      : null));
+    if (!changed) return;
+  }
   if (isNew) await recordEvent(storage, "subscribed", { now: t, randomBytes, plan: "free" });
   await recordEvent(storage, "confirmsent", { now: t, randomBytes, plan: "free" });
 
@@ -222,7 +230,7 @@ export function makeSubscribeHandler({ env, storage, fetchFn, now, randomBytes =
           return sendJson(res, 200, ALREADY);
         }
         try {
-          await putSubscriber(storage, { ...existing, noticeSentAt: new Date(t).toISOString() });
+          await updateSubscriber(storage, existing.id, (r) => ({ ...r, noticeSentAt: new Date(t).toISOString() }));
           await recordEvent(storage, "noticesent", { now: t, randomBytes, plan: effectivePlan(existing, t) });
         } catch (e) {
           log("subscribe notice-record", "error: " + ((e && e.name) || "Error")); // the email went; say so
@@ -330,9 +338,8 @@ export function makeConfirmHandler({ env, storage, fetchFn = fetch, now, randomB
         };
         // Already confirmed: never a sign-in. The same id and token are in every digest's manage and
         // unsubscribe links, so signing in here would let anyone a digest is forwarded to log in.
-        if (record.status === "active") {
-          return sendPage(res, 200, { title: "You're already subscribed", body: `<p>Nothing more to do. <a href="${esc(managePath(params.id, params.t))}">Manage your subscription</a> · <a href="/live/">Open the live board</a> · <a href="/signin/">Sign in</a></p>` });
-        }
+        const already = () => sendPage(res, 200, { title: "You're already subscribed", body: `<p>Nothing more to do. <a href="${esc(managePath(params.id, params.t))}">Manage your subscription</a> · <a href="/live/">Open the live board</a> · <a href="/signin/">Sign in</a></p>` });
+        if (record.status === "active") return already();
         if (record.status !== "pending") return sendPage(res, 404, INVALID);
         if (!post) {
           return sendPage(res, 200, {
@@ -340,9 +347,12 @@ export function makeConfirmHandler({ env, storage, fetchFn = fetch, now, randomB
             body: `<p>One click to start getting the Travel Problem Radar digest by email.</p>${hiddenForm("/api/confirm", params.id, params.t, "Confirm")}`,
           });
         }
-        const active = { ...record, status: "active", confirmedAt: new Date(t).toISOString() };
-        await putSubscriber(storage, active);
-        await recordEvent(storage, "confirmed", { now: t, randomBytes, plan: record.plan === "pro" ? "pro" : "free" });
+        // Only the press that moves it from pending signs in: a second press at the same moment
+        // (or a Google sign-in) that finds it active gets the already-subscribed page.
+        const { record: active, changed } = await updateSubscriber(storage, record.id, (r) => (r.status === "pending"
+          ? { ...r, status: "active", confirmedAt: new Date(t).toISOString() } : null));
+        if (!changed) return active && active.status === "active" && tokenOk(active, params.t) ? already() : sendPage(res, 404, INVALID);
+        await recordEvent(storage, "confirmed", { now: t, randomBytes, plan: active.plan === "pro" ? "pro" : "free" });
         // A Pro request ticked at sign-up counts from here, once the address is proven.
         if (active.proRequestedAt && effectivePlan(active, t) !== "pro") {
           await recordEvent(storage, "prorequested", { now: t, randomBytes, plan: "free" });
@@ -383,8 +393,9 @@ export function makeUnsubscribeHandler({ env, storage, now, randomBytes = crypto
           });
         }
         if (keep) {
-          await putSubscriber(storage, { ...record, emailOff: "unsubscribed" });
-          await recordEvent(storage, "emailoff", { now: t, randomBytes, plan: "pro" });
+          // A bounce or a complaint recorded in the meantime stays: it is the stronger reason.
+          const { changed } = await updateSubscriber(storage, record.id, (r) => (r.emailOff ? null : { ...r, emailOff: "unsubscribed" }));
+          if (changed) await recordEvent(storage, "emailoff", { now: t, randomBytes, plan: "pro" });
           return sendPage(res, 200, { title: "Your emails are off", body: `<p>Nothing more will be sent. Your Pro account stays; you can turn emails back on, or delete the account, on the ${manage}.</p>` });
         }
         await deleteSubscriber(storage, record.id);
@@ -458,6 +469,10 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
       }
       const view = (rec) => ({ ...accountView(rec, t, env), signedIn: Boolean(session) });
       if (req.method === "GET") return sendJson(res, 200, view(record));
+      // Every change below is made with updateSubscriber, on the record as stored at that moment,
+      // so a webhook or another tab writing at the same time isn't undone. Deleted meanwhile: 404.
+      const gone = () => sendJson(res, 404, { error: "this link isn't valid" });
+      const save = (change) => updateSubscriber(storage, record.id, change);
 
       if (action === "set-cats") {
         if (record.status !== "active") return sendJson(res, 409, { error: "not_confirmed" });
@@ -465,15 +480,20 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
         if (effectivePlan(record, t) !== "pro") return sendJson(res, 403, { error: "pro_only" });
         const chosen = normaliseCats(cats);
         if (!chosen.ok) return sendJson(res, 400, { error: "unknown category" });
-        const updated = { ...record, cats: chosen.cats };
-        await putSubscriber(storage, updated);
+        const { record: updated, changed } = await save((r) => (effectivePlan(r, t) === "pro" ? { ...r, cats: chosen.cats } : null));
+        if (!updated) return gone();
+        if (!changed) return sendJson(res, 403, { error: "pro_only" });
         return sendJson(res, 200, { ok: true, ...view(updated) });
       }
       if (action === "email-on") {
         // A bounce or a complaint can't be undone here: that would send to an address that refused mail.
-        if (record.emailOff !== "unsubscribed") return sendJson(res, 409, { error: record.emailOff ? "email_blocked" : "already_on" });
-        const { emailOff, ...updated } = record;
-        await putSubscriber(storage, updated);
+        const { record: updated, changed } = await save((r) => {
+          if (r.emailOff !== "unsubscribed") return null;
+          const { emailOff, ...on } = r;
+          return on;
+        });
+        if (!updated) return gone();
+        if (!changed) return sendJson(res, 409, { error: updated.emailOff ? "email_blocked" : "already_on" });
         return sendJson(res, 200, { ok: true, ...view(updated) });
       }
       if (action === "delete-account") {
@@ -505,8 +525,14 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
             return sendJson(res, 502, { error: "payment_provider" });
           }
           await storage.set(KEY_RZPSUB_PREFIX + sub.id, JSON.stringify({ id: record.id }));
-          const updated = { ...record, rzp: { subscriptionId: sub.id, status: "created", createdAt: new Date(t).toISOString(), currentEnd: null, cancelAtPeriodEnd: false, lastEventAt: null } };
-          await putSubscriber(storage, updated);
+          // Checked again on the stored record: a payment that landed meanwhile keeps its subscription.
+          const { record: updated, changed } = await save((r) => {
+            const cur = rzpOf(r);
+            if (effectivePlan(r, t) === "pro" || cur.status === "authenticated" || cur.status === "pending") return null;
+            return { ...r, rzp: { subscriptionId: sub.id, status: "created", createdAt: new Date(t).toISOString(), currentEnd: null, cancelAtPeriodEnd: false, lastEventAt: null } };
+          });
+          if (!updated) return gone();
+          if (!changed) return sendJson(res, 409, { error: effectivePlan(updated, t) === "pro" ? "already_pro" : "payment_pending" });
           await recordEvent(storage, "checkoutstarted", { now: t, randomBytes, plan: "free" });
           return sendJson(res, 200, { ok: true, keyId, subscriptionId: sub.id });
         }
@@ -516,9 +542,13 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
           const good = rzp.subscriptionId && f.subscriptionId === rzp.subscriptionId && typeof f.paymentId === "string" && PAYMENT_ID.test(f.paymentId)
             && verifyCheckout({ paymentId: f.paymentId, subscriptionId: rzp.subscriptionId, signature: f.signature }, String(env.RAZORPAY_KEY_SECRET).trim());
           if (!good) return sendJson(res, 400, { error: "bad_signature" });
-          // Only "created" moves on: if the webhook got here first, its status stays.
-          const updated = rzp.status === "created" ? { ...record, rzp: { ...rzp, status: "authenticated" } } : record;
-          if (updated !== record) await putSubscriber(storage, updated);
+          // Only "created" moves on, judged on the stored record: if the webhook got here first, even
+          // while this request was running, its status and its Pro stay.
+          const { record: updated } = await save((r) => {
+            const cur = rzpOf(r);
+            return cur.subscriptionId === rzp.subscriptionId && cur.status === "created" ? { ...r, rzp: { ...cur, status: "authenticated" } } : null;
+          });
+          if (!updated) return gone();
           return sendJson(res, 200, { ok: true, message: "Payment received; Pro starts in a minute or two.", ...view(updated) });
         }
         // cancel: a paid Pro stops renewing; Pro lasts until proUntil, and the webhook (T21) ends it.
@@ -529,18 +559,24 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
           log("account", "cancel: razorpay error " + done.error);
           return sendJson(res, 502, { error: "payment_provider" });
         }
-        const updated = { ...record, rzp: { ...rzp, cancelAtPeriodEnd: true } };
-        await putSubscriber(storage, updated);
+        const { record: updated } = await save((r) => {
+          const cur = rzpOf(r);
+          return cur.subscriptionId === rzp.subscriptionId ? { ...r, rzp: { ...cur, cancelAtPeriodEnd: true } } : null;
+        });
+        if (!updated) return gone();
         return sendJson(res, 200, { ok: true, ...view(updated) });
       }
       if (action !== "request-pro") return sendJson(res, 400, { error: "unknown action" });
       if (record.status !== "active") return sendJson(res, 409, { error: "not_confirmed" });
       if (effectivePlan(record, t) === "pro") return sendJson(res, 409, { error: "already_pro" });
       if (record.proRequestedAt) return sendJson(res, 200, { ok: true, ...view(record) }); // a repeat click
-      const updated = { ...record, proRequestedAt: new Date(t).toISOString() };
-      await putSubscriber(storage, updated);
-      await recordEvent(storage, "prorequested", { now: t, randomBytes, plan: "free" });
-      await notifyOwnerProRequest({ env, fetchFn, at: t, source: "manage", log });
+      // Two clicks at once write one request and tell the owner once.
+      const { record: updated, changed } = await save((r) => (r.proRequestedAt || effectivePlan(r, t) === "pro" ? null : { ...r, proRequestedAt: new Date(t).toISOString() }));
+      if (!updated) return gone();
+      if (changed) {
+        await recordEvent(storage, "prorequested", { now: t, randomBytes, plan: "free" });
+        await notifyOwnerProRequest({ env, fetchFn, at: t, source: "manage", log });
+      }
       return sendJson(res, 200, { ok: true, ...view(updated) });
     } catch (e) {
       log("account", "error: " + ((e && e.name) || "Error"));
@@ -587,10 +623,12 @@ async function sendSignInLink({ record, env, storage, fetchFn, t, randomBytes, l
 
   const site = siteUrl(env);
   const code = Buffer.from(randomBytes(32)).toString("base64url");
-  await putSubscriber(storage, {
-    ...record,
+  // The gap is checked again on the stored record, so two requests at once send one link.
+  const { changed } = await updateSubscriber(storage, record.id, (r) => (r.status !== "active" || (r.signin && t - Date.parse(r.signin.sentAt) < SIGNIN_GAP_MINUTES * MINUTE_MS) ? null : {
+    ...r,
     signin: { hash: codeHash(code), exp: new Date(t + SIGNIN_MINUTES * MINUTE_MS).toISOString(), sentAt: new Date(t).toISOString() },
-  });
+  }));
+  if (!changed) return "held";
   await recordEvent(storage, "signinsent", { now: t, randomBytes, plan: effectivePlan(record, t) });
   const mail = buildSignInEmail({ signInUrl: `${site}/api/session?id=${record.id}&c=${code}`, siteUrl: site, already });
   const result = await sendOne({ apiKey: env.RESEND_API_KEY, from: env.EMAIL_FROM }, { to: record.email, ...mail }, {
@@ -701,8 +739,10 @@ export function makeSessionHandler({ env, storage, fetchFn = fetch, now, randomB
       if (req.method === "GET") {
         return sendPage(res, 200, { title: "Sign in to Travel Problem Radar", body: `<p>One click to sign in on this browser.</p>${hiddenForm("/api/session", id, code, "Sign in", "c")}` });
       }
-      const used = { ...record, signin: null };
-      await putSubscriber(storage, used);
+      // The code is used once: checked again and cleared in one conditional write, so two presses
+      // at the same moment can't both sign in.
+      const { record: used, changed } = await updateSubscriber(storage, id, (r) => (r.status === "active" && signinOk(r, code, t) ? { ...r, signin: null } : null));
+      if (!changed) return sendPage(res, 400, SIGNIN_INVALID);
       res.statusCode = 303;
       res.setHeader("set-cookie", sessionCookie(signSession(used, { secret, now: t })));
       res.setHeader("location", "/live/");
@@ -793,7 +833,16 @@ async function googleSignIn({ res, record, isNew = false, pro, env, storage, fet
       ? { ...record, status: "active", confirmSentAt: null, confirmSends: 0, confirmedAt: at }
       : { ...record, status: "active", confirmedAt: at };
     if (pro && !record.proRequestedAt) record.proRequestedAt = at;
-    await putSubscriber(storage, record);
+    if (isNew) await putSubscriber(storage, record);
+    else {
+      // Confirmed by its link meanwhile: it just signs in, as an active account does.
+      const made = record;
+      const out = await updateSubscriber(storage, record.id, (r) => (r.status === "pending"
+        ? { ...r, status: "active", confirmedAt: at, proRequestedAt: r.proRequestedAt || made.proRequestedAt } : null));
+      if (!out.record) return page(400, GOOGLE_FAILED);
+      record = out.record;
+      if (!out.changed) return signedIn();
+    }
     if (isNew) await recordEvent(storage, "subscribed", { now: t, randomBytes, plan: "free" });
     await recordEvent(storage, "confirmed", { now: t, randomBytes, plan: "free" });
     if (record.proRequestedAt && effectivePlan(record, t) !== "pro") {
@@ -803,12 +852,17 @@ async function googleSignIn({ res, record, isNew = false, pro, env, storage, fet
   } else if (record.status !== "active") {
     return page(400, GOOGLE_FAILED); // anything unexpected
   }
-  cookies.unshift(sessionCookie(signSession(record, { secret, now: t })));
-  res.statusCode = 303;
-  res.setHeader("set-cookie", cookies);
-  res.setHeader("location", "/live/");
-  res.setHeader("cache-control", "no-store");
-  return res.end();
+  return signedIn();
+
+  function signedIn() {
+    if (record.status !== "active") return page(400, GOOGLE_FAILED);
+    cookies.unshift(sessionCookie(signSession(record, { secret, now: t })));
+    res.statusCode = 303;
+    res.setHeader("set-cookie", cookies);
+    res.setHeader("location", "/live/");
+    res.setHeader("cache-control", "no-store");
+    return res.end();
+  }
 }
 
 const signupPage = (email, pro) => ({
@@ -902,7 +956,7 @@ export function makeResendWebhookHandler({ env, storage, now, randomBytes = cryp
         const record = await findSubscriber(storage, email);
         if (!record) continue; // not a subscriber, e.g. the owner's own EMAIL_TO
         const plan = effectivePlan(record, t);
-        if (plan === "pro") await putSubscriber(storage, { ...record, emailOff: action });
+        if (plan === "pro") await updateSubscriber(storage, record.id, (r) => ({ ...r, emailOff: action }));
         else await deleteSubscriber(storage, record.id);
         await recordEvent(storage, action, { now: t, randomBytes, plan });
         matched++;
@@ -1008,15 +1062,24 @@ export function makeRazorpayWebhookHandler({ env, storage, now, randomBytes = cr
         log("rzp-webhook", `${kind}: unknown subscription`);
         return jsonResponse(200, { ok: true, unknown: true });
       }
-      const last = Date.parse(rzpOf(record).lastEventAt);
-      if (Number.isFinite(last) && Date.parse(eventAt) < last) {
-        log("rzp-webhook", `${kind}: stale, a newer event was applied`);
-        return jsonResponse(200, { ok: true, stale: true });
+      // Applied to the record as stored at the moment of writing: another event (or Checkout's
+      // return) that lands meanwhile makes this re-read and decide again, rather than be overwritten.
+      let before = "free";
+      let why = "unknown";
+      const { record: next, changed } = await updateSubscriber(storage, record.id, (r) => {
+        const cur = rzpOf(r);
+        before = effectivePlan(r, t);
+        why = "unknown";
+        if (cur.subscriptionId !== entity.id) return null;
+        const last = Date.parse(cur.lastEventAt);
+        if (Number.isFinite(last) && Date.parse(eventAt) < last) { why = "stale"; return null; }
+        return applyRzpEvent(r, kind, entity, eventAt, t);
+      });
+      if (!changed) {
+        log("rzp-webhook", why === "stale" ? `${kind}: stale, a newer event was applied` : `${kind}: unknown subscription`);
+        return jsonResponse(200, why === "stale" ? { ok: true, stale: true } : { ok: true, unknown: true });
       }
-      const before = effectivePlan(record, t);
-      const next = applyRzpEvent(record, kind, entity, eventAt, t);
       const after = effectivePlan(next, t);
-      await putSubscriber(storage, next);
       if (before !== after) await recordEvent(storage, after === "pro" ? "progranted" : "prorevoked", { now: t, randomBytes, plan: after });
       if (marker) await storage.set(marker, JSON.stringify({ at: new Date(t).toISOString() }));
       log("rzp-webhook", `${kind}: plan ${before} -> ${after}`);
