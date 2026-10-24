@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="google-site-verification" content="MAdMSZJtf-_nkXyb4yA5-VWzLXIryMmQcf4RhboEG3w" />
 <title>Travel Problem Radar — travel-industry problems, found daily</title>
-<meta name="description" content="An AI model with web search looks for travel-industry problems about 5 times a day: traveler complaints, visa and policy changes, website and app failures, and industry disruptions. Free daily email." />
+<meta name="description" content="An AI model with web search looks for travel-industry problems 1 to 5 times a day: traveler complaints, visa and policy changes, website and app failures, and industry disruptions. Free daily email." />
 <link rel="canonical" href="https://travel-problem-radar.vercel.app/" />
 <meta property="og:type" content="website" />
 <meta property="og:title" content="Travel Problem Radar" />
-<meta property="og:description" content="Travel-industry problems found by an AI model with web search, about 5 times a day. Get a free daily email, or the live board with Pro." />
+<meta property="og:description" content="Travel-industry problems found by an AI model with web search, 1 to 5 times a day. Get a free daily email, or the live board with Pro." />
 <meta property="og:url" content="https://travel-problem-radar.vercel.app/" />
 <meta name="theme-color" content="#0B0B0D" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230B0B0D'/%3E%3Ccircle cx='16' cy='16' r='10' fill='none' stroke='%23C6FF3D' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%23FF2E88'/%3E%3C/svg%3E" />
@@ -193,7 +193,7 @@ dialog::backdrop{background:rgba(0,0,0,.65);}
 <main id="main">
   <div class="hero">
     <div class="wrap">
-      <p class="label">Updated about 5 times a day</p>
+      <p class="label">Updated 1 to 5 times a day</p>
       <h1>Travel-industry problems, <em>found for you.</em></h1>
       <p class="lede">An AI model with web search looks for recent, real problems in travel: what travelers complain about, new visa and entry rules, broken booking sites and apps, and industry disruptions. Each one comes with its source and a product idea that could solve it.</p>
       <div class="ctas">
@@ -254,7 +254,7 @@ dialog::backdrop{background:rgba(0,0,0,.65);}
           <template data-when="paid"><div class="price">{{PRO_PRICE}}</div></template>
           <ul>
             <li>The live board, any time</li>
-            <li>An email after every sweep, about 5 a day</li>
+            <li>1 to 5 emails a day; you choose how many</li>
             <li>Choose which of the four categories you get</li>
             <!-- when:free-test --><li>Ask for it when you create your account; it&rsquo;s switched on by hand</li><!-- /when -->
             <template data-when="paid"><li>{{PRO_PRICE}}, {{PRO_GST}}. Renews automatically every month until you cancel; cancel any time on your account page</li></template>
@@ -303,7 +303,7 @@ dialog::backdrop{background:rgba(0,0,0,.65);}
       <form id="fUp" method="post" action="/api/subscribe">
         <label class="field" for="upEmail">Your email address</label>
         <input id="upEmail" name="email" type="email" autocomplete="email" required maxlength="254" placeholder="you@example.com" />
-        <label class="check"><input id="upPro" name="wantsPro" type="checkbox" value="1" /> <span><!-- when:free-test -->I&rsquo;d also like Pro (the live board and an email after every sweep). You&rsquo;ll get the daily email until it&rsquo;s switched on.<!-- /when --><template data-when="paid">I&rsquo;d like Pro: the live board and an email after every sweep, {{PRO_PRICE}}, {{PRO_GST}}. It renews automatically every month until you cancel. You&rsquo;ll pay on your account page after confirming your email.</template></span></label>
+        <label class="check"><input id="upPro" name="wantsPro" type="checkbox" value="1" /> <span><!-- when:free-test -->I&rsquo;d also like Pro (the live board and 1 to 5 emails a day). You&rsquo;ll get the daily email until it&rsquo;s switched on.<!-- /when --><template data-when="paid">I&rsquo;d like Pro: the live board and 1 to 5 emails a day, {{PRO_PRICE}}, {{PRO_GST}}. It renews automatically every month until you cancel. You&rsquo;ll pay on your account page after confirming your email.</template></span></label>
         <div class="trap"><label for="upWebsite">Leave this field empty (it is a trap for automated sign-ups)</label><input id="upWebsite" name="website" type="text" tabindex="-1" autocomplete="off" /></div>
         <button class="btn pri" id="upGo" type="submit">Create account</button>
       </form>

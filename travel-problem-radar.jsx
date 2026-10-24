@@ -596,7 +596,7 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
               <button className={"tpr-tab" + (view === "history" ? " on" : "")} onClick={() => setView("history")}>History</button>
             </div>
           )}
-          {sweptAt && <div className="tpr-swept">{demo ? "Last replayed" : live ? "Updated every 5 hours · last sweep" : "Last swept"}<br /><b>{new Date(sweptAt).toLocaleString()}</b></div>}
+          {sweptAt && <div className="tpr-swept">{demo ? "Last replayed" : live ? "Updated 1 to 5 times a day · last sweep" : "Last swept"}<br /><b>{new Date(sweptAt).toLocaleString()}</b></div>}
           {!live && (
             <button className={"tpr-sweep-btn" + (busy ? " busy" : "")} onClick={() => runSweep()} disabled={busy}>
               <span className="dot" />
@@ -772,7 +772,7 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
             ) : live && locked === 402 ? (
               <>
                 <h2>The live board is part of Pro</h2>
-                <p>You’re signed in on the Free plan, which gets the daily email digest. Pro adds this live board and an email after every sweep.{proPriceLine() ? " It’s " + proPriceLine() : ""}</p>
+                <p>You’re signed in on the Free plan, which gets the daily email digest. Pro adds this live board and 1 to 5 emails a day.{proPriceLine() ? " It’s " + proPriceLine() : ""}</p>
                 <p className="tpr-locked-actions">
                   <a className="tpr-hview cur" href="../manage/">{proPriceLine() ? "Go to your account" : "Request Pro"}</a>
                 </p>
@@ -781,7 +781,7 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
             ) : live ? (
               <>
                 <h2>The first sweep hasn’t run yet</h2>
-                <p>This page shows the result of an automatic sweep that runs every 5 hours. Nothing has been saved yet, so there is nothing to show. In the meantime, <a href="../demo/" style={{ color: "inherit" }}>try the sample demo</a>.</p>
+                <p>This page shows the result of an automatic sweep that runs 1 to 5 times a day. Nothing has been saved yet, so there is nothing to show. In the meantime, <a href="../demo/" style={{ color: "inherit" }}>try the sample demo</a>.</p>
               </>
             ) : demo ? (
               <>
@@ -801,7 +801,7 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
       {status === "done" && (
         <div className="tpr-note">
           {live
-            ? "Live: an automatic sweep runs every 5 hours and every visitor sees the latest saved result. Items are gathered by an AI model with web search, so check each source link. Items unseen in any earlier sweep are flagged New."
+            ? "Live: an automatic sweep runs 1 to 5 times a day and every visitor sees the latest saved result. Items are gathered by an AI model with web search, so check each source link. Items unseen in any earlier sweep are flagged New."
             : demo
             ? "Demo: replays a saved July 2026 sample and keeps history in this browser only. Replay it again and nothing is flagged New, because every item was already seen."
             : "Every run is archived by date — open History to revisit past sweeps. Items unseen in any prior sweep are flagged New."}
