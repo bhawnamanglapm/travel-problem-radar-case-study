@@ -5,6 +5,9 @@ grouped by date.
 
 ## 2026-10-24
 
+- [costing.md](docs/subscriptions/costing.md#tiers-by-number-of-categories-at-2-sweeps-a-day-illustrative): an
+  illustrative table of Pro tiers by number of categories (1 to 4) at 2 sweeps a day, with monthly and yearly
+  prices, the owner's cost and the customers needed to cover it. The prices are examples; nothing is decided.
 - A product-management case study in [`pm/`](pm/README.md), in seven stages: discovery, product definition,
   design, planning and governance, business case and launch, executive communication, data and metrics, with a
   summary in [`pm/CASE_STUDY.md`](pm/CASE_STUDY.md). It summarises and links the existing docs; every figure names
