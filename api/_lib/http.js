@@ -6,10 +6,12 @@ import { timingSafeEqual } from "node:crypto";
 export const esc = (s = "") => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
   .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
-export const sendJson = (res, code, body) => {
+// `headers` are set last, before the body is sent (a header set after end() throws).
+export const sendJson = (res, code, body, headers = {}) => {
   res.statusCode = code;
   res.setHeader("content-type", "application/json; charset=utf-8");
   res.setHeader("cache-control", "no-store");
+  for (const [k, v] of Object.entries(headers)) res.setHeader(k, v);
   res.end(JSON.stringify(body));
 };
 
