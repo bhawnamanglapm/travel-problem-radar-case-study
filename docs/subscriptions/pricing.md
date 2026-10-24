@@ -74,7 +74,7 @@ IST), though GitHub can start scheduled runs late.
 |---|---|---|
 | 1 | Anthropic credit, then one sweep that saves all 4 categories (RM-01) | Owner |
 | 2 | [T28](tasks/T28-two-sweeps-a-day.md): 2 sweeps a day, and every page says so | Dev |
-| 3 | [T30](tasks/T30-owner-launch-checklist.md): the owner's launch steps, starting with Razorpay activation | Owner, in parallel |
+| 3 | [T30](tasks/T30-owner-launch-checklist.md): the owner's launch steps, starting with the terms page, then Razorpay activation | Owner, in parallel |
 | 4 | [T22](tasks/T22-pro-lifecycle-and-go-live.md): Pro expiry, paid unsubscribe, key safety (after Vercel Pro) | Dev |
 | 5 | [T27](tasks/T27-razorpay-test-run-and-go-live.md): test run on a Preview, then go-live | Owner + Dev |
 | 6 | [T31](tasks/T31-measure-and-add-tiers.md): measure the first 20 to 30 paying members, then decide on tiers | Owner + Dev |
