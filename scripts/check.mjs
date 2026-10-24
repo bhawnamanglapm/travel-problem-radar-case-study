@@ -85,6 +85,10 @@ check(existsSync("api/account.js"), "api/account.js exists (the manage page's en
 check(/fetch\("\/api\/session"/.test(manPage) && /action: "signout"/.test(manPage), "manage/index.html has a Sign out button that posts to /api/session");
 check(/action: "delete-account"/.test(manPage) && />Delete my account</.test(manPage) && /This can’t be undone/.test(manPage) && /action: "email-on"/.test(manPage),
   "manage/index.html has Delete my account (asked twice) and Turn emails back on (T17)");
+// T32: the Emails a day card posts set-freq, with one radio button for each number, 1 to 5, in order.
+const manFreq = [...manPage.matchAll(/<input type="radio" name="freq" value="(\d)"/g)].map((m) => m[1]);
+check(/action: "set-freq"/.test(manPage) && manFreq.join() === "1,2,3,4,5" && /id="freqCard"/.test(manPage) && /sweepsPerDayMax/.test(manPage) && /"freqCard", "deleteCard"/.test(manPage),
+  "manage/index.html has the Emails a day card: posts set-freq, radios 1 to 5, hides numbers above the cap, hidden after delete (T32)");
 // T20: the one script loaded from elsewhere is Razorpay's Checkout, and only on the Upgrade click.
 // Request Pro stays for while payments are off.
 const manSrcs = [...manPage.matchAll(/\.src\s*=\s*([^;]+);/g)].map((m) => m[1].trim());
@@ -189,6 +193,12 @@ const copied = ((buildCmd.match(/\bcp -r ([^&]*) public\/(?:\s|&|$)/) || [])[1] 
 const pricingShipped = copied.includes("pricing");
 const shippedPages = [...copied.flatMap((d) => (d.endsWith(".html") ? [d] : [`${d}/index.html`])), ...shippedLegal.map((s) => `legal/${s}/index.html`)].filter((f) => existsSync(f));
 check(shippedPages.includes("index.html") && shippedPages.includes("manage/index.html"), `the shipped pages are worked out from the build command (${shippedPages.length})`);
+// T32: the schedule is 1 to 5 sweeps a day, as Pro members choose. Nothing a visitor or subscriber reads may say the
+// old fixed schedule. The prompt's "up to 5 objects" is items per category, not the schedule, and isn't matched.
+const OLD_SCHEDULE = /(?<!1 to )5 times a day|every 5 hours|about 5 a day|up to 5 a day|after every sweep/i;
+const oldSchedule = [...shippedPages, "travel-problem-radar.jsx", "live/radar-live.js", "demo/radar.js", "api/_lib/email.js", "api/_lib/subscription-handlers.js"]
+  .filter((f) => existsSync(f) && OLD_SCHEDULE.test(readFileSync(f, "utf8")));
+check(oldSchedule.length === 0, `no page, bundle or email says the old fixed schedule ("5 times a day", "every 5 hours", "after every sweep")${oldSchedule.length ? ": " + oldSchedule.join(", ") : ""}`);
 const notReady = shippedPages.map((f) => [f, fillPlan.fill(readFileSync(f, "utf8"), plan).missing]).filter(([, m]) => m.length);
 check(planErrs.length > 0 || notReady.length === 0, `every shipped page has plan.json values for the slots it uses${notReady.length ? " (" + notReady.map(([f, m]) => f + ": " + m.join(", ")).join("; ") + ")" : ""}`);
 const pricePage = existsSync("pricing/index.html") ? readFileSync("pricing/index.html", "utf8") : "";
