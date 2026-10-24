@@ -100,6 +100,37 @@ export async function putSubscriber(storage, record) {
   await storage.set(KEY_SUB_PREFIX + record.id, JSON.stringify(record));
 }
 
+// Read, change and write one record without losing a write made in between (storage.update re-reads
+// and calls `change` again on a mismatch, so `change` must only compute: no emails, no events).
+// `change(record)` gets the current record and returns the new one, or null to leave it as it is.
+// A missing or unreadable record isn't passed to `change`. Returns { record, changed }: the record
+// as now stored (null if missing), and whether this call wrote it. A store without update (a test
+// fake) gets a plain read then write.
+export async function updateSubscriber(storage, id, change) {
+  if (typeof id !== "string" || !ID_RE.test(id)) return { record: null, changed: false };
+  const key = KEY_SUB_PREFIX + id;
+  let record = null;
+  let changed = false;
+  const step = async (text) => {
+    record = null;
+    changed = false;
+    try { const r = text == null ? null : JSON.parse(text); record = r && typeof r === "object" ? r : null; } catch (e) { /* unreadable */ }
+    if (!record) return undefined;
+    const next = await change(record);
+    if (!next) return undefined;
+    if (next.id !== id) throw new Error("updateSubscriber: the id changed");
+    record = next;
+    changed = true;
+    return JSON.stringify(next);
+  };
+  if (typeof storage.update === "function") await storage.update(key, step);
+  else {
+    const out = await step(await storage.get(key));
+    if (out !== undefined) await storage.set(key, out);
+  }
+  return { record, changed };
+}
+
 export async function deleteSubscriber(storage, id) {
   if (typeof id !== "string" || !ID_RE.test(id)) return;
   await storage.del(KEY_SUB_PREFIX + id);
