@@ -563,7 +563,7 @@ const iso = (ms) => new Date(ms).toISOString();
   check(evCount(c.st, "confirmed") === 1 && !r.body.includes("@"), "confirm POST: a confirmed event written; the page holds no address");
   const eventsBefore = c.st.m.size;
   const r2 = await c.call("POST");
-  check(r2.code === 200 && r2.body === r.body && c.st.m.size === eventsBefore && c.stored().confirmedAt === iso(T0), "confirm POST twice: the second is a no-op with the same success page");
+  check(r2.code === 200 && r2.body.includes("already subscribed") && !r2.body.includes("<form") && c.st.m.size === eventsBefore && c.stored().confirmedAt === iso(T0), "confirm POST twice: the second is a no-op that says \"You're already subscribed\"");
   r = await c.call("GET");
   check(r.code === 200 && r.body.includes("already subscribed") && !r.body.includes("<form"), "confirm GET after confirming: \"You're already subscribed\"");
 
@@ -2137,6 +2137,13 @@ const iso = (ms) => new Date(ms).toISOString();
     check(r.code === 200 && /You(&#39;|')re subscribed/.test(r.body) && cookie && (await readSession({ headers: { cookie } }, { env: w.env, storage: w.st, now: T0 }))?.status === "active",
       "confirm: pressing Confirm also signs this browser in");
     check(/you(&#39;|')re signed in on this browser/.test(r.body), "confirm: the page says this browser is now signed in");
+    // A forwarded digest carries the same id and token: on an active record they never sign anyone in.
+    r = await w.call("conf", { method: "POST", body: { id: w.rec.id, t: "tok-secret-1" } });
+    check(r.code === 200 && !r.headers["set-cookie"] && /already subscribed/.test(r.body) && /href="\/signin\/"/.test(r.body),
+      "confirm: once active, POSTing the digest's id and token sets no cookie and points to sign-in");
+    w = await world();
+    r = await w.call("conf", { method: "POST", body: { id: w.rec.id, t: "tok-secret-1" } });
+    check(r.code === 200 && !r.headers["set-cookie"] && (await w.now()).status === "active", "confirm: an account confirmed long ago can't be signed into with its digest token");
     w = await world({ SESSION_SECRET: "" }, { status: "pending" });
     r = await w.call("conf", { method: "POST", body: { id: w.rec.id, t: "tok-secret-1" } });
     check(r.code === 200 && !r.headers["set-cookie"] && (await w.now()).status === "active", "confirm: with no SESSION_SECRET it confirms as before and sets no cookie");

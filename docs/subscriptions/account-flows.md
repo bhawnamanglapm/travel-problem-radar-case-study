@@ -119,7 +119,7 @@ Flow 2's emailed link is not checked yet, and neither are the #4 and #5 changes.
 |---|---|
 | No passwords | Nothing to store, leak or reset. The inbox proves who you are, which fits a product that already lives in email. Continue with Google keeps this: Google proves the address, and we keep only the address |
 | A button after every link | Mail scanners open links automatically. Requiring a press means they can't confirm or sign anyone in |
-| Confirming signs you in | A new user never has to sign in separately right after signing up |
+| Confirming signs you in | A new user never has to sign in separately right after signing up. Only the press that confirms does it: once the account is active, the confirm link signs nobody in, because its id and token are also in every digest's links (fixed 2026-10-24) |
 | Short, single-use sign-in links | 15 minutes, once. A forwarded or old email can't be reused |
 | The cookie | Signed, `HttpOnly`, ends when the browser closes (12 hours at most), holds no address, and a `POST` from another site is refused |
 | Limits and a bot trap | Daily caps, a per-connection limit and a hidden field stop bots from using up the email quota |

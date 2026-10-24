@@ -328,8 +328,10 @@ export function makeConfirmHandler({ env, storage, fetchFn = fetch, now, randomB
               + `<p><a href="/live/">Open the live board</a></p>`,
           });
         };
+        // Already confirmed: never a sign-in. The same id and token are in every digest's manage and
+        // unsubscribe links, so signing in here would let anyone a digest is forwarded to log in.
         if (record.status === "active") {
-          return post ? done(record) : sendPage(res, 200, { title: "You're already subscribed", body: `<p>Nothing more to do. <a href="${esc(managePath(params.id, params.t))}">Manage your subscription</a> · <a href="/live/">Open the live board</a></p>` });
+          return sendPage(res, 200, { title: "You're already subscribed", body: `<p>Nothing more to do. <a href="${esc(managePath(params.id, params.t))}">Manage your subscription</a> · <a href="/live/">Open the live board</a> · <a href="/signin/">Sign in</a></p>` });
         }
         if (record.status !== "pending") return sendPage(res, 404, INVALID);
         if (!post) {
