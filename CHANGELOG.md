@@ -5,6 +5,13 @@ grouped by date.
 
 ## 2026-10-24
 
+- [pricing.md](docs/subscriptions/pricing.md#final-pro-plan-2026-10-24): the final Pro plan. Free and Pro only,
+  Pro at ₹299 a month (monthly only), all 4 categories, a digest after every scheduled sweep at 2 a day, and the
+  live board. Four new tasks carry it out: [T28](docs/subscriptions/tasks/T28-two-sweeps-a-day.md) (2 sweeps a
+  day), [T29](docs/subscriptions/tasks/T29-usage-by-category.md) (usage per category, optional),
+  [T30](docs/subscriptions/tasks/T30-owner-launch-checklist.md) (the owner's launch steps) and
+  [T31](docs/subscriptions/tasks/T31-measure-and-add-tiers.md) (measure, then decide on tiers). Docs only: the
+  schedule, the pages and `plan.json` are unchanged.
 - [pricing.md](docs/subscriptions/pricing.md#tiers-by-categories-and-sweeps-draft-2026-10-24): a draft tier plan by
   categories and sweeps (Free, Starter, Plus, Pro at 2 sweeps a day), with example prices, break-even by mix and a
   rollout that launches with Pro only. Nothing is built or priced yet.
