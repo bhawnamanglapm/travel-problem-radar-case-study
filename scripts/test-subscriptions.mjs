@@ -3279,4 +3279,150 @@ const iso = (ms) => new Date(ms).toISOString();
   }
 }
 
+// ---- conditional writes: two updates to one record at the same moment don't undo each other
+{
+  // blobStorage().update over a fake @vercel/blob client that keeps an ETag per file, like Blob.
+  const files = new Map(); // path -> { text, etag }
+  let etagN = 0;
+  const puts = [];
+  let competeOnce = false; // write the file again between update's read and its write, once
+  const fake = {
+    get: async (p) => {
+      const f = files.get(p);
+      if (!f) return null;
+      const out = { statusCode: 200, stream: new Blob([f.text]).stream(), etag: f.etag };
+      if (competeOnce) { competeOnce = false; files.set(p, { text: JSON.stringify({ ...JSON.parse(f.text), other: true }), etag: "e" + ++etagN }); }
+      return out;
+    },
+    put: async (p, body, opts) => {
+      puts.push({ p, opts });
+      const f = files.get(p);
+      if (opts.ifMatch !== undefined && (!f || f.etag !== opts.ifMatch)) throw Object.assign(new Error("Precondition failed: ETag mismatch."), { name: "BlobPreconditionFailedError" });
+      files.set(p, { text: body, etag: "e" + ++etagN });
+    },
+  };
+  const blob = blobStorage(fake);
+  await blob.update("radar:sub:x", () => JSON.stringify({ n: 1 }));
+  check(puts[0].opts.ifMatch === undefined && puts[0].opts.allowOverwrite === true && JSON.parse(files.get("radar/radar-sub-x.json").text).n === 1, "blob update: a missing file is written without ifMatch");
+  await blob.update("radar:sub:x", (text) => JSON.stringify({ ...JSON.parse(text), n: 2 }));
+  check(puts[1].opts.ifMatch === "e1" && puts[1].opts.access === "private", "blob update: the write carries the ETag that was read (ifMatch)");
+  let runs = 0;
+  competeOnce = true;
+  const out = await blob.update("radar:sub:x", (text) => { runs++; return JSON.stringify({ ...JSON.parse(text), n: 3 }); });
+  check(runs === 2 && JSON.parse(out).other === true && JSON.parse(out).n === 3 && files.get("radar/radar-sub-x.json").text === out,
+    "blob update: a write made between the read and the write is kept; the change runs again on a fresh read");
+  const before = puts.length;
+  await blob.update("radar:sub:x", () => undefined);
+  check(puts.length === before, "blob update: a change that returns undefined writes nothing");
+  const always = { get: fake.get, put: async () => { throw Object.assign(new Error("Precondition failed: ETag mismatch."), { name: "BlobPreconditionFailedError" }); } };
+  runs = 0;
+  let threw = false;
+  try { await blobStorage(always).update("radar:sub:x", (text) => { runs++; return text; }); } catch (e) { threw = e.name === "BlobPreconditionFailedError"; }
+  check(threw && runs === 5, "blob update: gives up and throws after 5 mismatches");
+  let other = null;
+  try { await blobStorage({ get: fake.get, put: async () => { throw new Error("blob down"); } }).update("radar:sub:x", (text) => text); } catch (e) { other = e.message; }
+  check(other === "blob down", "blob update: any other error is thrown at once, not retried");
+
+  const { makeAccountHandler, makeRazorpayWebhookHandler, makeSessionHandler, KEY_RZPSUB_PREFIX } = await import("../api/_lib/subscription-handlers.js");
+  const KEY_ID = "rzp_" + "test_" + "Fixture000003";
+  const KEY_SECRET = "fixture" + "-key-" + "secret-3";
+  const WH_SECRET = "whsec_" + "fixture_3";
+  const ENV = { SUBSCRIPTIONS_ENABLED: "1", RESEND_API_KEY: "re_k", EMAIL_FROM: "Radar <hello@pehchanthetraveller.com>", EMAIL_TO: "owner@example.com", SITE_URL: "https://site.example",
+    SESSION_SECRET: "test-session-secret-0123456789abcdef", RAZORPAY_KEY_ID: KEY_ID, RAZORPAY_KEY_SECRET: KEY_SECRET, RAZORPAY_WEBHOOK_SECRET: WH_SECRET, RAZORPAY_PLAN_ID: "plan_00000000000009", RAZORPAY_TOTAL_COUNT: "12" };
+  const S = Math.floor(T0 / 1000);
+  const SUB = "sub_RACE00000001";
+  const world = async (over = {}) => {
+    const st = memStorage();
+    const mail = []; const logs = [];
+    const fetchFn = async (url, init) => { const b = JSON.parse(init.body); mail.push(...(Array.isArray(b) ? b : [b])); return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ id: "m0", data: [{ id: "m0" }] }) }; };
+    const deps = { env: ENV, storage: st, fetchFn, now: () => T0, randomBytes: seeded(61), log: (...a) => logs.push(a.join(" ")) };
+    const acct = makeAccountHandler(deps);
+    const sess = makeSessionHandler(deps);
+    const hook = makeRazorpayWebhookHandler(deps);
+    const rec = { ...newPending("race@example.com", { now: T0 - 3600_000, randomBytes: seeded(62) }), status: "active", confirmedAt: iso(T0 - 1800_000),
+      rzp: { subscriptionId: SUB, status: "created", createdAt: iso(T0 - 600_000), currentEnd: null, cancelAtPeriodEnd: false, lastEventAt: null }, ...over };
+    await putSubscriber(st, rec);
+    await st.set(KEY_RZPSUB_PREFIX + SUB, JSON.stringify({ id: rec.id }));
+    const res = async (h, req) => { const r = mockRes(); await h({ headers: { host: "site.example", "content-type": "application/json" }, query: {}, ...req }, r); return r; };
+    const act = (action, extra = {}) => res(acct, { method: "POST", body: { id: rec.id, t: rec.token, action, ...extra } });
+    let n = 0;
+    const webhook = async (kind, at, status) => {
+      const body = JSON.stringify({ entity: "event", event: "subscription." + kind, contains: ["subscription"], created_at: at,
+        payload: { subscription: { entity: { id: SUB, entity: "subscription", status, current_start: at, current_end: at + 30 * 86400, notes: { sid: rec.id } } } } });
+      const r = await hook(new Request("https://site.example/api/razorpay-webhook", { method: "POST", body,
+        headers: { "content-type": "application/json", "x-razorpay-signature": createHmac("sha256", WH_SECRET).update(body).digest("hex"), "x-razorpay-event-id": "evt_RACE" + ++n } }));
+      return r.status;
+    };
+    // Runs `fn` once, right after the next read of the record: the read hands back what was there before.
+    const afterNextRead = (fn) => {
+      const get = st.get;
+      st.get = async (k) => {
+        const v = await get(k);
+        if (k === "radar:sub:" + rec.id) { st.get = get; await fn(); }
+        return v;
+      };
+    };
+    const stored = () => getSubscriber(st, rec.id);
+    const evs = (type) => [...st.m.keys()].filter((k) => k.startsWith("radar:event:") && k.includes(`-${type}-`));
+    return { st, rec, mail, logs, act, res, sess, webhook, afterNextRead, stored, evs };
+  };
+
+  // Bug #1: the webhook's Pro lands while Checkout's return is being handled.
+  {
+    const w = await world();
+    w.afterNextRead(async () => { check((await w.webhook("activated", S, "active")) === 200, "race: the webhook's activated event is applied"); });
+    const sig = createHmac("sha256", KEY_SECRET).update(`pay_RACE1|${SUB}`).digest("hex");
+    const r = await w.act("checkout-return", { paymentId: "pay_RACE1", subscriptionId: SUB, signature: sig });
+    const s = await w.stored();
+    check(r.code === 200 && s.plan === "pro" && s.proSource === "razorpay" && s.rzp.status === "active" && r.json().effectivePlan === "pro",
+      "race: an activated webhook that lands during checkout-return leaves the record Pro (it was written back as Free before)");
+  }
+  // Two Razorpay events delivered at the same moment, the older one last.
+  {
+    const w = await world({ rzp: { subscriptionId: SUB, status: "authenticated", createdAt: iso(T0 - 600_000), currentEnd: null, cancelAtPeriodEnd: false, lastEventAt: null } });
+    const codes = await Promise.all([w.webhook("activated", S + 10, "active"), w.webhook("authenticated", S, "authenticated")]);
+    const s = await w.stored();
+    check(codes.every((c) => c === 200) && s.plan === "pro" && s.rzp.status === "active" && s.rzp.lastEventAt === iso((S + 10) * 1000) && w.evs("progranted").length === 1,
+      "race: activated and an older authenticated arriving together leave the record Pro, with one progranted event");
+  }
+  // One sign-in link pressed twice at the same moment signs in once.
+  {
+    const w = await world();
+    await w.res(w.sess, { method: "POST", body: { action: "request", email: "race@example.com" } });
+    const m = /[?&]c=([A-Za-z0-9_-]+)/.exec((w.mail.find((x) => /c=/.test(x.text || "")) || {}).text || "");
+    const code = m ? m[1] : "";
+    const [a, b] = await Promise.all([1, 2].map(() => w.res(w.sess, { method: "POST", body: { id: w.rec.id, c: code } })));
+    const ok = [a, b].filter((r) => r.code === 303 && /^tpr_session=[^;]+/.test(r.headers["set-cookie"] || ""));
+    const refused = [a, b].filter((r) => r.code === 400 && !r.headers["set-cookie"] && /sign-in link isn/.test(r.body));
+    check(code && ok.length === 1 && refused.length === 1 && (await w.stored()).signin === null, "race: two presses of one sign-in link at once: one 303 with a cookie, one invalid page");
+  }
+  // The Confirm button pressed twice at once: one sign-in, one "already subscribed".
+  {
+    const w = await world({ status: "pending", confirmedAt: null, rzp: null });
+    const conf = makeConfirmHandler({ env: ENV, storage: w.st, fetchFn: async () => ({ ok: true, status: 200, headers: { get: () => null }, json: async () => ({ id: "m0" }) }), now: () => T0, randomBytes: seeded(63), log: () => {} });
+    const rs = await Promise.all([1, 2].map(() => w.res(conf, { method: "POST", body: { id: w.rec.id, t: w.rec.token } })));
+    const first = rs.filter((r) => r.code === 200 && /You&#39;re subscribed/.test(r.body) && /^tpr_session=[^;]+/.test(r.headers["set-cookie"] || ""));
+    const second = rs.filter((r) => r.code === 200 && /already subscribed/.test(r.body) && !r.headers["set-cookie"]);
+    check(first.length === 1 && second.length === 1 && w.evs("confirmed").length === 1 && (await w.stored()).status === "active",
+      "race: two Confirm presses at once: one signs in, the other gets the already-subscribed page with no cookie; one confirmed event");
+  }
+  // Two Request Pro clicks at once: one request, one owner email.
+  {
+    const w = await world({ rzp: null });
+    const rs = await Promise.all([w.act("request-pro"), w.act("request-pro")]);
+    check(rs.every((r) => r.code === 200 && r.json().proRequestedAt === iso(T0)) && w.evs("prorequested").length === 1 && w.mail.filter((x) => x.to === "owner@example.com" || (Array.isArray(x.to) && x.to.includes("owner@example.com"))).length === 1,
+      "race: two Request Pro clicks at once record one request and email the owner once");
+  }
+  // Someone else writes the record every time: after 5 tries the request fails, and nothing is half done.
+  {
+    const w = await world({ rzp: null });
+    w.st.beforeWrite = async (k) => { if (k === "radar:sub:" + w.rec.id) await w.st.set(k, w.st.m.get(k)); };
+    const r = await w.act("request-pro");
+    w.st.beforeWrite = null;
+    check(r.code === 500 && w.st.updateMisses === 5 && !(await w.stored()).proRequestedAt && w.evs("prorequested").length === 0 && w.mail.length === 0,
+      "race: a record written by someone else on every try gives 500 after 5 tries, with no request, event or email");
+    check(w.logs.some((l) => l === "account error: BlobPreconditionFailedError") && w.logs.every((l) => !l.includes("@")), "race: the give-up is logged by error name only");
+  }
+}
+
 finish("subscription tests");
