@@ -18,7 +18,7 @@ import {
   KEY_EVENT_PREFIX, deleteSubscriber, effectivePlan, findSubscriber, getSubscriber, listSubscribers, normaliseEmail,
   recordEvent, updateSubscriber, utcDay,
 } from "../api/_lib/subscribers.js";
-import { KEY_SUBSCRIBER_COUNT } from "../api/_lib/subscription-handlers.js";
+import { KEY_RZPSUB_PREFIX, KEY_SUBSCRIBER_COUNT } from "../api/_lib/subscription-handlers.js";
 
 const DAY_MS = 24 * 3600 * 1000;
 const KEY_DELIVERIES_PREFIX = "radar:deliveries:";
@@ -218,12 +218,20 @@ export async function revokePro(storage, email, { apply, now, randomBytes: rb = 
   return { code: 0, message: `done: ${summary}`, changed: true };
 }
 
-export async function removeSubscriber(storage, email, { apply }) {
+// A Razorpay subscription that will still charge (paid Pro not set to end, or paid and waiting for
+// its webhook) is refused: deleting the record wouldn't stop Razorpay. Its radar:rzpsub: index goes too.
+export async function removeSubscriber(storage, email, { apply, now }) {
   const r = await findSubscriber(storage, email);
   if (!r) return { code: 1, message: "not found: no subscriber with that address", changed: false };
-  if (!apply) return { code: 1, message: `would delete the ${r.status} ${r.plan} record. Nothing changed; add --yes to apply.`, changed: false };
+  const rzp = r.rzp && typeof r.rzp === "object" ? r.rzp : {};
+  const renewing = (r.proSource === "razorpay" && effectivePlan(r, now) === "pro" && rzp.cancelAtPeriodEnd !== true) || rzp.status === "authenticated";
+  if (renewing) return { code: 1, message: "refused: this Razorpay subscription will still charge; cancel it first (in Razorpay, or Cancel on the manage page), then delete", changed: false };
+  const index = typeof rzp.subscriptionId === "string" && rzp.subscriptionId ? KEY_RZPSUB_PREFIX + rzp.subscriptionId : null;
+  const what = `the ${r.status} ${r.plan} record${index ? " and its Razorpay index" : ""}`;
+  if (!apply) return { code: 1, message: `would delete ${what}. Nothing changed; add --yes to apply.`, changed: false };
   await deleteSubscriber(storage, r.id);
-  return { code: 0, message: `done: deleted the ${r.status} ${r.plan} record`, changed: true };
+  if (index) await storage.del(index);
+  return { code: 0, message: `done: deleted ${what}`, changed: true };
 }
 
 export async function pruneEvents(storage, { olderThanDays, apply, now }) {
@@ -235,7 +243,8 @@ export async function pruneEvents(storage, { olderThanDays, apply, now }) {
 }
 
 // Writes the pending-plus-active count that sign-up checks against MAX_SUBSCRIBERS, in the shape the
-// sweep writes. For a store that has never had a sweep (a Preview), where sign-up otherwise reads "full".
+// sweep writes. For a store whose count is missing (sign-up reads that as 0, so the cap isn't applied
+// until a sweep writes one, as on a Preview) or unreadable (sign-up reads that as full).
 export async function recount(storage, { apply, now }) {
   const { records } = await listSubscribers(storage);
   const count = records.filter((r) => r.status === "pending" || r.status === "active").length;
@@ -286,7 +295,7 @@ export async function main(argv, { storage, now = Date.now(), rb = randomBytes, 
     }
     const res = cmd === "grant-pro" ? await grantPro(storage, email, { until: flags.until || null, apply, now, randomBytes: rb })
       : cmd === "revoke-pro" ? await revokePro(storage, email, { apply, now, randomBytes: rb })
-        : await removeSubscriber(storage, email, { apply });
+        : await removeSubscriber(storage, email, { apply, now });
     (res.code === 0 ? out : err)(res.message);
     return res.code;
   } catch (e) {
