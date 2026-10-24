@@ -28,7 +28,9 @@ The owner's own Slack post and `EMAIL_TO` email stay exactly as they are today.
 ## How the work is split
 
 The work is in phases. Each phase ships on its own and leaves the site working. Phase 3 (T23 to T27, added
-2026-10-23) shows Pro's price and terms on the site and takes Razorpay live.
+2026-10-23) shows Pro's price and terms on the site and takes Razorpay live. T28 to T31 (added 2026-10-24) carry
+out the [final Pro plan](../pricing.md#final-pro-plan-2026-10-24): 2 sweeps a day, the owner's launch steps, and a
+measurement gate after launch.
 
 ```mermaid
 flowchart TD
@@ -73,6 +75,12 @@ flowchart TD
     T25["T25 /about/, footer, policy pages"]
     T26["T26 Pro wording + pre-checkout summary"]
     T27["T27 Test run + go-live"]
+    T28["T28 2 sweeps a day"]
+    T29["T29 Usage per category (optional)"]
+    T30["T30 Owner launch checklist"]
+  end
+  subgraph P4["Phase 4: after go-live"]
+    T31["T31 Measure, then decide on tiers"]
   end
   T00 --> T04
   T01 --> T02
@@ -90,7 +98,10 @@ flowchart TD
   T17 & T18 --> T22
   T23 --> T24 & T25
   T23 & T24 --> T26
-  T22 & T24 & T25 & T26 --> T27
+  T22 & T24 & T25 & T26 & T28 & T30 --> T27
+  T30 --> T22
+  T27 --> T31
+  T29 -.-> T31
 ```
 
 **Pro before payments.** Phase 1 builds both plans. Until Phase 2, the owner grants Pro by hand with the admin
@@ -128,7 +139,11 @@ themselves. It is built only if the Phase 1 numbers pass the owner's gate ([pric
 | [T24](T24-pricing-page.md) | `/pricing/` page; `plan.json` as the one source for price and refund rule | Dev | M | T23 |
 | [T25](T25-about-footer-legal.md) | `/about/`, footer on every page, ship terms, refunds, contact | Owner + Dev | M | T23 |
 | [T26](T26-pro-copy-and-checkout-summary.md) | Pro wording on existing pages; summary before checkout | Dev | M | T23, T24 |
-| [T27](T27-razorpay-test-run-and-go-live.md) | Razorpay test-mode run and go-live | Owner + Dev | M | T22, T24, T25, T26 |
+| [T27](T27-razorpay-test-run-and-go-live.md) | Razorpay test-mode run and go-live | Owner + Dev | M | T22, T24, T25, T26, T28, T30 |
+| [T28](T28-two-sweeps-a-day.md) | Move to 2 sweeps a day; schedule wording on every page | Dev | M | One saved sweep (RM-01) |
+| [T29](T29-usage-by-category.md) | Optional: usage per category in each saved sweep | Dev | S | — |
+| [T30](T30-owner-launch-checklist.md) | Owner launch checklist: credit, Vercel Pro, Razorpay activation, terms, limits, refunds | Owner | L | — |
+| [T31](T31-measure-and-add-tiers.md) | After launch: measure, then decide on Plus and Starter | Owner + Dev | S | T27 + 20 to 30 paying members |
 
 ## Decisions to settle before or during the build (OWNER INPUT NEEDED)
 

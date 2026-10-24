@@ -5,7 +5,7 @@
 | Phase | 3, showing Pro and going live |
 | Who | Owner (accounts, keys, the real payment) and developer (the run, docs) |
 | Size | M |
-| Depends on | T22, T24, T25, T26 |
+| Depends on | T22, T24, T25, T26, T28, T30 |
 | Unblocks | — |
 
 > Moved here from T22 on 2026-10-23, so the go-live waits for the pricing and policy pages as well as the code.
