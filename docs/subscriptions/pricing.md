@@ -45,6 +45,68 @@ findings is still unmeasured; no real sweep has been scored yet.
 The free daily email goes out after the first saved sweep of the UTC day. The scheduled run is at 00:17 UTC (about 05:47
 IST), though GitHub can start scheduled runs late.
 
+## Tiers by categories and sweeps (draft, 2026-10-24)
+
+> **A draft the owner agreed to record on 2026-10-24. Nothing here is built, and nothing changes `plan.json`,
+> `/pricing/` or Razorpay.** Every price is an example: no one has paid at any of them. Costs and nets come from
+> [costing.md](costing.md#tiers-by-number-of-categories-at-2-sweeps-a-day-illustrative).
+
+**The rule.** A sweep runs for the whole site, not per member. The owner's cost is set by two site-wide settings:
+how many categories the sweep searches (all 4 as soon as any tier includes all 4) and how many sweeps run a day (the
+most any tier needs). Tiers only decide what each member receives.
+
+**Site setting for this plan:** 4 categories, **2 sweeps a day**, about **₹4,987 a month** with Vercel Pro and
+Resend Pro. Two a day is the least at which "every sweep" differs from "once a day".
+
+| | Free (today) | Starter | Plus | Pro |
+|---|---|---|---|---|
+| Categories | All, teaser only | 1, chosen | 2, chosen | All 4 |
+| Emails | 1 a day, headlines only | 1 full digest a day | After every sweep (2 a day) | After every sweep (2 a day) |
+| Live board | No | No | No | Yes, with history and Copy report |
+| Price a month (example) | ₹0 | ₹99 | ₹199 | ₹299 (today's `plan.json`) |
+| Price a year (example, 10 × monthly) | — | ₹990 | ₹1,990 | ₹2,990 |
+| Net a month after Razorpay's 3.422% | — | ₹95.61 | ₹192.19 | ₹288.77 |
+| Net a month on the yearly plan | — | ₹79.68 | ₹160.16 | ₹240.64 |
+
+The live board stays in Pro only, so the tiers differ clearly and the board never has to hide categories.
+
+**Customers needed to cover ₹4,987 a month** (monthly plans, rounded up):
+
+| Mix | Customers |
+|---|---|
+| All Starter | 53 |
+| All Plus | 26 |
+| All Pro | 18 |
+| 50% Starter, 30% Plus, 20% Pro | 31 |
+| 20% Starter, 30% Plus, 50% Pro | 23 |
+
+The two mixes are **assumptions** chosen to show the range, not forecasts. A cheaper tier only helps if it brings
+in people who would not have paid ₹299; otherwise it raises the count.
+
+**Other site settings**, for comparison (Pro only, ₹299):
+
+| Site setting | Cost a month | Customers to cover it |
+|---|---|---|
+| 4 categories, 1 sweep a day | ₹4,383 | 16, but frequency can no longer separate the tiers |
+| 4 categories, 2 sweeps a day (this plan) | ₹4,987 | 18 |
+| 4 categories, 5 sweeps a day (costing.md's `F`) | ₹6,797 | 24 |
+
+A later "Pro Max" at 5 a day would raise the cost for the whole site, so it waits until Pro members ask for it.
+
+**Rollout**
+
+| Phase | What | When |
+|---|---|---|
+| 1. Launch | Free and Pro only: ₹299, all 4 categories, 2 sweeps a day, the board. The site moves to 2 sweeps a day | Payments go live (T27) |
+| 2. Measure | Which categories Pro members choose (already stored as `cats`), cancellations, Free accounts that never upgrade | The first 20 to 30 paying members |
+| 3. Add tiers | Plus, then Starter, only if the data shows demand for fewer categories or a lower price | After phase 2 |
+
+Pro alone is built, needs one Razorpay Plan and breaks even soonest. Each extra tier needs its own monthly (and
+yearly) Razorpay Plan and changes to `plan.json`, `/pricing/`, checkout, the webhook and delivery.
+
+**Still open (OWNER INPUT NEEDED):** the real prices, whether to offer a yearly plan, and the timing of the move to
+2 sweeps a day. The site's "about 5 times a day" wording changes with that move.
+
 ## Costs
 
 ### Fixed monthly costs
