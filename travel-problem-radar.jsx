@@ -257,8 +257,10 @@ async function scanCategory(cat) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
+      // The model that worked in Claude's app, which doesn't think unless asked. An answer alone is
+      // about 1,000 tokens (DEPLOYMENT.md, Known issues 2), so 1,000 was too tight; this is the server's cap.
       model: "claude-sonnet-4-6",
-      max_tokens: 1000,
+      max_tokens: 16000,
       messages: [{ role: "user", content: prompt }],
       tools: [{ type: "web_search_20250305", name: "web_search" }],
     }),
@@ -382,14 +384,18 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
   }, []);
 
   async function firstLoad() {
-    const seen = await loadJSON(KEY_SEEN);
-    if (Array.isArray(seen)) seenRef.current = new Set(seen);
+    // The live board only reads the server's sweeps: /api/data serves neither the seen ids nor the
+    // pre-history sweep, so asking would only get a 400.
+    if (!live) {
+      const seen = await loadJSON(KEY_SEEN);
+      if (Array.isArray(seen)) seenRef.current = new Set(seen);
+    }
 
     let hist = await loadJSON(KEY_INDEX);
     hist = Array.isArray(hist) ? hist : [];
 
     // migrate a pre-history single sweep, if present
-    if (hist.length === 0) {
+    if (hist.length === 0 && !live) {
       const legacy = await loadJSON(KEY_LEGACY);
       if (legacy && Array.isArray(legacy.problems) && legacy.problems.length) {
         const at = legacy.at || new Date().toISOString();
@@ -473,14 +479,13 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
     const entry = { id, at, total: merged.length, newCount, highCount };
 
     let hist = [...history, entry];
-    if (hist.length > 60) {
-      const drop = hist.slice(0, hist.length - 60);
-      hist = hist.slice(hist.length - 60);
-      for (const d of drop) { try { await store.delete(sweepKey(d.id)); } catch (e) {} }
-    }
+    const drop = hist.slice(0, Math.max(0, hist.length - 60));
+    hist = hist.slice(drop.length);
 
+    // The new sweep and the index first: old files go only once nothing points at them.
     await saveJSON(sweepKey(id), { at, problems: merged });
     await saveJSON(KEY_INDEX, hist);
+    for (const d of drop) { try { await store.delete(sweepKey(d.id)); } catch (e) {} }
 
     setHistory(hist);
     setProblems(merged);
@@ -489,9 +494,10 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
     setStatus("done");
     setView(nextView);
 
-    const union = new Set([...seenBefore, ...idset]);
-    seenRef.current = union;
-    await saveJSON(KEY_SEEN, [...union].slice(-800));
+    // This sweep's ids go last, so an item that keeps coming back is never trimmed and shown as new again.
+    const kept = [...[...seenBefore].filter((x) => !idset.has(x)), ...idset].slice(-800);
+    seenRef.current = new Set(kept);
+    await saveJSON(KEY_SEEN, kept);
   }
 
   async function openSweep(id) {
