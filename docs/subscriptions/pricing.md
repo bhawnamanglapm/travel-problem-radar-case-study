@@ -30,7 +30,7 @@ sign-up first, payments only if people actually sign up.
 | Status | Exists today (board open to all) | Exists today as the free email | Planned |
 | Demo with sample data | Yes | Yes | Yes |
 | Live board (every sweep, history, Copy report) | No: sign-in or upgrade panel | No: upgrade panel | Yes |
-| Email digest | No | Teaser once a day: counts and headlines, a link to sign in | Full digest after every saved sweep (up to 5 a day) |
+| Email digest | No | Teaser once a day: counts and headlines, a link to sign in | Full digest 1 to 5 times a day, the member's choice (default 2, T32) |
 | Choose categories | No | No | Yes (built, T14) |
 | Sign in | — | By an emailed link, no password | By an emailed link, no password |
 | Price | Free | Free | ₹299 a month, no yearly plan at launch ([final Pro plan](#final-pro-plan-2026-10-24)) |
@@ -177,16 +177,16 @@ With Resend Pro, `F` is about ₹6,797 a month; [costing.md](costing.md#break-ev
 with GST on top and inside the price. Free subscribers add cost and no income, so keep the free list within the email
 quota below.
 
-**Email quota** (Resend free plan, 100 a day): the owner's copy goes out up to 5 times a day, each free subscriber gets
-1 a day and each Pro subscriber up to 5 a day.
+**Email quota** (Resend free plan, 100 a day): the owner's copy goes out once per sweep, `S` times a day (the site's
+sweeps a day, 1 to 5), each free subscriber gets 1 a day and each Pro subscriber the 1 to 5 they chose (T32).
 
 ```
-5 + free + (5 x pro) + confirmations  <=  100 emails a day
+S + free + (Σ each Pro member's emails a day) + confirmations  <=  100 emails a day
 ```
 
-So with no Pro subscribers, about 90 free subscribers fit, fewer on days with many new sign-ups. The monthly cap of
-3,000 works out to the same limit (3,000 / 30 days = 100). Set `MAX_SUBSCRIBERS` below this and move to a paid Resend
-plan before raising it.
+So with no Pro subscribers (`S` = 1), up to 99 free subscribers fit, minus that day's confirmations. Each Pro member
+on the default 2 takes 2 more and raises `S` to 2. The monthly cap of 3,000 works out to the same limit (3,000 / 30
+days = 100). Set `MAX_SUBSCRIBERS` below this and move to a paid Resend plan before raising it.
 
 ## Rollout order, with gates
 

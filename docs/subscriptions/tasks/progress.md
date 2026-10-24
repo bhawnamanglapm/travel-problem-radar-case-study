@@ -45,7 +45,7 @@ working in a real inbox; that is T12's staged launch.
 | [T29](T29-usage-by-category.md) Usage per category (optional) | todo | | | Added 2026-10-24 |
 | [T30](T30-owner-launch-checklist.md) Owner launch checklist | todo; step 1 (Anthropic credit) first | | | Added 2026-10-24 |
 | [T31](T31-measure-and-add-tiers.md) Measure, then decide on tiers | todo; after go-live | | | Added 2026-10-24 |
-| [T32](T32-sweeps-per-day.md) Pro chooses 1 to 5 emails a day | in progress: server done and live (#88); the manage card and wording are PR 2 | #88, `32c22ca` | 1,040 pass | Replaces T28. First skipped slot seen in production 2026-10-24 18:12 UTC (slot 15) |
+| [T32](T32-sweeps-per-day.md) Pro chooses 1 to 5 emails a day | in progress: server live (#88); PR 2 (the manage card, wording, docs) in review; the checks after deploy need RM-01 | #88, `32c22ca` | 1,040 pass | Replaces T28. First skipped slot seen in production 2026-10-24 18:12 UTC (slot 15) |
 
 ## Notes per task
 

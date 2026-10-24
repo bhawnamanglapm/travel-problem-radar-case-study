@@ -56,7 +56,7 @@ the [final Pro plan](../pricing.md#final-pro-plan-2026-10-24) budgets about ₹4
   `sweepsPerDayDefault` and `sweepsPerDayMax`.
 - DEPLOYMENT: the two variables and [Sweeps a day](../../../DEPLOYMENT.md#sweeps-a-day-t32).
 
-## PR 2: the page and the wording (todo)
+## PR 2: the page and the wording (built, in review, 2026-10-25)
 
 ### The manage page
 
@@ -90,8 +90,9 @@ the [final Pro plan](../pricing.md#final-pro-plan-2026-10-24) budgets about ₹4
 
 - [x] A scheduled call in an unneeded slot answers `skipped` and never calls Anthropic (PR 1)
 - [x] A Pro member can save 1 to the cap through `set-freq`; Free gets 403 (PR 1)
-- [ ] `/manage/` shows the card, saves a choice and shows the saved choice after a reload
-- [ ] No site page, built file or email says "5 times a day", "every 5 hours" or "about 5 a day"
+- [x] `/manage/` shows the card, saves a choice and shows the saved choice after a reload (PR 2; checked in
+  headless Chrome against a stub `/api/account`)
+- [x] No site page, built file or email says "5 times a day", "every 5 hours" or "about 5 a day" (PR 2; `check.mjs`)
 - [ ] After deploy, with no Pro choice set, one day of GitHub Actions logs shows slots 05 to 20 `skipped` and slot 00
   saved (needs RM-01)
 - [ ] A test Pro set to 3 on `/manage/` gets 3 emails the next day, at 00, 10 and 15 UTC
