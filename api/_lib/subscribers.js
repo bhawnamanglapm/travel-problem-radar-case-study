@@ -193,6 +193,7 @@ export function newPending(email, { now, randomBytes }) {
     confirmedAt: null,
     proRequestedAt: null, // set when the subscriber asks for Pro; the owner grants it (until payments exist)
     cats: null,
+    sweepsPerDay: null, // emails a day a Pro member chose (T32); null is the default
     rzp: null,
   };
 }

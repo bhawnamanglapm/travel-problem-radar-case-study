@@ -6,6 +6,7 @@ import { DEFAULT_FROM, buildAlreadySubscribedEmail, buildConfirmEmail, buildProR
 import { BodyTooLargeError, allowMethods, esc, readFields, sendJson, sendPage } from "./http.js";
 import { OAUTH_COOKIE, OAUTH_MINUTES, clearOAuthCookie, googleConfigured, googleFinish, googleStart, readOAuthCookie, readSignupCookie, signupCookie } from "./google.js";
 import { cancelSubscription, createSubscription, razorpayConfigured, verifyCheckout, verifyWebhook } from "./razorpay.js";
+import { DEFAULT_SWEEPS_PER_DAY, normaliseSweepsPerDay, sweepLimits } from "./schedule.js";
 import { clearCookie, originOk, parseCookies, readSession, sessionCookie, sessionSecret, signSession } from "./session.js";
 import {
   CONFIRM_RESEND_MINUTES, KEY_SUB_PREFIX, MAX_CONFIRMS_PER_ADDRESS, PENDING_TTL_DAYS, countEvents, deleteSubscriber, effectivePlan, findSubscriber, getSubscriber, newPending, normaliseCats, normaliseEmail, putSubscriber,
@@ -424,6 +425,10 @@ const accountView = (record, t, env) => ({
   proSource: record.proSource || null,
   proRequestedAt: record.proRequestedAt || null,
   cats: record.cats || null,
+  // Emails a day (T32): the stored choice, or null for the default; the page offers 1 to the max.
+  sweepsPerDay: normaliseSweepsPerDay(record.sweepsPerDay, sweepLimits(env).max).ok ? record.sweepsPerDay : null,
+  sweepsPerDayDefault: DEFAULT_SWEEPS_PER_DAY,
+  sweepsPerDayMax: sweepLimits(env).max,
   emailOff: record.emailOff || null,
   payments: paymentsReady(env),
   paymentPending: rzpOf(record).status === "authenticated" && effectivePlan(record, t) !== "pro",
@@ -436,6 +441,8 @@ const accountView = (record, t, env) => ({
 // browser holds a valid login cookie. POST {id, t, action: "request-pro"}: ask for Pro, which the
 // owner grants with the admin script; the page offers it while payments are off.
 // POST {id, t, action: "set-cats", cats: [...]}: a Pro subscriber picks their categories (T14).
+// POST {id, t, action: "set-freq", sweepsPerDay: n}: a Pro subscriber picks 1 to n emails a day,
+// n being SWEEPS_PER_DAY_MAX (T32).
 // POST action "email-on" turns emails back on after an unsubscribe (not after a bounce or a
 // complaint), and "delete-account" deletes the record and signs this browser out (T17).
 // With payments on (T20): "checkout" starts a Razorpay subscription and returns what Checkout
@@ -448,10 +455,11 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
     let params;
     let action = "";
     let cats;
+    let sweepsPerDay;
     try {
       params = await linkParams(req, { queryOnly: false });
       if (params.fields && typeof params.fields.action === "string") action = params.fields.action;
-      if (params.fields) cats = params.fields.cats;
+      if (params.fields) ({ cats, sweepsPerDay } = params.fields);
     } catch (e) {
       if (e instanceof BodyTooLargeError) return sendJson(res, 413, { error: "request too large" });
       throw e;
@@ -483,6 +491,16 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
         const chosen = normaliseCats(cats);
         if (!chosen.ok) return sendJson(res, 400, { error: "unknown category" });
         const { record: updated, changed } = await save((r) => (effectivePlan(r, t) === "pro" ? { ...r, cats: chosen.cats } : null));
+        if (!updated) return gone();
+        if (!changed) return sendJson(res, 403, { error: "pro_only" });
+        return sendJson(res, 200, { ok: true, ...view(updated) });
+      }
+      if (action === "set-freq") {
+        if (record.status !== "active") return sendJson(res, 409, { error: "not_confirmed" });
+        if (effectivePlan(record, t) !== "pro") return sendJson(res, 403, { error: "pro_only" });
+        const chosen = normaliseSweepsPerDay(sweepsPerDay, sweepLimits(env).max);
+        if (!chosen.ok) return sendJson(res, 400, { error: chosen.error });
+        const { record: updated, changed } = await save((r) => (effectivePlan(r, t) === "pro" ? { ...r, sweepsPerDay: chosen.value } : null));
         if (!updated) return gone();
         if (!changed) return sendJson(res, 403, { error: "pro_only" });
         return sendJson(res, 200, { ok: true, ...view(updated) });

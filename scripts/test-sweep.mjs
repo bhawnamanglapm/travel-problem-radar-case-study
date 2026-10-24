@@ -3,6 +3,7 @@
 //   node scripts/test-sweep.mjs
 import { makeDataHandler, makeSweepHandler } from "../api/_lib/handlers.js";
 import { CATS, extractProblems, runDailySweep, scanCategory, sweepKey, trimSeen } from "../api/_lib/radar.js";
+import { SLOTS_BY_FREQ, normaliseSweepsPerDay, previousSlotAt, siteSweepsPerDay, slotOf, sweepLimits, sweepsPerDayOf } from "../api/_lib/schedule.js";
 import { check, finish, memStorage, mockRes } from "./test-helpers.mjs";
 
 const item = (n, over = {}) => ({
@@ -195,7 +196,7 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
 
 // ---- /api/sweep
 {
-  const env = { CRON_SECRET: "abc123", ANTHROPIC_API_KEY: "k" };
+  const env = { CRON_SECRET: "abc123", ANTHROPIC_API_KEY: "k", SWEEPS_PER_DAY_MIN: "5" };
   const run = async (headers, e = env, st = memStorage(), byCat = { traveler_pain: [item(1)], gov_policy: [], web_app: [], industry: [] }) => {
     const h = makeSweepHandler({ env: e, storage: st, fetchFn: fakeFetch(byCat), now: () => 1_800_000_000_000, log: () => {} });
     const res = mockRes(); await h({ headers }, res); return { res, st };
@@ -231,7 +232,7 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
 
 // ---- manual runs: at most MAX_MANUAL_SWEEPS_PER_DAY a UTC day (default 3), counted before they run
 {
-  const env = { CRON_SECRET: "abc123", ANTHROPIC_API_KEY: "k", SLACK_WEBHOOK_URL: "https://webhook.example/x" };
+  const env = { CRON_SECRET: "abc123", ANTHROPIC_API_KEY: "k", SWEEPS_PER_DAY_MIN: "5", SLACK_WEBHOOK_URL: "https://webhook.example/x" };
   const day0 = Date.UTC(2027, 0, 15, 8);
   const one = { traveler_pain: [item(1)], gov_policy: [], web_app: [], industry: [] };
   const run = async ({ st, headers = { authorization: "Bearer abc123" }, e = env, t = day0, byCat = one }) => {
@@ -288,7 +289,7 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
 // ---- Slack delivery after the sweep
 {
   const hook = "https://webhook.example/not-a-real-secret"; // fake: real webhooks live only in Vercel
-  const env = { CRON_SECRET: "abc123", ANTHROPIC_API_KEY: "k", SLACK_WEBHOOK_URL: hook, VERCEL_PROJECT_PRODUCTION_URL: "radar.example.com" };
+  const env = { CRON_SECRET: "abc123", ANTHROPIC_API_KEY: "k", SWEEPS_PER_DAY_MIN: "5", SLACK_WEBHOOK_URL: hook, VERCEL_PROJECT_PRODUCTION_URL: "radar.example.com" };
   const some = { traveler_pain: [item(1, { severity: "High", title: "Fees <rise> & more" })], gov_policy: "http", web_app: [item(2)], industry: [] };
   const allFail = { traveler_pain: "http", gov_policy: "http", web_app: "http", industry: "http" };
   // Anthropic calls go to fakeFetch; calls to the webhook are recorded and answered with slackStatus.
@@ -348,7 +349,7 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   const hook = "https://webhook.example/not-a-real-secret";
   // fake: the real key and addresses live only in Vercel
   const mail = { RESEND_API_KEY: "re_test_fake", EMAIL_TO: "a@example.com, b@example.com" };
-  const env = { CRON_SECRET: "abc123", ANTHROPIC_API_KEY: "k", VERCEL_PROJECT_PRODUCTION_URL: "radar.example.com", ...mail };
+  const env = { CRON_SECRET: "abc123", ANTHROPIC_API_KEY: "k", SWEEPS_PER_DAY_MIN: "5", VERCEL_PROJECT_PRODUCTION_URL: "radar.example.com", ...mail };
   const some = { traveler_pain: [item(1, { severity: "High", title: "Fees <rise> & more", link: "https://example.com/a\"b" })], gov_policy: "http", web_app: [item(2)], industry: [] };
   const allFail = { traveler_pain: "http", gov_policy: "http", web_app: "http", industry: "http" };
   // Anthropic calls go to fakeFetch; Resend and Slack calls are recorded and answered as asked.
@@ -421,6 +422,73 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   const broken = { get: async () => null, set: async () => { throw new Error("Vercel Blob: No blob credentials found"); }, del: async () => {} };
   const err = await run({ st: broken, headers: cron });
   check(err.res.code === 500 && err.res.json().email === "sent" && /No blob credentials/.test(err.sent[0].body.text), "sweep error: failure email sent, still 500");
+}
+
+// ---- T32: sweeps a day. Slots, the site's number, and the handler skipping unneeded slots
+{
+  const H = 3600 * 1000;
+  const day = Date.UTC(2027, 0, 15);
+  check(JSON.stringify(SLOTS_BY_FREQ) === '{"1":[0],"2":[0,10],"3":[0,10,15],"4":[0,5,10,15],"5":[0,5,10,15,20]}', "slots: each number a day has its UTC hours");
+  check([1, 2, 3, 4].every((f) => SLOTS_BY_FREQ[f].every((h) => SLOTS_BY_FREQ[f + 1].includes(h))), "slots: each number holds every slot of the smaller ones");
+  check(slotOf(day + 5 * H + 40 * 60_000).hour === 5 && slotOf(day + 5 * H + 40 * 60_000).at === day + 5 * H, "slots: a 05:40 run is slot 05, which began at 05:00");
+  check(slotOf(day + H + 30 * 60_000).hour === 0 && slotOf(day + 23 * H + 59 * 60_000).hour === 20, "slots: the Vercel 01:30 backstop is slot 00; 23:59 is slot 20");
+  check(previousSlotAt(2, slotOf(day + 10 * H + 17 * 60_000)) === day && previousSlotAt(2, slotOf(day + 17 * 60_000)) === day - 14 * H,
+    "slots: on 2 a day, slot 10 follows 00 the same day, and slot 00 follows 10 the day before");
+  check(previousSlotAt(1, slotOf(day + 17 * 60_000)) === day - 24 * H && previousSlotAt(2, slotOf(day + 5 * H)) === undefined, "slots: on 1 a day the previous slot is a day back; slot 05 isn't one of 2 a day");
+
+  const lim = (e) => JSON.stringify(sweepLimits(e));
+  check(lim({}) === '{"min":1,"max":5}' && lim({ SWEEPS_PER_DAY_MIN: "2", SWEEPS_PER_DAY_MAX: "3" }) === '{"min":2,"max":3}', "limits: default 1 to 5; both can be set");
+  check(lim({ SWEEPS_PER_DAY_MIN: "4", SWEEPS_PER_DAY_MAX: "2" }) === '{"min":2,"max":2}' && lim({ SWEEPS_PER_DAY_MIN: "0", SWEEPS_PER_DAY_MAX: "9" }) === '{"min":1,"max":5}' && lim({ SWEEPS_PER_DAY_MAX: "2.5" }) === '{"min":1,"max":5}',
+    "limits: a floor above the cap is lowered to it; a value that isn't 1 to 5 is the default");
+  check(normaliseSweepsPerDay(3, 5).ok && normaliseSweepsPerDay(3, 5).value === 3 && normaliseSweepsPerDay(4, 3).error === "over the limit"
+    && ["3", 0, 6, 2.5, null].every((v) => normaliseSweepsPerDay(v, 5).error === "unknown frequency"), "choice: 1 to the cap; above the cap and anything else are told apart");
+  check(sweepsPerDayOf({}, 5) === 2 && sweepsPerDayOf({ sweepsPerDay: 4 }, 5) === 4 && sweepsPerDayOf({ sweepsPerDay: 4 }, 3) === 3 && sweepsPerDayOf({ sweepsPerDay: 9 }, 5) === 2 && sweepsPerDayOf({}, 1) === 1,
+    "choice: no choice is 2; the cap lowers a choice; a stored value that isn't 1 to 5 counts as no choice");
+
+  const sub = (n, over = {}) => ({ id: String(n).padStart(64, "a"), email: `p${n}@example.com`, token: "t", status: "active", plan: "pro", proUntil: null, ...over });
+  const stWith = (recs) => { const st = memStorage(); for (const r of recs) st.m.set("radar:sub:" + r.id, JSON.stringify(r)); return st; };
+  const on = { SUBSCRIPTIONS_ENABLED: "1" };
+  const site = async (recs, e = on) => (await siteSweepsPerDay({ env: e, storage: stWith(recs), now: day })).perDay;
+  check(await site([]) === 1 && await site([sub(1, { plan: "free" })]) === 1, "site: no Pro members, once a day");
+  check(await site([sub(1)]) === 2, "site: a Pro who hasn't chosen counts as 2");
+  check(await site([sub(1, { sweepsPerDay: 1 }), sub(2, { sweepsPerDay: 4 })]) === 4, "site: choices 1 and 4 give 4");
+  check(await site([sub(1, { sweepsPerDay: 5 })], { ...on, SWEEPS_PER_DAY_MAX: "3" }) === 3 && await site([], { ...on, SWEEPS_PER_DAY_MIN: "3" }) === 3, "site: the cap and the floor clamp it");
+  check(await site([sub(1, { sweepsPerDay: 5, proUntil: new Date(day - 1000).toISOString() }), sub(2, { sweepsPerDay: 5, emailOff: "unsubscribed" }), sub(3, { sweepsPerDay: 5, status: "pending" })]) === 1,
+    "site: a lapsed Pro, one with emails off and a pending record don't count");
+  check(await site([sub(1, { sweepsPerDay: 5 })], {}) === 1 && await site([sub(1, { sweepsPerDay: 5 })], { SWEEPS_PER_DAY_MIN: "2" }) === 2, "site: with subscriptions off, the floor");
+  const broken = () => ({ ...memStorage(), list: async () => { throw new Error("list failed"); } });
+  const b = await siteSweepsPerDay({ env: { ...on, SWEEPS_PER_DAY_MAX: "4" }, storage: broken(), now: day });
+  check(b.perDay === 4 && /couldn't read/.test(b.error), "site: if the list can't be read, the cap, so a needed slot still runs");
+
+  // The handler: an unneeded slot is skipped before Anthropic; a needed one saves the slot.
+  const env = { CRON_SECRET: "abc123", ANTHROPIC_API_KEY: "k", ...on };
+  const gh = { authorization: "Bearer abc123", "x-sweep-trigger": "scheduled" };
+  const run = async ({ st = memStorage(), t, headers = gh, e = env }) => {
+    const seenCats = [];
+    const logs = [];
+    const h = makeSweepHandler({ env: e, storage: st, fetchFn: fakeFetch({ traveler_pain: [item(1)], gov_policy: [], web_app: [], industry: [] }, { seenCats }), now: () => t, log: (...a) => logs.push(a.join(" ")) });
+    const res = mockRes(); await h({ headers }, res); return { res, st, scans: seenCats.length, logs };
+  };
+  const s05 = await run({ t: day + 5 * H + 17 * 60_000 });
+  check(s05.res.code === 200 && s05.res.json().status === "skipped" && s05.res.json().reason === "slot 05 not needed: 1 a day" && s05.scans === 0,
+    "handler: with no Pro, slot 05 is skipped, 200, and the scan is never called");
+  check(!s05.st.m.has("radar:lastScheduled") && !s05.st.m.has("radar:history"), "handler: a skipped slot saves nothing and doesn't start the 2-hour gap");
+  const s00 = await run({ t: day + 17 * 60_000 });
+  const idx = JSON.parse(s00.st.m.get("radar:history"));
+  const file = JSON.parse(s00.st.m.get(sweepKey(idx[0].id)));
+  check(s00.res.json().status === "saved" && s00.scans === 4 && idx[0].slot === 0 && idx[0].slotAt === new Date(day).toISOString() && file.slot === 0 && file.slotAt === idx[0].slotAt,
+    "handler: slot 00 sweeps and saves the slot on the index entry and the sweep");
+  const st2 = stWith([sub(1, { sweepsPerDay: 2 })]);
+  const at10 = await run({ st: st2, t: day + 10 * H + 17 * 60_000 });
+  const at15 = await run({ st: st2, t: day + 15 * H + 17 * 60_000 });
+  check(at10.res.json().status === "saved" && at15.res.json().reason === "slot 15 not needed: 2 a day" && at15.scans === 0, "handler: a Pro on 2 a day: slot 10 sweeps, slot 15 is skipped");
+  const backstop = await run({ t: day + H + 30 * 60_000, headers: { authorization: "Bearer abc123", "user-agent": "vercel-cron/1.0" } });
+  check(backstop.res.json().status === "saved" && JSON.parse(backstop.st.m.get("radar:history"))[0].slot === 0, "handler: the Vercel backstop at 01:30 is slot 00, which always sweeps");
+  const manual = await run({ t: day + 5 * H + 17 * 60_000, headers: { authorization: "Bearer abc123" } });
+  const mIdx = JSON.parse(manual.st.m.get("radar:history"));
+  check(manual.res.json().status === "saved" && manual.res.json().trigger === "manual" && !("slot" in mIdx[0]) && !("slotAt" in mIdx[0]), "handler: a manual run in an unneeded slot still sweeps, with no slot saved");
+  const unread = await run({ st: broken(), t: day + 20 * H + 17 * 60_000 });
+  check(unread.res.json().status !== "skipped" && unread.scans === 4 && unread.logs.some((l) => /couldn't read the subscriber list/.test(l)), "handler: if the list can't be read, the slot runs and the log says why");
 }
 
 // ---- /api/data

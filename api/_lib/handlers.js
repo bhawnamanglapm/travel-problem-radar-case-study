@@ -8,6 +8,7 @@ import { bearerOk, sendJson } from "./http.js";
 import { deliverToSubscribers } from "./subscriber-delivery.js";
 import { readSession } from "./session.js";
 import { countEvents, effectivePlan, recordEvent, utcDay } from "./subscribers.js";
+import { SLOTS_BY_FREQ, siteSweepsPerDay, slotOf } from "./schedule.js";
 
 const DEFAULT_MODEL = "claude-sonnet-5-5";
 // Manual runs a UTC day (MAX_MANUAL_SWEEPS_PER_DAY; "0" turns them off). Each costs a full sweep,
@@ -33,6 +34,18 @@ export function makeSweepHandler({ env, storage, fetchFn, now, randomBytes = cry
     const scheduled = /^vercel-cron\//.test(req.headers["user-agent"] || "") || Boolean(req.headers["x-vercel-cron-schedule"])
       || req.headers["x-sweep-trigger"] === "scheduled";
     const trigger = scheduled ? "scheduled" : "manual";
+    // A scheduled run sweeps only in a slot some Pro member's choice needs (T32). Skipped here, it
+    // saves nothing and doesn't count towards the 2-hour gap, so it costs no Anthropic credit.
+    const slot = scheduled ? slotOf(now()) : null;
+    if (scheduled) {
+      const site = await siteSweepsPerDay({ env, storage, now: now() });
+      if (site.error) log("sweep", JSON.stringify({ model, trigger, slot: slot.hour, error: site.error }));
+      if (!SLOTS_BY_FREQ[site.perDay].includes(slot.hour)) {
+        const reason = `slot ${String(slot.hour).padStart(2, "0")} not needed: ${site.perDay} a day`;
+        log("sweep", JSON.stringify({ model, trigger, status: "skipped", reason }));
+        return sendJson(res, 200, { model, trigger, status: "skipped", reason });
+      }
+    }
     if (!scheduled) {
       // Counted before the run, so a failed or empty one (still billed) uses up a run too. Two calls at
       // the same instant can both get through, so the limit is approximate; it is a cost guard.
@@ -61,7 +74,7 @@ export function makeSweepHandler({ env, storage, fetchFn, now, randomBytes = cry
     };
     let out;
     try {
-      out = await runDailySweep({ storage, scan, now, manual: !scheduled, log: (x) => log("sweep", JSON.stringify({ model, trigger, ...x })) });
+      out = await runDailySweep({ storage, scan, now, manual: !scheduled, slot, log: (x) => log("sweep", JSON.stringify({ model, trigger, ...x })) });
     } catch (e) {
       const error = "sweep failed: " + String((e && e.message) || e);
       const at = new Date(now()).toISOString();
