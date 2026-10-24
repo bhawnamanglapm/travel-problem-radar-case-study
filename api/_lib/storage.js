@@ -1,6 +1,6 @@
 // Vercel Blob as a tiny key-value store. The store is private; the only public
 // reader is api/data.js, which allow-lists the keys.
-import { del, get, list, put } from "@vercel/blob";
+import { BlobPreconditionFailedError, del, get, list, put } from "@vercel/blob";
 
 const path = (key) => "radar/" + key.replace(/[^a-z0-9]+/gi, "-") + ".json";
 
@@ -20,6 +20,31 @@ export function blobStorage(blob = { del, get, list, put }, { cached = false } =
         access: "private", contentType: "application/json",
         allowOverwrite: true, addRandomSuffix: false,
       });
+    },
+    // Read, change, write back, and only if nobody wrote in between: the write carries the ETag that
+    // was read (ifMatch), and on a mismatch the change runs again on a fresh read. `change(text)` gets
+    // the current text (null if missing) and returns the new text, or undefined to write nothing.
+    // Returns the text now stored. Throws after `tries` mismatches, so the caller answers 500.
+    async update(key, change, { tries = 5 } = {}) {
+      for (let i = 1; ; i++) {
+        const r = await blob.get(path(key), { access: "private", useCache: false });
+        const found = Boolean(r && r.statusCode === 200);
+        const current = found ? await new Response(r.stream).text() : null;
+        const next = await change(current);
+        if (next === undefined) return current;
+        try {
+          await blob.put(path(key), next, {
+            access: "private", contentType: "application/json",
+            allowOverwrite: true, addRandomSuffix: false,
+            ...(found && r.etag ? { ifMatch: r.etag } : {}),
+          });
+          return next;
+        } catch (e) {
+          // By name too: the offline tests pass a fake client whose errors aren't this class.
+          const mismatch = e instanceof BlobPreconditionFailedError || (e && e.name === "BlobPreconditionFailedError");
+          if (!mismatch || i >= tries) throw e;
+        }
+      }
     },
     async del(key) { await blob.del(path(key)); },
     // The key suffixes under a logical prefix, sorted: list("radar:sub:") -> ["<id>", ...].

@@ -7,15 +7,36 @@ export const check = (ok, label) => {
   if (!ok) failures.push(label);
 };
 
+// `update` is storage.js's conditional write: a per-key version stands in for the ETag. It reads
+// through st.get and writes through st.set, so tests that replace those still apply. A test that
+// wraps get can slip a competing write in after the read, as can `beforeWrite(key)`, called just
+// before each write.
 export const memStorage = () => {
   const m = new Map();
-  return {
+  const ver = new Map();
+  const bump = (k) => ver.set(k, (ver.get(k) || 0) + 1);
+  const st = {
     m,
+    beforeWrite: null,
+    updateMisses: 0,
     get: async (k) => (m.has(k) ? m.get(k) : null),
-    set: async (k, v) => { m.set(k, v); },
-    del: async (k) => { m.delete(k); },
+    set: async (k, v) => { m.set(k, v); bump(k); },
+    del: async (k) => { m.delete(k); bump(k); },
     list: async (prefix) => [...m.keys()].filter((k) => k.startsWith(prefix)).map((k) => k.slice(prefix.length)).sort(),
+    async update(k, change, { tries = 5 } = {}) {
+      for (let i = 1; ; i++) {
+        const seen = ver.get(k) || 0;
+        const current = await st.get(k);
+        const next = await change(current);
+        if (next === undefined) return current;
+        if (st.beforeWrite) await st.beforeWrite(k);
+        if ((ver.get(k) || 0) === seen) { await st.set(k, next); return next; } // through set, so a test's failing set fails it
+        st.updateMisses++;
+        if (i >= tries) throw Object.assign(new Error("Precondition failed: ETag mismatch."), { name: "BlobPreconditionFailedError" });
+      }
+    },
   };
+  return st;
 };
 
 export const mockRes = () => {
