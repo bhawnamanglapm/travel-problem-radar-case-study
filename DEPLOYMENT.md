@@ -213,7 +213,7 @@ Open **Settings → Environment Variables** and add:
 | `EMAIL_TO` | The email address your Resend account was created with | **Production only** | Only with `RESEND_API_KEY` |
 | `EMAIL_FROM` | A sender on a domain verified in Resend, for example `Travel Problem Radar <hello@yourdomain.com>` | **Production only** | Only for subscribers, or to email anyone but the Resend account's own address |
 | `SUBSCRIPTIONS_ENABLED` | `1` | **Production only** | No. Turns subscriber sign-up and delivery on; see [Subscriber email](#subscriber-email-optional) |
-| `MAX_SUBSCRIBERS` | A whole number, for example `5000` | **Production only** | Only with `SUBSCRIPTIONS_ENABLED`. Unset means the list takes nobody new |
+| `MAX_SUBSCRIBERS` | A whole number, for example `5000` | **Production only** | Only with `SUBSCRIPTIONS_ENABLED`. Unset, sign-up answers "subscriptions are not open yet" |
 | `MAX_CONFIRMS_PER_DAY` | A whole number | **Production only** | No. Defaults to 10 confirmation emails a day |
 | `MAX_SIGNUPS_PER_IP_HOUR` | A whole number | **Production only** | No. Defaults to 5 sign-ups per connection per UTC hour |
 | `SESSION_SECRET` | A random string of at least 32 characters (see [Signing in](#signing-in-t16)) | **Production and Preview, a different value for each** | Only for sign-in. Without it `/signin/` answers "not set up yet" and Confirm signs nobody in |
@@ -549,11 +549,11 @@ wrong unit shows as amounts 100 times apart.
 | `EMAIL_TO` | You (optional) | `/api/sweep`, `/api/confirm`, `/api/account` | Recipients, separated by commas, at most 50. With the default sender, only the Resend account's own address works. Also gets the "Pro request" email. Kept out of the repository and out of every reply |
 | `EMAIL_FROM` | You (optional; required for subscribers) | `/api/sweep`, the subscriber endpoints | Defaults to `Travel Problem Radar <onboarding@resend.dev>`, Resend's shared sender, which is enough for the owner's own digest. Subscriber email refuses that default and any `@resend.dev` sender: it needs a sender on a domain verified in Resend |
 | `SUBSCRIPTIONS_ENABLED` | You (optional) | The subscriber endpoints, `/api/sweep` | `1` turns sign-up and subscriber delivery on together. Anything else, or unset, means off |
-| `MAX_SUBSCRIBERS` | You (with subscriptions) | `/api/subscribe` | The cap on records (pending and active). Unset or not a positive whole number means **closed**: the sign-up reply looks the same but nothing is stored. The count is the one the last saved sweep wrote |
+| `MAX_SUBSCRIBERS` | You (with subscriptions) | `/api/subscribe` | The cap on records (pending and active). Unset or not a positive whole number means **not set up**: sign-up and Google sign-up answer `503` "subscriptions are not open yet", the same for every address, and nothing is stored. A **full** list keeps the usual sign-up reply, so it looks like any other sign-up. The count is the one the last saved sweep wrote |
 | `MAX_CONFIRMS_PER_DAY` | You (optional) | `/api/subscribe` | Emails sign-up sends per UTC day, across all addresses: confirmations and "already subscribed" notices together. Default 10; `0` stops both |
 | `MAX_SIGNUPS_PER_IP_HOUR` | You (optional) | `/api/subscribe`, `/api/session` | Sign-up and sign-in requests per client IP per UTC hour, counted together. Default 5; unset or not a positive whole number means 5. Over it the reply is the same and nothing is stored or sent |
 | `SESSION_SECRET` | You (for sign-in) | `/api/session`, `/api/confirm`, `/api/account` | Signs the login cookie (HMAC-SHA256). At least 32 characters; shorter counts as unset. Unset means sign-in answers `503`, Confirm sets no cookie, and `/manage/` works only from an email link. Use a different value on Preview and Production. Changing it signs everyone out |
-| `MAX_SIGNINS_PER_DAY` | You (optional) | `/api/session` | Sign-in emails per UTC day, across all addresses. Default 50; `0` stops them. Separate from `MAX_CONFIRMS_PER_DAY`, so a burst of sign-ups can't stop subscribers signing in |
+| `MAX_SIGNINS_PER_DAY` | You (optional) | `/api/session` | Sign-in emails per UTC day, across all addresses. Default 50; `0` stops them. Once reached, every sign-in request is told so ("Sign-in emails have hit today's limit"), whatever the address. Separate from `MAX_CONFIRMS_PER_DAY`, so a burst of sign-ups can't stop subscribers signing in |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | You (optional) | `/api/session` | The Google OAuth client. With both and `SESSION_SECRET`, the pages show "Continue with Google"; with either unset the button stays hidden and `?action=google` answers `503`. The secret never leaves the server |
 | `BOARD_PAYWALL` | You (at go-live) | `/api/data` | `1` locks the board: not signed in `401`, Free or lapsed Pro `402`, Pro the data, and every reply `private, no-store`. Anything else, or unset, means off: the replies and their public cache header are as before. Needs `SESSION_SECRET`, or nobody can sign in to see it. Read only by a new deployment |
 | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `RAZORPAY_PLAN_ID` | You (for paid Pro) | `/api/account`; `/api/razorpay-webhook` (the webhook secret only; without it the endpoint answers `503`) | The Razorpay API keys, the webhook's signing secret and the subscription plan. The key id is public: Checkout needs it in the browser. The two secrets never leave the server. Test keys start `rzp_test_`, and test and live are separate in Razorpay, so a test plan id doesn't work with live keys |
@@ -754,7 +754,7 @@ unchanged. Code: `api/subscribe.js`, `api/confirm.js`, `api/unsubscribe.js`, `ap
    `SESSION_SECRET` it is told "This address is already subscribed" and gets one email with its manage and
    unsubscribe links instead, at most once every 24 hours. A pending address whose confirmation went out in the last 24 hours is told so. Every other
    request gets the same reply ("If that address can be subscribed, a confirmation link is on its way"), so a
-   closed or full list, the daily cap and the per-IP limit look alike. A filled-in hidden field (a trap for bots)
+   full list, the daily cap and the per-IP limit look alike. (With `MAX_SUBSCRIBERS` unset, sign-up answers "subscriptions are not open yet" instead.) A filled-in hidden field (a trap for bots)
    gets that reply and does nothing.
 2. A confirmation email links to `/api/confirm?id=…&t=…`. Opening it shows a **Confirm** button; only pressing it
    (a `POST`) confirms, so a mail scanner that opens links can't sign anyone up. An address not confirmed within 7
@@ -776,7 +776,7 @@ unchanged. Code: `api/subscribe.js`, `api/confirm.js`, `api/unsubscribe.js`, `ap
 - A domain verified in Resend (**Domains → Add Domain**, then its DNS records), and `EMAIL_FROM` set to a sender on
   it. The shared `onboarding@resend.dev` sender can't reach other people, so the code refuses it for subscribers.
 - `RESEND_API_KEY` (as for the owner's email).
-- `MAX_SUBSCRIBERS`. Without it the list is closed.
+- `MAX_SUBSCRIBERS`. Without it sign-up answers "subscriptions are not open yet".
 - `SUBSCRIPTIONS_ENABLED=1`.
 - Optional: `SITE_URL`, `MAX_CONFIRMS_PER_DAY`, `MAX_SIGNUPS_PER_IP_HOUR` and `RESEND_WEBHOOK_SECRET` (see the
   [environment variables](#environment-variables)).
@@ -882,7 +882,7 @@ locked only while `BOARD_PAYWALL` is on: see [The locked board](#the-locked-boar
 **How it works**
 
 1. `/signin/` posts the address to `POST /api/session`. Every address gets the same reply ("If that address has an
-   account, a sign-in link is on its way"); only a confirmed subscriber is emailed a sign-in link. An address that
+   account, a sign-in link is on its way"); only a confirmed subscriber is emailed a sign-in link. Once `MAX_SIGNINS_PER_DAY` is reached, every address gets another reply instead: today's limit is hit, try again after 00:00 UTC or use the Manage link in any digest. An address that
    never pressed Confirm gets its confirmation link again instead, on sign-up's limits (10 minutes apart, 5 per
    address, within `MAX_CONFIRMS_PER_DAY`). The reply also says a new link can be asked for once every 5 minutes. Signing up again at `/signup/` with a confirmed address also sends a sign-in link. The link holds a one-time code
    that works for 15 minutes; the record keeps only its SHA-256.
@@ -901,7 +901,7 @@ A cookie-authenticated `POST` whose `Origin` names another site is refused.
 
 **Limits on sign-in emails.** At most one per address every 5 minutes, at most `MAX_SIGNINS_PER_DAY` a day (default
 50), and the sign-up limit of `MAX_SIGNUPS_PER_IP_HOUR` per connection, counted together with sign-ups. Over any of
-them nothing is sent. Each sign-in email, from `/signin/` or from signing up again, records a `signinsent` event; `stats` counts them.
+them nothing is sent; over the daily one the reply says so. Each sign-in email, from `/signin/` or from signing up again, records a `signinsent` event; `stats` counts them.
 They come out of the same Resend daily quota as everything else.
 
 **Setting `SESSION_SECRET`.** Make it at random and send it straight to Vercel, so it is never shown or saved:
@@ -1281,7 +1281,7 @@ covers a missed 00:17 run.
 | `email: failed: http 429 daily_quota_exceeded` (or `monthly_quota_exceeded`) | The plan's sending quota is used up; each recipient counts. Unlikely with one recipient | Fewer recipients or a paid plan. The daily quota resets at midnight UTC |
 | `/signup/` says "Sign-up isn't open yet" (`503`) | `SUBSCRIPTIONS_ENABLED` isn't `1`, or `RESEND_API_KEY`, a verified-domain `EMAIL_FROM` or a site URL is missing for this deployment | Set them for Production; redeploy (see [Subscriber email](#subscriber-email-optional)) |
 | `"subscribers": "not configured"` in the sweep reply | Same as the row above | Same fix |
-| Sign-up says the link is on its way, but no confirmation email comes | In order: the spam folder; `MAX_SUBSCRIBERS` unset (the list is closed) or reached; `MAX_CONFIRMS_PER_DAY` used up today; more than `MAX_SIGNUPS_PER_IP_HOUR` sign-ups from the same connection this hour. The reply is the same in every case on purpose. (An address already confirmed, or with a link sent in the last 24 hours, gets a reply that says so instead) | Check spam first. Then the `subscribe confirm-email` log line in Vercel (kept about 30 minutes), `stats` for today's confirmation emails, and Resend's **Logs** |
+| Sign-up says the link is on its way, but no confirmation email comes | In order: the spam folder; `MAX_SUBSCRIBERS` reached; `MAX_CONFIRMS_PER_DAY` used up today; more than `MAX_SIGNUPS_PER_IP_HOUR` sign-ups from the same connection this hour. The reply is the same in every case on purpose. (An address already confirmed, or with a link sent in the last 24 hours, gets a reply that says so instead) | Check spam first. Then the `subscribe confirm-email` log line in Vercel (kept about 30 minutes), `stats` for today's confirmation emails, and Resend's **Logs** |
 | `/signup/` says "Too many tries from your connection" (`429`) | The Vercel Firewall rule: more than 5 sign-up requests from one IP in 10 minutes | Wait 10 minutes. Many people behind one office or mobile network share an IP; raise the rule's limit if that matters |
 | Unsubscribe says "This link is no longer active", but emails keep coming | The link is from an email sent before that address unsubscribed and signed up again. The new record has the same id but a new token, so older links (and Gmail's Unsubscribe button on older emails) change nothing | Use the Unsubscribe link in the most recent email, or `delete <email> --yes` with the admin script |
 | Resend's webhook log shows `401` | `RESEND_WEBHOOK_SECRET` isn't this webhook's signing secret (for example after re-creating the webhook), or the server clock and the event's timestamp differ by more than 5 minutes | Copy the secret again from Resend's webhook page; redeploy. Resend retries failed deliveries |

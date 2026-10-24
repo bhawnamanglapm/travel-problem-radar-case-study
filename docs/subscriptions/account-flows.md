@@ -56,7 +56,8 @@ flowchart TD
   D -- "active account" --> E["Sign-in email sent<br/>link works 15 min, once"]
   D -- "unknown" --> N["Nothing sent"]
   D -- "not confirmed" --> CF["Confirmation link re-sent<br/>(10 min apart, 5 per address,<br/>daily cap)<br/>→ Confirm signs you in"]
-  D -- "asked under 5 min ago /<br/>daily or per-IP limit" --> N
+  D -- "asked under 5 min ago /<br/>per-IP limit" --> N
+  C -- "today's sign-in limit reached" --> CAP["Reply for everyone instead:<br/>today's limit is hit,<br/>try after 00:00 UTC"]
   E --> F["Opens link"]
   F --> G["Page with a Sign in button"]
   G --> H["Presses Sign in"]

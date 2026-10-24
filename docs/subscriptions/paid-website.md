@@ -47,7 +47,8 @@ an account are the same thing.
    - Sign-in emails have their own limits, so a burst of bot sign-ups can't use up the day's emails and stop paying
      subscribers signing in: at most one per address every 5 minutes, at most `MAX_SIGNINS_PER_DAY` a day (default
      50, counted by a `signinsent` event), and the per-IP limit `MAX_SIGNUPS_PER_IP_HOUR`, counted together with
-     sign-ups. They don't count against `MAX_CONFIRMS_PER_DAY`.
+     sign-ups. They don't count against `MAX_CONFIRMS_PER_DAY`. Once the day's limit is reached, the reply says so, the
+     same for every address.
 3. **The sign-in link** opens a page with a **Sign in** button, like Confirm, because mail scanners open links but
    don't press buttons. Pressing it checks the code, deletes it from the record, sets the login cookie and goes to
    `/live/`. An expired or used code says so and offers a new link.
