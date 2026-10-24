@@ -28,8 +28,8 @@
   button:hover { background: #d8ff6f; }
   button[disabled] { opacity: .6; cursor: default; }
   #status { min-height: 1.6em; margin: 12px 0 0; color: #F4F4F7; }
-  #status.err, #catStatus.err { color: #FF8A80; }
-  #catStatus, #delStatus { min-height: 1.6em; margin: 12px 0 0; color: #F4F4F7; }
+  #status.err, #catStatus.err, #freqStatus.err { color: #FF8A80; }
+  #catStatus, #freqStatus, #delStatus { min-height: 1.6em; margin: 12px 0 0; color: #F4F4F7; }
   #delStatus.err { color: #FF8A80; }
   #delCancel { margin-left: 8px; }
   h2 { font-size: 16px; margin: 0 0 8px; color: #F4F4F7; }
@@ -54,14 +54,14 @@
     <p class="plan" id="plan">Loading&hellip;</p>
     <p id="detail"></p>
     <div id="ask" hidden>
-      <!-- when:free-test --><p>Pro opens the live board and sends an email after every sweep (about 5 a day) instead of one a day. It&rsquo;s free while it&rsquo;s being tested and is switched on by hand, so it can take a day.</p>
+      <!-- when:free-test --><p>Pro opens the live board and sends 1 to 5 emails a day, as many as you choose (2 unless you change it), instead of one a day. It&rsquo;s free while it&rsquo;s being tested and is switched on by hand, so it can take a day.</p>
       <button id="req" type="button">Request Pro</button><!-- /when -->
-      <template data-when="paid"><p>Pro opens the live board and sends an email after every sweep (about 5 a day) instead of one a day. Payments aren&rsquo;t open right now; please check back later.</p></template>
+      <template data-when="paid"><p>Pro opens the live board and sends 1 to 5 emails a day, as many as you choose (2 unless you change it), instead of one a day. Payments aren&rsquo;t open right now; please check back later.</p></template>
     </div>
     <div id="buy" hidden>
-      <!-- when:free-test --><p>Pro opens the live board and sends an email after every sweep (about 5 a day) instead of one a day. Payment is handled by Razorpay.</p>
+      <!-- when:free-test --><p>Pro opens the live board and sends 1 to 5 emails a day, as many as you choose (2 unless you change it), instead of one a day. Payment is handled by Razorpay.</p>
       <button id="upgrade" type="button">Upgrade to Pro</button><!-- /when -->
-      <template data-when="paid"><p>Pro opens the live board and sends an email after every sweep (about 5 a day) instead of one a day.</p>
+      <template data-when="paid"><p>Pro opens the live board and sends 1 to 5 emails a day, as many as you choose (2 unless you change it), instead of one a day.</p>
       <p><strong>{{PRO_PRICE}}, {{PRO_GST}}.</strong> Renews automatically every month until you cancel. Cancel here any time; Pro stays on until the end of the period you&rsquo;ve paid for.</p>
       <p>{{PRO_REFUND}}</p>
       <p>Payments are handled by Razorpay. <a href="../pricing/">Pricing details</a>.</p>
@@ -90,6 +90,20 @@
     <p id="catStatus" role="status" aria-live="polite"></p>
   </div>
 
+  <div class="card" id="freqCard" hidden>
+    <h2>Emails a day</h2>
+    <p id="freqNote">How many Pro emails you get each day. Each one has everything found since the one before.</p>
+    <fieldset class="cats" id="freq" aria-label="Emails a day">
+      <label><input type="radio" name="freq" value="1" /><span>1 a day: about 05:47 IST</span></label>
+      <label><input type="radio" name="freq" value="2" /><span>2 a day: about 05:47 and 15:47 IST</span></label>
+      <label><input type="radio" name="freq" value="3" /><span>3 a day: about 05:47, 15:47 and 20:47 IST</span></label>
+      <label><input type="radio" name="freq" value="4" /><span>4 a day: about 05:47, 10:47, 15:47 and 20:47 IST</span></label>
+      <label><input type="radio" name="freq" value="5" /><span>5 a day: about 01:47, 05:47, 10:47, 15:47 and 20:47 IST</span></label>
+    </fieldset>
+    <button id="saveFreq" type="button">Save emails a day</button>
+    <p id="freqStatus" role="status" aria-live="polite"></p>
+  </div>
+
   <div class="card" id="deleteCard" hidden>
     <h2>Delete my account</h2>
     <p id="deleteNote">Deletes your address and everything stored with it, and signs this browser out. Nothing more is sent.</p>
@@ -116,8 +130,12 @@
   var catsCard = document.getElementById("catsCard"), catsNote = document.getElementById("catsNote");
   var saveCats = document.getElementById("saveCats"), catStatus = document.getElementById("catStatus");
   var boxes = Array.prototype.slice.call(document.querySelectorAll("#cats input"));
+  var freqCard = document.getElementById("freqCard"), freqNote = document.getElementById("freqNote");
+  var saveFreq = document.getElementById("saveFreq"), freqStatus = document.getElementById("freqStatus");
+  var radios = Array.prototype.slice.call(document.querySelectorAll("#freq input"));
   function say(text, isErr) { statusEl.textContent = text; statusEl.className = isErr ? "err" : ""; }
   function sayCats(text, isErr) { catStatus.textContent = text; catStatus.className = isErr ? "err" : ""; }
+  function sayFreq(text, isErr) { freqStatus.textContent = text; freqStatus.className = isErr ? "err" : ""; }
   // Pro only (T14). No choice saved (null) means every category.
   function showCats(a) {
     catsCard.hidden = false;
@@ -125,6 +143,20 @@
     boxes.forEach(function (b) { b.checked = !a.cats || a.cats.indexOf(b.value) !== -1; b.disabled = !isPro; });
     saveCats.hidden = !isPro;
     catsNote.textContent = isPro ? "Choose which categories your Pro emails include." : "Choosing categories is a Pro feature. The daily digest always has all four.";
+  }
+  // Pro only (T32). No choice saved (null) means the default, 2; numbers above the owner's cap aren't offered.
+  function perDay(a) { return a.sweepsPerDay || Math.min(a.sweepsPerDayDefault || 2, a.sweepsPerDayMax || 5); }
+  function showFreq(a) {
+    freqCard.hidden = false;
+    var isPro = a.effectivePlan === "pro", max = a.sweepsPerDayMax || 5, n = perDay(a);
+    radios.forEach(function (r) {
+      var v = Number(r.value);
+      r.parentNode.hidden = v > max;
+      r.checked = v === n;
+      r.disabled = !isPro;
+    });
+    saveFreq.hidden = !isPro;
+    freqNote.textContent = isPro ? "How many Pro emails you get each day. Each one has everything found since the one before." : "Choosing how many emails a day is a Pro feature. Free gets one a day.";
   }
   function day(iso) { return iso ? iso.slice(0, 10) : ""; }
   function setPlan(name, rest) {
@@ -167,9 +199,10 @@
     showEmail(a);
     document.getElementById("deleteCard").hidden = false;
     showCats(a);
+    showFreq(a);
     if (isPro) {
       var paid = a.proSource === "razorpay";
-      setPlan("Pro", (a.emailOff ? "The live board" : "The live board and an email after every sweep") + (a.proUntil && !paid ? ", until " + day(a.proUntil) + "." : "."));
+      setPlan("Pro", (a.emailOff ? "The live board" : "The live board and " + perDay(a) + (perDay(a) === 1 ? " email" : " emails") + " a day") + (a.proUntil && !paid ? ", until " + day(a.proUntil) + "." : "."));
       // Paid through Razorpay (T20): renews each period until cancelled. A Pro the owner granted has no billing.
       if (paid) {
         billing.hidden = false;
@@ -355,7 +388,7 @@
     sayDel("Deleting…", false);
     call("POST", { id: id, t: t, action: "delete-account" }).then(function (x) {
       if (x.status === 200) {
-        ["ask", "buy", "billing", "catsCard", "deleteCard", "leave", "leaveByLink", "signOutRow", "emailLine", "emailOnRow"].forEach(function (k) { document.getElementById(k).hidden = true; });
+        ["ask", "buy", "billing", "catsCard", "freqCard", "deleteCard", "leave", "leaveByLink", "signOutRow", "emailLine", "emailOnRow"].forEach(function (k) { document.getElementById(k).hidden = true; });
         planEl.textContent = "Your account is deleted";
         detail.textContent = "Your address is gone and nothing more will be sent. You can sign up again any time.";
         say("", false);
@@ -382,6 +415,24 @@
     }).catch(function () {
       sayCats("Couldn’t reach the server. Please try again in a minute.", true);
     }).then(function () { saveCats.disabled = false; });
+  });
+
+  saveFreq.addEventListener("click", function () {
+    var pick = radios.filter(function (r) { return r.checked; })[0];
+    if (!pick) { sayFreq("Pick how many emails a day.", true); return; }
+    var n = Number(pick.value);
+    saveFreq.disabled = true;
+    sayFreq("Saving…", false);
+    call("POST", { id: id, t: t, action: "set-freq", sweepsPerDay: n }).then(function (x) {
+      if (x.status === 200) { show(x.body); sayFreq("Saved. You get " + n + (n === 1 ? " email" : " emails") + " a day, starting with the next one.", false); }
+      else if (x.status === 403) { sayFreq("Choosing how many emails a day is a Pro feature.", true); }
+      else if (x.status === 400 && x.body.error === "over the limit") { sayFreq("That number isn’t offered right now. Reload the page.", true); }
+      else if (x.status === 400) { sayFreq("That choice couldn’t be saved. Reload the page and try again.", true); }
+      else if (x.status === 409) { sayFreq("Confirm your address first, using the email we sent you.", true); }
+      else fail(x);
+    }).catch(function () {
+      sayFreq("Couldn’t reach the server. Please try again in a minute.", true);
+    }).then(function () { saveFreq.disabled = false; });
   });
 })();
 </script>

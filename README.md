@@ -16,8 +16,8 @@ each item with a product idea a PM could build.
 | **Home page** | https://travel-problem-radar.vercel.app/ (also served by GitHub Pages). Latest findings, plans, and sign-up / sign-in |
 | **Try the demo** | https://bhawnamanglapm.github.io/travel-problem-radar-case-study/demo/ (replays a saved sample; no AI calls) |
 | **Sample digest** | https://bhawnamanglapm.github.io/travel-problem-radar-case-study/demo/#report |
-| **Live page** | https://travel-problem-radar.vercel.app/live/. Pro members only since 2026-10-23 (`BOARD_PAYWALL`); others see a sign-in or Request Pro panel, and the demo above is open to all. A sweep runs every 5 hours. The first production sweep (Oct 2026) saved items from only 1 of 4 categories; the cause, an output token limit, is fixed and a local run returned all four. |
-| **Get it by email** | https://travel-problem-radar.vercel.app/subscribe/. Free: a daily summary (counts and headlines). Pro, the live board and an email after every sweep, is free while it's being tested: tick the box when you sign up, or use "Request Pro" on the manage page your emails link to. When payments open, the same pages show the price instead (`plan.json`'s `paid`, T26). |
+| **Live page** | https://travel-problem-radar.vercel.app/live/. Pro members only since 2026-10-23 (`BOARD_PAYWALL`); others see a sign-in or Request Pro panel, and the demo above is open to all. It sweeps 1 to 5 times a day: as often as the Pro member who chose the most emails a day (T32). The first production sweep (Oct 2026) saved items from only 1 of 4 categories; the cause, an output token limit, is fixed and a local run returned all four. |
+| **Get it by email** | https://travel-problem-radar.vercel.app/subscribe/. Free: a daily summary (counts and headlines). Pro, the live board and 1 to 5 emails a day (the member chooses, default 2), is free while it's being tested: tick the box when you sign up, or use "Request Pro" on the manage page your emails link to. When payments open, the same pages show the price instead (`plan.json`'s `paid`, T26). |
 | **PM case study** | [pm/CASE_STUDY.md](pm/CASE_STUDY.md): the product written up across seven product-management stages, from discovery to data. Stages 5 to 7 are plans, since payments haven't opened |
 | **More** | [Technical reference](docs/TECHNICAL.md) · [PRD](docs/PRD.md) · [Decision log](docs/decisions.md) · [Subscriptions: how it fits together](docs/subscriptions/architecture.md) · [Changelog](CHANGELOG.md) |
 
@@ -56,8 +56,8 @@ Full log with dates: [docs/decisions.md](docs/decisions.md).
 1. **Four category calls instead of one big prompt.** *Gave up:* a single ranked list across categories. *Got:* the
    calls run in parallel, and one failed category doesn't sink the other three. A test checks that a broken category
    is skipped and the rest are saved.
-2. **Visitors never trigger an AI call.** The live page reads a sweep saved by a server job that runs every 5 hours.
-   *Gave up:* fresh results whenever someone visits. *Got:* the cost is about five sweeps a day whatever the traffic,
+2. **Visitors never trigger an AI call.** The live page reads a sweep saved by a server job that runs 1 to 5 times a
+   day. *Gave up:* fresh results whenever someone visits. *Got:* the cost is at most five sweeps a day whatever the traffic,
    and the API key stays on the server.
 3. **The public demo replays a saved sample.** *Gave up:* live data in the demo. *Got:* a demo anyone can open, with
    no key, no cost and nothing that can break. The trade-off is that the sample (July 2026) is now dated.
@@ -106,7 +106,7 @@ changed:
 | "Posts the digest to Slack and email" | Slack kept as owner-reported; email removed. The original text itself said the email connector only drafts. | `a960184`, `5141067` |
 | Four calls "raised result quality" | Removed: it was never measured. The reason given now is reliability. | `a960184` |
 | "Product & build (solo)" | "Product owner, built with AI (Claude)" | `a960184` |
-| Public live version described as future work | Built: server sweep (now every 5 hours) and read-only page. The first production sweep saved 1 of 4 categories; the token-limit cause is fixed | `66f2bf1`, `b691d54`, `f200a79` |
+| Public live version described as future work | Built: server sweep (1 to 5 a day since T32) and read-only page. The first production sweep saved 1 of 4 categories; the token-limit cause is fixed | `66f2bf1`, `b691d54`, `f200a79` |
 | Slack and email described as Claude-app only | The server sweep can also post to Slack and email through Resend (both optional; tested offline only) | `493ddbd`, `bb78fbb` |
 
 ## Failure modes and guardrails
@@ -120,11 +120,11 @@ changed:
 | Someone calls the sweep to run up costs | Refused without the secret (401); a repeat scheduled call within 2 hours is skipped. A manual call with the secret runs at most 3 times a UTC day (`MAX_MANUAL_SWEEPS_PER_DAY`), then gets 429; the Anthropic spend limit stays the final cap | `npm test`; preview deployment returned 401 |
 | Someone reads other stored data | The data feed serves only history and sweep keys and refuses writes | `npm test` |
 | Storage grows forever | Only the last 60 sweeps are kept | `npm test` |
-| A reader treats AI findings as fact | The live page says: "Gathered every 5 hours by an AI model with web search. Check each source link; items are not verified." The demo says it replays a saved sample. | `live/index.html`; demo banner |
+| A reader treats AI findings as fact | The live page says: "Gathered 1 to 5 times a day by an AI model with web search. Check each source link; items are not verified." The demo says it replays a saved sample. | `live/index.html`; demo banner |
 | Slack or email delivery fails | The sweep is still saved; each channel reports its own outcome, and replies never include the webhook, API key or addresses | `npm test` |
 | A reply is cut off by the output token limit | Raised to 16,000 tokens, because the model's thinking counts toward it; a reply with no usable answer says why the model stopped | `npm test`; `scanCategory()` in `api/_lib/radar.js` |
 | **The model invents or misreads a source** | **No guardrail beyond the link check.** This is the main open risk. | Not measured |
-| Spend runs away | The owner sets a monthly limit in the Anthropic Console; about five scheduled sweeps a day, up to 3 searches per category | Owner step; not verified here |
+| Spend runs away | The owner sets a monthly limit in the Anthropic Console; at most five scheduled sweeps a day (`SWEEPS_PER_DAY_MAX` lowers it), up to 3 searches per category | Owner step; not verified here |
 | Someone signs up another person's address | Double opt-in: one confirmation email, and nothing else until the Confirm button is pressed. At most 5 per address, 10 minutes apart, and 10 a day in all | `npm test` |
 | Subscriber addresses leak | Replies and log lines carry counts only; the data feed refuses subscriber keys; the manage page's endpoint never returns the address | `npm test` |
 | More subscribers than the email quota allows | The owner's email goes first; the rest wait for the next sweep, and nobody gets a day's digest twice. Sign-up stops at `MAX_SUBSCRIBERS` | `npm test` |

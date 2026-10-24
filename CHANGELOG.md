@@ -3,8 +3,19 @@
 Built from the git history. Dates are commit dates. The project has no version numbers or releases, so entries are
 grouped by date.
 
+## 2026-10-25
+
+- [T32](docs/subscriptions/tasks/T32-sweeps-per-day.md) gets its own task file, and [T28](docs/subscriptions/tasks/T28-two-sweeps-a-day.md)
+  is marked replaced (its `cron` change would stop 3 to 5 a day from running). T27, T30, the tasks README, progress,
+  pricing.md and roadmap RM-26 now point at T32. Docs only.
+
 ## 2026-10-24
 
+- Each Pro member chooses 1 to 5 emails a day (T32, server side, #88). The site sweeps only as often as the most
+  frequent member needs, between `SWEEPS_PER_DAY_MIN` and `SWEEPS_PER_DAY_MAX`; a scheduled slot nobody needs answers
+  `skipped` before any Anthropic call. Pro emails roll up every sweep since the member's previous slot. New account
+  action `set-freq`. With no Pro members the site now sweeps once a day. The manage page and the wording follow in
+  PR 2.
 - [pricing.md](docs/subscriptions/pricing.md#final-pro-plan-2026-10-24): the final Pro plan. Free and Pro only,
   Pro at ₹299 a month (monthly only), all 4 categories, a digest after every scheduled sweep at 2 a day, and the
   live board. Four new tasks carry it out: [T28](docs/subscriptions/tasks/T28-two-sweeps-a-day.md) (2 sweeps a

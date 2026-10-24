@@ -10,6 +10,11 @@
 
 > Added 2026-10-24 with the [final Pro plan](../pricing.md#final-pro-plan-2026-10-24).
 
+> **Replaced by [T32](T32-sweeps-per-day.md) on 2026-10-24. Do not build this task.** Each Pro member now chooses 1
+> to 5 emails a day, with 2 as the default. The schedule step below would break that: changing `cron` to `0,12`
+> stops slots 05, 15 and 20, so 3 to 5 a day could never run. The wording, check and docs steps moved to T32. To hold
+> the site at T28's 2 sweeps a day, set `SWEEPS_PER_DAY_MAX=2` instead. Kept for the record.
+
 ## Why
 
 The final Pro plan sells "a digest after every scheduled sweep, 2 a day" at ₹299 a month. The site runs about 5

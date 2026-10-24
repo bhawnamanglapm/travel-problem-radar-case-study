@@ -8,9 +8,9 @@ in the [README](../README.md).
 | | In Claude's app | Public demo | Live page (Vercel) |
 |---|---|---|---|
 | Where it runs | Inside Claude's app, as an artifact | GitHub Pages, any browser | Vercel, any browser |
-| What a sweep does | 4 real web-search calls to Claude | Replays the 8 saved items in `sampleData.json` | A server job makes the 4 web-search calls every 5 hours |
+| What a sweep does | 4 real web-search calls to Claude | Replays the 8 saved items in `sampleData.json` | A server job makes the 4 web-search calls 1 to 5 times a day |
 | Who triggers it | You, with a button | You, with a button (replay only) | A GitHub Actions schedule (plus Vercel's daily cron as a backstop); visitors can't trigger it |
-| AI or API calls | Yes, through Claude's app | None | About 5 sweeps a day, whatever the traffic |
+| AI or API calls | Yes, through Claude's app | None | 1 to 5 sweeps a day, whatever the traffic |
 | History is saved in | Claude's artifact storage | This browser's localStorage | A private Vercel Blob store |
 | Digest | A scheduled task in Claude posts it to Slack | The "Sample digest" view | The page itself; optionally posted to Slack and emailed to the owner after each sweep; anyone can subscribe by email at `/subscribe/` (Free: one a day; Pro: every scheduled sweep) |
 | Status | Owner-reported working | Verified | Deployed; first production sweep saved 1 of 4 categories (token limit, since fixed and tested locally) |
@@ -23,20 +23,26 @@ from the browser without a key, which only works inside Claude's app. That is wh
 ## Live page: how it works and what it needs
 
 ```
-GitHub Actions, every 5 hours (00:17, 05:17, 10:17, 15:17, 20:17 UTC)
+GitHub Actions, every 5 hours (00:17, 05:17, 10:17, 15:17, 20:17 UTC); a slot no Pro member needs is
+  skipped before any Claude call (T32)
   + Vercel cron, once a day (01:30 UTC), as a backstop
   -> /api/sweep   (refuses calls without the secret; a scheduled call skips if a scheduled sweep ran in
                    the last 2 hours; a manual call with the secret always runs)
        4 Claude calls with web search, one per category, same prompts as the component
        merge, de-duplicate, flag "New", keep the last 60 sweeps -> private Vercel Blob store
        then post the digest (or a failure notice) to Slack and by email, for each one that is set up
-       then, if subscriptions are on, email subscribers: Pro every scheduled sweep, Free once a UTC day
+       then, if subscriptions are on, email subscribers: Pro at the slots of their 1 to 5 a day, Free once a UTC day
 Visitor -> /live/ -> /api/data (read-only, cached) -> same dashboard, no sweep button
 Visitor -> /subscribe/ -> /api/subscribe -> confirmation email -> /api/confirm (Confirm button) -> active
 Subscriber -> links in each email -> /manage/ (/api/account: plan, Request Pro or Upgrade, cancel) or /api/unsubscribe
 ```
 
-- Visitors only read the saved result and never trigger an AI call, so cost is about 5 sweeps a day (roughly $1 a day at the measured ~$0.21 a sweep).
+- Visitors only read the saved result and never trigger an AI call, so cost is 1 to 5 sweeps a day (at most about $1 a day at the measured ~$0.21 a sweep).
+- **Sweeps a day (T32).** Each Pro member chooses 1 to 5 emails a day on `/manage/` (default 2). The site sweeps as
+  often as the highest choice, between `SWEEPS_PER_DAY_MIN` and `SWEEPS_PER_DAY_MAX`; with no Pro members, once a day.
+  The slots are nested (1: 00; 2: + 10; 3: + 15; 4: + 05; 5: + 20 UTC), so one sweep serves every choice. The GitHub
+  schedule can't change itself, so it keeps firing and an unneeded slot answers `skipped`. Each Pro email rolls up
+  every sweep since that member's previous slot. Details: [DEPLOYMENT.md](../DEPLOYMENT.md#sweeps-a-day-t32).
 - If every category fails, nothing is saved and the run shows as failed. If some fail, the rest are saved.
 - The API key is held as a Vercel secret, never in the page or the code.
 - Items are AI-gathered and not verified; the page tells visitors to check each source link.
@@ -87,7 +93,7 @@ Email has been sent through a real Resend account since 21 Oct 2026, from the ve
 | `sampleData.json` | 8 saved items, two per category, each with a source link |
 | `scripts/check.mjs` | Offline checks: sample data, page links, bundles, the subscribe and manage pages, prompt drift, secrets (Razorpay key secrets too), Hobby's 12-function limit |
 | `scripts/subscribers.mjs` | Owner admin tool, run on your own machine: `stats`, `list`, `show`, `grant-pro`, `revoke-pro`, `delete`, `prune-events`, `recount`. Not deployed |
-| `.github/workflows/sweep.yml` | Calls `/api/sweep` every 5 hours, and on demand from the Actions tab |
+| `.github/workflows/sweep.yml` | Calls `/api/sweep` every 5 hours (the sweep skips slots nobody needs), and on demand from the Actions tab |
 | `scripts/test-sweep.mjs` | Offline tests for the sweep, the Slack post, the email and the data feed (no network, no key) |
 | `scripts/test-subscriptions.mjs` | Offline tests for the subscriber features: storage, records, emails, every endpoint (the Resend webhook's signature check too), the per-IP limit, delivery, the sweep wiring and the admin script (fake Resend, no network) |
 | `scripts/test-helpers.mjs` | Shared by both test files: PASS/FAIL printer, in-memory store, fake response |

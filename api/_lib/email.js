@@ -116,7 +116,7 @@ export function buildFailureEmail({ at, perCat = {}, error = "" }) {
 
 const PLAN_LINE = {
   free: "You get this because you subscribed (Free plan: one email a day).",
-  pro: "You get this because you subscribed (Pro plan: an email after every sweep).",
+  pro: "You get this because you subscribed (Pro plan: 1 to 5 emails a day, set on your account page).",
 };
 const LINK_OK = /^https?:\/\/[^\s<>"]+$/;
 
