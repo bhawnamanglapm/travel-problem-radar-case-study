@@ -49,13 +49,13 @@ IST), though GitHub can start scheduled runs late.
 
 > **Decided by the owner on 2026-10-24** ([decision log](../decisions.md)). It is phase 1 of the tier plan below.
 > Payments are still off (`plan.json` `paid: false`) until T27. The tasks that carry it out are
-> [T28 to T31](tasks/README.md#task-list).
+> [T29 to T32](tasks/README.md#task-list); T32 replaced T28 the same day.
 
 | | Free | Pro |
 |---|---|---|
 | Price | ₹0 | **₹299 a month**, no GST charged. Monthly only at launch |
 | Categories | All 4, teaser only | All 4; the member can narrow them with `cats` (built, T14) |
-| Email | 1 teaser a day, headlines only | A full digest after every scheduled sweep: **2 a day** |
+| Email | 1 teaser a day, headlines only | A full digest after the scheduled sweeps the member chose: **1 to 5 a day, default 2** (T32) |
 | Live board | No | Yes, with history and Copy report |
 | Payment | — | Razorpay subscription, cards and UPI AutoPay; cancel any time; refunds per the published policy |
 
@@ -63,9 +63,10 @@ IST), though GitHub can start scheduled runs late.
   ([costing.md](costing.md#tiers-by-number-of-categories-at-2-sweeps-a-day-illustrative)). Break-even: **18 Pro
   members**. The sweeps alone cost about $12.60 a month (2 × $0.21 × 30), against about $32 at 5 a day.
 - **The three inputs this settles:** the price is ₹299 a month; there's no yearly plan at launch (it needs a second
-  Razorpay Plan and code; RM-20); the site moves to 2 sweeps a day **before** payments open (T28), to cut credit use
-  while no one pays.
-- **Not in Pro v1:** Plus and Starter, a yearly plan, Slack delivery, a "Pro Max" at 5 a day. Each waits for the
+  Razorpay Plan and code; RM-20); the site sweeps only as often as Pro members need (T32): once a day with no Pro
+  members, 2 a day while everyone keeps the default. One member on 5 a day takes the site to 5 sweeps a day, which
+  [costing.md](costing.md) budgets at ₹6,797 a month, 24 members to break even at ₹299; `SWEEPS_PER_DAY_MAX` caps it.
+- **Not in Pro v1:** Plus and Starter, a yearly plan, Slack delivery, a higher price for more emails a day. Each waits for the
   measurement after launch ([T31](tasks/T31-measure-and-add-tiers.md)).
 
 **How it ships**
@@ -73,7 +74,7 @@ IST), though GitHub can start scheduled runs late.
 | Order | Task | Who |
 |---|---|---|
 | 1 | Anthropic credit, then one sweep that saves all 4 categories (RM-01) | Owner |
-| 2 | [T28](tasks/T28-two-sweeps-a-day.md): 2 sweeps a day, and every page says so | Dev |
+| 2 | [T32](tasks/T32-sweeps-per-day.md): each Pro member chooses 1 to 5 emails a day (default 2), and every page says so. Replaces T28 | Dev |
 | 3 | [T30](tasks/T30-owner-launch-checklist.md): the owner's launch steps, starting with the terms page, then Razorpay activation | Owner, in parallel |
 | 4 | [T22](tasks/T22-pro-lifecycle-and-go-live.md): Pro expiry, paid unsubscribe, key safety (after Vercel Pro) | Dev |
 | 5 | [T27](tasks/T27-razorpay-test-run-and-go-live.md): test run on a Preview, then go-live | Owner + Dev |
@@ -142,7 +143,7 @@ Pro alone is built, needs one Razorpay Plan and breaks even soonest. Each extra 
 yearly) Razorpay Plan and changes to `plan.json`, `/pricing/`, checkout, the webhook and delivery.
 
 **Settled 2026-10-24** by the [final Pro plan](#final-pro-plan-2026-10-24): Pro at ₹299 a month, no yearly plan at
-launch, and 2 sweeps a day from T28. **Still open:** the Plus and Starter prices, and whether to add them at all,
+launch, and 1 to 5 emails a day, the member's choice, from T32 (default 2). **Still open:** the Plus and Starter prices, and whether to add them at all,
 are decided in [T31](tasks/T31-measure-and-add-tiers.md).
 
 ## Costs

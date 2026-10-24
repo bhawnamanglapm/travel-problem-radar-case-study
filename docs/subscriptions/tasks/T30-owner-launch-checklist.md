@@ -15,7 +15,7 @@
 
 ## Why
 
-Everything left before the first live payment, apart from T22 and T28, is a step only the owner can take: an
+Everything left before the first live payment, apart from T22 and T32, is a step only the owner can take: an
 account, a payment, a review or a legal answer. Several wait on someone else, so they should start before the code
 is finished.
 

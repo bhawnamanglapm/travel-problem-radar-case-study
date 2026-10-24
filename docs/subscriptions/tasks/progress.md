@@ -40,11 +40,12 @@ working in a real inbox; that is T12's staged launch.
 | [T24](T24-pricing-page.md) `/pricing/`, `plan.json` | built; price set (₹299, input 1); not shipped until the owner fills GST and the refund rule (inputs 2, 4) | branch `feat/t24-pricing-page` | 37 new plan tests; 162 `npm run check` checks (+48) | Build steps now in `package.json` `build:site` (Vercel's 256-character `buildCommand` limit). Built site unchanged; `check-plan.mjs` not run yet (needs keys) |
 | [T25](T25-about-footer-legal.md) `/about/`, footer, policy pages | footer live (#67). `/about/` shipped 2026-10-23 with the owner's text; refund rule in `plan.json`. Three policy pages not shipped until the owner fills their gaps (dates, liability, notice) and the `LEGAL_*` variables | #67; branch `feat/about-and-refund-rule` | 4 new plan tests; 184 `npm run check` checks | Built site differs from main only in the footers. See T25's "Built" section |
 | [T26](T26-pro-copy-and-checkout-summary.md) Pro wording, pre-checkout summary | built 2026-10-23, behind `paid: false`; live site unchanged. Fixes a failed renewal offering a second checkout (`payment_retrying`) | branch `feat/t26-pro-copy` | 188 `npm run check` checks; new plan and account tests | See T26's "Built" section |
-| [T27](T27-razorpay-test-run-and-go-live.md) Test run, go-live | todo; needs Vercel Pro, live activation, T28 and T30 | | | |
-| [T28](T28-two-sweeps-a-day.md) 2 sweeps a day | todo; waits for one saved sweep (RM-01) | | | Added 2026-10-24, final Pro plan |
+| [T27](T27-razorpay-test-run-and-go-live.md) Test run, go-live | todo; needs Vercel Pro, live activation, T30 and T32 | | | |
+| [T28](T28-two-sweeps-a-day.md) 2 sweeps a day | replaced by T32 (2026-10-24); not to be built | | | Added 2026-10-24, final Pro plan |
 | [T29](T29-usage-by-category.md) Usage per category (optional) | todo | | | Added 2026-10-24 |
 | [T30](T30-owner-launch-checklist.md) Owner launch checklist | todo; step 1 (Anthropic credit) first | | | Added 2026-10-24 |
 | [T31](T31-measure-and-add-tiers.md) Measure, then decide on tiers | todo; after go-live | | | Added 2026-10-24 |
+| [T32](T32-sweeps-per-day.md) Pro chooses 1 to 5 emails a day | in progress: server done and live (#88); the manage card and wording are PR 2 | #88, `32c22ca` | 1,040 pass | Replaces T28. First skipped slot seen in production 2026-10-24 18:12 UTC (slot 15) |
 
 ## Notes per task
 
