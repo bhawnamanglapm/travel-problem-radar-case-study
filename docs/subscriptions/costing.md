@@ -466,6 +466,38 @@ Before choosing:
 - add the [business costs not included](#business-costs-not-included);
 - measure sign-up to paid conversion, retention and cancellations at the price chosen.
 
+### Tiers by number of categories, at 2 sweeps a day (illustrative)
+
+Added 2026-10-24 to explore pricing Pro by how many categories a member chooses. **Nothing here is decided or
+built**: today there is one price, ₹299, and choosing categories (T14) only filters the digest.
+
+**The prices are examples, not data.** ₹149 / ₹199 / ₹249 / ₹299 are ₹50 steps up to today's price. No one has paid
+at any of them.
+
+| Categories | Customer pays a month | Customer pays a year (12 × monthly) | Cost to the owner a month | Cost to the owner a year | Customers to cover a month | Customers to cover a year |
+|---|---|---|---|---|---|---|
+| 1 | ₹149 | ₹1,788 | ₹4,082 | ₹48,980 | 29 | 29 |
+| 2 | ₹199 | ₹2,388 | ₹4,383 | ₹52,599 | 23 | 23 |
+| 3 | ₹249 | ₹2,988 | ₹4,685 | ₹56,219 | 20 | 20 |
+| 4 | ₹299 | ₹3,588 | ₹4,987 | ₹59,839 | 18 | 18 |
+
+How the figures are made:
+- **Cost to the owner** = Vercel Pro + Resend Pro (₹3,780, **Price**) + the AI at 2 sweeps a day, about ₹302 a month
+  per category (**Estimate**: the measured $0.2100 a sweep split evenly over 4 categories; the sweep logs only the
+  total, so the real split isn't known).
+- **Customers** = cost ÷ the net price, rounded up. The net is the price less Razorpay's 3.422% (case A, not
+  GST-registered, as `plan.json` says today).
+- **The monthly and yearly counts match** because the yearly price is exactly 12 months. At 10 × monthly ("2 months
+  free") the yearly counts become 35 / 28 / 24 / 21.
+- **Not included:** GST, income tax and the [business costs not included](#business-costs-not-included).
+
+**The catch.** Each row's cost assumes the whole site sweeps only that many categories. If all four tiers are sold
+side by side, the sweep must search all 4 as soon as anyone buys the 4-category tier, so the cost is the 4-category
+row (₹4,987) whatever the mix. If every customer then chose the ₹149 tier, covering it would take 35, not 29.
+
+**Read.** The fixed part (₹3,780) is 76% to 93% of the cost, and each category adds only about ₹302. The price
+moves the count far more than the number of categories: 29 customers at ₹149, 18 at ₹299.
+
 ## Risks and safeguards
 
 | Risk | Effect | Safeguard | Status |
