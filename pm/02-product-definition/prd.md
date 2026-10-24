@@ -89,7 +89,7 @@ Status: **Live** (on production), **Built** (merged, switched off or not yet use
 | REQ-15 | Pro gets an email after every saved scheduled sweep, not after manual runs | T09, T10; D4, D5 | Live |
 | REQ-16 | Subscriber work never fails or slows the sweep's save, and stops before the 300-second limit | T10 | Live |
 | REQ-17 | No addresses, tokens or keys in any reply or log line; the data feed refuses subscriber keys | Rules 1 and 6 of the [tasks](../../docs/subscriptions/tasks/README.md#rules-every-task-follows) | Live |
-| REQ-18 | One switch, `SUBSCRIPTIONS_ENABLED`, starts and stops sign-up and delivery; `MAX_SUBSCRIBERS` unset means closed | T05 | Live (cap 5,000) |
+| REQ-18 | One switch, `SUBSCRIPTIONS_ENABLED`, starts and stops sign-up and delivery; `MAX_SUBSCRIBERS` unset means sign-up isn't open (it answers "not open yet") | T05 | Live (cap 5,000) |
 | REQ-19 | The owner can see counts, grant or revoke Pro, and delete a member from an admin script, with addresses shown only on request | T11 | Live |
 | REQ-20 | Bounces and spam complaints stop mail; sign-ups are rate-limited per IP | T13 | Live |
 | REQ-21 | Pro members choose their categories | T14 | Live; the email side not yet checked |
