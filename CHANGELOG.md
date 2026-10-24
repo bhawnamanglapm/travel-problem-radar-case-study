@@ -5,6 +5,9 @@ grouped by date.
 
 ## 2026-10-24
 
+- [pricing.md](docs/subscriptions/pricing.md#tiers-by-categories-and-sweeps-draft-2026-10-24): a draft tier plan by
+  categories and sweeps (Free, Starter, Plus, Pro at 2 sweeps a day), with example prices, break-even by mix and a
+  rollout that launches with Pro only. Nothing is built or priced yet.
 - [costing.md](docs/subscriptions/costing.md#tiers-by-number-of-categories-at-2-sweeps-a-day-illustrative): an
   illustrative table of Pro tiers by number of categories (1 to 4) at 2 sweeps a day, with monthly and yearly
   prices, the owner's cost and the customers needed to cover it. The prices are examples; nothing is decided.
