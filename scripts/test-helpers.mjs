@@ -19,9 +19,13 @@ export const memStorage = () => {
 };
 
 export const mockRes = () => {
-  const r = { code: 0, headers: {}, body: "" };
-  r.setHeader = (k, v) => { r.headers[k.toLowerCase()] = v; };
-  r.end = (b) => { r.body = b; };
+  const r = { code: 0, headers: {}, body: "", ended: false };
+  // Like Node: a header set after end() throws ERR_HTTP_HEADERS_SENT.
+  r.setHeader = (k, v) => {
+    if (r.ended) throw Object.assign(new Error("Cannot set headers after they are sent to the client"), { code: "ERR_HTTP_HEADERS_SENT" });
+    r.headers[k.toLowerCase()] = v;
+  };
+  r.end = (b) => { r.body = b; r.ended = true; };
   Object.defineProperty(r, "statusCode", { set(v) { r.code = v; }, get() { return r.code; } });
   r.json = () => JSON.parse(r.body);
   return r;

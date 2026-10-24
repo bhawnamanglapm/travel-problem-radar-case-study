@@ -2,7 +2,7 @@
 // storage are stubbed, so this needs no network and no API key.
 //   node scripts/test-sweep.mjs
 import { makeDataHandler, makeSweepHandler } from "../api/_lib/handlers.js";
-import { CATS, extractProblems, runDailySweep, scanCategory, sweepKey } from "../api/_lib/radar.js";
+import { CATS, extractProblems, runDailySweep, scanCategory, sweepKey, trimSeen } from "../api/_lib/radar.js";
 import { check, finish, memStorage, mockRes } from "./test-helpers.mjs";
 
 const item = (n, over = {}) => ({
@@ -141,6 +141,22 @@ const sweepOpts = (storage, byCat, now) => ({
   const hist = JSON.parse(st.m.get("radar:history"));
   const sweeps = [...st.m.keys()].filter((k) => k.startsWith("radar:sweep:")).length;
   check(hist.length === 60 && sweeps === 60, `keeps only the last 60 sweeps (${hist.length} in index, ${sweeps} stored)`);
+
+  // A failed index write leaves the old sweep files in place: nothing is deleted before the index is saved.
+  const failing = { ...st, set: async (k, v) => { if (k === "radar:history") throw new Error("down"); return st.set(k, v); } };
+  t += 5 * 3600 * 1000;
+  let threw = false;
+  try { await runDailySweep(sweepOpts(failing, { traveler_pain: [item(99)], gov_policy: [], web_app: [], industry: [] }, () => t)); } catch (e) { threw = true; }
+  const indexed = JSON.parse(st.m.get("radar:history"));
+  check(threw && indexed.length === 60 && indexed.every((h) => st.m.has(sweepKey(h.id))), "an index write that fails deletes no sweep the index still lists");
+}
+
+// ---- the seen list keeps what keeps coming back
+{
+  const ids = Array.from({ length: 10 }, (_, i) => "c:" + i);
+  const kept = trimSeen(new Set(ids), new Set(["c:0", "c:new"]), 5);
+  check(kept.length === 5 && kept.includes("c:0") && kept.includes("c:new") && kept[kept.length - 1] === "c:new" && !kept.includes("c:5"),
+    "trimSeen: an old id seen again moves to the end and survives the trim");
 }
 
 // ---- parser

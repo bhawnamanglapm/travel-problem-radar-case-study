@@ -101,10 +101,7 @@ const ALLOWED_KEY = /^radar:(history|sweep:\d{10,16})$/;
 export function makeDataHandler({ storage, accounts = storage, env = {}, now = Date.now }) {
   return async function data(req, res) {
     const paywall = env.BOARD_PAYWALL === "1";
-    const reply = (code, body) => {
-      sendJson(res, code, body);
-      if (paywall) res.setHeader("cache-control", "private, no-store");
-    };
+    const reply = (code, body) => sendJson(res, code, body, paywall ? { "cache-control": "private, no-store" } : {});
     if (req.method !== "GET") return reply(405, { error: "read-only" });
     const key = new URL(req.url, "http://x").searchParams.get("key") || "";
     if (!ALLOWED_KEY.test(key)) return reply(400, { error: "key not allowed" });

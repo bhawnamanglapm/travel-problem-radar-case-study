@@ -24,6 +24,12 @@ const SEV_RANK = { High: 3, Medium: 2, Low: 1 };
 const MAX_SWEEPS = 60;
 const MAX_SEEN = 800;
 
+// The seen ids to keep: this sweep's ids go last, so an item that keeps coming back is never
+// trimmed and shown as new again. The oldest unseen-since ids go first.
+export function trimSeen(seenBefore, idset, max = MAX_SEEN) {
+  return [...[...seenBefore].filter((id) => !idset.has(id)), ...idset].slice(-max);
+}
+
 const slug = (s = "") =>
   s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
 
@@ -194,15 +200,14 @@ export async function runDailySweep({ storage, scan, now = () => Date.now(), min
   if (manual) entry.manual = true;
 
   hist = [...hist, entry];
-  if (hist.length > MAX_SWEEPS) {
-    const drop = hist.slice(0, hist.length - MAX_SWEEPS);
-    hist = hist.slice(hist.length - MAX_SWEEPS);
-    for (const d of drop) { try { await storage.del(sweepKey(d.id)); } catch (e) {} }
-  }
+  const drop = hist.slice(0, Math.max(0, hist.length - MAX_SWEEPS));
+  hist = hist.slice(drop.length);
 
+  // The new sweep and the index first: old files go only once nothing points at them.
   await storage.set(sweepKey(id), JSON.stringify({ at, problems: merged }));
   await storage.set(KEY_INDEX, JSON.stringify(hist));
-  await storage.set(KEY_SEEN, JSON.stringify([...new Set([...seenBefore, ...idset])].slice(-MAX_SEEN)));
+  await storage.set(KEY_SEEN, JSON.stringify(trimSeen(seenBefore, idset)));
+  for (const d of drop) { try { await storage.del(sweepKey(d.id)); } catch (e) {} }
 
   return { status: "saved", id, at, total: entry.total, newCount: entry.newCount, perCat, usage, problems: merged };
 }
