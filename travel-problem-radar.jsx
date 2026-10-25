@@ -259,7 +259,7 @@ async function scanCategory(cat) {
     body: JSON.stringify({
       // The model that worked in Claude's app, which doesn't think unless asked. An answer alone is
       // about 1,000 tokens (DEPLOYMENT.md, Known issues 2), so 1,000 was too tight; this is the server's cap.
-      model: "claude-sonnet-4-6",
+      model: "claude-haiku-5-5",
       max_tokens: 16000,
       messages: [{ role: "user", content: prompt }],
       tools: [{ type: "web_search_20250305", name: "web_search" }],

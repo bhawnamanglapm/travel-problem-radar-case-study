@@ -10,7 +10,7 @@ import { readSession } from "./session.js";
 import { countEvents, effectivePlan, recordEvent, utcDay } from "./subscribers.js";
 import { SLOTS_BY_FREQ, siteSweepsPerDay, slotOf } from "./schedule.js";
 
-const DEFAULT_MODEL = "claude-sonnet-5-5";
+const DEFAULT_MODEL = "claude-haiku-5-5";
 // Manual runs a UTC day (MAX_MANUAL_SWEEPS_PER_DAY; "0" turns them off). Each costs a full sweep,
 // so a leaked CRON_SECRET can't run up the Anthropic bill. Scheduled calls have the 2-hour gap instead.
 export const DEFAULT_MAX_MANUAL_SWEEPS_PER_DAY = 3;

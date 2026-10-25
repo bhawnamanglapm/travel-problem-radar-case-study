@@ -8,7 +8,7 @@ import { CATS } from "../api/_lib/radar.js";
 import { buildReview, callCost, checkLink, main, parseCsv, runSweep, score, summarize, toCsv } from "./compare-models.mjs";
 import { check, finish } from "./test-helpers.mjs";
 
-const SONNET = "claude-sonnet-5-5", HAIKU = "claude-haiku-5-5";
+const SONNET = "claude-haiku-5-5", HAIKU = "claude-haiku-5-5";
 const near = (a, b) => Math.abs(a - b) < 1e-9;
 const item = (n, over = {}) => ({
   title: "Problem " + n, summary: "s", source: "Src", link: "https://example.com/" + n,
