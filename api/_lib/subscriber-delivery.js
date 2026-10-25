@@ -2,17 +2,30 @@
 // in each slot of the number a day they chose (T32), Free gets one roll-up per UTC day. What was sent is
 // remembered in radar:deliveries:<YYYYMMDD>, so a send that is cut off picks up later without
 // sending anyone the same digest twice. Never throws; the result and the log hold counts only.
-import { buildDigestEmail, sendBatch, withSubscriberFooter } from "./email.js";
+import { buildDigestEmail, buildPlanEndingEmail, sendBatch, withSubscriberFooter } from "./email.js";
 import { KEY_INDEX, sweepKey } from "./radar.js";
 import { IPHIT_KEEP_HOURS, KEY_IPHIT_PREFIX, KEY_RZPEVENT_PREFIX, KEY_SUBSCRIBER_COUNT, RZP_EVENT_KEEP_DAYS, managePath, senderOk, siteUrl, utcHour } from "./subscription-handlers.js";
 import { DEFAULT_SWEEPS_PER_DAY, SLOTS_BY_FREQ, previousSlotAt, slotOf, sweepLimits, sweepsPerDayOf } from "./schedule.js";
-import { PENDING_TTL_DAYS, deleteSubscriber, effectivePlan, listSubscribers, normaliseCats, recordEvent, utcDay } from "./subscribers.js";
+import { PENDING_TTL_DAYS, deleteSubscriber, effectivePlan, listSubscribers, normaliseCats, recordEvent, updateSubscriber, utcDay } from "./subscribers.js";
 
 export const KEY_DELIVERIES_PREFIX = "radar:deliveries:";
 const DAY_MS = 24 * 3600 * 1000;
 const KEEP_DELIVERY_DAYS = 7;
 const MAX_ROLLUP_SWEEPS = 12; // 24 h holds at most 5 scheduled sweeps; this leaves room for manual runs
 const SEV_RANK = { High: 3, Medium: 2, Low: 1 };
+export const END_WARNING_DAYS = 7;
+
+// A Pro plan that ends within END_WARNING_DAYS and won't renew (T34): a paid plan cancelled with no renewal set up,
+// a paid plan in its last billing cycle, or an owner-granted Pro with an end date. Not yet warned for this end.
+export function endingSoon(r, t) {
+  if (effectivePlan(r, t) !== "pro" || !r.proUntil) return false;
+  const left = Date.parse(r.proUntil) - t;
+  if (!(left > 0 && left <= END_WARNING_DAYS * DAY_MS) || r.endWarnedFor === r.proUntil) return false;
+  if (r.proSource !== "razorpay") return true;
+  const rzp = r.rzp && typeof r.rzp === "object" ? r.rzp : {};
+  const renewal = rzp.next && rzp.next.status === "authenticated";
+  return (rzp.cancelAtPeriodEnd === true && !renewal) || rzp.remaining === 0;
+}
 
 // Error text for the result and the log: the class name and a short message with anything that
 // looks like an address, an id or a token taken out.
@@ -192,6 +205,30 @@ export async function deliverToSubscribers({ env, storage, fetchFn, now, randomB
         },
       });
       Object.assign(result.free, { sent: r.sent, failed: r.failed, deferred: due.length - r.sent - r.failed });
+      note(r);
+    }
+
+    // 6. Plans ending within a week that won't renew (T34): one email per plan end, remembered as endWarnedFor.
+    const ending = sendable.filter((r) => endingSoon(r, t));
+    result.endWarning = { due: ending.length, sent: 0, failed: 0, deferred: 0 };
+    if (ending.length && halted) {
+      result.endWarning.deferred = ending.length;
+    } else if (ending.length) {
+      const r = await sendBatch(creds, ending.map((rec) => ({
+        to: rec.email,
+        ...withSubscriberFooter(buildPlanEndingEmail({ endsAt: rec.proUntil, manageUrl: site + managePath(rec.id, rec.token), renewable: rec.proSource === "razorpay", siteUrl: site }),
+          { unsubscribeUrl: `${site}/api/unsubscribe?id=${rec.id}&t=${rec.token}`, manageUrl: site + managePath(rec.id, rec.token), plan: "pro" }),
+      })), {
+        fetchFn, shouldStop,
+        onChunk: async ({ sentIndexes }) => {
+          for (const i of sentIndexes) {
+            const rec = ending[i];
+            try { await updateSubscriber(storage, rec.id, (cur) => (cur.proUntil === rec.proUntil ? { ...cur, endWarnedFor: rec.proUntil } : null)); }
+            catch (e) { result.endWarning.saveFailed = true; }
+          }
+        },
+      });
+      Object.assign(result.endWarning, { sent: r.sent, failed: r.failed, deferred: ending.length - r.sent - r.failed });
       note(r);
     }
 

@@ -63,7 +63,7 @@
     <tbody>
       <tr><th scope="row">Price</th>
         <td data-plan="Free"><span class="price">₹0</span>No card needed.</td>
-        <td data-plan="Pro"><span class="price">{{PRO_PRICE}}</span> The full price, {{PRO_GST}}. Renews automatically every month until you cancel.</td></tr>
+        <td data-plan="Pro"><span class="price">{{PRO_PRICE}}</span> The full price, {{PRO_GST}}. Renews automatically at the end of each billing period until you cancel.</td></tr>
       <tr><th scope="row">Email</th>
         <td data-plan="Free">One a day, after the first sweep of the UTC day (about 05:47 IST): how many findings in each category in the last 24 hours, and their headlines.</td>
         <td data-plan="Pro">1 to 5 a day, as many as you choose on your account page (2 unless you change it). Each has everything found since the one before.</td></tr>
@@ -78,7 +78,7 @@
         <td data-plan="Pro">
           <!-- when:free-test --><a class="btn main" id="getpro" href="../signup/?pro=1">Ask for Pro</a><!-- /when -->
           <template data-when="paid"><a class="btn main" id="getpro" href="../signup/?pro=1">Get Pro</a>
-          <p class="renews">{{PRO_PRICE}}, {{PRO_GST}}. Renews automatically every month until you cancel.</p></template>
+          <p class="renews">{{PRO_PRICE}}, {{PRO_GST}}. Renews automatically at the end of each billing period until you cancel.</p></template>
         </td></tr>
     </tbody>
   </table>
@@ -90,9 +90,10 @@
   <!-- /when -->
   <ul>
     <li>You pay on your account page, after confirming your email. Payments are handled by Razorpay.</li>
-    <li>Pro renews automatically every month until you cancel. You approve the first payment; later monthly payments are taken under that approval, and before each one you&rsquo;re notified at least 24 hours ahead, as the RBI&rsquo;s e-mandate rules require (for cards, by your bank).</li>
+    <li>On your account page you choose which categories you get, how many emails a day, and how long each billing period is ({{PRO_PERIODS}}); the price depends on all three, and you see it before you pay.</li>
+    <li>Pro renews automatically at the end of each billing period until you cancel. You approve the first payment; later payments are taken under that approval, and before each one you&rsquo;re notified at least 24 hours ahead, as the RBI&rsquo;s e-mandate rules require (for cards, by your bank).</li>
     <li>Pro starts a minute or two after you pay, and your account page shows the next renewal date.</li>
-    <li>Cancel any time on your account page: two clicks, no reason asked. Pro stays on until the end of the month you&rsquo;ve paid for, then the account is Free.</li>
+    <li>Cancel any time on your account page: two clicks, no reason asked. Pro stays on until the end of the billing period you&rsquo;ve paid for, then the account is Free.</li>
     <li>If a renewal payment fails, Pro stays on while Razorpay tries again. If it stops trying, the account goes back to Free and nothing more is charged.</li>
   </ul>
 

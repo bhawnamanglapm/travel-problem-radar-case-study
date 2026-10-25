@@ -15,7 +15,7 @@
 
 | ID | Item | Who | Status | Blocks | Links |
 |---|---|---|---|---|---|
-| LR-01 | Sweeps run again and save all four categories | Owner: a key with credit in Vercel Production | **Open**: failing since 2026-10-23 15:09 UTC | Go-live: there is nothing new to sell | RM-01, I-01 |
+| LR-01 | Sweeps run again and save all four categories | Owner: a key with credit in Vercel Production | **Done** (2026-10-25): a manual sweep at 17:18 UTC saved all four categories, 18 items. Failing from 2026-10-23 15:09 UTC until then | Go-live: there is nothing new to sell | RM-01, I-01 |
 | LR-02 | The failure notice records Anthropic's reason, not just `http 400` | Dev | **Done** (2026-10-24, PR #79) | Nothing; it speeds up LR-01 | RM-02, I-02 |
 | LR-03 | 20 or more live items scored with the draft rubric | Owner | Open | Go-live, **if** the owner keeps pricing.md's rule not to charge first | RM-13, R-01, KPI-01 to KPI-05 |
 | LR-04 | Production checks still open: emailed sign-in link, a Pro email after choosing categories, Gmail's one-click unsubscribe | Owner | Open | Nothing hard; each is a path a paying member uses | RM-10, RM-11, RM-12 |
@@ -28,7 +28,7 @@
 | LR-06 | T22 built: Pro expiry with a grace period, unsubscribing on paid Pro, key safety | Dev | To do | LR-07 | RM-06, [T22](../../docs/subscriptions/tasks/T22-pro-lifecycle-and-go-live.md) |
 | LR-07 | Test-mode run on a Preview: every row of T27's table passes, with the date in the pull request | Owner and dev | To do | Go-live | RM-07 |
 | LR-08 | Razorpay live activation, which includes a review of the website | Owner | To do | LR-09, LR-10 | RM-03, D-05 |
-| LR-09 | A live Razorpay plan at ₹299, in `RAZORPAY_PLAN_ID` on Production; `check-plan.mjs` matches with the live keys | Owner | To do | Merging `paid: true` | T27 go-live steps 2–3 |
+| LR-09 | Live ₹1 Razorpay plans, one per billing period, made by `check-plan.mjs --create` with the live keys and set as `RAZORPAY_PLANS` on Production; `plan.json`'s `pricing` set to the real prices (₹1 while testing, T33) | Owner | To do | Merging `paid: true` | T27 go-live steps 2–3 |
 | LR-10 | The live webhook Enabled, with a new `RAZORPAY_WEBHOOK_SECRET` on Production only | Owner | To do | Go-live: without it a paid account stays Free | R-06 |
 
 ### Legal and tax

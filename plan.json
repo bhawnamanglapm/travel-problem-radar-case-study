@@ -1,11 +1,14 @@
 {
   "paid": false,
   "currency": "INR",
-  "monthly": 299,
-  "yearly": null,
+  "pricing": {
+    "byCategories": { "1": 1, "2": 1, "3": 1, "4": 1 },
+    "perExtraEmail": 0,
+    "periods": { "1": 1, "3": 1, "6": 1, "12": 1 }
+  },
   "gst": "no GST charged (we aren’t registered for GST)",
   "trialDays": 0,
-  "refund": "If Pro isn’t for you, email us within 7 days of your first payment and we’ll refund it in full, no reason asked. After that, a month that has started isn’t refunded; cancel any time and you won’t be charged again. A charge made by mistake (charged twice, or charged after you cancelled) is always refunded in full.",
+  "refund": "If Pro isn’t for you, email us within 7 days of your first payment and we’ll refund it in full, no reason asked. After that, a billing period that has started isn’t refunded; cancel any time and you won’t be charged again. A charge made by mistake (charged twice, or charged after you cancelled) is always refunded in full.",
   "refundDays": 14,
   "methods": ["cards", "UPI AutoPay"],
   "contact": "pehchanthetraveller19@gmail.com"

@@ -154,6 +154,12 @@ the first complete figure. The Anthropic Console's usage page has the real total
 tokens and 5 searches, about **$0.21 a sweep**. Each category took 7–10 seconds. At five scheduled sweeps a day that
 is about **$1.05 a day, or roughly $32 a month**, plus $0.21 for each manual run.
 
+**First full production sweep on Haiku (25 Oct 2026, manual, `claude-haiku-5-5`):** all four categories saved, 18
+items; 101,309 input and 9,306 output tokens, 10 searches, 90 pages, about 20 seconds. At the prices in
+`scripts/compare-models.mjs` ($0.10 input / $0.50 output per million tokens, $10 per 1,000 searches; not rechecked
+against Anthropic's price page) that is about **$0.12**, most of it the searches. Each sweep's tokens, searches and
+pages per category are in its LLM log ([Reading the LLM logs](#reading-the-llm-logs)).
+
 **Set a monthly spend limit in the Anthropic Console.** That is the real cost cap. A limit around $50 a month leaves
 room above that figure; adjust it once real usage is known. When the limit is reached the API refuses the calls:
 nothing is saved, the live page keeps showing the last sweep, and Slack (if set up) gets a failure notice.
@@ -207,7 +213,7 @@ Open **Settings → Environment Variables** and add:
 |---|---|---|---|
 | `CRON_SECRET` | A long random string (see below) | **Production only** | Yes |
 | `ANTHROPIC_API_KEY` | Your Anthropic API key | **Production only** | Yes |
-| `RADAR_MODEL` | A Claude model ID, for example `claude-sonnet-4-6` | Production | No. Defaults to `claude-sonnet-5-5`; see [Known issues](#known-issues-to-fix-before-or-after-the-first-sweep) |
+| `RADAR_MODEL` | A Claude model ID, for example `claude-sonnet-4-6` | Production | No. Defaults to `claude-haiku-5-5`; see [Known issues](#known-issues-to-fix-before-or-after-the-first-sweep) |
 | `SLACK_WEBHOOK_URL` | A Slack incoming-webhook URL | **Production only** | No. Posts each sweep to Slack; see [Posting to Slack](#posting-to-slack-optional) |
 | `RESEND_API_KEY` | A Resend API key with sending access | **Production only** | No. With `EMAIL_TO`, emails each sweep; see [Sending email](#sending-email-optional) |
 | `EMAIL_TO` | The email address your Resend account was created with | **Production only** | Only with `RESEND_API_KEY` |
@@ -221,7 +227,7 @@ Open **Settings → Environment Variables** and add:
 | `MAX_MANUAL_SWEEPS_PER_DAY` | A whole number | **Production only** | No. Defaults to 3 manual sweeps a UTC day (5.5); `0` stops them. Scheduled sweeps aren't limited by it |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | The OAuth client from Google Cloud (see [Google sign-in](#google-sign-in-optional)) | **Production only**, the secret marked Sensitive | No. Both, with `SESSION_SECRET`, show "Continue with Google" |
 | `BOARD_PAYWALL` | `1` | **Production only**, at go-live | No. Locks the live board to signed-in Pro accounts; see [The locked board](#the-locked-board-t17). Leave it unset until then |
-| `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `RAZORPAY_PLAN_ID`, `RAZORPAY_TOTAL_COUNT` | Razorpay test-mode keys, a webhook secret, a plan id and the number of billing cycles (see [Paid Pro checkout](#paid-pro-checkout-t20)) | **Preview only** while testing, the two secrets marked Sensitive. Never test keys on Production; live keys go there at T22 | No. All five turn on **Upgrade to Pro** on `/manage/`; with any of them unset the page keeps Request Pro |
+| `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `RAZORPAY_PLANS`, `RAZORPAY_TOTAL_COUNT` | Razorpay test-mode keys, a webhook secret, the ₹1 plan for each billing period as JSON (printed by `check-plan.mjs --create`) and how many months a subscription runs (see [Paid Pro checkout](#paid-pro-checkout-t20)) | **Preview only** while testing, the two secrets marked Sensitive. Never test keys on Production; live keys go there at T22 | No. All five turn on **Upgrade to Pro** on `/manage/`; with any of them unset the page keeps Request Pro |
 | `RESEND_WEBHOOK_SECRET` | The signing secret (`whsec_…`) of the Resend webhook | **Production only** | No. Turns on `/api/resend-webhook`; see [Subscriber email](#subscriber-email-optional) |
 | `SITE_URL` | `https://` plus your production domain, no trailing slash | **Production only** | No. Defaults to the Vercel production domain |
 | `LEGAL_NAME`, `LEGAL_ADDRESS`, `LEGAL_PHONE` | The name, postal address and phone shown on the policy pages | Production and Preview | Yes for `LEGAL_NAME`: the build ships `legal/privacy` (since 2026-10-22) and fails without it. The address and phone fill the other policy pages once they ship |
@@ -286,8 +292,9 @@ Vercel's Hobby plan runs a cron job at most once a day, so the 5-hour schedule r
 `.github/workflows/sweep.yml` calls `/api/sweep` with the same secret at **00:17, 05:17, 10:17, 15:17 and 20:17 UTC**
 (05:47, 10:47, 15:47, 20:47 and 01:47 IST). The gap over midnight is 4 hours, because 24 isn't divisible by 5.
 
-Vercel's daily cron stays as a backstop. On a normal day it fires within 2 hours of the 00:17 run, so it answers
-`skipped` and costs nothing (5.5). If the 00:17 run was missed or failed, the backstop sweeps instead.
+Vercel's daily cron stays as a backstop. It fires at 01:30 UTC, in slot 00, and each slot sweeps once (5.5): if
+the 00:17 run already swept, the backstop answers `skipped` and costs nothing; if that run was missed, the backstop
+sweeps instead, and a late GitHub run for slot 00 is then skipped.
 
 1. On GitHub, open the repository's **Settings → Secrets and variables → Actions**.
 2. Choose **New repository secret**. Name: `CRON_SECRET`. Value: the same value as `CRON_SECRET` in Vercel.
@@ -301,7 +308,9 @@ What to expect:
 
 - **A failed sweep fails the job.** A `401`, `500` or `502` answer marks the run failed (red X). GitHub notifies the
   person who last edited the `cron` line in the workflow file. A `skipped` answer is a `200` and shows as passed.
-- **Runs can start late.** GitHub may delay scheduled runs at busy times. The 2-hour rule (5.5) leaves room for that.
+- **Runs can start late.** GitHub started runs 2 h 15 m to 4 h 35 m late on 24 and 25 Oct 2026. Each cron line sends
+  the slot it was due for (`X-Sweep-Slot`), so a late run still sweeps as its own slot, up to 12 hours late (T35).
+  Every reply from a scheduled call carries `slotAt` and `lateMinutes`, to watch the delay.
 - **It stops after 60 quiet days.** In a public repository, GitHub turns scheduled workflows off after 60 days with no
   repository activity. See [Keeping the GitHub schedule on](#keeping-the-github-schedule-on).
 - **The secret stays secret.** GitHub masks it in logs, and the job has no access to the repository
@@ -353,8 +362,9 @@ automatically after every production deploy, call the same URL from a GitHub Act
 | HTTP | Body | Meaning | What to do |
 |---|---|---|---|
 | 200 | `{"model":…,"trigger":"manual","status":"saved","id":…,"total":N,"newCount":N,"perCat":{…},"usage":{…}}` | Saved. `perCat` shows items per category, `usage` the real token and search counts | Open `/live/` |
-| 200 | `{"trigger":"scheduled","status":"skipped","reason":"last scheduled sweep … is under 2 h old"}` | A scheduled call came within 2 hours of the last scheduled sweep, for example Vercel's backstop after the 00:17 run. Manual calls never get this | Nothing; this stops duplicate scheduled calls |
-| 502 | `{"status":"empty","perCat":{…}}` | All four categories failed; nothing was saved. A scheduled one still holds back the next scheduled call for 2 hours | Read `perCat` and see [Troubleshooting](#10-troubleshooting) |
+| 200 | `{"trigger":"scheduled","status":"skipped","reason":"slot … already swept"}` | A scheduled sweep for this slot already started, for example Vercel's backstop after the 00:17 run. Manual calls never get this | Nothing; this stops duplicate scheduled calls |
+| 200 | `{"trigger":"scheduled","status":"skipped","reason":"slot 05 not needed: 2 a day"}` | No Pro member's choice needs this slot ([Sweeps a day](#sweeps-a-day-t32)) | Nothing |
+| 502 | `{"status":"empty","perCat":{…}}` | All four categories failed; nothing was saved. A scheduled one still uses up its slot, so it isn't retried until the next needed slot | Read `perCat` and see [Troubleshooting](#10-troubleshooting) |
 | 500 | `{"error":"ANTHROPIC_API_KEY is not set; …"}` | Key missing in this deployment | Add it (4.3) and redeploy (4.5) |
 | 500 | `{"error":"sweep failed: …"}` | Storage or another unexpected error | Read the message; usually storage (see Troubleshooting) |
 | 401 | `{"error":"unauthorized"}` | Secret missing or wrong, or `CRON_SECRET` not set in this deployment | Check the value; redeploy after changing it |
@@ -395,18 +405,18 @@ The server tells the two kinds of call apart by their headers. Vercel's timer se
 and an `x-vercel-cron-schedule` header. The GitHub Actions schedule sends `X-Sweep-Trigger: scheduled`, and its
 **Run workflow** button sends `X-Sweep-Trigger: manual`.
 
-| Call | 2-hour rule | Counts toward the 2 hours |
+| Call | One sweep per slot (T35) | Uses up the slot |
 |---|---|---|
-| **Scheduled:** the GitHub Actions schedule or Vercel's timer | Skipped if a scheduled sweep started less than 2 hours ago, so a duplicate delivery, or the backstop firing soon after the 00:17 run, costs nothing. A scheduled sweep that saved nothing (`502 empty`) counts too, since it may still be billed | Yes |
-| **Manual:** any other call with the secret, such as the `curl` in 5.1 or **Run workflow** | Never skipped: it always sweeps | No, so it never cancels the next scheduled sweep |
+| **Scheduled:** the GitHub Actions schedule or Vercel's timer | Skipped if a scheduled sweep for the same slot already started, so a duplicate delivery, or the backstop after the 00:17 run, costs nothing. The slot is the one in `X-Sweep-Slot` (GitHub) if it began under 12 hours ago, else the slot of the time the call arrives (00 for the backstop). A scheduled sweep that saved nothing (`502 empty`) uses its slot too, since it may still be billed | Yes |
+| **Manual:** any other call with the secret, such as the `curl` in 5.1 or **Run workflow** | Never skipped: it always sweeps | No, so it never cancels a scheduled sweep |
 
 Manual runs are marked `"manual": true` in the history. Keep in mind:
 
 - **Each manual run costs a full sweep, so there are at most 3 a UTC day.** A call past that answers `429` and runs
   nothing. Set `MAX_MANUAL_SWEEPS_PER_DAY` to change the number; `0` stops manual runs. A run counts when it starts,
   so one that fails still uses one up. Two calls at the same moment can both get through, so treat the limit as
-  approximate. With a leaked secret, the most it allows is about 15 sweeps a day (12 scheduled-looking calls 2
-  hours apart, plus the manual ones), so keep the Anthropic spend limit in place as the final cap.
+  approximate. With a leaked secret, the most it allows is 8 sweeps a day (one per slot, 5, plus the 3
+  manual ones), so keep the Anthropic spend limit in place as the final cap.
 - **A manual run uses up New flags.** Items it finds are no longer flagged New in the next scheduled digest.
 - **Vercel's own run options may count as scheduled.** `vercel crons run` and the dashboard's run option may send
   the timer's headers. If one answers `skipped`, use the `curl` command in 5.1 instead.
@@ -480,9 +490,10 @@ modules. `@vercel/blob` is the only runtime dependency.
 
 | Setting | What it does |
 |---|---|
-| `cron: "17 */5 * * *"` | Runs at 00:17, 05:17, 10:17, 15:17 and 20:17 UTC |
+| Five `cron` lines (`"17 0 * * *"` … `"17 20 * * *"`) | Run at 00:17, 05:17, 10:17, 15:17 and 20:17 UTC, one line per slot so each run knows its slot |
 | `workflow_dispatch` | Adds **Run workflow** to the Actions tab. Those runs are manual |
-| `X-Sweep-Trigger` header | `scheduled` for the timer, `manual` for **Run workflow**. The server uses it for the 2-hour rule (5.5) |
+| `X-Sweep-Trigger` header | `scheduled` for the timer, `manual` for **Run workflow**. The server uses it for the one-sweep-per-slot rule (5.5) |
+| `X-Sweep-Slot` header | The hour of the cron line that fired (`github.event.schedule`), so a run that starts late still sweeps as the slot it was due for (T35). Empty on manual runs |
 | `curl --fail-with-body` | A `401`, `500` or `502` answer fails the job and prints the answer |
 | `--max-time 320`, `timeout-minutes: 7` | Waits out the function's 300-second limit |
 | `permissions: {}` | The job gets no access to the repository |
@@ -506,8 +517,7 @@ It isn't secret and isn't served (the build reads it from the repository root).
 |---|---|---|
 | `paid` | `false` while Pro is free and switched on by hand; `true` at go-live (T27) | Switches the blocks below |
 | `currency` | `"INR"`, the only one the pages are written for | |
-| `monthly` | Whole rupees, or `null` until the owner sets the price | `{{PRO_PRICE}}` ("₹299 a month", Indian digit grouping), `{{PRO_PRICE_SHORT}}` ("₹299") |
-| `yearly` | Must stay `null`: no yearly plan is built (T23 input 8) | |
+| `pricing` | Pro's price (T33), or `null` until set: `byCategories` (whole rupees a month for 1, 2, 3 and 4 categories), `perExtraEmail` (whole rupees a month for each email a day above one, 0 or more) and `periods` (the billing periods on sale, 1, 3, 6 or 12 months, each with how many months it charges, so a longer period can cost less a month). A plan's price is `(byCategories[n] + perExtraEmail × (emails a day − 1)) × periods[months]`, rounded to whole rupees. **While testing, every value is ₹1** | `{{PRO_PRICE}}` ("₹1 for 1, 3, 6 or 12 months"; with real prices "from ₹… a month, ₹… for 3 months, …", Indian digit grouping), `{{PRO_PRICE_SHORT}}` (the lowest price), `{{PRO_PERIODS}}` ("1, 3, 6 or 12 months") |
 | `gst` | The exact line, for example "GST included" | `{{PRO_GST}}` |
 | `trialDays` | `0` for no trial, or the days | `{{PRO_TRIAL}}` ("No free trial." or "A 7-day free trial.") |
 | `refund` | The one or two sentences of the refund rule | `{{PRO_REFUND}}` |
@@ -523,19 +533,27 @@ each (T23 A4).
 `true` it does the opposite. A `<template>` never renders, so GitHub Pages, which serves `index.html` as it is,
 still shows today's text.
 
-**What fails the build.** A shipped page using a slot whose value is `null`; `paid: true` with no `monthly`; a
-`yearly` value; anything malformed. `npm run check` catches the same things before a merge.
+**What fails the build.** A shipped page using a slot whose value is `null`; `paid: true` with no `pricing`; the old
+`monthly` or `yearly` keys; anything malformed. `npm run check` catches the same things before a merge.
 
-**Checking the price against Razorpay.** Before go-live and after any price change, run this in your own shell. It
-reads the Plan with `GET /v1/plans/:id` and compares amount, currency and period with `plan.json`. It prints no key.
+**How Razorpay charges a price it has no plan for (T33).** A Pro plan is any mix of categories, emails a day and
+billing period, so there are up to 80 prices. Instead of one Razorpay plan per price, there is one **₹1 plan per
+billing period**, and each subscription's `quantity` is the price in rupees: 3 months at ₹825 is the 3-month plan
+× 825. A new price in `plan.json` needs no new Razorpay plan. `RAZORPAY_PLANS` maps months to the plan ids:
+`{"1":"plan_…","3":"plan_…","6":"plan_…","12":"plan_…"}`. A period with no plan there isn't offered for payment.
+
+**Making and checking the plans.** Run this in your own shell, with test keys for the staging Preview and live keys
+for Production. `--create` makes the ₹1 plan for every period that has none and prints the `RAZORPAY_PLANS` value
+to set in Vercel; without it the script only checks each plan is ₹1, INR, and repeats every period. It prints no key.
 
 ```bash
-RAZORPAY_KEY_ID=… RAZORPAY_KEY_SECRET=… RAZORPAY_PLAN_ID=plan_… node scripts/check-plan.mjs
+RAZORPAY_KEY_ID=… RAZORPAY_KEY_SECRET=… node scripts/check-plan.mjs --create
+RAZORPAY_KEY_ID=… RAZORPAY_KEY_SECRET=… RAZORPAY_PLANS='{"1":"plan_…",…}' node scripts/check-plan.mjs
 ```
 
-Exit `0` is a match, `1` a difference or a failed call, `2` something not set up. Razorpay's docs don't state the
-amount's unit on that page; it's taken as paise like their other APIs. **Verify** with the first test-mode run: a
-wrong unit shows as amounts 100 times apart.
+Exit `0` is a match, `1` a difference or a failed call, `2` something not set up. Amounts are in paise (₹1 is 100).
+**Verify** on the first test run: that Razorpay accepts a monthly plan with interval 3 and 6 (12 months is made as
+yearly, interval 1), and that Checkout shows quantity × ₹1 as the amount.
 
 ### Environment variables
 
@@ -543,7 +561,7 @@ wrong unit shows as amounts 100 times apart.
 |---|---|---|---|
 | `CRON_SECRET` | You | `/api/sweep` | Vercel sends it as `Authorization: Bearer <value>` on cron calls; the GitHub workflow sends the same value from its repository secret. If it is unset, `/api/sweep` always answers 401 |
 | `ANTHROPIC_API_KEY` | You | `/api/sweep` | Sent to the Anthropic API in a header; never returned in a response |
-| `RADAR_MODEL` | You (optional) | `/api/sweep` | Claude model ID. Default `claude-sonnet-5-5` (`api/_lib/handlers.js`). Must support `effort` (Claude 4.6 or later) |
+| `RADAR_MODEL` | You (optional) | `/api/sweep` | Claude model ID. Default `claude-haiku-5-5` (`api/_lib/handlers.js`). Must support `effort` (Claude 4.6 or later) |
 | `SLACK_WEBHOOK_URL` | You (optional) | `/api/sweep` | Slack incoming webhook. Treat it as a secret: anyone who has it can post to the channel |
 | `RESEND_API_KEY` | You (optional) | `/api/sweep`, the subscriber endpoints | Resend API key, sent in a header; never returned in a response. Owner email is sent only when it and `EMAIL_TO` are set |
 | `EMAIL_TO` | You (optional) | `/api/sweep`, `/api/confirm`, `/api/account` | Recipients, separated by commas, at most 50. With the default sender, only the Resend account's own address works. Also gets the "Pro request" email. Kept out of the repository and out of every reply |
@@ -558,8 +576,9 @@ wrong unit shows as amounts 100 times apart.
 | `MAX_SIGNINS_PER_DAY` | You (optional) | `/api/session` | Sign-in emails per UTC day, across all addresses. Default 50; `0` stops them. Once reached, every sign-in request is told so ("Sign-in emails have hit today's limit"), whatever the address. Separate from `MAX_CONFIRMS_PER_DAY`, so a burst of sign-ups can't stop subscribers signing in |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | You (optional) | `/api/session` | The Google OAuth client. With both and `SESSION_SECRET`, the pages show "Continue with Google"; with either unset the button stays hidden and `?action=google` answers `503`. The secret never leaves the server |
 | `BOARD_PAYWALL` | You (at go-live) | `/api/data` | `1` locks the board: not signed in `401`, Free or lapsed Pro `402`, Pro the data, and every reply `private, no-store`. Anything else, or unset, means off: the replies and their public cache header are as before. Needs `SESSION_SECRET`, or nobody can sign in to see it. Read only by a new deployment |
-| `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `RAZORPAY_PLAN_ID` | You (for paid Pro) | `/api/account`; `/api/razorpay-webhook` (the webhook secret only; without it the endpoint answers `503`) | The Razorpay API keys, the webhook's signing secret and the subscription plan. The key id is public: Checkout needs it in the browser. The two secrets never leave the server. Test keys start `rzp_test_`, and test and live are separate in Razorpay, so a test plan id doesn't work with live keys |
-| `RAZORPAY_TOTAL_COUNT` | You (for paid Pro) | `/api/account` | Razorpay's `total_count`: how many billing cycles a subscription runs before it ends. A whole number of 1 or more. Payments count as on only when this and the four above are all set; otherwise `/manage/` shows Request Pro and the payment actions answer `503` |
+| `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | You (for paid Pro) | `/api/account`; `/api/razorpay-webhook` (the webhook secret only; without it the endpoint answers `503`) | The Razorpay API keys and the webhook's signing secret. The key id is public: Checkout needs it in the browser. The two secrets never leave the server. Test keys start `rzp_test_`, and test and live are separate in Razorpay, so test plans don't work with live keys |
+| `RAZORPAY_PLANS` | You (for paid Pro) | `/api/account` | JSON from billing period in months to its ₹1 Razorpay plan, for example `{"1":"plan_…","3":"plan_…"}` (T33). `check-plan.mjs --create` makes the plans and prints it. Only `plan_…` ids for periods in `plan.json` count; a period without one isn't offered for payment. Replaces `RAZORPAY_PLAN_ID` |
+| `RAZORPAY_TOTAL_COUNT` | You (for paid Pro) | `/api/account` | How many **months** a subscription runs before it ends; a whole number of 1 or more. Each subscription gets `total_count` = this ÷ its period, rounded up (12 gives 12 monthly cycles, 4 of 3 months, 2 of 6, 1 of 12). Payments count as on only when this, `RAZORPAY_PLANS` with at least one plan, and the three above are all set; otherwise `/manage/` shows Request Pro and the payment actions answer `503` |
 | `RESEND_WEBHOOK_SECRET` | You (optional) | `/api/resend-webhook` | The Resend webhook's signing secret. If it is unset, the endpoint answers `503` and does nothing |
 | `SITE_URL` | You (optional) | The subscriber endpoints, `/api/sweep` | Base of the links in subscriber emails. If unset, `https://` plus `VERCEL_PROJECT_PRODUCTION_URL`; **on a Preview**, `https://` plus `VERCEL_BRANCH_URL` instead, never the production domain. With neither, subscriber email is off |
 | `LEGAL_NAME`, `LEGAL_ADDRESS`, `LEGAL_PHONE` | You (`LEGAL_NAME` now; the rest once their pages ship) | The build (`scripts/fill-legal.mjs`) | Filled into the `{{LEGAL_…}}` slots of the policy pages at build time, HTML-escaped; a newline in the address becomes a line break. Kept out of the repository so they are not in its history. If `legal/` is built and one is unset, the build fails |
@@ -576,7 +595,7 @@ not a letter or digit with `-`.
 | `radar:history` | `radar/radar-history.json` | Index of saved sweeps (id, time, counts), last 60 | Yes |
 | `radar:sweep:<id>` | `radar/radar-sweep-<id>.json` | One sweep's items | Yes |
 | `radar:seenIds` | `radar/radar-seenIds.json` | Up to 800 item IDs already seen, used for the New flag | No |
-| `radar:lastScheduled` | `radar/radar-lastScheduled.json` | When the last scheduled sweep started, saved or not; the 2-hour rule reads it | No |
+| `radar:lastScheduled` | `radar/radar-lastScheduled.json` | When the last scheduled sweep started, saved or not, and its slot (`{ at, slotAt }`; before T35 just the time); the one-sweep-per-slot rule reads it | No |
 | `radar:llmlog:<id>` | `radar/radar-llmlog-<id>.json` | One sweep's LLM log: each Claude call's request (prompt, model, limits, tools; never the headers or key) and response (thinking, search queries, answer, stop reason, usage), and a summary of input and output tokens, searches, and the pages search found, **as links only** (page contents are encrypted and left out). Written for every sweep that ran: saved, empty, or not saved. `<id>` is the sweep's id. Deleted after 30 days by the day's first sweep. Read with `scripts/llm-logs.mjs` | No |
 | `radar:sub:<id>` | `radar/radar-sub-<id>.json` | One subscriber: address, status, plan, token, dates, and chosen categories (`cats`, Pro only). Since T16 also `signin` (the SHA-256 of an unused sign-in code, its expiry and when it was sent; `null` once used) and, optionally, `sessionVer` (raising it by hand signs that subscriber out on every browser). Since T17, a Pro record whose emails stopped has `emailOff`: `unsubscribed`, `bounced` or `complained`. `<id>` is the SHA-256 of the canonical address (Gmail without dots or `+tags`, and `+tags` dropped for the big providers; see [email-signup.md](docs/subscriptions/email-signup.md#flow)). Records made before 2026-10-22 keep the SHA-256 of the lowercased address | No |
 | `radar:event:<YYYYMMDD>-<time>-<type>-<random>` | `radar/radar-event-….json` | One sign-up, confirmation, sign-in email, unsubscribe, emails-off, account-deleted, Pro, bounce or complaint event: type, time and plan, **no address or id**. Kept until `prune-events` deletes it | No |
@@ -642,7 +661,7 @@ static files, functions and cron definition. Stored sweeps are not touched.
   every call, whichever scheduler made it.
 - **GitHub → Actions → sweep** lists each GitHub run, scheduled or manual. Each job log ends with the JSON answer.
 - Each run logs one line starting with `sweep`, with the model, the per-category result and the API usage, for example:
-  `sweep {"model":"claude-sonnet-5-5","perCat":{"traveler_pain":"5 items",…},"usage":{"input":…,"output":…,"searches":…}}`
+  `sweep {"model":"claude-haiku-5-5","perCat":{"traveler_pain":"5 items",…},"usage":{"input":…,"output":…,"searches":…}}`
 - Hobby keeps runtime logs only for a short time, so check on the day if you are tracking cost or duration.
 - A failed run (`502` or `500`) shows as an error in the logs, and as a failed job on GitHub. Neither retries it;
   the next scheduled run is 5 hours later (4 over midnight).
@@ -668,7 +687,7 @@ After each sweep, the server can post to one Slack channel through an incoming w
 |---|---|
 | Saved | The digest: counts, any failed categories, a link to the live board, then every item by category, with severity, a NEW tag, the title linked to its source, summary, source, region, date and opportunity |
 | Every category failed, or an error stopped the run | A short notice that nothing was saved, with the reason for each category or the error |
-| Skipped (a repeat scheduled call within 2 hours) | Nothing |
+| Skipped (a slot already swept, or not needed) | Nothing |
 
 To turn it on:
 
@@ -1002,14 +1021,26 @@ can sign in. It is set on Production only, so a Preview with the switch on shows
 
 **Off in production**: none of the `RAZORPAY_*` variables are set there, so `/manage/` shows Request Pro as before.
 Payments count as on only when `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`,
-`RAZORPAY_PLAN_ID` and `RAZORPAY_TOTAL_COUNT` are all set (`paymentsReady` in `api/_lib/subscription-handlers.js`).
+`RAZORPAY_PLANS` (at least one plan) and `RAZORPAY_TOTAL_COUNT` are all set (`paymentsReady` in
+`api/_lib/subscription-handlers.js`).
 No new function: the three actions below are on `/api/account`, so the site still has 8.
 
 With payments on:
 
-- **A confirmed Free account** sees **Upgrade to Pro** on `/manage/`, from an email link or signed in. The click loads
-  Razorpay's `https://checkout.razorpay.com/v1/checkout.js` (only then), and `action: "checkout"` creates a Razorpay
-  subscription for the plan. Checkout opens; Razorpay shows the price. No email address is sent to Checkout.
+- **A confirmed Free account** sees **Upgrade to Pro** on `/manage/`, from an email link or signed in. It opens the
+  plan card (T33): categories (all four, just one, or several), emails a day (1 to the cap) and the billing period,
+  each period showing its price for that choice, worked out from `plan.json`'s table, which `/api/account` sends.
+  **Pay with Razorpay** loads Razorpay's `https://checkout.razorpay.com/v1/checkout.js` (only then), and
+  `action: "checkout"` with `cats`, `sweepsPerDay` and `months` creates a subscription on that period's ₹1 plan
+  with `quantity` = the price, the choice in its notes, and the choice stored as `rzp.choice`. Checkout opens;
+  Razorpay shows the amount. No email address is sent to Checkout.
+- **With payments off**, Free sees **Request Pro**, which opens the same card; **Send my request** stores the choice
+  as `proRequest` with the request, and `grant-pro` applies its categories and emails a day. Asking again with
+  another choice updates it without emailing the owner again.
+- **The first payment** (the webhook's first grant for a subscription) applies `rzp.choice` to the record and
+  stores `paidFor` (`sub`, `catCount`, `perDay`, `months`, `price`). After that the member changes categories and
+  emails a day with **Save changes** (`action: "set-plan"`), up to anything that costs no more than what they paid
+  for over the same period; more is `403 change_plan`. `set-cats` and `set-freq` follow the same rule.
 - **After paying**, the page sends Checkout's result to `action: "checkout-return"`. The signature is checked with the
   key secret against the subscription id we saved, and the record's `rzp.status` becomes `authenticated`. The page
   says "Payment received; Pro starts in a minute or two". **It does not grant Pro**: only Razorpay's signed webhook
@@ -1023,12 +1054,23 @@ With payments on:
 | `503 payments_off` | Any of the three actions while payments are off |
 | `409 not_confirmed`, `already_pro`, `payment_pending` | Checkout for a pending record, a Pro, or one that has paid and is waiting for the webhook |
 | `409 not_paid_pro` | Cancel on anything but a Razorpay Pro |
+| `409 already_renewed` | Checkout from a cancelled Pro that has already approved a renewal (T34) |
 | `400 bad_signature` | Checkout-return with a wrong signature, a different subscription id, or no open checkout |
 | `502 payment_provider` | Razorpay refused or didn't answer. The log line holds the error code only |
 
-A second Upgrade click within an hour reopens the same subscription instead of making another. Each new one writes
+A second Pay click within an hour, for the same choice, reopens the same subscription instead of making another; a
+different choice gets its own. Each new one writes
 `radar:rzpsub:<subscription id>` → `{ id }`, which the webhook uses to find the record, and a
 `checkoutstarted` event.
+
+**Renewing (T34).** A paid Pro who has cancelled, while the paid period still runs, sees **Keep renewing**. It opens
+the plan card; Pay with Razorpay creates a new subscription that starts at `proUntil` (`start_at`), kept as
+`rzp.next` until its first charge, which makes it the plan. If the old plan's `cancelled` event arrives first, Pro
+holds for 6 hours (`RENEW_GRACE_HOURS`). Cancelling again cancels the renewal at once. A Free member who paid
+before sees **Renew Pro** with their last plan filled in (`lastPlan`). A Pro that won't renew (cancelled with no
+renewal, its last billing cycle, or owner-granted with an end date) gets one email 7 days before it ends, from
+the sweep's delivery step; `endWarning` in the sweep reply counts them, and `endWarnedFor` on the record stops a
+repeat. **Verify** on the first test run that Razorpay accepts `start_at` from Checkout and charges then.
 
 **Known gap:** an account that paid but whose webhook never arrives stays `authenticated` and gets
 `payment_pending` on every Upgrade. See "Paid but still Free" below; there is no admin command for it yet.
@@ -1036,11 +1078,11 @@ A second Upgrade click within an hour reopens the same subscription instead of m
 **Setting up a test (owner).** Test and live mode are separate in Razorpay: what you make in test mode doesn't
 appear in live mode, and each has its own keys ([test and live modes][rzp-modes]). So this plan is only for testing.
 
-1. In the Razorpay dashboard, in **Test Mode**: create a monthly plan at any price and note its id; generate a test
-   key pair.
+1. In the Razorpay dashboard, in **Test Mode**, generate a test key pair. Then make the ₹1 plans with
+   `check-plan.mjs --create` (above) and keep the `RAZORPAY_PLANS` value it prints.
 2. Make a random webhook secret and keep it in your password manager. T21 uses the same one when the webhook is
    added in Razorpay; T20 only needs it set.
-3. Choose `RAZORPAY_TOTAL_COUNT` (how many months a subscription runs).
+3. Choose `RAZORPAY_TOTAL_COUNT` (how many months a subscription runs, for example 12).
 4. Add the five variables to **Preview only**, branch `staging` (the key secret and webhook secret marked
    Sensitive), never to Production. The whole Preview setup is in the next section.
 
@@ -1220,12 +1262,13 @@ subject "Travel Problem Radar: Pro request". It names nobody, so run `list --pla
 then `grant-pro <email> --yes`. A repeat click sends nothing more, and a failed owner email still records the request.
 The subscriber is not emailed when Pro is switched on: their next email after a scheduled sweep is the Pro update.
 
-**Pro categories (T14).** On `/manage/`, a Pro subscriber ticks the categories they want and presses Save. The page
-posts `action: "set-cats"` to `/api/account`, and the choice is stored on their record as `cats`: `null` means all
+**Pro categories (T14, T33).** On `/manage/`, a Pro subscriber picks all four, just one, or several categories on the
+plan card, with their emails a day, and presses Save changes. The page posts `action: "set-plan"` to `/api/account`
+(`set-cats` still works on its own), and the choice is stored on their record as `cats`: `null` means all
 four, otherwise a list of category keys. Their Pro emails then hold only those categories, with the counts in the
 subject and heading worked out for them. If none of their categories has anything in a sweep, they get no email for
-it (`pro.emptyForCats` in the sweep reply). Free subscribers see the boxes disabled and always get every category in
-the daily digest. If Pro ends, the choice stays stored but is ignored, so it applies again if Pro is granted again.
+it (`pro.emptyForCats` in the sweep reply). Free subscribers see the plan card only when they ask for or buy Pro,
+and always get every category in the daily digest. If Pro ends, the choice stays stored but is ignored, so it applies again if Pro is granted again.
 `show <email>` prints it.
 
 ### Sweeps a day (T32)
@@ -1291,8 +1334,8 @@ history, and every item is flagged New again. This cannot be undone.
 ### Duplicate, late or missed scheduled calls
 
 Both schedulers are best effort. Vercel can miss a run or deliver it twice. GitHub can start a run late, or drop it at
-very busy times. A scheduled call within 2 hours of the last scheduled sweep answers `skipped`, so duplicates cost
-nothing. A missed run is made up at the next needed slot ([Sweeps a day](#sweeps-a-day-t32)): at most about 5 hours later at 5 a day, up to a day at 1 a day. Around midnight, Vercel's backstop
+very busy times. A second scheduled call for a slot that already swept answers `skipped`, so duplicates cost
+nothing, and a late GitHub run still counts as the slot it was due for (T35). A missed run is made up at the next needed slot ([Sweeps a day](#sweeps-a-day-t32)): at most about 5 hours later at 5 a day, up to a day at 1 a day. Around midnight, Vercel's backstop
 covers a missed 00:17 run.
 
 ---

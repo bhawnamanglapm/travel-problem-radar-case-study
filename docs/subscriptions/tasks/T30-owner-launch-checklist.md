@@ -23,7 +23,7 @@ is finished.
 
 | # | Step | Links | Status |
 |---|---|---|---|
-| 1 | Add Anthropic credit in the same organization as the key; re-run the sweep; all 4 categories saved | RM-01, LR-01, I-01 | todo |
+| 1 | Add Anthropic credit in the same organization as the key; re-run the sweep; all 4 categories saved | RM-01, LR-01, I-01 | **Done** 2026-10-25: new key in Vercel, deployed 17:00 UTC; a manual sweep at 17:18 UTC (run 40215787749) on `claude-haiku-5-5` saved all four categories saved (5, 4, 4 and 5 items, 18 in all); 101,309 input and 9,306 output tokens, 10 searches, 90 pages; about 20 seconds |
 | 2 | An Anthropic monthly spend limit and alert | LR-17 | todo |
 | 3 | Ask an adviser for the liability clause, then ship the terms page. **Start early**: Razorpay's website review comes after it | RM-04, LR-11 | todo |
 | 4 | Submit Razorpay live activation with the site's URLs, once terms is live (**verify** Razorpay's required pages) | RM-03, LR-08 | todo |

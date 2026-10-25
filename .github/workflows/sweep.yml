@@ -4,10 +4,16 @@ name: sweep
 # midnight, because 24 isn't divisible by 5). Vercel's Hobby plan only allows a daily cron, so
 # this calls the same endpoint with the same secret; the daily Vercel cron stays as a backstop.
 # Minute 17 avoids the top of the hour, when GitHub delays scheduled runs the most.
+# One line per slot, so each run can say which slot it was due for (X-Sweep-Slot, T35): GitHub has started runs
+# up to 4 h 35 m late, and the sweep would otherwise count a late run in the next slot.
 # "Run workflow" on the Actions tab runs a sweep by hand (it counts as a manual run).
 on:
   schedule:
-    - cron: "17 */5 * * *"
+    - cron: "17 0 * * *"
+    - cron: "17 5 * * *"
+    - cron: "17 10 * * *"
+    - cron: "17 15 * * *"
+    - cron: "17 20 * * *"
   workflow_dispatch:
 
 permissions: {}
@@ -21,10 +27,15 @@ jobs:
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           TRIGGER: ${{ github.event_name == 'schedule' && 'scheduled' || 'manual' }}
+          SCHEDULE: ${{ github.event.schedule }}
         run: |
           if [ -z "$CRON_SECRET" ]; then echo "Add CRON_SECRET under Settings > Secrets and variables > Actions"; exit 1; fi
+          # The cron line that fired, e.g. "17 10 * * *": its hour is the slot this run was due for.
+          SLOT=""
+          if [ "$TRIGGER" = "scheduled" ]; then SLOT=$(echo "$SCHEDULE" | awk '{print $2}'); fi
           curl -sS --fail-with-body --max-time 320 \
             -H "Authorization: Bearer $CRON_SECRET" \
             -H "X-Sweep-Trigger: $TRIGGER" \
+            -H "X-Sweep-Slot: $SLOT" \
             https://travel-problem-radar.vercel.app/api/sweep
           echo

@@ -20,6 +20,22 @@ export function slotOf(t) {
   return { hour, at: Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), hour) };
 }
 
+// The slot a scheduled run was due for (T35). GitHub sends it as X-Sweep-Slot, because its runs can start hours
+// late and slotOf(start) would then count a late run in the next slot. Used when it names one of the five slots
+// and that slot began under DUE_SLOT_WINDOW_HOURS before `t`; otherwise the slot of `t`. A forged header can only
+// pick another real slot, which the secret already allows.
+export const SLOT_HOURS = [0, 5, 10, 15, 20];
+export const DUE_SLOT_WINDOW_HOURS = 12;
+export function dueSlot(t, header) {
+  const own = slotOf(t);
+  const raw = String(header ?? "").trim();
+  const hour = Number(raw);
+  if (!/^\d{1,2}$/.test(raw) || !SLOT_HOURS.includes(hour)) return own;
+  let at = own.at - own.hour * HOUR_MS + hour * HOUR_MS;
+  if (at > t) at -= DAY_MS;
+  return t - at < DUE_SLOT_WINDOW_HOURS * HOUR_MS ? { hour, at } : own;
+}
+
 // When the slot before `slot` (a slotOf result) began, among the slots of `perDay`: earlier the
 // same day, or that list's last slot the day before. Undefined when `slot` isn't one of them.
 export function previousSlotAt(perDay, slot) {

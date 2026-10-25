@@ -211,6 +211,32 @@ export function buildAlreadySubscribedEmail({ manageUrl, unsubscribeUrl, siteUrl
   };
 }
 
+// To a Pro member 7 days before a plan that won't renew ends (T34): cancelled, the last billing cycle, or an end date
+// the owner set. `renewable` says whether the manage page can renew it (a paid plan) or the owner must (owner-granted).
+export function buildPlanEndingEmail({ endsAt, manageUrl, renewable = true, siteUrl = "" }) {
+  if (!LINK_OK.test(manageUrl || "")) throw new Error("buildPlanEndingEmail: bad manage link");
+  const day = String(endsAt).slice(0, 10);
+  const subject = `Your Travel Problem Radar Pro ends on ${day}`;
+  const intro = `Your Pro plan ends on ${day} and won't renew. After that your account is Free: one email a day, and no live board.`;
+  const how = renewable
+    ? "To keep Pro, open your manage page and press Keep renewing (or Renew Pro once it has ended). Nothing is charged until this plan ends."
+    : "To keep Pro, reply to this email or use Request Pro on your manage page.";
+  const ignore = "If you meant to stop, there's nothing to do.";
+  return {
+    subject,
+    text: [subject, "", intro, "", how, `Manage subscription: ${manageUrl}`, "", ignore, ...(siteUrl ? ["", siteUrl] : [])].join("\n"),
+    html: [
+      `<div style="${FONT};max-width:640px">`,
+      `<h1 style="font-size:18px;margin:0 0 8px">${esc(subject)}</h1>`,
+      `<p style="margin:0 0 14px">${esc(intro)}</p>`,
+      `<p style="margin:0 0 14px">${esc(how)}</p>`,
+      `<p style="margin:0 0 14px"><a href="${esc(manageUrl)}" style="display:inline-block;padding:10px 18px;background:#1a1a1a;color:#ffffff;text-decoration:none;border-radius:6px">Manage subscription</a></p>`,
+      `<p style="margin:0;font-size:12px;${MUTED}">${esc(ignore)}</p>`,
+      `</div>`,
+    ].join("\n"),
+  };
+}
+
 // To the owner (EMAIL_TO) when a subscriber asks for Pro. It names nobody: the address stays in
 // storage, and the owner looks it up with the admin script.
 export function buildProRequestEmail({ at, source }) {

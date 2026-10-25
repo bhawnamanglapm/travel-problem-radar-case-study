@@ -5,10 +5,15 @@
 | Phase | 3, showing Pro and going live |
 | Who | Owner (accounts, keys, the real payment) and developer (the run, docs) |
 | Size | M |
-| Depends on | T22, T24, T25, T26, T30, T32 |
+| Depends on | T22, T24, T25, T26, T30, T32, T33, T34, T35 |
 | Unblocks | — |
 
 > Moved here from T22 on 2026-10-23, so the go-live waits for the pricing and policy pages as well as the code.
+>
+> **Changed 2026-10-25:** Pro becomes one plan the member builds ([T33](T33-pro-plan-builder.md)), with renewal
+> ([T34](T34-renew-pro.md)). The run below then covers every period and a plan change, `check-plan.mjs` checks every
+> plan, and go-live creates the live plans with T33's script instead of one plan at one price. Update `staging` from
+> `main` first: on 2026-10-25 it was 121 commits behind.
 
 ## Why
 
@@ -47,10 +52,11 @@ Write the results and date in the pull request.
 ## Go-live (owner)
 
 1. Live activation approved.
-2. Create the live Plan at the exact `plan.json` price. Set live `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`,
-   `RAZORPAY_PLAN_ID`, `RAZORPAY_WEBHOOK_SECRET` for **Production only**; live webhook to the production URL with a
-   new secret. Never paste keys into chat, issues or commits.
-3. Run `check-plan.mjs` with the live keys: must match.
+2. Set the real prices in `plan.json`'s `pricing` (₹1 everywhere while testing, T33). Make the live ₹1 plans with
+   `check-plan.mjs --create` and the live keys. Set live `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`,
+   `RAZORPAY_PLANS` (the value it prints), `RAZORPAY_TOTAL_COUNT` and `RAZORPAY_WEBHOOK_SECRET` for **Production
+   only**; live webhook to the production URL with a new secret. Never paste keys into chat, issues or commits.
+3. Run `check-plan.mjs` with the live keys and `RAZORPAY_PLANS`: must match.
 4. Merge `paid: true`; redeploy Production (variables apply only to new deployments).
 5. One real payment with the owner's own card; check the page, Razorpay dashboard, `/manage/`, the webhook log and
    the receipt. Refund it in the dashboard if wanted.

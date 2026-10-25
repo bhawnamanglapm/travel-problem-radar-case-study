@@ -16,8 +16,8 @@ each item with a product idea a PM could build.
 | **Home page** | https://travel-problem-radar.vercel.app/ (also served by GitHub Pages). Latest findings, plans, and sign-up / sign-in |
 | **Try the demo** | https://bhawnamanglapm.github.io/travel-problem-radar-case-study/demo/ (replays a saved sample; no AI calls) |
 | **Sample digest** | https://bhawnamanglapm.github.io/travel-problem-radar-case-study/demo/#report |
-| **Live page** | https://travel-problem-radar.vercel.app/live/. Pro members only since 2026-10-23 (`BOARD_PAYWALL`); others see a sign-in or Request Pro panel, and the demo above is open to all. It sweeps 1 to 5 times a day: as often as the Pro member who chose the most emails a day (T32). The first production sweep (Oct 2026) saved items from only 1 of 4 categories; the cause, an output token limit, is fixed and a local run returned all four. |
-| **Get it by email** | https://travel-problem-radar.vercel.app/subscribe/. Free: a daily summary (counts and headlines). Pro, the live board and 1 to 5 emails a day (the member chooses, default 2), is free while it's being tested: tick the box when you sign up, or use "Request Pro" on the manage page your emails link to. When payments open, the same pages show the price instead (`plan.json`'s `paid`, T26). |
+| **Live page** | https://travel-problem-radar.vercel.app/live/. Pro members only since 2026-10-23 (`BOARD_PAYWALL`); others see a sign-in or Request Pro panel, and the demo above is open to all. It sweeps 1 to 5 times a day: as often as the Pro member who chose the most emails a day (T32). The first production sweep (Oct 2026) saved items from only 1 of 4 categories; the cause, an output token limit, is fixed, and on 25 Oct 2026 a production sweep saved all four (18 items). |
+| **Get it by email** | https://travel-problem-radar.vercel.app/subscribe/. Free: a daily summary (counts and headlines). Pro, the live board and 1 to 5 emails a day (the member chooses, default 2), is free while it's being tested: tick the box when you sign up, or use "Request Pro" on the manage page your emails link to, which lets you choose the categories, emails a day and billing period first (T33). When payments open, the same pages show the price instead (`plan.json`'s `paid` and `pricing`, T26, T33). |
 | **PM case study** | [pm/CASE_STUDY.md](pm/CASE_STUDY.md): the product written up across seven product-management stages, from discovery to data. Stages 5 to 7 are plans, since payments haven't opened |
 | **More** | [Technical reference](docs/TECHNICAL.md) · [PRD](docs/PRD.md) · [Decision log](docs/decisions.md) · [Subscriptions: how it fits together](docs/subscriptions/architecture.md) · [Changelog](CHANGELOG.md) |
 
@@ -76,7 +76,7 @@ Full log with dates: [docs/decisions.md](docs/decisions.md).
 
 | Check | Result | How |
 |---|---|---|
-| Scheduled sweep: merge, de-duplicate, "New" flags, 2-hour gap for scheduled runs, GitHub Actions trigger, manual runs, 60-sweep cap, partial and total failure, secret check, Slack post, email through Resend, read-only data feed | 68 of 68 pass | `npm test`, with the Anthropic API and storage stubbed |
+| Scheduled sweep: merge, de-duplicate, "New" flags, one scheduled sweep per slot, GitHub Actions trigger, manual runs, 60-sweep cap, partial and total failure, secret check, Slack post, email through Resend, read-only data feed | 68 of 68 pass | `npm test`, with the Anthropic API and storage stubbed |
 | Subscriber email: sign-up, Confirm button, unsubscribe (also one-click), manage page and Request Pro, Free daily roll-up, Pro every scheduled sweep, quota and deadline stops, resuming a cut-off send, admin script, no addresses in replies or logs | 306 of 306 pass | `npm test`, with Resend and storage stubbed |
 | Sample data shape, page links, bundles up to date, server prompt matches the component, subscribe and manage pages, no secrets in the repo | 39 of 39 pass | `npm run check` |
 | Demo: replay, filters, search, report, history, "New" flag, phone width, no AI or API calls | 19 checks pass | Headless browser, 18 Oct 2026 |
@@ -106,7 +106,7 @@ changed:
 | "Posts the digest to Slack and email" | Slack kept as owner-reported; email removed. The original text itself said the email connector only drafts. | `a960184`, `5141067` |
 | Four calls "raised result quality" | Removed: it was never measured. The reason given now is reliability. | `a960184` |
 | "Product & build (solo)" | "Product owner, built with AI (Claude)" | `a960184` |
-| Public live version described as future work | Built: server sweep (1 to 5 a day since T32) and read-only page. The first production sweep saved 1 of 4 categories; the token-limit cause is fixed | `66f2bf1`, `b691d54`, `f200a79` |
+| Public live version described as future work | Built: server sweep (1 to 5 a day since T32) and read-only page. The first production sweep saved 1 of 4 categories; the token-limit cause is fixed, and a sweep on 25 Oct saved all four | `66f2bf1`, `b691d54`, `f200a79` |
 | Slack and email described as Claude-app only | The server sweep can also post to Slack and email through Resend (both optional; tested offline only) | `493ddbd`, `bb78fbb` |
 
 ## Failure modes and guardrails
@@ -117,7 +117,7 @@ changed:
 | Every category fails | Nothing is saved, and the run reports an error so the failure is visible | `npm test` |
 | The model returns text that isn't clean JSON | Code fences are stripped; a reply cut off mid-list keeps the complete items; an empty or unreadable reply fails that category | `npm test`; `extractProblems()` |
 | A link that isn't a web address | Dropped from the item | Code: `normalize()` in `api/_lib/radar.js` |
-| Someone calls the sweep to run up costs | Refused without the secret (401); a repeat scheduled call within 2 hours is skipped. A manual call with the secret runs at most 3 times a UTC day (`MAX_MANUAL_SWEEPS_PER_DAY`), then gets 429; the Anthropic spend limit stays the final cap | `npm test`; preview deployment returned 401 |
+| Someone calls the sweep to run up costs | Refused without the secret (401); a second scheduled call for a slot that already swept is skipped. A manual call with the secret runs at most 3 times a UTC day (`MAX_MANUAL_SWEEPS_PER_DAY`), then gets 429; the Anthropic spend limit stays the final cap | `npm test`; preview deployment returned 401 |
 | Someone reads other stored data | The data feed serves only history and sweep keys and refuses writes | `npm test` |
 | Storage grows forever | Only the last 60 sweeps are kept | `npm test` |
 | A reader treats AI findings as fact | The live page says: "Gathered 1 to 5 times a day by an AI model with web search. Check each source link; items are not verified." The demo says it replays a saved sample. | `live/index.html`; demo banner |
@@ -156,9 +156,9 @@ records no delivery to a real Slack workspace or inbox yet.
 
 ## What's next
 
-1. **Confirm a full production sweep.** The first one saved 1 of 4 categories; after the token-limit fix, check
-   that a scheduled run saves all four, and record the time taken against the 300-second limit, plus token and
-   search counts.
+1. **Confirm a full production sweep: done for a manual run.** On 25 Oct 2026 a manual sweep on
+   `claude-haiku-5-5` saved all four categories (18 items) in about 20 seconds of the 300-second limit, with
+   101,309 input and 9,306 output tokens and 10 searches. Still to see: a day of scheduled runs doing the same.
 2. **Score the first 20+ real items** with the rubric above and publish the results.
 3. **Recognise the same event under a new headline**, so "New" means a new event and not just new wording.
 4. **Refresh the sample** (the items are from July 2026).

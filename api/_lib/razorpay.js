@@ -4,6 +4,7 @@
 // they return a few chosen fields or { error }, never the reply itself, a secret or an address.
 // Nothing here logs.
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { razorpayPlans } from "./plan.js";
 
 export const RAZORPAY_API = "https://api.razorpay.com/v1";
 const TIMEOUT_MS = 10_000;
@@ -14,9 +15,10 @@ const HEX_SHA256 = /^[0-9a-f]{64}$/;
 
 const val = (env, name) => String(env[name] || "").trim();
 
-// Everything checkout, cancel and the webhook need. The API calls themselves need only the two keys.
+// Everything checkout, cancel and the webhook need: the keys, the webhook secret, and RAZORPAY_PLANS with a ₹1
+// plan for at least one billing period on sale (T33). The API calls themselves need only the two keys.
 export const razorpayConfigured = (env) =>
-  ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET", "RAZORPAY_WEBHOOK_SECRET", "RAZORPAY_PLAN_ID"].every((n) => val(env, n));
+  ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET", "RAZORPAY_WEBHOOK_SECRET"].every((n) => val(env, n)) && Object.keys(razorpayPlans(env)).length > 0;
 
 // Test-mode key ids begin rzp_test_, live ones rzp_live_.
 export const isTestKey = (env) => val(env, "RAZORPAY_KEY_ID").startsWith("rzp_test_");
@@ -71,12 +73,20 @@ async function call(env, fetchFn, method, path, body) {
 }
 
 // A new subscription for one subscriber. `totalCount` is how many billing cycles it runs for
-// (Razorpay requires it); the subscriber id goes in notes so the webhook can find the record, and no
-// address is sent. Returns { id, status, shortUrl } (shortUrl: Razorpay's payment page) or { error }.
-export async function createSubscription({ env, fetchFn, planId = val(env, "RAZORPAY_PLAN_ID"), subscriberId, totalCount, customerNotify = true }) {
+// (Razorpay requires it); `quantity` is how many times the ₹1 plan is charged each cycle, i.e. the price in
+// rupees (T33; **verify** Razorpay's quantity limit at build time). The subscriber id goes in notes so the webhook
+// can find the record, with the plan chosen (`extraNotes`, short strings only); no address is sent.
+// `startAt` (seconds) starts the first charge later, for a plan that renews after a running one (T34).
+// Returns { id, status, shortUrl } (shortUrl: Razorpay's payment page) or { error }.
+export async function createSubscription({ env, fetchFn, planId, subscriberId, totalCount, quantity = 1, extraNotes = {}, startAt = null, customerNotify = true }) {
   if (!PLAN_ID.test(String(planId)) || !SID.test(String(subscriberId)) || !Number.isInteger(totalCount) || totalCount < 1) return { error: "input" };
+  if (!Number.isInteger(quantity) || quantity < 1) return { error: "input" };
+  if (startAt !== null && !(Number.isInteger(startAt) && startAt > 0)) return { error: "input" };
+  const notes = { sid: subscriberId };
+  for (const [k, v] of Object.entries(extraNotes)) if (/^[a-z]{1,20}$/.test(k) && typeof v === "string" && v.length <= 100) notes[k] = v;
   const r = await call(env, fetchFn, "POST", "/subscriptions", {
-    plan_id: planId, total_count: totalCount, customer_notify: Boolean(customerNotify), notes: { sid: subscriberId },
+    plan_id: planId, total_count: totalCount, quantity, customer_notify: Boolean(customerNotify), notes,
+    ...(startAt ? { start_at: startAt } : {}),
   });
   if (r.error) return r;
   return { id: r.data.id, status: String(r.data.status || ""), shortUrl: typeof r.data.short_url === "string" ? r.data.short_url : "" };
