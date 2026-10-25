@@ -1385,6 +1385,23 @@ const iso = (ms) => new Date(ms).toISOString();
   r = await w.confirm(plain);
   check(r.code === 200 && r.body.includes(`href="${esc(managePath(plain.id, plain.token))}"`) && w.owner().length === 1, "pro request: confirming without the box links to the manage page and tells the owner nothing");
 
+  // Payments on: the confirm page sends a ticked sign-up straight to the plan card to pay, and the owner isn't asked
+  // to switch anything on.
+  {
+    const PAY = { RAZORPAY_KEY_ID: "rzp_test_Fixture000001", RAZORPAY_KEY_SECRET: "ks", RAZORPAY_WEBHOOK_SECRET: "wh", RAZORPAY_PLANS: JSON.stringify({ 1: "plan_00000000000001", 12: "plan_00000000000012" }), RAZORPAY_TOTAL_COUNT: "12" };
+    const wp = world(PAY);
+    await wp.subscribe({ email: "payer@example.com", wantsPro: "1" });
+    await wp.subscribe({ email: "maybe@example.com" });
+    const payer = await recOf(wp, "payer@example.com"), maybe = await recOf(wp, "maybe@example.com");
+    const rp = await wp.confirm(payer);
+    check(rp.code === 200 && rp.body.includes(`href="${esc(managePath(payer.id, payer.token) + "&pay=1")}"`) && /choose your plan and pay/.test(rp.body) && !/switched over/.test(rp.body),
+      "payments on: confirming a ticked sign-up links to the manage page with ?pay=1 to choose a plan and pay");
+    check(evCount(wp, "prorequested") === 1 && wp.owner().length === 0, "payments on: the Pro request is counted, but the owner gets no email to switch it on");
+    const rm = await wp.confirm(maybe);
+    check(rm.code === 200 && rm.body.includes(`href="${esc(managePath(maybe.id, maybe.token) + "&pay=1")}"`) && /Upgrade to Pro/.test(rm.body) && !/Request Pro/.test(rm.body),
+      "payments on: confirming without the box offers Upgrade to Pro, not Request Pro");
+  }
+
   // GET /api/account
   r = await w.get(plain.id, plain.token);
   let a = r.json();
@@ -2569,6 +2586,17 @@ const iso = (ms) => new Date(ms).toISOString();
     await w.back();
     await w.create();
     check(!(await getSubscriber(w.st, subscriberId("new@example.com"))).proRequestedAt && w.sent.length === 0, "google sign-up: Pro unticked on the page means no Pro request");
+    const PAY = { RAZORPAY_KEY_ID: "rzp_test_Fixture000001", RAZORPAY_KEY_SECRET: "ks", RAZORPAY_WEBHOOK_SECRET: "wh", RAZORPAY_PLANS: JSON.stringify({ 1: "plan_00000000000001", 12: "plan_00000000000012" }), RAZORPAY_TOTAL_COUNT: "12" };
+    w = await gw({ existing: false, claims: { email: "new@example.com" }, envOver: PAY });
+    await w.start({ pro: "1" });
+    await w.back();
+    r = await w.create({ wantsPro: "1" });
+    check(r.code === 303 && r.headers.location === "/manage/?pay=1" && w.evs("prorequested").length === 1 && w.sent.length === 0,
+      "google sign-up with payments on: Pro ticked goes straight to the plan card to pay (/manage/?pay=1), no owner email");
+    w = await gw({ existing: false, claims: { email: "new@example.com" }, envOver: PAY });
+    await w.start();
+    await w.back();
+    check((await w.create()).headers.location === "/live/", "google sign-up with payments on: Pro unticked still goes to the board");
 
     // Create account refused: an error page, no login, nothing stored
     const refusedSignup = async (label, { setup = {}, prep, origin = "https://site.example", code = 400, page }) => {

@@ -5,6 +5,11 @@ grouped by date.
 
 ## 2026-10-26
 
+- Sign-up straight to payment (payments on only). Ticking Pro at sign-up and confirming now links to
+  `/manage/?pay=1`, which opens the plan card ready for Pay with Razorpay; Google sign-up with Pro ticked goes there
+  too. Without the box the confirm page offers Upgrade to Pro. No owner "Pro request" email while payments are on.
+  After paying, `/manage/` checks every 5 seconds for 2 minutes and shows Pro once Razorpay's webhook has arrived.
+  With payments off nothing changes.
 - Admin dashboard: `/admin/` and `/api/admin` (the tenth function). Every subscriber with their address, plan, type
   (monthly, yearly, granted), price, categories, emails a day, dates and billing state, with search, filters and a
   CSV download; counts, Pro's categories and emails a day, the paid value per month, and the day-by-day sign-up

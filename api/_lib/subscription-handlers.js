@@ -363,6 +363,10 @@ export function makeConfirmHandler({ env, storage, fetchFn = fetch, now, randomB
             body: (secret ? `<p>Your account is ready, and you're signed in on this browser.</p>` : "")
               + `<p>You'll get the daily digest after the first sweep of the UTC day (about 05:47 IST).</p>`
               + (effectivePlan(rec, t) === "pro" ? ""
+                // Payments on: one step left, paying, on the manage page with the plan card open (?pay=1).
+                : paymentsReady(env) ? (rec.proRequestedAt
+                  ? `<p>One step left for Pro (the live board and 1 to 5 emails a day): <a href="${esc(managePath(params.id, params.t) + "&pay=1")}">choose your plan and pay</a>. Until then you get the daily digest.</p>`
+                  : `<p>Want the live board and 1 to 5 emails a day? <a href="${esc(managePath(params.id, params.t) + "&pay=1")}">Upgrade to Pro</a></p>`)
                 : rec.proRequestedAt ? `<p>You asked for Pro (the live board and 1 to 5 emails a day). You'll be switched over shortly; until then you get the daily digest.</p>`
                 : `<p>Want the live board and 1 to 5 emails a day? <a href="${esc(managePath(params.id, params.t))}">Request Pro</a></p>`)
               + `<p><a href="/live/">Open the live board</a></p>`,
@@ -385,10 +389,11 @@ export function makeConfirmHandler({ env, storage, fetchFn = fetch, now, randomB
           ? { ...r, status: "active", confirmedAt: new Date(t).toISOString() } : null));
         if (!changed) return active && active.status === "active" && tokenOk(active, params.t) ? already() : sendPage(res, 404, INVALID);
         await recordEvent(storage, "confirmed", { now: t, randomBytes, plan: active.plan === "pro" ? "pro" : "free" });
-        // A Pro request ticked at sign-up counts from here, once the address is proven.
+        // A Pro request ticked at sign-up counts from here, once the address is proven. With payments on they pay
+        // for it themselves, so there's nothing for the owner to switch on.
         if (active.proRequestedAt && effectivePlan(active, t) !== "pro") {
           await recordEvent(storage, "prorequested", { now: t, randomBytes, plan: "free" });
-          await notifyOwnerProRequest({ env, fetchFn, at: t, source: "signup", log });
+          if (!paymentsReady(env)) await notifyOwnerProRequest({ env, fetchFn, at: t, source: "signup", log });
         }
         return done(active);
       },
@@ -1011,7 +1016,7 @@ async function googleSignIn({ res, record, isNew = false, pro, env, storage, fet
     await recordEvent(storage, "confirmed", { now: t, randomBytes, plan: "free" });
     if (record.proRequestedAt && effectivePlan(record, t) !== "pro") {
       await recordEvent(storage, "prorequested", { now: t, randomBytes, plan: "free" });
-      await notifyOwnerProRequest({ env, fetchFn, at: t, source: "signup", log });
+      if (!paymentsReady(env)) await notifyOwnerProRequest({ env, fetchFn, at: t, source: "signup", log });
     }
   } else if (record.status !== "active") {
     return page(400, GOOGLE_FAILED); // anything unexpected
@@ -1023,7 +1028,8 @@ async function googleSignIn({ res, record, isNew = false, pro, env, storage, fet
     cookies.unshift(sessionCookie(signSession(record, { secret, now: t })));
     res.statusCode = 303;
     res.setHeader("set-cookie", cookies);
-    res.setHeader("location", "/live/");
+    // Ticked Pro with payments on: straight to the plan card to pay; otherwise the board.
+    res.setHeader("location", record.proRequestedAt && paymentsReady(env) && effectivePlan(record, t) !== "pro" ? "/manage/?pay=1" : "/live/");
     res.setHeader("cache-control", "no-store");
     return res.end();
   }

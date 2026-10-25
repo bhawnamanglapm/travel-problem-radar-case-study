@@ -1029,7 +1029,7 @@ can sign in. It is set on Production only, so a Preview with the switch on shows
 Payments count as on only when `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`,
 `RAZORPAY_PLANS` (at least one plan) and `RAZORPAY_TOTAL_COUNT` are all set (`paymentsReady` in
 `api/_lib/subscription-handlers.js`).
-No new function: the three actions below are on `/api/account`, so the site still has 8.
+No new function: the actions below are on `/api/account`.
 
 With payments on:
 
@@ -1049,7 +1049,14 @@ With payments on:
 - **After paying**, the page sends Checkout's result to `action: "checkout-return"`. The signature is checked with the
   key secret against the subscription id we saved, and the record's `rzp.status` becomes `authenticated`. The page
   says "Payment received; Pro starts in a minute or two". **It does not grant Pro**: only Razorpay's signed webhook
-  does, which is T21 and not built yet. So until T21, a test payment leaves the account Free.
+  does (T21, `/api/razorpay-webhook`). The page checks again every 5 seconds for 2 minutes and switches to Pro,
+  saying "Payment confirmed: Pro is on", as soon as the webhook has arrived; after that it asks for a reload.
+- **Signing up for Pro** (2026-10-26). Ticking "I'd like Pro" on `/signup/` and confirming the email now ends on a
+  page whose link, **choose your plan and pay**, opens `/manage/?pay=1`: the plan card is already open, filled in
+  with any choice made, ready for Pay with Razorpay. Without the box the confirm page offers **Upgrade to Pro** the
+  same way. Google sign-up with the box ticked goes straight to `/manage/?pay=1` instead of `/live/`. The Pro request
+  is still counted (`prorequested`), but the owner gets no "Pro request" email while payments are on: there is
+  nothing to switch on by hand. With payments off all of this is as before (Request Pro, the owner email).
 - **A paid Pro** sees "Renews on DATE" and **Cancel at the end of this period** (asked twice).
   `action: "cancel"` asks Razorpay to cancel at the end of the cycle; the account stays Pro until then and the page
   says "Pro until DATE; it won't renew". A Pro given by `grant-pro` has no billing buttons.
@@ -1124,13 +1131,17 @@ Notes:
   Use the emailed sign-in link.
 - **Cron jobs don't run on previews**, so no sweep or daily email goes out from `staging`.
 
-**The test checkout.** On the `staging` URL, sign up at `/subscribe/` with your own address; the confirm link must
-open `staging`. Confirm, open `/manage/` and press **Upgrade to Pro**. Pay with Razorpay's **domestic** subscription
+**The test checkout.** On the `staging` URL, sign up at `/signup/` with your own address and tick "I'd like Pro";
+the confirm link must open `staging`. Confirm; the page's **choose your plan and pay** link opens `/manage/` with the
+plan card ready. (Or, signed up without the box, open `/manage/` and press **Upgrade to Pro**.) Pay with Razorpay's **domestic** subscription
 test card 4718 6091 0820 4366, any CVV and a future expiry, and an OTP of 4 to 10 digits ([test cards][rzp-cards]).
 The international test card 5104 0600 0000 0008 is refused with "International cards are not supported" unless the
-account accepts international cards. The page should say "Payment received; Pro starts in a minute or two" and the
-plan stays **Free**. `show <your email>` against the preview store should give `rzp.status: "authenticated"`. Pro
-itself waits for the webhook (T21). Done this way on 2026-10-23.
+account accepts international cards. The page should say "Payment received; Pro starts in a minute or two" and, once Razorpay's webhook reaches
+`staging` (see [Razorpay ↔ Vercel](#razorpay--vercel) for the webhook URL and the protection bypass), switch to
+**Pro** by itself. `show <your email>` against the preview store should then give `plan: "pro"` and `proSource:
+"razorpay"`. The payment up to "authenticated" was done this way on 2026-10-23; the whole path, sign-up to Pro, is
+still to run. For the pages to show the price instead of "free while it's being tested", set `"paid": true` in
+`plan.json` **on `staging` only**, and don't merge that into `main` until go-live (T27).
 
 ### Razorpay ↔ Vercel
 

@@ -299,7 +299,19 @@
     line.textContent = a.emailOff ? (EMAIL_OFF[a.emailOff] || "Email: off.") : "Email: on.";
     document.getElementById("emailOnRow").hidden = a.emailOff !== "unsubscribed";
   }
+  // After paying, Pro starts when Razorpay's webhook arrives: check every 5 seconds for 2 minutes, then say so.
+  var polls = 0, polling = false;
+  function waitForPro() {
+    if (polling) return;
+    if (polls >= 24) { say("Razorpay hasn’t confirmed the payment yet. Reload this page in a few minutes; if Pro hasn’t started within an hour, write to pehchanthetraveller19@gmail.com.", false); return; }
+    polling = true;
+    setTimeout(function () {
+      polls++;
+      call("GET").then(function (x) { polling = false; if (x.status === 200) show(x.body); }, function () { polling = false; waitForPro(); });
+    }, 5000);
+  }
   function show(a) {
+    if (polls && a.effectivePlan === "pro" && !(acct && acct.effectivePlan === "pro")) say("Payment confirmed: Pro is on.", false);
     acct = a;
     ask.hidden = buy.hidden = billing.hidden = true;
     document.getElementById("signOutRow").hidden = !a.signedIn;
@@ -345,8 +357,9 @@
     }
     if (cardMode === "pro") closeCard();
     if (a.paymentPending) {
-      setPlan("Free", "Payment received; Pro starts in a minute or two.");
+      setPlan("Free", "Payment received; Pro starts in a minute or two. This page updates by itself.");
       closeCard();
+      waitForPro();
     } else if (a.billing === "pending") {
       // The paid period has ended and Razorpay is retrying the renewal (T26): no second checkout.
       setPlan("Free", "Your renewal payment didn’t go through, and Razorpay is trying again. Pro comes back as soon as a payment succeeds.");
@@ -386,7 +399,13 @@
     else if (x.status === 503) { planEl.textContent = "Subscriptions are paused"; detail.textContent = "Your link stays valid: try again later."; }
     else say("Something went wrong. Please try again in a minute.", true);
   }
-  call("GET").then(function (x) { if (x.status === 200) show(x.body); else fail(x); })
+  // ?pay=1 (from the confirm page or Google sign-up after ticking Pro): open the plan card ready to pay.
+  var wantsPay = q.get("pay") === "1";
+  call("GET").then(function (x) {
+    if (x.status !== 200) return fail(x);
+    show(x.body);
+    if (wantsPay && !buy.hidden) { choose.click(); planCard.scrollIntoView({ block: "start" }); }
+  })
     .catch(function () { say("Couldn’t reach the server. Please try again in a minute.", true); });
 
   // The choice the card sends with checkout, request-pro and set-plan. Null when it isn't complete.
