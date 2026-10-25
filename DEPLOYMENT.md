@@ -1091,7 +1091,8 @@ repeat. **Verify** on the first test run that Razorpay accepts `start_at` from C
 appear in live mode, and each has its own keys ([test and live modes][rzp-modes]). So this plan is only for testing.
 
 1. In the Razorpay dashboard, in **Test Mode**, generate a test key pair. Then make the ₹1 plans with
-   `check-plan.mjs --create` (above) and keep the `RAZORPAY_PLANS` value it prints.
+   `check-plan.mjs --create` and keep the `RAZORPAY_PLANS` value it prints; the full commands are in
+   [Creating the Razorpay plans](#creating-the-razorpay-plans).
 2. Make a random webhook secret and keep it in your password manager. T21 uses the same one when the webhook is
    added in Razorpay; T20 only needs it set.
 3. Choose `RAZORPAY_TOTAL_COUNT` (how many months a subscription runs, for example 12).
@@ -1102,6 +1103,95 @@ To turn payments off again, remove any one of the five variables and redeploy.
 
 [rzp-modes]: https://razorpay.com/docs/payments/dashboard/test-live-modes/
 [rzp-subs]: https://razorpay.com/docs/payments/subscriptions/integration-guide/
+
+### Creating the Razorpay plans
+
+`scripts/check-plan.mjs` reads the billing periods from `plan.json` (`monthly`, `yearly`), makes one **₹1** Razorpay
+plan for each period that has none yet, checks them, and prints the `RAZORPAY_PLANS` value for Vercel. The plans are
+always ₹1 because the price is the subscription's quantity (T33), so changing a price in `plan.json` never needs new
+plans. Test and live plans are separate: make each set once, with that mode's keys.
+
+Run it on your own machine from the repository root, with Node 22 or later (no packages needed). The keys are typed
+into the shell, never saved in a file, the repository, a chat or a commit. Every value below in `<…>` is a placeholder.
+
+**Test mode (Preview, branch `staging`).** Keys: Razorpay Dashboard → **Test Mode** → **Account & Settings** →
+**API Keys** → **Generate Test Key**.
+
+```bash
+# Type the keys in: -s hides the secret, and neither goes into shell history or a file
+read -r  -p "Razorpay TEST key id (rzp_test_…): " RAZORPAY_KEY_ID
+read -rs -p "Razorpay TEST key secret: " RAZORPAY_KEY_SECRET; echo
+export RAZORPAY_KEY_ID RAZORPAY_KEY_SECRET
+
+# Create the ₹1 monthly and yearly plans
+node scripts/check-plan.mjs --create
+```
+
+It prints:
+
+```
+check-plan: created the test 1-month plan
+check-plan: created the test 12-month plan
+check-plan: match (test plans, ₹1 each, for 1, 12 months)
+Set this in Vercel as RAZORPAY_PLANS (Preview, branch staging):
+{"1":"plan_<monthly id>","12":"plan_<yearly id>"}
+```
+
+Check them again with the printed value:
+
+```bash
+export RAZORPAY_PLANS='{"1":"plan_<monthly id>","12":"plan_<yearly id>"}'
+node scripts/check-plan.mjs
+# check-plan: match (test plans, ₹1 each, for 1, 12 months)
+```
+
+Set the five variables for Preview, branch `staging` only (each command asks for the value):
+
+```bash
+vercel env add RAZORPAY_KEY_ID preview staging
+vercel env add RAZORPAY_KEY_SECRET preview staging --sensitive
+vercel env add RAZORPAY_WEBHOOK_SECRET preview staging --sensitive   # the secret the Razorpay webhook uses too
+vercel env add RAZORPAY_PLANS preview staging                        # the {"1":…,"12":…} line
+vercel env add RAZORPAY_TOTAL_COUNT preview staging                  # months a subscription runs, e.g. 120
+
+unset RAZORPAY_KEY_ID RAZORPAY_KEY_SECRET RAZORPAY_PLANS
+```
+
+A webhook secret can be made with `openssl rand -hex 32`. Redeploy `staging` afterwards: variables reach only new
+deployments.
+
+**Live mode (Production, at go-live, T27).** After Razorpay approves live activation, the same steps with the live
+keys (Razorpay Dashboard → **Live Mode** → **API Keys**). Test plans don't exist in live mode, so the live ones are
+made too.
+
+```bash
+read -r  -p "Razorpay LIVE key id (rzp_live_…): " RAZORPAY_KEY_ID
+read -rs -p "Razorpay LIVE key secret: " RAZORPAY_KEY_SECRET; echo
+export RAZORPAY_KEY_ID RAZORPAY_KEY_SECRET
+node scripts/check-plan.mjs --create
+# Set this in Vercel as RAZORPAY_PLANS (Production): {"1":"plan_<monthly id>","12":"plan_<yearly id>"}
+
+export RAZORPAY_PLANS='{"1":"plan_<monthly id>","12":"plan_<yearly id>"}'
+node scripts/check-plan.mjs        # must say: match (live plans, ₹1 each, for 1, 12 months)
+
+vercel env add RAZORPAY_KEY_ID production
+vercel env add RAZORPAY_KEY_SECRET production --sensitive
+vercel env add RAZORPAY_WEBHOOK_SECRET production --sensitive        # a new secret, not the test one
+vercel env add RAZORPAY_PLANS production
+vercel env add RAZORPAY_TOTAL_COUNT production
+
+unset RAZORPAY_KEY_ID RAZORPAY_KEY_SECRET RAZORPAY_PLANS
+```
+
+Notes:
+
+- **Run `--create` again** only with `RAZORPAY_PLANS` exported: then it makes plans just for the periods missing.
+  Without it, it makes a second set (harmless, but clutter in the dashboard).
+- **Without the Vercel CLI**, add the same five in **Vercel → Settings → Environment Variables**, choosing Preview
+  with branch `staging`, or Production, and ticking **Sensitive** for the two secrets.
+- **Exit codes**: `0` the plans match; `1` a plan differs or Razorpay refused ("Razorpay said 401" means the keys
+  weren't accepted); `2` not set up (keys not in the shell, `plan.json` invalid, or no plan id for a period without
+  `--create`).
 
 ### Testing payments on Preview
 
