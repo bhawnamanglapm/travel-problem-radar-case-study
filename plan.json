@@ -1,5 +1,5 @@
 {
-  "paid": false,
+  "paid": true,
   "currency": "INR",
   "monthly": 1,
   "yearly": 1,
