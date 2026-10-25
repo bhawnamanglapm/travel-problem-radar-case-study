@@ -122,6 +122,7 @@ changed:
 | Storage grows forever | Only the last 60 sweeps are kept | `npm test` |
 | A reader treats AI findings as fact | The live page says: "Gathered 1 to 5 times a day by an AI model with web search. Check each source link; items are not verified." The demo says it replays a saved sample. | `live/index.html`; demo banner |
 | Slack or email delivery fails | The sweep is still saved; each channel reports its own outcome, and replies never include the webhook, API key or addresses | `npm test` |
+| A sweep goes wrong after Vercel's one-hour log window | Each sweep that runs saves an LLM log in the private Blob store for 30 days: every call's request and response, total input and output tokens, and the links of the pages search found. Read with `scripts/llm-logs.mjs` | `npm test` |
 | A reply is cut off by the output token limit | Raised to 16,000 tokens, because the model's thinking counts toward it; a reply with no usable answer says why the model stopped | `npm test`; `scanCategory()` in `api/_lib/radar.js` |
 | **The model invents or misreads a source** | **No guardrail beyond the link check.** This is the main open risk. | Not measured |
 | Spend runs away | The owner sets a monthly limit in the Anthropic Console; at most five scheduled sweeps a day (`SWEEPS_PER_DAY_MAX` lowers it), up to 3 searches per category | Owner step; not verified here |

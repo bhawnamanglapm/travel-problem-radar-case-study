@@ -5,6 +5,12 @@ grouped by date.
 
 ## 2026-10-25
 
+- Each sweep that runs saves an LLM log in the private Blob store (`radar:llmlog:<id>`), because Vercel's Hobby plan
+  keeps function logs for an hour. It holds every Claude call's request and response (thinking, search queries,
+  answer, stop reason, usage; encrypted page contents left out) and a summary: input and output tokens, searches,
+  and the pages search found, as links. Written for saved, empty and unsaved sweeps; deleted after 30 days, listed
+  once a UTC day to spare Blob operations. Not readable through `/api/data`. New owner script
+  `scripts/llm-logs.mjs` (`list`, `summary`, `show`). The sweep reply adds `llmLog` and `usage.pages`.
 - Pro members choose 1 to 5 emails a day on `/manage/` (T32, PR 2, #89): an "Emails a day" card that saves through
   `set-freq`, greyed out for Free. Every page, the live board, the Pro email footer and the account replies say "1 to 5
   a day" instead of "every 5 hours"; `check.mjs` fails if the old wording comes back. README, TECHNICAL and the
