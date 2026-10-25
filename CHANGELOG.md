@@ -5,6 +5,11 @@ grouped by date.
 
 ## 2026-10-26
 
+- Pick a plan, pay, and Pro starts at once (payments on only). `/signup/` (paid build) shows Monthly or Yearly when
+  Pro is ticked; confirming the email redirects to `/manage/?pay=1`, which opens Razorpay's Checkout for that plan.
+  `checkout-return` now starts Pro as soon as Checkout's signature checks out and Razorpay's subscription agrees
+  (or can't be reached), until the period end Razorpay reports or the months paid for; the webhook still sets the
+  real end. The email must still be confirmed before paying.
 - Sign-up straight to payment (payments on only). Ticking Pro at sign-up and confirming now links to
   `/manage/?pay=1`, which opens the plan card ready for Pay with Razorpay; Google sign-up with Pro ticked goes there
   too. Without the box the confirm page offers Upgrade to Pro. No owner "Pro request" email while payments are on.

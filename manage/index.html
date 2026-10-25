@@ -404,7 +404,13 @@
   call("GET").then(function (x) {
     if (x.status !== 200) return fail(x);
     show(x.body);
-    if (wantsPay && !buy.hidden) { choose.click(); planCard.scrollIntoView({ block: "start" }); }
+    if (wantsPay && !buy.hidden) {
+      choose.click();
+      planCard.scrollIntoView({ block: "start" });
+      // A period picked at sign-up, still on sale: open Razorpay's Checkout for it at once. Closing it leaves the card.
+      var pr = x.body.proRequest;
+      if (pr && (x.body.payPeriods || []).indexOf(pr.months) >= 0) upgrade.click();
+    }
   })
     .catch(function () { say("Couldn’t reach the server. Please try again in a minute.", true); });
 
@@ -477,7 +483,10 @@
   function checkoutDone(resp) {
     say("Checking the payment…", false);
     call("POST", { id: id, t: t, action: "checkout-return", paymentId: resp.razorpay_payment_id, subscriptionId: resp.razorpay_subscription_id, signature: resp.razorpay_signature }).then(function (x) {
-      if (x.status === 200) { cardMode = null; show(x.body); say(x.body.renewal ? "Renewal set up. It starts when this period ends." : "", false); } // show() says the payment was received
+      if (x.status === 200) {
+        cardMode = null; show(x.body);
+        say(x.body.renewal ? "Renewal set up. It starts when this period ends." : x.body.effectivePlan === "pro" ? "Payment received. Pro is on: the live board is open now." : "", false);
+      } // show() says the payment was received
       else if (x.status === 400) { say("The payment couldn’t be checked here. If you were charged, Pro starts when Razorpay confirms it; write to pehchanthetraveller19@gmail.com if it hasn’t within an hour.", true); }
       else fail(x);
     }).catch(function () {

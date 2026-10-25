@@ -1048,15 +1048,24 @@ With payments on:
   with **Save changes** (`action: "set-plan"`): the price doesn't depend on them.
 - **After paying**, the page sends Checkout's result to `action: "checkout-return"`. The signature is checked with the
   key secret against the subscription id we saved, and the record's `rzp.status` becomes `authenticated`. The page
-  says "Payment received; Pro starts in a minute or two". **It does not grant Pro**: only Razorpay's signed webhook
-  does (T21, `/api/razorpay-webhook`). The page checks again every 5 seconds for 2 minutes and switches to Pro,
-  saying "Payment confirmed: Pro is on", as soon as the webhook has arrived; after that it asks for a reload.
-- **Signing up for Pro** (2026-10-26). Ticking "I'd like Pro" on `/signup/` and confirming the email now ends on a
-  page whose link, **choose your plan and pay**, opens `/manage/?pay=1`: the plan card is already open, filled in
-  with any choice made, ready for Pay with Razorpay. Without the box the confirm page offers **Upgrade to Pro** the
-  same way. Google sign-up with the box ticked goes straight to `/manage/?pay=1` instead of `/live/`. The Pro request
-  is still counted (`prorequested`), but the owner gets no "Pro request" email while payments are on: there is
-  nothing to switch on by hand. With payments off all of this is as before (Request Pro, the owner email).
+  **starts Pro at once** (2026-10-26): the signature proves the payment, and a plan that starts now is charged when
+  it is approved. First it asks Razorpay for the subscription (`GET /subscriptions/:id`): if its notes name another
+  account, or its state is `halted`, `cancelled`, `completed`, `expired`, `paused` or `pending`, Pro waits for the
+  webhook as before ("Payment received; Pro starts in a minute or two", and the page checks every 5 seconds for 2
+  minutes). If Razorpay can't be reached, the signature is enough. Pro runs to the period end Razorpay reports, or,
+  without one, for the months paid for (31 days a month) until the webhook (T21, `/api/razorpay-webhook`) brings the
+  real end. The plan chosen at checkout is applied, `paidFor` stored, a `progranted` event recorded, and the page
+  says "Payment received. Pro is on". `rzp.lastEventAt` isn't touched, so none of the webhook's events is taken for
+  stale; they apply on top as usual.
+- **Signing up for Pro** (2026-10-26): pick the plan, confirm the email, pay, and Pro starts. On `/signup/` (paid
+  build), ticking "I'd like Pro" shows **Monthly** or **Yearly**; the period goes with the sign-up and is kept as
+  `proRequest` (a period not on sale is dropped). Pressing **Confirm** in the email then redirects (`303`) to
+  `/manage/?id…&t…&pay=1`, which opens the plan card and, with a period picked that is on sale, **Razorpay's
+  Checkout at once**; paying starts Pro there and then (below). Closing Checkout leaves the card open. Without a
+  period the card asks for one. Google sign-up with the box ticked goes to `/manage/?pay=1` too (the card asks for
+  the period). Without the box, the confirm page offers **Upgrade to Pro** linking there. The email still has to be
+  confirmed before paying. The Pro request is counted (`prorequested`), but the owner gets no "Pro request" email
+  while payments are on. With payments off all of this is as before (Request Pro, the owner email).
 - **A paid Pro** sees "Renews on DATE" and **Cancel at the end of this period** (asked twice).
   `action: "cancel"` asks Razorpay to cancel at the end of the cycle; the account stays Pro until then and the page
   says "Pro until DATE; it won't renew". A Pro given by `grant-pro` has no billing buttons.
@@ -1084,8 +1093,9 @@ renewal, its last billing cycle, or owner-granted with an end date) gets one ema
 the sweep's delivery step; `endWarning` in the sweep reply counts them, and `endWarnedFor` on the record stops a
 repeat. **Verify** on the first test run that Razorpay accepts `start_at` from Checkout and charges then.
 
-**Known gap:** an account that paid but whose webhook never arrives stays `authenticated` and gets
-`payment_pending` on every Upgrade. See "Paid but still Free" below; there is no admin command for it yet.
+**Known gap:** an account that paid, whose Checkout return didn't start Pro (Razorpay's answer named another
+account or a stopped state, or the page was closed before it returned) and whose webhook never arrives, stays
+`authenticated` and gets `payment_pending` on every Upgrade. See "Paid but still Free" below; there is no admin command for it yet.
 
 **Setting up a test (owner).** Test and live mode are separate in Razorpay: what you make in test mode doesn't
 appear in live mode, and each has its own keys ([test and live modes][rzp-modes]). So this plan is only for testing.
@@ -1221,14 +1231,14 @@ Notes:
   Use the emailed sign-in link.
 - **Cron jobs don't run on previews**, so no sweep or daily email goes out from `staging`.
 
-**The test checkout.** On the `staging` URL, sign up at `/signup/` with your own address and tick "I'd like Pro";
-the confirm link must open `staging`. Confirm; the page's **choose your plan and pay** link opens `/manage/` with the
-plan card ready. (Or, signed up without the box, open `/manage/` and press **Upgrade to Pro**.) Pay with Razorpay's **domestic** subscription
+**The test checkout.** On the `staging` URL, sign up at `/signup/` with your own address, tick "I'd like Pro"
+and pick Monthly or Yearly; the confirm link must open `staging`. Press Confirm: Razorpay's Checkout opens on
+`/manage/` for that plan. (Or, signed up without the box, open `/manage/` and press **Upgrade to Pro**.) Pay with Razorpay's **domestic** subscription
 test card 4718 6091 0820 4366, any CVV and a future expiry, and an OTP of 4 to 10 digits ([test cards][rzp-cards]).
 The international test card 5104 0600 0000 0008 is refused with "International cards are not supported" unless the
-account accepts international cards. The page should say "Payment received; Pro starts in a minute or two" and, once Razorpay's webhook reaches
-`staging` (see [Razorpay ↔ Vercel](#razorpay--vercel) for the webhook URL and the protection bypass), switch to
-**Pro** by itself. `show <your email>` against the preview store should then give `plan: "pro"` and `proSource:
+account accepts international cards. The page should say "Payment received. Pro is on" and show **Pro** straight away; the
+webhook (see [Razorpay ↔ Vercel](#razorpay--vercel) for its URL and the protection bypass) then sets the real
+period end. `show <your email>` against the preview store should then give `plan: "pro"` and `proSource:
 "razorpay"`. The payment up to "authenticated" was done this way on 2026-10-23; the whole path, sign-up to Pro, is
 still to run. For the pages to show the price instead of "free while it's being tested", set `"paid": true` in
 `plan.json` **on `staging` only**, and don't merge that into `main` until go-live (T27).

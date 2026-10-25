@@ -5,7 +5,7 @@ import { createHash, createHmac, randomBytes as cryptoRandomBytes, timingSafeEqu
 import { DEFAULT_FROM, buildAlreadySubscribedEmail, buildConfirmEmail, buildProRequestEmail, buildSignInEmail, sendEmail, sendOne } from "./email.js";
 import { BodyTooLargeError, allowMethods, esc, readFields, sendJson, sendPage } from "./http.js";
 import { OAUTH_COOKIE, OAUTH_MINUTES, clearOAuthCookie, googleConfigured, googleFinish, googleStart, readOAuthCookie, readSignupCookie, signupCookie } from "./google.js";
-import { cancelSubscription, createSubscription, razorpayConfigured, verifyCheckout, verifyWebhook } from "./razorpay.js";
+import { cancelSubscription, createSubscription, fetchSubscription, razorpayConfigured, verifyCheckout, verifyWebhook } from "./razorpay.js";
 import { DEFAULT_SWEEPS_PER_DAY, normaliseSweepsPerDay, sweepLimits, sweepsPerDayOf } from "./schedule.js";
 import { periodsOf, priceOf, priceTable, razorpayPlans } from "./plan.js";
 import { clearCookie, originOk, parseCookies, readSession, sessionCookie, sessionSecret, signSession } from "./session.js";
@@ -99,6 +99,9 @@ export function readChoice({ cats, sweepsPerDay, months }, env, { forPayment = f
   return { ok: true, cats: chosenCats, perDay, months: m, price };
 }
 const PAYMENT_ID = /^pay_[A-Za-z0-9]+$/;
+// Subscription states that mean Checkout's payment didn't give a running plan; Pro then waits for the webhook.
+const RETURN_NO_GRANT = new Set(["halted", "cancelled", "completed", "expired", "paused", "pending"]);
+const DAY_MS = 24 * 3600 * 1000;
 
 // Unset or unreadable gives the default; an explicit 0 closes confirmations.
 const maxConfirmsPerDay = (v) => {
@@ -188,7 +191,8 @@ async function sendConfirmation({ record, isNew, env, storage, fetchFn, t, rando
   if (isNew) await putSubscriber(storage, record);
   else {
     const { changed } = await updateSubscriber(storage, record.id, (r) => (r.status === "pending" && !confirmHeld(r, t)
-      ? { ...r, confirmSentAt: record.confirmSentAt, confirmSends: record.confirmSends, proRequestedAt: r.proRequestedAt || record.proRequestedAt }
+      ? { ...r, confirmSentAt: record.confirmSentAt, confirmSends: record.confirmSends, proRequestedAt: r.proRequestedAt || record.proRequestedAt,
+        ...(record.proRequest ? { proRequest: record.proRequest } : {}) }
       : null));
     if (!changed) return;
   }
@@ -291,6 +295,10 @@ export function makeSubscribeHandler({ env, storage, fetchFn, now, randomBytes =
         record = resent(record, t);
       }
       if (wantsPro && !record.proRequestedAt) record = { ...record, proRequestedAt: new Date(t).toISOString() };
+      // The billing period picked on the sign-up form, so confirming can go straight to paying for it. Anything not
+      // on sale is dropped: the plan card then asks for it.
+      const picked = wantsPro && fields.months !== undefined ? readChoice({ months: Number(fields.months) }, env) : null;
+      if (picked && picked.ok) record = { ...record, proRequest: { cats: picked.cats, perDay: picked.perDay, months: picked.months } };
       await sendConfirmation({ record, isNew: !existing, env, storage, fetchFn, t, randomBytes, log, logAs: "subscribe confirm-email" });
       return reply();
     } catch (e) {
@@ -358,15 +366,21 @@ export function makeConfirmHandler({ env, storage, fetchFn = fetch, now, randomB
         const done = (rec) => {
           const secret = sessionSecret(env);
           if (secret) res.setHeader("set-cookie", sessionCookie(signSession(rec, { secret, now: t })));
+          // Ticked Pro with payments on: straight to the manage page, which opens Razorpay's Checkout for the plan
+          // picked at sign-up (or the plan card, if none was).
+          if (paymentsReady(env) && rec.proRequestedAt && effectivePlan(rec, t) !== "pro") {
+            res.statusCode = 303;
+            res.setHeader("location", managePath(params.id, params.t) + "&pay=1");
+            res.setHeader("cache-control", "no-store");
+            return res.end();
+          }
           return sendPage(res, 200, {
             title: "You're subscribed",
             body: (secret ? `<p>Your account is ready, and you're signed in on this browser.</p>` : "")
               + `<p>You'll get the daily digest after the first sweep of the UTC day (about 05:47 IST).</p>`
               + (effectivePlan(rec, t) === "pro" ? ""
                 // Payments on: one step left, paying, on the manage page with the plan card open (?pay=1).
-                : paymentsReady(env) ? (rec.proRequestedAt
-                  ? `<p>One step left for Pro (the live board and 1 to 5 emails a day): <a href="${esc(managePath(params.id, params.t) + "&pay=1")}">choose your plan and pay</a>. Until then you get the daily digest.</p>`
-                  : `<p>Want the live board and 1 to 5 emails a day? <a href="${esc(managePath(params.id, params.t) + "&pay=1")}">Upgrade to Pro</a></p>`)
+                : paymentsReady(env) ? `<p>Want the live board and 1 to 5 emails a day? <a href="${esc(managePath(params.id, params.t) + "&pay=1")}">Upgrade to Pro</a></p>`
                 : rec.proRequestedAt ? `<p>You asked for Pro (the live board and 1 to 5 emails a day). You'll be switched over shortly; until then you get the daily digest.</p>`
                 : `<p>Want the live board and 1 to 5 emails a day? <a href="${esc(managePath(params.id, params.t))}">Request Pro</a></p>`)
               + `<p><a href="/live/">Open the live board</a></p>`,
@@ -667,14 +681,36 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
             if (!updated) return gone();
             return sendJson(res, 200, { ok: true, message: "Renewal set up; it starts when this period ends.", ...view(updated) });
           }
-          // Only "created" moves on, judged on the stored record: if the webhook got here first, even
-          // while this request was running, its status and its Pro stay.
+          // Checkout's signature proves the payment went through, and a plan that starts now is charged when it's
+          // approved, so Pro starts here rather than when the webhook arrives. Razorpay is asked about the
+          // subscription first: one that belongs to another record, or is in a state that says otherwise (halted,
+          // cancelled…), is left to the webhook; if Razorpay can't be reached, the signature is enough. Pro runs to
+          // the period end Razorpay reports, else for the months paid for, until the webhook brings the real one.
+          // lastEventAt is left as it is, so no webhook event is taken for stale.
+          const live = await fetchSubscription({ env, fetchFn, subscriptionId: rzp.subscriptionId });
+          if (live.error) log("account", "checkout-return: razorpay error " + live.error + "; starting Pro on the signature");
+          const startNow = live.error ? true : live.sid === record.id && !RETURN_NO_GRANT.has(live.status);
+          let before = "free";
+          // Only "created" or "authenticated" move on, judged on the stored record: if the webhook got here first,
+          // even while this request was running, its status and its Pro stay.
           const { record: updated } = await save((r) => {
             const cur = rzpOf(r);
-            return cur.subscriptionId === rzp.subscriptionId && cur.status === "created" ? { ...r, rzp: { ...cur, status: "authenticated" } } : null;
+            before = effectivePlan(r, t);
+            if (cur.subscriptionId !== rzp.subscriptionId || (cur.status !== "created" && cur.status !== "authenticated")) return null;
+            const authed = { ...r, rzp: { ...cur, status: "authenticated" } };
+            const c = cur.choice;
+            if (!startNow || before === "pro" || !c || !Number.isInteger(c.months)) return cur.status === "created" ? authed : null;
+            const end = !live.error && live.currentEnd && live.currentEnd * 1000 > t ? live.currentEnd : Math.floor((t + c.months * 31 * DAY_MS) / 1000);
+            const status = !live.error && live.status === "active" ? "active" : "authenticated";
+            return applyRzpEvent(authed, "activated", { status, current_end: end, remaining_count: live.error ? undefined : live.remainingCount }, cur.lastEventAt || null, t);
           });
           if (!updated) return gone();
-          return sendJson(res, 200, { ok: true, message: "Payment received; Pro starts in a minute or two.", ...view(updated) });
+          const now = effectivePlan(updated, t) === "pro";
+          if (now && before !== "pro") {
+            await recordEvent(storage, "progranted", { now: t, randomBytes, plan: "pro" });
+            log("account", "checkout-return: Pro started");
+          }
+          return sendJson(res, 200, { ok: true, message: now ? "Payment received. Pro is on." : "Payment received; Pro starts in a minute or two.", ...view(updated) });
         }
         // cancel: a paid Pro stops renewing; Pro lasts until proUntil, and the webhook (T21) ends it.
         if (!paidPro(record, t) || !rzp.subscriptionId) return sendJson(res, 409, { error: "not_paid_pro" });

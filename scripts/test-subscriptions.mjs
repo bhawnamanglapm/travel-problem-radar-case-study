@@ -1390,12 +1390,16 @@ const iso = (ms) => new Date(ms).toISOString();
   {
     const PAY = { RAZORPAY_KEY_ID: "rzp_test_Fixture000001", RAZORPAY_KEY_SECRET: "ks", RAZORPAY_WEBHOOK_SECRET: "wh", RAZORPAY_PLANS: JSON.stringify({ 1: "plan_00000000000001", 12: "plan_00000000000012" }), RAZORPAY_TOTAL_COUNT: "12" };
     const wp = world(PAY);
-    await wp.subscribe({ email: "payer@example.com", wantsPro: "1" });
+    await wp.subscribe({ email: "payer@example.com", wantsPro: "1", months: "12" });
     await wp.subscribe({ email: "maybe@example.com" });
+    await wp.subscribe({ email: "odd@example.com", wantsPro: "1", months: "3" });
+    await wp.subscribe({ email: "plainpick@example.com", months: "12" });
     const payer = await recOf(wp, "payer@example.com"), maybe = await recOf(wp, "maybe@example.com");
+    check(JSON.stringify(payer.proRequest) === JSON.stringify({ cats: null, perDay: 2, months: 12 }) && !(await recOf(wp, "odd@example.com")).proRequest && !(await recOf(wp, "plainpick@example.com")).proRequest,
+      "payments on: the period picked at sign-up is kept as the Pro request (a period not on sale, or no Pro box, keeps nothing)");
     const rp = await wp.confirm(payer);
-    check(rp.code === 200 && rp.body.includes(`href="${esc(managePath(payer.id, payer.token) + "&pay=1")}"`) && /choose your plan and pay/.test(rp.body) && !/switched over/.test(rp.body),
-      "payments on: confirming a ticked sign-up links to the manage page with ?pay=1 to choose a plan and pay");
+    check(rp.code === 303 && rp.headers.location === managePath(payer.id, payer.token) + "&pay=1" && rp.headers["cache-control"] === "no-store",
+      "payments on: confirming a ticked sign-up goes straight to the manage page with ?pay=1, to pay");
     check(evCount(wp, "prorequested") === 1 && wp.owner().length === 0, "payments on: the Pro request is counted, but the owner gets no email to switch it on");
     const rm = await wp.confirm(maybe);
     check(rm.code === 200 && rm.body.includes(`href="${esc(managePath(maybe.id, maybe.token) + "&pay=1")}"`) && /Upgrade to Pro/.test(rm.body) && !/Request Pro/.test(rm.body),
@@ -3104,11 +3108,16 @@ const iso = (ms) => new Date(ms).toISOString();
     const rzpCalls = []; const mail = []; const logs = [];
     let nextSub = 1;
     let rzpReply = null; // null: a good reply; otherwise the fake response to give
+    let subGet = null; // GET /subscriptions/:id: null gives the plain reply below (no notes), else subGet(id) is the body or a response
     let clock = T0;
     const fetchFn = async (url, init) => {
       if (!String(url).startsWith("https://api.razorpay.com/")) { mail.push(init); return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ id: "m" }) }; }
       rzpCalls.push({ url, ...init, json: init.body ? JSON.parse(init.body) : null });
       if (rzpReply) return rzpReply;
+      if (subGet && (!init.method || init.method === "GET") && /\/subscriptions\/sub_[A-Za-z0-9]+$/.test(url)) {
+        const b = subGet(url.split("/").at(-1));
+        return b && b.status && typeof b.json === "function" ? b : { ok: true, status: 200, json: async () => b };
+      }
       const id = url.endsWith("/cancel") ? url.split("/").at(-2) : "sub_T20" + String(nextSub++).padStart(9, "0");
       return { ok: true, status: 200, json: async () => ({ id, status: url.endsWith("/cancel") ? "active" : "created", short_url: "https://rzp.io/x", customer_email: "payer@example.com" }) };
     };
@@ -3133,7 +3142,7 @@ const iso = (ms) => new Date(ms).toISOString();
     const get = (rec) => call({ method: "GET", query: { id: rec.id, t: rec.token } });
     const stored = (rec) => getSubscriber(st, rec.id);
     const evs = (type) => [...st.m.keys()].filter((k) => k.startsWith("radar:event:") && k.includes(`-${type}-`));
-    return { st, env, rzpCalls, mail, logs, replies, add, call, act, get, stored, evs, setReply: (r) => { rzpReply = r; }, tick: (ms) => { clock += ms; } };
+    return { st, env, rzpCalls, mail, logs, replies, add, call, act, get, stored, evs, setReply: (r) => { rzpReply = r; }, setSubGet: (f) => { subGet = f; }, tick: (ms) => { clock += ms; } };
   };
 
   // payments on or off
@@ -3244,13 +3253,51 @@ const iso = (ms) => new Date(ms).toISOString();
     r = await w.act(free, "checkout-return", { paymentId: "pay_A1", subscriptionId: SUB, signature: sig("pay_A1", SUB) });
     let s = await w.stored(free);
     check(r.code === 200 && /Payment received; Pro starts in a minute or two/.test(r.json().message) && r.json().paymentPending === true, "checkout-return: a good signature is 200 with the payment-received message");
-    check(s.rzp.status === "authenticated" && s.plan === "free" && !s.proSource && effectivePlan(s, T0) === "free", "checkout-return: the record is authenticated and still free; only the webhook grants Pro");
+    check(s.rzp.status === "authenticated" && s.plan === "free" && !s.proSource && effectivePlan(s, T0) === "free", "checkout-return: when Razorpay's subscription doesn't name this account, the record is authenticated and stays Free until the webhook");
     // The webhook got there first: its status stays.
     await putSubscriber(w.st, { ...s, plan: "pro", proSource: "razorpay", proUntil: iso(T0 + 30 * 24 * 3600_000), rzp: { ...s.rzp, status: "active" } });
     r = await w.act(free, "checkout-return", { paymentId: "pay_A1", subscriptionId: SUB, signature: sig("pay_A1", SUB) });
     s = await w.stored(free);
     check(r.code === 200 && s.rzp.status === "active" && s.plan === "pro", "checkout-return: never moves a status the webhook set back to authenticated");
     check(w.mail.length === 0 && w.replies.every((b) => !b.includes("@") && !b.includes(free.token)), "checkout-return: sends no email; no reply holds an address or a token");
+  }
+
+  // checkout-return starts Pro at once (2026-10-26): the signature proves the payment, and Razorpay is asked about
+  // the subscription first.
+  {
+    const DAY = 24 * 3600_000;
+    const paid = async (label, subReply, email) => {
+      const w = await world();
+      const rec = await w.add(email, { proRequestedAt: iso(T0 - 600_000), proRequest: { cats: ["industry"], perDay: 3, months: 12 } });
+      await w.act(rec, "checkout", { cats: ["industry"], sweepsPerDay: 3, months: 12 });
+      const SUB = (await w.stored(rec)).rzp.subscriptionId;
+      w.setSubGet(typeof subReply === "function" ? (id) => subReply(id, rec) : () => subReply);
+      const r = await w.act(rec, "checkout-return", { paymentId: "pay_NOW1", subscriptionId: SUB, signature: sig("pay_NOW1", SUB) });
+      return { w, rec, r, s: await w.stored(rec), SUB };
+    };
+    const END = Math.floor((T0 + 365 * DAY) / 1000);
+    let x = await paid("active", (id, rec) => ({ id, status: "active", notes: { sid: rec.id }, current_end: END, remaining_count: 9, paid_count: 1 }), "instant@example.com");
+    check(x.r.code === 200 && x.r.json().effectivePlan === "pro" && x.r.json().paymentPending === false && /Pro is on/.test(x.r.json().message),
+      "checkout-return: a verified payment on an active subscription gives Pro at once");
+    check(x.s.plan === "pro" && x.s.proSource === "razorpay" && x.s.proUntil === iso(END * 1000) && x.s.rzp.status === "active" && x.s.rzp.remaining === 9 &&
+      JSON.stringify(x.s.paidFor) === JSON.stringify({ sub: x.SUB, months: 12, price: 1 }) && JSON.stringify(x.s.cats) === '["industry"]' && x.s.sweepsPerDay === 3 && !x.s.proRequestedAt && !x.s.proRequest,
+      "checkout-return: Pro until Razorpay's period end, with the plan chosen at checkout applied and the request cleared");
+    check(x.w.evs("progranted").length === 1 && x.s.rzp.lastEventAt === null, "checkout-return: one progranted event; lastEventAt untouched, so the webhook's events aren't taken for stale");
+    const later = (await import("../api/_lib/subscription-handlers.js")).applyRzpEvent(x.s, "charged", { status: "active", current_end: END + 3600 }, iso(T0 + 1000), T0 + 1000);
+    check(later.proUntil === iso((END + 3600) * 1000) && JSON.stringify(later.paidFor) === JSON.stringify(x.s.paidFor), "checkout-return: the webhook's later event still moves the period end");
+    const again = await x.w.act(x.rec, "checkout-return", { paymentId: "pay_NOW1", subscriptionId: x.SUB, signature: sig("pay_NOW1", x.SUB) });
+    check(again.code === 200 && x.w.evs("progranted").length === 1 && (await x.w.stored(x.rec)).proUntil === x.s.proUntil, "checkout-return: sent twice, Pro is granted once");
+
+    x = await paid("unreachable", { ok: false, status: 500, json: async () => ({}) }, "offline@example.com");
+    check(x.s.plan === "pro" && x.s.rzp.status === "authenticated" && x.s.proUntil === iso(Math.floor((T0 + 12 * 31 * DAY) / 1000) * 1000) && x.w.logs.some((l) => /checkout-return: razorpay error/.test(l)),
+      "checkout-return: Razorpay unreachable, the signature is enough: Pro for the months paid for (31 days each) until the webhook brings the real end");
+    x = await paid("authenticated", (id, rec) => ({ id, status: "authenticated", notes: { sid: rec.id }, current_end: null }), "authed@example.com");
+    check(x.s.plan === "pro" && x.s.rzp.status === "authenticated", "checkout-return: Razorpay still says authenticated: Pro starts anyway");
+    x = await paid("halted", (id, rec) => ({ id, status: "halted", notes: { sid: rec.id }, current_end: END }), "halted@example.com");
+    check(x.s.plan === "free" && x.s.rzp.status === "authenticated" && x.r.json().paymentPending === true && x.w.evs("progranted").length === 0,
+      "checkout-return: a subscription Razorpay calls halted waits for the webhook");
+    x = await paid("someone else's", (id) => ({ id, status: "active", notes: { sid: "f".repeat(64) }, current_end: END }), "other@example.com");
+    check(x.s.plan === "free" && x.s.rzp.status === "authenticated", "checkout-return: a subscription whose notes name another account waits for the webhook");
   }
 
   // cancel

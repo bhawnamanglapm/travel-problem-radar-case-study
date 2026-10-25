@@ -41,6 +41,9 @@
   .small { font-size: 13px; color: #93939F; }
   label.check { display: flex; gap: 8px; align-items: flex-start; margin: 12px 0 0; font-size: 14px; color: #C9C9D2; cursor: pointer; }
   label.check input { margin: 4px 0 0; accent-color: #C6FF3D; }
+  fieldset.period { border: 0; margin: 8px 0 0 24px; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; color: #C9C9D2; }
+  fieldset.period legend { float: left; padding: 0; margin-right: 4px; }
+  fieldset.period input { accent-color: #C6FF3D; margin-right: 6px; }
   .gbtn { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 48px;
     font-weight: 600; background: #fff; color: #1f1f1f; border: 1px solid #747775; border-radius: 6px; padding: 10px 20px; text-decoration: none; }
   .gbtn:hover { background: #f2f2f2; }
@@ -81,7 +84,8 @@
         <input id="email" name="email" type="email" autocomplete="email" required maxlength="254" placeholder="you@example.com" />
         <button id="go" type="submit">Create account</button>
       </div>
-      <label class="check"><input id="wantsPro" name="wantsPro" type="checkbox" value="1" /> <span><!-- when:free-test -->I&rsquo;d also like Pro (the live board and 1 to 5 emails a day). You&rsquo;ll get the daily digest until it&rsquo;s switched on. <a href="../subscribe/">Compare the plans</a>.<!-- /when --><template data-when="paid">I&rsquo;d like Pro: the live board and 1 to 5 emails a day, {{PRO_PRICE}}, {{PRO_GST}}. It renews automatically at the end of each billing period until you cancel. You&rsquo;ll pay on your account page after confirming your email. <a href="../pricing/">Pricing details</a>.</template></span></label>
+      <label class="check"><input id="wantsPro" name="wantsPro" type="checkbox" value="1" /> <span><!-- when:free-test -->I&rsquo;d also like Pro (the live board and 1 to 5 emails a day). You&rsquo;ll get the daily digest until it&rsquo;s switched on. <a href="../subscribe/">Compare the plans</a>.<!-- /when --><template data-when="paid">I&rsquo;d like Pro: the live board and 1 to 5 emails a day, {{PRO_PRICE}}, {{PRO_GST}}. It renews automatically at the end of each billing period until you cancel. Confirm your email, pay with Razorpay, and Pro starts straight away. <a href="../pricing/">Pricing details</a>.</template></span></label>
+      <template data-when="paid"><fieldset class="period" id="period" hidden><legend>Pay</legend><label><input type="radio" name="months" value="1" checked /> Monthly</label><label><input type="radio" name="months" value="12" /> Yearly</label></fieldset></template>
       <div class="trap">
         <label for="website">Leave this field empty (it is a trap for automated sign-ups)</label>
         <input id="website" name="website" type="text" tabindex="-1" autocomplete="off" />
@@ -97,7 +101,7 @@
   </div>
 
   <p class="small">Your account includes the free daily summary: how many travel-industry problems were found in the last 24 hours, and their headlines. Unsubscribing from it deletes the account.</p>
-  <p class="small">We store your email address, the dates you signed up and confirmed, and whether you asked for Pro. Confirming or signing in sets one cookie on that browser so the site knows it&rsquo;s you; it holds no address and lasts until you close the browser or sign out (12 hours at most). If you continue with Google, we receive only your email address from it. Questions or a deletion request: email <a href="mailto:pehchanthetraveller19@gmail.com">pehchanthetraveller19@gmail.com</a>. <a href="../legal/privacy/">Privacy policy</a></p>
+  <p class="small">We store your email address, the dates you signed up and confirmed, and whether you asked for Pro (and the billing period you picked). Confirming or signing in sets one cookie on that browser so the site knows it&rsquo;s you; it holds no address and lasts until you close the browser or sign out (12 hours at most). If you continue with Google, we receive only your email address from it. Questions or a deletion request: email <a href="mailto:pehchanthetraveller19@gmail.com">pehchanthetraveller19@gmail.com</a>. <a href="../legal/privacy/">Privacy policy</a></p>
   <p class="small">Gathered by an AI model with web search. Items are not verified; check each source link.</p>
   <footer><nav class="site-foot" aria-label="Site"><a href="../">Home</a> &middot; <a href="../about/">About</a> &middot; <a href="../pricing/">Pricing</a> &middot; <a href="../legal/contact/">Contact</a> &middot; <a href="../legal/privacy/">Privacy</a> &middot; <a href="../legal/refunds/">Refunds</a></nav></footer>
 </main>
@@ -119,6 +123,12 @@
     .catch(function () { /* stay on the form */ });
   // The plans page's "Ask for Pro" link arrives with ?pro=1.
   if (/[?&]pro=1(&|$)/.test(location.search)) form.wantsPro.checked = true;
+  // With payments open, ticking Pro shows Monthly or Yearly; confirming the email then opens Razorpay for that plan.
+  var period = document.getElementById("period");
+  function showPeriod() { if (period) period.hidden = !form.wantsPro.checked; }
+  form.wantsPro.addEventListener("change", showPeriod);
+  showPeriod();
+  function pickedMonths() { var m = form.querySelector('input[name="months"]:checked'); return form.wantsPro.checked && m ? m.value : undefined; }
   // Continue with Google takes the Pro box along.
   document.getElementById("gbtn").addEventListener("click", function () {
     this.href = "/api/session?action=google" + (form.wantsPro.checked ? "&pro=1" : "");
@@ -131,7 +141,7 @@
     fetch("/api/subscribe", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email: form.email.value, website: form.website.value, wantsPro: form.wantsPro.checked ? "1" : "" })
+      body: JSON.stringify({ email: form.email.value, website: form.website.value, wantsPro: form.wantsPro.checked ? "1" : "", months: pickedMonths() })
     }).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (b) { return { status: r.status, body: b }; });
     }).then(function (x) {
