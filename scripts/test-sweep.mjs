@@ -2,7 +2,7 @@
 // storage are stubbed, so this needs no network and no API key.
 //   node scripts/test-sweep.mjs
 import { makeDataHandler, makeSweepHandler } from "../api/_lib/handlers.js";
-import { CATS, extractProblems, runDailySweep, scanCategory, sweepKey, trimSeen } from "../api/_lib/radar.js";
+import { CATS, KEY_LLMLOG_PREFIX, extractProblems, llmLogKey, runDailySweep, scanCategory, sweepKey, trimSeen } from "../api/_lib/radar.js";
 import { SLOTS_BY_FREQ, normaliseSweepsPerDay, previousSlotAt, siteSweepsPerDay, slotOf, sweepLimits, sweepsPerDayOf } from "../api/_lib/schedule.js";
 import { check, finish, memStorage, mockRes } from "./test-helpers.mjs";
 
@@ -124,11 +124,128 @@ const sweepOpts = (storage, byCat, now) => ({
 
   const st2 = memStorage();
   const none = await runDailySweep(sweepOpts(st2, { traveler_pain: "http", gov_policy: "http", web_app: "http", industry: "http" }, () => 1_800_000_000_000));
-  check(none.status === "empty" && [...st2.m.keys()].join() === "radar:lastScheduled", "all four failed: nothing saved but the start time");
+  check(none.status === "empty" && [...st2.m.keys()].sort().join() === "radar:lastScheduled," + llmLogKey("1800000000000"),
+    "all four failed: nothing saved but the start time and the LLM log");
 
   const cut = await runDailySweep(sweepOpts(memStorage(), { traveler_pain: "cutoff", gov_policy: [item(1)], web_app: [], industry: [] }, () => 1_800_000_000_000));
   check(cut.perCat.traveler_pain === "failed: empty (stop_reason: max_tokens)", "a failed category says why the model stopped");
   check(cut.usage.output === 8150 && cut.usage.searches === 7 && cut.usage.input === 400, "usage includes failed categories, which are billed too");
+}
+
+// ---- LLM log: every call's request and response, kept in the store
+{
+  // A reply shaped like a real web-search one: searches, results with encrypted page contents, a
+  // thinking block with a signature, and an answer with citations.
+  const searched = (urls, text) => async (url, init) => ({
+    ok: true, status: 200,
+    json: async () => ({
+      id: "msg_1", model: "claude-test", stop_reason: "end_turn",
+      content: [
+        { type: "thinking", thinking: "look for refunds", signature: "SIG" },
+        { type: "server_tool_use", id: "srv_1", name: "web_search", input: { query: "refund complaints" } },
+        { type: "web_search_tool_result", tool_use_id: "srv_1", content: urls.map((u) => ({ type: "web_search_result", url: u, title: "T", encrypted_content: "ENC", page_age: "1 day" })) },
+        { type: "web_search_tool_result", tool_use_id: "srv_2", content: { type: "web_search_tool_result_error", error_code: "max_uses_exceeded" } },
+        { type: "text", text, citations: [{ type: "web_search_result_location", url: urls[0], title: "T", encrypted_index: "IDX", cited_text: "quoted" }] },
+      ],
+      usage: { input_tokens: 1000, output_tokens: 200, server_tool_use: { web_search_requests: 1 } },
+    }),
+  });
+  const st = memStorage();
+  const t = Date.UTC(2026, 9, 25, 5, 17);
+  const byCat = {
+    traveler_pain: searched(["https://a.example/1", "https://b.example/2", "https://a.example/1"], JSON.stringify([item(1)])),
+    gov_policy: searched(["https://b.example/2", "https://c.example/3"], JSON.stringify([item(2)])),
+    web_app: searched([], "no json here"),
+    industry: async () => { throw new Error("socket hang up"); },
+  };
+  const out = await runDailySweep({ storage: st, now: () => t, scan: (cat) => scanCategory(cat, { fetchFn: byCat[cat.key], apiKey: "sekret", model: "claude-test" }) });
+  const raw = st.m.get(llmLogKey(String(t)));
+  const lg = JSON.parse(raw || "{}");
+  check(out.status === "saved" && out.llmLog === String(t) && out.llmLog === out.id, "a saved sweep's LLM log has the sweep's id");
+  check(lg.status === "saved" && lg.calls.length === 4 && lg.summary.calls === 4 && lg.summary.failed === 2, "the log has all four calls, two of them failed");
+  check(lg.summary.input === 3000 && lg.summary.output === 600 && lg.summary.searches === 3,
+    `summary: total input and output tokens and searches (${lg.summary.input}, ${lg.summary.output}, ${lg.summary.searches})`);
+  check(lg.summary.pages === 3 && lg.summary.links.join() === "https://a.example/1,https://b.example/2,https://c.example/3",
+    "summary: pages found by search, each link once across the sweep");
+  check(out.usage.pages === 3, "the sweep's usage counts the pages too");
+  const tp = lg.calls.find((c) => c.cat === "traveler_pain");
+  check(tp.request.messages[0].content.includes('"Traveler pain"') && tp.request.model === "claude-test" && tp.request.max_tokens === 16000,
+    "a call keeps its request: prompt, model, limits");
+  check(tp.response.content.find((b) => b.type === "text").text.includes("Problem 1") && tp.items === 1 && tp.usage.pages === 2,
+    "a call keeps the model's answer, its item count and its pages");
+  check(tp.response.content.some((b) => b.type === "server_tool_use" && b.input.query === "refund complaints")
+    && tp.response.content.find((b) => b.type === "thinking").thinking === "look for refunds",
+    "a call keeps the search queries and the thinking");
+  check(!/ENC|IDX|SIG|quoted/.test(raw), "encrypted page contents, citation indexes and signatures are left out; pages are links only");
+  check(!raw.includes("sekret"), "the API key is never in the log");
+  const wa = lg.calls.find((c) => c.cat === "web_app");
+  const ind = lg.calls.find((c) => c.cat === "industry");
+  check(/no json/.test(wa.error) && wa.response.content.length === 5, "a call with no usable answer keeps its response and the reason");
+  check(ind.error === "socket hang up" && ind.request.messages.length === 1, "a call that never reached the API keeps its request and the error");
+
+  // An HTTP error keeps its status and body, with the key blanked.
+  let httpErr;
+  try { await scanCategory(CATS[0], { apiKey: "sekret", model: "m", fetchFn: async () => ({ ok: false, status: 401, json: async () => ({ error: { type: "authentication_error", message: "bad sekret" } }) }) }); }
+  catch (e) { httpErr = e; }
+  check(httpErr.call.response.status === 401 && !JSON.stringify(httpErr.call).includes("sekret") && JSON.stringify(httpErr.call).includes("[key]"),
+    "an HTTP error's log keeps the status and body, never the key");
+
+  // A sweep whose save fails still keeps the log, since the calls were billed.
+  const st2 = memStorage();
+  const failing = { ...st2, set: async (k, v) => { if (k.startsWith("radar:sweep:")) throw new Error("down"); return st2.set(k, v); } };
+  let threw = false;
+  try { await runDailySweep(sweepOpts(failing, { traveler_pain: [item(1)], gov_policy: [], web_app: [], industry: [] }, () => t)); } catch (e) { threw = true; }
+  check(threw && /^save failed: down/.test(JSON.parse(st2.m.get(llmLogKey(String(t)))).status), "a sweep that can't be saved still leaves its LLM log");
+
+  // A failed log write never fails the sweep.
+  const st3 = memStorage();
+  const noLog = { ...st3, set: async (k, v) => { if (k.startsWith(KEY_LLMLOG_PREFIX)) throw new Error("down"); return st3.set(k, v); } };
+  const out3 = await runDailySweep(sweepOpts(noLog, { traveler_pain: [item(1)], gov_policy: [], web_app: [], industry: [] }, () => t));
+  check(out3.status === "saved" && out3.llmLog === null, "a log that can't be written leaves the sweep saved (llmLog: null)");
+}
+
+// ---- LLM logs older than 30 days go, listed on the first sweep of a UTC day only
+{
+  const st = memStorage();
+  let lists = 0;
+  const counted = { ...st, list: async (p) => { lists++; return st.list(p); } };
+  const day = 24 * 3600 * 1000;
+  const t0 = Date.UTC(2026, 9, 25, 0, 17);
+  st.m.set(llmLogKey(String(t0 - 31 * day)), "{}");
+  st.m.set(llmLogKey(String(t0 - 29 * day)), "{}");
+  const four = { traveler_pain: [item(1)], gov_policy: [], web_app: [], industry: [] };
+  await runDailySweep(sweepOpts(counted, four, () => t0));
+  check(!st.m.has(llmLogKey(String(t0 - 31 * day))) && st.m.has(llmLogKey(String(t0 - 29 * day))) && lists === 1,
+    "the day's first sweep deletes logs older than 30 days and keeps the rest");
+  await runDailySweep(sweepOpts(counted, four, () => t0 + 5 * 3600 * 1000));
+  check(lists === 1 && [...st.m.keys()].filter((k) => k.startsWith(KEY_LLMLOG_PREFIX)).length === 3, "a later sweep that day lists nothing (Blob advanced operations)");
+}
+
+// ---- owner script: scripts/llm-logs.mjs
+{
+  const tool = await import("./llm-logs.mjs");
+  const st = memStorage();
+  const t1 = Date.UTC(2026, 9, 24, 3, 17), t2 = Date.UTC(2026, 9, 25, 5, 17);
+  const four = { traveler_pain: [item(1)], gov_policy: "http", web_app: [], industry: [] };
+  await runDailySweep(sweepOpts(st, four, () => t1));
+  await runDailySweep(sweepOpts(st, four, () => t2));
+  const run = async (argv) => {
+    const out = [];
+    const code = await tool.main(argv, { storage: st, now: t2, out: (s) => out.push(s), err: (s) => out.push(s) });
+    return { code, out: out.join("\n") };
+  };
+  const ls = await run(["list"]);
+  check(ls.code === 0 && ls.out.split("\n").length === 2 && ls.out.startsWith(String(t2)) && /3\/4 calls ok +in 300 +out 150/.test(ls.out),
+    "llm-logs list: newest first, with calls, tokens, searches and pages");
+  check((await run(["list", "--days", "1"])).out.split("\n").length === 1, "llm-logs list --days limits the range");
+  const sum = await run(["summary", "latest"]);
+  check(sum.code === 0 && sum.out.includes(`Sweep ${t2}`) && /gov_policy +failed: http 529/.test(sum.out) && /Tokens: 300 input, 150 output/.test(sum.out),
+    "llm-logs summary: totals and each call's outcome");
+  const show = await run(["show", String(t1)]);
+  check(show.code === 0 && JSON.parse(show.out).calls.length === 4, "llm-logs show: the whole log as JSON");
+  check((await run(["show", "1700000000000"])).code === 1, "llm-logs show: unknown id is not found (exit 1)");
+  check((await run(["show"])).code === 2 && (await run(["drop", "x"])).code === 2 && (await run(["list", "--days", "0"])).code === 2,
+    "llm-logs: bad usage exits 2");
 }
 
 // ---- 60-sweep cap
@@ -504,6 +621,7 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   check((await call("/api/data?key=radar:sweep:1800000000000")).code === 200, "a sweep is served");
   check((await call("/api/data?key=radar:seenIds")).code === 400, "seenIds is not exposed");
   check((await call("/api/data?key=radar:lastScheduled")).code === 400, "lastScheduled is not exposed");
+  check((await call("/api/data?key=" + llmLogKey("1800000000000"))).code === 400, "LLM logs are not exposed");
   check((await call("/api/data?key=../../etc/passwd")).code === 400, "path-like keys are rejected");
   check((await call("/api/data")).code === 400, "missing key is rejected");
   check((await call("/api/data?key=radar:sweep:1700000000000")).code === 404, "unknown sweep: 404");

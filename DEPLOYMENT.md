@@ -577,6 +577,7 @@ not a letter or digit with `-`.
 | `radar:sweep:<id>` | `radar/radar-sweep-<id>.json` | One sweep's items | Yes |
 | `radar:seenIds` | `radar/radar-seenIds.json` | Up to 800 item IDs already seen, used for the New flag | No |
 | `radar:lastScheduled` | `radar/radar-lastScheduled.json` | When the last scheduled sweep started, saved or not; the 2-hour rule reads it | No |
+| `radar:llmlog:<id>` | `radar/radar-llmlog-<id>.json` | One sweep's LLM log: each Claude call's request (prompt, model, limits, tools; never the headers or key) and response (thinking, search queries, answer, stop reason, usage), and a summary of input and output tokens, searches, and the pages search found, **as links only** (page contents are encrypted and left out). Written for every sweep that ran: saved, empty, or not saved. `<id>` is the sweep's id. Deleted after 30 days by the day's first sweep. Read with `scripts/llm-logs.mjs` | No |
 | `radar:sub:<id>` | `radar/radar-sub-<id>.json` | One subscriber: address, status, plan, token, dates, and chosen categories (`cats`, Pro only). Since T16 also `signin` (the SHA-256 of an unused sign-in code, its expiry and when it was sent; `null` once used) and, optionally, `sessionVer` (raising it by hand signs that subscriber out on every browser). Since T17, a Pro record whose emails stopped has `emailOff`: `unsubscribed`, `bounced` or `complained`. `<id>` is the SHA-256 of the canonical address (Gmail without dots or `+tags`, and `+tags` dropped for the big providers; see [email-signup.md](docs/subscriptions/email-signup.md#flow)). Records made before 2026-10-22 keep the SHA-256 of the lowercased address | No |
 | `radar:event:<YYYYMMDD>-<time>-<type>-<random>` | `radar/radar-event-….json` | One sign-up, confirmation, sign-in email, unsubscribe, emails-off, account-deleted, Pro, bounce or complaint event: type, time and plan, **no address or id**. Kept until `prune-events` deletes it | No |
 | `radar:deliveries:<YYYYMMDD>` | `radar/radar-deliveries-<YYYYMMDD>.json` | Record ids already sent that day's Free digest. Deleted by the sweep after 7 days | No |
@@ -1147,6 +1148,31 @@ domain isn't behind Vercel Authentication, so the live webhook URL needs no bypa
 [vercel-bypass]: https://vercel.com/docs/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation
 [rzp-webhooks]: https://razorpay.com/docs/webhooks/
 [rzp-webhook-bp]: https://razorpay.com/docs/webhooks/best-practices/
+
+### Reading the LLM logs
+
+Vercel's Hobby plan keeps function logs for an hour, so each sweep that runs also saves its LLM log in the Blob store
+(`radar:llmlog:<id>` in [What is stored](#what-is-stored)), kept for 30 days. The sweep's reply, printed in the
+public Actions log, carries only the log's id (`llmLog`) and the page count (`usage.pages`), never the log itself.
+Each log costs one Blob write (an advanced operation); old logs are listed for deletion once a UTC day, not every sweep.
+
+`scripts/llm-logs.mjs` reads them on your own machine, with the same `.env.local` token as the subscriber script
+below. It is read-only and not deployed.
+
+```
+node --env-file=.env.local scripts/llm-logs.mjs list [--days 7]
+node --env-file=.env.local scripts/llm-logs.mjs summary <id|latest>
+node --env-file=.env.local scripts/llm-logs.mjs show <id|latest>
+```
+
+| Command | What it does |
+|---|---|
+| `list` | One line per sweep that ran, newest first: id, time, outcome, calls that worked, input and output tokens, searches, pages |
+| `summary` | One sweep's totals, each category's outcome, tokens, pages and time, then the links of every page search found |
+| `show` | The whole log as JSON: every request and response |
+
+The Blob store's browser in the Vercel dashboard (**Storage**, then the store, under `radar/`) lists the log files
+too; whether it opens a private file is **not confirmed**.
 
 ### Managing subscribers
 
