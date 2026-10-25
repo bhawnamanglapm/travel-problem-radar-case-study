@@ -27,7 +27,8 @@ async list(prefix) { ... }
 ```
 
 - Logical keys become Blob paths through `path()`: anything that is not a letter or digit becomes `-`, so
-  `radar:sub:abc` is stored at `radar/radar-sub-abc.json`.
+  `radar:sub:abc` is stored at `radar/radar-sub-abc.json`. (Since 2026-10-26 each kind of key has its own folder:
+  `radar/subscribers/abc.json`; see DEPLOYMENT.md, What is stored.)
 - `list` maps the prefix the same way (`radar:sub:` → `radar/radar-sub-`), calls `@vercel/blob`'s `list` with that
   prefix, follows every page, and returns each blob's pathname with the prefix and `.json` removed.
 - **Only use it for prefixes that end in `:` and keys whose suffix is letters, digits and `-`.** Then the suffix maps

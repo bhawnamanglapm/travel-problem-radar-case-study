@@ -5,6 +5,11 @@ grouped by date.
 
 ## 2026-10-26
 
+- Blob folders. Each kind of key now has its own folder under `radar/`: `logs/` (LLM logs), `sweeps/`, `history/`
+  (the sweep index and seen ids), `state/` (last scheduled run, subscriber count), `subscribers/`, `events/`,
+  `deliveries/`, `ip-hits/` and `razorpay/` (`subscriptions/`, `events/`). Files written before this, directly in
+  `radar/` as `radar-….json`, are no longer read; the data was test data, so there is no migration. Delete them by
+  hand in the Blob browser.
 - One Pro price (owner's decision). Categories and emails a day no longer change the price; Pro is paid **monthly or
   yearly** (3 and 6 months dropped). `plan.json` has `monthly` and `yearly` again, both ₹1 while testing, and its
   per-category `pricing` block is gone. `/manage/`'s plan card shows Monthly and Yearly with their prices; a Pro

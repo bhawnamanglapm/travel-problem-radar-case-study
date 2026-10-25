@@ -33,8 +33,8 @@ const iso = (ms) => new Date(ms).toISOString();
   check(!ids.includes("1") && (await st.list("radar:sweep:")).join() === "1", "a key under another prefix is not returned");
 
   // blobStorage().list over a fake @vercel/blob client that answers in pages of two.
-  const files = ["radar/radar-sub-e.json", "radar/radar-sub-a.json", "radar/radar-sub-d.json", "radar/radar-sub-c.json",
-    "radar/radar-sub-b.json", "radar/radar-sweep-1.json", "radar/radar-sub-f.txt"];
+  const files = ["radar/subscribers/e.json", "radar/subscribers/a.json", "radar/subscribers/d.json", "radar/subscribers/c.json",
+    "radar/subscribers/b.json", "radar/sweeps/1.json", "radar/subscribers/f.txt"];
   const calls = [];
   const fake = {
     list: async ({ prefix, cursor }) => {
@@ -48,30 +48,46 @@ const iso = (ms) => new Date(ms).toISOString();
   const blob = blobStorage(fake);
   const got = await blob.list("radar:sub:");
   check(got.join() === "a,b,c,d,e", `blob list follows every page and returns sorted suffixes (${got.join()})`);
-  check(calls.length === 3 && calls[0].prefix === "radar/radar-sub-" && calls[0].cursor === undefined, "blob list maps the prefix the way path() does, 3 pages of 2");
+  check(calls.length === 3 && calls[0].prefix === "radar/subscribers/" && calls[0].cursor === undefined, "blob list maps the prefix the way path() does, 3 pages of 2");
   let threw = false;
   try { await blob.list("radar"); } catch (e) { threw = true; }
   check(threw && calls.length === 3, "list without a trailing ':' throws before calling the service");
   let allRefused = true;
-  for (const bad of ["sub:", "radar:", "radar", "radar:sub", ""]) {
+  for (const bad of ["sub:", "radar:", "radar", "radar:sub", "radar:nofolder:", ""]) {
     try { await blob.list(bad); allRefused = false; } catch (e) { /* refused, as it should be */ }
   }
-  check(allRefused && calls.length === 3, "list refuses a prefix not under radar: or not ending in ':' or '-', before calling the service");
+  check(allRefused && calls.length === 3, "list refuses a prefix not under a known folder or not ending in ':' or '-', before calling the service");
 
   // get() reads past Blob's CDN cache unless the caller opts in (a stale read would undo a recent write).
   const gets = [];
   const fakeGet = { get: async (p, opts) => { gets.push({ p, opts }); return { statusCode: 200, stream: new Blob(["{\"a\":1}"]).stream() }; } };
   const fresh = await blobStorage(fakeGet).get("radar:sub:x");
   await blobStorage(fakeGet, { cached: true }).get("radar:index");
-  check(fresh === '{"a":1}' && gets[0].p === "radar/radar-sub-x.json" && gets[0].opts.useCache === false && gets[0].opts.access === "private", "blob get: skips the CDN cache by default (useCache: false)");
+  check(fresh === '{"a":1}' && gets[0].p === "radar/subscribers/x.json" && gets[0].opts.useCache === false && gets[0].opts.access === "private", "blob get: skips the CDN cache by default (useCache: false)");
   check(gets[1].opts.useCache === true, "blob get: { cached: true } keeps the CDN cache (for /api/data only)");
   check(/blobStorage\(undefined, \{ cached: true \}\)/.test(readFileSync(new URL("../api/data.js", import.meta.url), "utf8")) &&
     ["account", "confirm", "resend-webhook", "subscribe", "sweep", "unsubscribe"].every((f) => !/cached/.test(readFileSync(new URL(`../api/${f}.js`, import.meta.url), "utf8"))),
     "only /api/data uses cached reads; every endpoint that writes reads fresh");
 
+  // Each kind of key has its own folder under radar/.
+  const where = [];
+  const fakePut = { put: async (p) => { where.push(p); } };
+  const keys = ["radar:history", "radar:seenIds", "radar:lastScheduled", "radar:subscriberCount", "radar:sweep:1792948701207",
+    "radar:llmlog:1792948701207", "radar:sub:abc", "radar:event:20261021-080910123-confirmed-112233", "radar:deliveries:20261021",
+    "radar:iphit:2026102112-0123456789abcdef-aabbcc", "radar:rzpsub:sub_ABC", "radar:rzp-event:20261021-evt_X", "radar:mystery"];
+  for (const k of keys) await blobStorage(fakePut).set(k, "{}");
+  const want = ["radar/history/index.json", "radar/history/seen-ids.json", "radar/state/last-scheduled.json", "radar/state/subscriber-count.json",
+    "radar/sweeps/1792948701207.json", "radar/logs/1792948701207.json", "radar/subscribers/abc.json", "radar/events/20261021-080910123-confirmed-112233.json",
+    "radar/deliveries/20261021.json", "radar/ip-hits/2026102112-0123456789abcdef-aabbcc.json", "radar/razorpay/subscriptions/sub-ABC.json",
+    "radar/razorpay/events/20261021-evt-X.json", "radar/other/radar-mystery.json"];
+  check(JSON.stringify(where) === JSON.stringify(want), `blob paths: one folder per kind of key (${where.join(", ")})`);
+  const lists = [];
+  const fakeList = { list: async ({ prefix }) => { lists.push(prefix); return { blobs: [{ pathname: "radar/logs/17.json" }], hasMore: false }; } };
+  check((await blobStorage(fakeList).list("radar:llmlog:")).join() === "17" && lists[0] === "radar/logs/", "blob list: the LLM logs are listed from radar/logs/");
+
   // The prefix countEvents uses ends in "-", and a real day's events must be counted through blobStorage, not only the memory store.
-  const evFiles = ["radar/radar-event-20261021-080910123-confirmsent-aabbcc.json", "radar/radar-event-20261021-090910123-confirmsent-ddeeff.json",
-    "radar/radar-event-20261021-080910123-confirmed-112233.json", "radar/radar-event-20261022-080910123-confirmsent-445566.json"];
+  const evFiles = ["radar/events/20261021-080910123-confirmsent-aabbcc.json", "radar/events/20261021-090910123-confirmsent-ddeeff.json",
+    "radar/events/20261021-080910123-confirmed-112233.json", "radar/events/20261022-080910123-confirmsent-445566.json"];
   const evBlob = blobStorage({ list: async ({ prefix }) => ({ blobs: evFiles.filter((p) => p.startsWith(prefix)).map((pathname) => ({ pathname })), hasMore: false }) });
   check(JSON.stringify(await evBlob.list("radar:event:20261021-")) === '["080910123-confirmed-112233","080910123-confirmsent-aabbcc","090910123-confirmsent-ddeeff"]', "blob list: a day's prefix ending in '-' works");
   check((await countEvents(evBlob, { day: "20261021", type: "confirmsent" })) === 2 && (await countEvents(evBlob, { day: "20261022", type: "confirmsent" })) === 1,
@@ -3590,13 +3606,13 @@ const iso = (ms) => new Date(ms).toISOString();
   };
   const blob = blobStorage(fake);
   await blob.update("radar:sub:x", () => JSON.stringify({ n: 1 }));
-  check(puts[0].opts.ifMatch === undefined && puts[0].opts.allowOverwrite === true && JSON.parse(files.get("radar/radar-sub-x.json").text).n === 1, "blob update: a missing file is written without ifMatch");
+  check(puts[0].opts.ifMatch === undefined && puts[0].opts.allowOverwrite === true && JSON.parse(files.get("radar/subscribers/x.json").text).n === 1, "blob update: a missing file is written without ifMatch");
   await blob.update("radar:sub:x", (text) => JSON.stringify({ ...JSON.parse(text), n: 2 }));
   check(puts[1].opts.ifMatch === "e1" && puts[1].opts.access === "private", "blob update: the write carries the ETag that was read (ifMatch)");
   let runs = 0;
   competeOnce = true;
   const out = await blob.update("radar:sub:x", (text) => { runs++; return JSON.stringify({ ...JSON.parse(text), n: 3 }); });
-  check(runs === 2 && JSON.parse(out).other === true && JSON.parse(out).n === 3 && files.get("radar/radar-sub-x.json").text === out,
+  check(runs === 2 && JSON.parse(out).other === true && JSON.parse(out).n === 3 && files.get("radar/subscribers/x.json").text === out,
     "blob update: a write made between the read and the write is kept; the change runs again on a fresh read");
   const before = puts.length;
   await blob.update("radar:sub:x", () => undefined);

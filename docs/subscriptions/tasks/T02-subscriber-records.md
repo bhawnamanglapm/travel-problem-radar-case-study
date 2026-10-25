@@ -15,7 +15,7 @@ token check and the plan rule in one module, `api/_lib/subscribers.js`, so they 
 
 ## The record
 
-Stored at `radar:sub:<id>` (Blob path `radar/radar-sub-<id>.json`).
+Stored at `radar:sub:<id>` (Blob path `radar/subscribers/<id>.json`; `radar/radar-sub-<id>.json` before 2026-10-26).
 
 ```js
 {

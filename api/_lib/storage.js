@@ -2,7 +2,34 @@
 // reader is api/data.js, which allow-lists the keys.
 import { BlobPreconditionFailedError, del, get, list, put } from "@vercel/blob";
 
-const path = (key) => "radar/" + key.replace(/[^a-z0-9]+/gi, "-") + ".json";
+// Each kind of key has its own folder under radar/ (2026-10-26). A one-off key maps to one file; a prefix key keeps
+// what follows the prefix as the file name, with anything not a letter or digit as "-":
+// radar:sub:abc -> radar/subscribers/abc.json, radar:history -> radar/history/index.json.
+const FILES = {
+  "radar:history": "history/index",
+  "radar:seenIds": "history/seen-ids",
+  "radar:lastScheduled": "state/last-scheduled",
+  "radar:subscriberCount": "state/subscriber-count",
+};
+const FOLDERS = {
+  "radar:sweep:": "sweeps/",
+  "radar:llmlog:": "logs/",
+  "radar:sub:": "subscribers/",
+  "radar:event:": "events/",
+  "radar:deliveries:": "deliveries/",
+  "radar:iphit:": "ip-hits/",
+  "radar:rzpsub:": "razorpay/subscriptions/",
+  "radar:rzp-event:": "razorpay/events/",
+};
+const tidy = (s) => s.replace(/[^a-z0-9]+/gi, "-");
+const folderOf = (key) => Object.keys(FOLDERS).find((p) => key.startsWith(p));
+// The path without ".json". A key that fits neither table lands in radar/other/, so a new key still works.
+const stem = (key) => {
+  if (FILES[key]) return "radar/" + FILES[key];
+  const p = folderOf(key);
+  return p ? "radar/" + FOLDERS[p] + tidy(key.slice(p.length)) : "radar/other/" + tidy(key);
+};
+const path = (key) => stem(key) + ".json";
 
 // `blob` is the @vercel/blob client; the offline tests pass a fake with the same four calls.
 // Reads skip Blob's CDN cache by default: an overwritten file can be served stale for up to 60 seconds, and most
@@ -48,12 +75,12 @@ export function blobStorage(blob = { del, get, list, put }, { cached = false } =
     },
     async del(key) { await blob.del(path(key)); },
     // The key suffixes under a logical prefix, sorted: list("radar:sub:") -> ["<id>", ...].
-    // The prefix must start with "radar:" and end in ":" or "-" (the latter for a day's events,
+    // The prefix must start with one of FOLDERS' prefixes and end in ":" or "-" (the latter for a day's events,
     // "radar:event:20261021-") so a careless call can't list the whole store, and the suffixes
     // must be letters, digits and "-" so each one maps back to the key exactly (prefix + suffix).
     async list(prefix) {
-      if (typeof prefix !== "string" || !/^radar:.*[:-]$/.test(prefix)) throw new Error("list: prefix must start with 'radar:' and end in ':' or '-'");
-      const base = path(prefix).slice(0, -".json".length);
+      if (typeof prefix !== "string" || !/^radar:.*[:-]$/.test(prefix) || !folderOf(prefix)) throw new Error("list: prefix must start with a known folder's prefix (radar:sub: …) and end in ':' or '-'");
+      const base = stem(prefix);
       const out = [];
       let cursor;
       do {

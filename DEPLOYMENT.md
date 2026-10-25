@@ -586,23 +586,25 @@ shows quantity × ₹1 as the amount.
 
 ### What is stored
 
-All objects live under `radar/` in the private store. Keys are turned into file names by replacing anything that is
-not a letter or digit with `-`.
+All objects live under `radar/` in the private store, one folder per kind of key (since 2026-10-26; before that
+every file sat directly in `radar/` as `radar/radar-<key>.json`, and nothing reads those any more). The mapping is in
+`api/_lib/storage.js`. In a file name, anything that is not a letter or digit becomes `-`. A key the mapping doesn't
+know is stored under `radar/other/`.
 
 | Logical key | Blob path | Contents | Readable through `/api/data` |
 |---|---|---|---|
-| `radar:history` | `radar/radar-history.json` | Index of saved sweeps (id, time, counts), last 60 | Yes |
-| `radar:sweep:<id>` | `radar/radar-sweep-<id>.json` | One sweep's items | Yes |
-| `radar:seenIds` | `radar/radar-seenIds.json` | Up to 800 item IDs already seen, used for the New flag | No |
-| `radar:lastScheduled` | `radar/radar-lastScheduled.json` | When the last scheduled sweep started, saved or not, and its slot (`{ at, slotAt }`; before T35 just the time); the one-sweep-per-slot rule reads it | No |
-| `radar:llmlog:<id>` | `radar/radar-llmlog-<id>.json` | One sweep's LLM log: each Claude call's request (prompt, model, limits, tools; never the headers or key) and response (thinking, search queries, answer, stop reason, usage), and a summary of input and output tokens, searches, and the pages search found, **as links only** (page contents are encrypted and left out). Written for every sweep that ran: saved, empty, or not saved. `<id>` is the sweep's id. Deleted after 30 days by the day's first sweep. Read with `scripts/llm-logs.mjs` | No |
-| `radar:sub:<id>` | `radar/radar-sub-<id>.json` | One subscriber: address, status, plan, token, dates, and chosen categories (`cats`, Pro only). Since T16 also `signin` (the SHA-256 of an unused sign-in code, its expiry and when it was sent; `null` once used) and, optionally, `sessionVer` (raising it by hand signs that subscriber out on every browser). Since T17, a Pro record whose emails stopped has `emailOff`: `unsubscribed`, `bounced` or `complained`. `<id>` is the SHA-256 of the canonical address (Gmail without dots or `+tags`, and `+tags` dropped for the big providers; see [email-signup.md](docs/subscriptions/email-signup.md#flow)). Records made before 2026-10-22 keep the SHA-256 of the lowercased address | No |
-| `radar:event:<YYYYMMDD>-<time>-<type>-<random>` | `radar/radar-event-….json` | One sign-up, confirmation, sign-in email, unsubscribe, emails-off, account-deleted, Pro, bounce or complaint event: type, time and plan, **no address or id**. Kept until `prune-events` deletes it | No |
-| `radar:deliveries:<YYYYMMDD>` | `radar/radar-deliveries-<YYYYMMDD>.json` | Record ids already sent that day's Free digest. Deleted by the sweep after 7 days | No |
-| `radar:subscriberCount` | `radar/radar-subscriberCount.json` | Pending plus active records at the last saved sweep; the sign-up cap reads it | No |
-| `radar:iphit:<YYYYMMDDHH>-<16 hex>-<6 hex>` | `radar/radar-iphit-….json` | One sign-up attempt: its time only. The 16 hex are from a SHA-256 of the client IP; **the IP itself is not stored**. Deleted by the sweep after 2 hours | No |
-| `radar:rzpsub:<subscription id>` | `radar/radar-rzpsub-sub-….json` | `{ id }`: the subscriber record a Razorpay subscription belongs to, written at checkout (T20) so the webhook finds the record without listing | No |
-| `radar:rzp-event:<YYYYMMDD>-<event id>` | `radar/radar-rzp-event-….json` | One Razorpay event already applied (`{ at }`), so a redelivery changes nothing. `<YYYYMMDD>` is the event's day. Deleted by the sweep after 30 days | No |
+| `radar:history` | `radar/history/index.json` | Index of saved sweeps (id, time, counts), last 60 | Yes |
+| `radar:sweep:<id>` | `radar/sweeps/<id>.json` | One sweep's items | Yes |
+| `radar:seenIds` | `radar/history/seen-ids.json` | Up to 800 item IDs already seen, used for the New flag | No |
+| `radar:lastScheduled` | `radar/state/last-scheduled.json` | When the last scheduled sweep started, saved or not, and its slot (`{ at, slotAt }`; before T35 just the time); the one-sweep-per-slot rule reads it | No |
+| `radar:llmlog:<id>` | `radar/logs/<id>.json` | One sweep's LLM log: each Claude call's request (prompt, model, limits, tools; never the headers or key) and response (thinking, search queries, answer, stop reason, usage), and a summary of input and output tokens, searches, and the pages search found, **as links only** (page contents are encrypted and left out). Written for every sweep that ran: saved, empty, or not saved. `<id>` is the sweep's id. Deleted after 30 days by the day's first sweep. Read with `scripts/llm-logs.mjs` | No |
+| `radar:sub:<id>` | `radar/subscribers/<id>.json` | One subscriber: address, status, plan, token, dates, and chosen categories (`cats`, Pro only). Since T16 also `signin` (the SHA-256 of an unused sign-in code, its expiry and when it was sent; `null` once used) and, optionally, `sessionVer` (raising it by hand signs that subscriber out on every browser). Since T17, a Pro record whose emails stopped has `emailOff`: `unsubscribed`, `bounced` or `complained`. `<id>` is the SHA-256 of the canonical address (Gmail without dots or `+tags`, and `+tags` dropped for the big providers; see [email-signup.md](docs/subscriptions/email-signup.md#flow)). Records made before 2026-10-22 keep the SHA-256 of the lowercased address | No |
+| `radar:event:<YYYYMMDD>-<time>-<type>-<random>` | `radar/events/….json` | One sign-up, confirmation, sign-in email, unsubscribe, emails-off, account-deleted, Pro, bounce or complaint event: type, time and plan, **no address or id**. Kept until `prune-events` deletes it | No |
+| `radar:deliveries:<YYYYMMDD>` | `radar/deliveries/<YYYYMMDD>.json` | Record ids already sent that day's Free digest. Deleted by the sweep after 7 days | No |
+| `radar:subscriberCount` | `radar/state/subscriber-count.json` | Pending plus active records at the last saved sweep; the sign-up cap reads it | No |
+| `radar:iphit:<YYYYMMDDHH>-<16 hex>-<6 hex>` | `radar/ip-hits/….json` | One sign-up attempt: its time only. The 16 hex are from a SHA-256 of the client IP; **the IP itself is not stored**. Deleted by the sweep after 2 hours | No |
+| `radar:rzpsub:<subscription id>` | `radar/razorpay/subscriptions/sub-….json` | `{ id }`: the subscriber record a Razorpay subscription belongs to, written at checkout (T20) so the webhook finds the record without listing | No |
+| `radar:rzp-event:<YYYYMMDD>-<event id>` | `radar/razorpay/events/….json` | One Razorpay event already applied (`{ at }`), so a redelivery changes nothing. `<YYYYMMDD>` is the event's day. Deleted by the sweep after 30 days | No |
 
 `/api/data` allows only `radar:history` and `radar:sweep:<id>`; the tests check that every subscriber key is refused.
 
