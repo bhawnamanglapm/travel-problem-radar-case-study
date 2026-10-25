@@ -3073,7 +3073,7 @@ const iso = (ms) => new Date(ms).toISOString();
   // payments on or off
   check(paymentsReady({ ...RZP }) && !paymentsReady({}) && ["", "0", "-1", "1.5", "twelve", " "].every((v) => !paymentsReady({ ...RZP, RAZORPAY_TOTAL_COUNT: v }))
     && ["", "{}", "not json", '{"1":"sub_X"}', '{"2":"plan_00000000000009"}'].every((v) => !paymentsReady({ ...RZP, RAZORPAY_PLANS: v }))
-    && paymentsReady({ ...RZP, RAZORPAY_PLANS: '{"3":"plan_00000000000039"}' }),
+    && paymentsReady({ ...RZP, RAZORPAY_PLANS: '{"12":"plan_00000000000129"}' }) && !paymentsReady({ ...RZP, RAZORPAY_PLANS: '{"3":"plan_00000000000039"}' }),
     "payments: on only with the keys, the webhook secret, a plan for at least one period on sale, and a whole RAZORPAY_TOTAL_COUNT of 1 or more");
   {
     const w = await world({ RAZORPAY_KEY_ID: "", RAZORPAY_KEY_SECRET: "", RAZORPAY_WEBHOOK_SECRET: "", RAZORPAY_PLANS: "", RAZORPAY_TOTAL_COUNT: "" });
@@ -3215,52 +3215,48 @@ const iso = (ms) => new Date(ms).toISOString();
     check(w.replies.every((b) => !b.includes("@") && !b.includes(paid.token)), "cancel: no reply holds an address or a token");
   }
 
-  // T33: one Pro plan, categories + emails a day + billing period, chosen and paid for together
+  // T33: one Pro plan. Categories and emails a day are chosen freely; only monthly or yearly changes the price.
   {
-    const { readChoice, withinPaid, applyRzpEvent } = await import("../api/_lib/subscription-handlers.js");
+    const { readChoice, applyRzpEvent } = await import("../api/_lib/subscription-handlers.js");
     const admin = await import("./subscribers.mjs");
     // readChoice: defaults, each kind of mistake, and periods without a Razorpay plan
     let c = readChoice({}, RZP);
-    check(c.ok && c.cats === null && c.perDay === 2 && c.months === 1 && c.catCount === 4 && c.price === 1, "readChoice: nothing sent is all categories, 2 a day, the shortest period");
+    check(c.ok && c.cats === null && c.perDay === 2 && c.months === 1 && c.price === 1, "readChoice: nothing sent is all categories, 2 a day, monthly");
     c = readChoice({ cats: ["industry", "gov_policy"], sweepsPerDay: 5, months: 12 }, RZP, { forPayment: true });
-    check(c.ok && c.catCount === 2 && c.perDay === 5 && c.months === 12 && c.price === 1, "readChoice: two categories, 5 a day, 12 months (₹1 while testing)");
+    check(c.ok && c.cats.length === 2 && c.perDay === 5 && c.months === 12 && c.price === 1, "readChoice: two categories, 5 a day, yearly (₹1 while testing)");
     check(readChoice({ cats: ["nope"] }, RZP).error === "unknown category" && readChoice({ sweepsPerDay: 9 }, RZP).ok === false
-      && [2, "3", 0, 1.5].every((m) => readChoice({ months: m }, RZP).error === "unknown period"), "readChoice: an unknown category, emails a day over the limit, and a period not on sale are refused");
-    const only3 = { ...RZP, RAZORPAY_PLANS: '{"3":"plan_00000000000039"}' };
-    check(readChoice({ months: 1 }, only3, { forPayment: true }).error === "unknown period" && readChoice({}, only3, { forPayment: true }).months === 3
-      && readChoice({ months: 1 }, only3).ok, "readChoice: for payment, only periods with a Razorpay plan; the shortest of those is the default");
-    // withinPaid
-    check(withinPaid({ proSource: "owner" }, 4, 5) && withinPaid({ proSource: "razorpay" }, 4, 5)
-      && withinPaid({ proSource: "razorpay", paidFor: { months: 1, price: 1 } }, 4, 5) && !withinPaid({ proSource: "razorpay", paidFor: { months: 1, price: 0 } }, 1, 1),
-      "withinPaid: owner-granted and pre-T33 paid Pro choose anything; paid Pro up to the price paid");
+      && [2, 3, 6, "12", 0, 1.5].every((m) => readChoice({ months: m }, RZP).error === "unknown period"), "readChoice: an unknown category, emails a day over the limit, and a period not on sale are refused");
+    const only12 = { ...RZP, RAZORPAY_PLANS: '{"12":"plan_00000000000129"}' };
+    check(readChoice({ months: 1 }, only12, { forPayment: true }).error === "unknown period" && readChoice({}, only12, { forPayment: true }).months === 12
+      && readChoice({ months: 1 }, only12).ok, "readChoice: for payment, only periods with a Razorpay plan; the shortest of those is the default");
 
     const w = await world();
     // checkout with a choice: the right period's plan, the price as the quantity, the choice in notes and stored
     const buyer = await w.add("chooser@example.com");
-    let r = await w.act(buyer, "checkout", { cats: ["industry"], sweepsPerDay: 3, months: 6 });
+    let r = await w.act(buyer, "checkout", { cats: ["industry"], sweepsPerDay: 3, months: 1 });
     let call = w.rzpCalls.at(-1);
-    check(r.code === 200 && call.json.plan_id === "plan_00000000000069" && call.json.quantity === 1 && call.json.total_count === 2
-      && JSON.stringify(call.json.notes) === JSON.stringify({ sid: buyer.id, months: "6", perday: "3", cats: "industry" }),
-      "checkout: a 6-month choice uses the 6-month plan, 2 cycles of RAZORPAY_TOTAL_COUNT 12, the price as quantity and the choice in notes");
+    check(r.code === 200 && call.json.plan_id === "plan_00000000000009" && call.json.quantity === 1 && call.json.total_count === 12
+      && JSON.stringify(call.json.notes) === JSON.stringify({ sid: buyer.id, months: "1", perday: "3", cats: "industry" }),
+      "checkout: a monthly choice uses the monthly plan, 12 cycles of RAZORPAY_TOTAL_COUNT 12, the price as quantity and the choice in notes");
     let s = await w.stored(buyer);
-    check(JSON.stringify(s.rzp.choice) === JSON.stringify({ cats: ["industry"], perDay: 3, months: 6, price: 1 }) && s.plan === "free", "checkout: the choice is stored with the unpaid subscription; the plan stays free");
+    check(JSON.stringify(s.rzp.choice) === JSON.stringify({ cats: ["industry"], perDay: 3, months: 1, price: 1 }) && s.plan === "free", "checkout: the choice is stored with the unpaid subscription; the plan stays free");
     const n = w.rzpCalls.length;
-    r = await w.act(buyer, "checkout", { cats: ["industry"], sweepsPerDay: 3, months: 6 });
+    r = await w.act(buyer, "checkout", { cats: ["industry"], sweepsPerDay: 3, months: 1 });
     check(r.json().subscriptionId === s.rzp.subscriptionId && w.rzpCalls.length === n, "checkout: the same choice again reuses the unpaid subscription");
     r = await w.act(buyer, "checkout", { cats: ["industry"], sweepsPerDay: 3, months: 12 });
     check(r.code === 200 && r.json().subscriptionId !== s.rzp.subscriptionId && w.rzpCalls.length === n + 1 && w.rzpCalls.at(-1).json.plan_id === "plan_00000000000129" && w.rzpCalls.at(-1).json.total_count === 1,
-      "checkout: a different choice gets its own subscription; 12 months is one cycle");
-    for (const [extra, err] of [[{ months: 2 }, "unknown period"], [{ cats: ["nope"] }, "unknown category"], [{ sweepsPerDay: 0 }, null]]) {
+      "checkout: a different choice gets its own subscription; yearly is one cycle");
+    for (const [extra, err] of [[{ months: 2 }, "unknown period"], [{ months: 6 }, "unknown period"], [{ cats: ["nope"] }, "unknown category"], [{ sweepsPerDay: 0 }, null]]) {
       const before = w.rzpCalls.length;
       r = await w.act(buyer, "checkout", extra);
       check(r.code === 400 && (!err || r.json().error === err) && w.rzpCalls.length === before, `checkout: ${JSON.stringify(extra)} is 400 with no Razorpay call`);
     }
-    const w3 = await world({ RAZORPAY_PLANS: '{"3":"plan_00000000000039"}' });
+    const w3 = await world({ RAZORPAY_PLANS: '{"12":"plan_00000000000129"}' });
     const b3 = await w3.add("three@example.com");
     r = await w3.act(b3, "checkout", { months: 1 });
     check(r.code === 400 && r.json().error === "unknown period" && w3.rzpCalls.length === 0, "checkout: a period with no Razorpay plan can't be paid for");
     r = await w3.get(b3);
-    check(JSON.stringify(r.json().payPeriods) === "[3]" && JSON.stringify(r.json().periods) === "[1,3,6,12]" && r.json().pricing.perExtraEmail === 0,
+    check(JSON.stringify(r.json().payPeriods) === "[12]" && JSON.stringify(r.json().periods) === "[1,12]" && JSON.stringify(r.json().pricing) === '{"1":1,"12":1}',
       "account GET: the price table, the periods on sale and the ones that can be paid for now");
 
     // the first payment applies the choice and records what was paid for; a later charge keeps the member's changes
@@ -3268,23 +3264,20 @@ const iso = (ms) => new Date(ms).toISOString();
     const end = Math.floor((T0 + 365 * 86400_000) / 1000);
     let next = applyRzpEvent(s, "activated", { id: s.rzp.subscriptionId, status: "active", current_end: end }, iso(T0), T0);
     check(next.plan === "pro" && JSON.stringify(next.cats) === '["industry"]' && next.sweepsPerDay === 3
-      && JSON.stringify(next.paidFor) === JSON.stringify({ sub: s.rzp.subscriptionId, catCount: 1, perDay: 3, months: 12, price: 1 }),
+      && JSON.stringify(next.paidFor) === JSON.stringify({ sub: s.rzp.subscriptionId, months: 12, price: 1 }),
       "webhook: the first grant applies the categories and emails a day chosen at checkout, and records what was paid for");
     next = applyRzpEvent({ ...next, cats: null, sweepsPerDay: 1 }, "charged", { id: s.rzp.subscriptionId, status: "active", current_end: end + 86400 }, iso(T0 + 1), T0 + 1);
     check(next.cats === null && next.sweepsPerDay === 1, "webhook: a later charge keeps the member's own changes");
 
-    // a paid Pro changes their plan with set-plan, within what they paid for
-    const paid = await w.add("paidpro@example.com", { plan: "pro", proSource: "razorpay", proUntil: iso(T0 + 30 * 86400_000), paidFor: { sub: "sub_X", catCount: 1, perDay: 1, months: 1, price: 1 } });
+    // a paid Pro changes categories and emails a day with set-plan, freely: the price doesn't depend on them
+    const paid = await w.add("paidpro@example.com", { plan: "pro", proSource: "razorpay", proUntil: iso(T0 + 30 * 86400_000), paidFor: { sub: "sub_X", months: 1, price: 1 } });
     r = await w.act(paid, "set-plan", { cats: ["industry", "gov_policy"], sweepsPerDay: 4 });
     s = await w.stored(paid);
     check(r.code === 200 && JSON.stringify(s.cats) === '["gov_policy","industry"]' && s.sweepsPerDay === 4, "set-plan: a Pro saves categories and emails a day together");
     r = await w.act(paid, "set-plan", { cats: null, sweepsPerDay: 2 });
     check(r.code === 200 && (await w.stored(paid)).cats === null, "set-plan: all four is stored as null");
-    const dear = await w.add("dear@example.com", { plan: "pro", proSource: "razorpay", proUntil: iso(T0 + 30 * 86400_000), paidFor: { sub: "sub_Y", catCount: 1, perDay: 1, months: 1, price: 0 } });
-    r = await w.act(dear, "set-plan", { cats: ["industry"], sweepsPerDay: 1 });
-    check(r.code === 403 && r.json().error === "change_plan" && !(await w.stored(dear)).cats, "set-plan: a choice that costs more than what was paid is 403 change_plan");
-    r = await w.act(dear, "set-cats", { cats: ["industry"] });
-    check(r.code === 403 && r.json().error === "change_plan", "set-cats: the same rule");
+    r = await w.act(paid, "set-plan", { cats: ["industry", "web_app", "gov_policy"], sweepsPerDay: 5 });
+    check(r.code === 200 && (await w.stored(paid)).sweepsPerDay === 5, "set-plan: a paid Pro may pick more categories and emails than at checkout; the price is the same");
     r = await w.act(paid, "set-plan", { cats: ["industry"] });
     check(r.code === 400, "set-plan: both categories and emails a day are needed");
     const freeOne = await w.add("freeone@example.com");
@@ -3294,9 +3287,9 @@ const iso = (ms) => new Date(ms).toISOString();
     // request-pro with a choice (payments off): stored, the owner told once, and grant-pro applies it
     const woff = await world({ RAZORPAY_PLANS: "" });
     const asker = await woff.add("asker@example.com");
-    r = await woff.act(asker, "request-pro", { cats: ["industry"], sweepsPerDay: 4, months: 3 });
+    r = await woff.act(asker, "request-pro", { cats: ["industry"], sweepsPerDay: 4, months: 1 });
     s = await woff.stored(asker);
-    check(r.code === 200 && JSON.stringify(s.proRequest) === JSON.stringify({ cats: ["industry"], perDay: 4, months: 3 }) && JSON.stringify(r.json().proRequest) === JSON.stringify(s.proRequest),
+    check(r.code === 200 && JSON.stringify(s.proRequest) === JSON.stringify({ cats: ["industry"], perDay: 4, months: 1 }) && JSON.stringify(r.json().proRequest) === JSON.stringify(s.proRequest),
       "request-pro: the chosen plan is stored and shown back");
     const mails = woff.mail.length;
     r = await woff.act(asker, "request-pro", { cats: null, sweepsPerDay: 1, months: 12 });
@@ -3768,30 +3761,30 @@ const iso = (ms) => new Date(ms).toISOString();
   const paidRzp = (sub, over = {}) => ({ subscriptionId: sub, status: "active", createdAt: iso(T0 - 25 * DAY), currentEnd: until, cancelAtPeriodEnd: false, lastEventAt: iso(T0 - 25 * DAY),
     choice: { cats: ["industry"], perDay: 3, months: 1, price: 1 }, ...over });
   const paidOver = (sub, over = {}) => ({ plan: "pro", proSource: "razorpay", proUntil: until, cats: ["industry"], sweepsPerDay: 3,
-    paidFor: { sub, catCount: 1, perDay: 3, months: 1, price: 1 }, rzp: paidRzp(sub, over) });
+    paidFor: { sub, months: 1, price: 1 }, rzp: paidRzp(sub, over) });
 
   // A plan that still renews can't set up another; a cancelled one can.
   const keep = await add("keep@example.com", paidOver("sub_T34KEEP0001"));
-  let r = await act(keep, "checkout", { cats: ["industry"], sweepsPerDay: 3, months: 3 });
+  let r = await act(keep, "checkout", { cats: ["industry"], sweepsPerDay: 3, months: 12 });
   check(r.code === 409 && r.json().error === "already_pro" && rzpCalls.length === 0, "renew: a plan that still renews gets 409 already_pro");
   r = await act(keep, "cancel");
   check(r.code === 200 && r.json().cancelAtPeriodEnd === true && r.json().canRenew === true && r.json().renewal === null, "renew: once cancelled, the account says it can renew");
   const calls = rzpCalls.length;
-  r = await act(keep, "checkout", { cats: ["industry", "web_app"], sweepsPerDay: 2, months: 3 });
+  r = await act(keep, "checkout", { cats: ["industry", "web_app"], sweepsPerDay: 2, months: 12 });
   let c = rzpCalls.at(-1);
   let s = await stored(keep);
-  check(r.code === 200 && r.json().renewing === true && rzpCalls.length === calls + 1 && c.json.start_at === endS && c.json.plan_id === "plan_00000000000003" && c.json.total_count === 4 && c.json.notes.renews === "1",
+  check(r.code === 200 && r.json().renewing === true && rzpCalls.length === calls + 1 && c.json.start_at === endS && c.json.plan_id === "plan_00000000000012" && c.json.total_count === 1 && c.json.notes.renews === "1",
     "renew: a cancelled plan's checkout starts a new subscription at the end of the paid period (start_at), for the chosen period");
   check(s.rzp.subscriptionId === "sub_T34KEEP0001" && s.rzp.next.subscriptionId === r.json().subscriptionId && s.rzp.next.status === "created" && s.plan === "pro" && s.proUntil === until
     && st.m.get(KEY_RZPSUB_PREFIX + r.json().subscriptionId) === JSON.stringify({ id: keep.id }), "renew: the running plan stays; the renewal waits beside it as rzp.next, indexed for the webhook");
   const renewSub = r.json().subscriptionId;
-  r = await act(keep, "checkout", { cats: ["industry", "web_app"], sweepsPerDay: 2, months: 3 });
+  r = await act(keep, "checkout", { cats: ["industry", "web_app"], sweepsPerDay: 2, months: 12 });
   check(r.json().subscriptionId === renewSub && rzpCalls.length === calls + 1, "renew: the same choice again reopens the same renewal");
   // approving it in Checkout
   const sig = createHmac("sha256", KEY_SECRET).update(`pay_T34A|${renewSub}`).digest("hex");
   r = await act(keep, "checkout-return", { paymentId: "pay_T34A", subscriptionId: renewSub, signature: sig });
   s = await stored(keep);
-  check(r.code === 200 && s.rzp.next.status === "authenticated" && JSON.stringify(r.json().renewal) === JSON.stringify({ months: 3, price: 1, startsAt: until }) && r.json().canRenew === false,
+  check(r.code === 200 && s.rzp.next.status === "authenticated" && JSON.stringify(r.json().renewal) === JSON.stringify({ months: 12, price: 1, startsAt: until }) && r.json().canRenew === false,
     "renew: Checkout's signed reply marks the renewal approved, and the account shows it");
   r = await act(keep, "checkout", { months: 1 });
   check(r.code === 409 && r.json().error === "already_renewed", "renew: a second renewal is refused");
@@ -3801,11 +3794,11 @@ const iso = (ms) => new Date(ms).toISOString();
   check((await send("cancelled", "sub_T34KEEP0001", keep, { end: endS })) === 200, "renew: the old plan's cancelled event is applied");
   s = await stored(keep);
   check(s.plan === "pro" && Date.parse(s.proUntil) === clock + RENEW_GRACE_HOURS * 3600_000, `renew: with a renewal approved, Pro holds ${RENEW_GRACE_HOURS} hours past the old end`);
-  const newEnd = endS + 90 * 86400;
+  const newEnd = endS + 365 * 86400;
   check((await send("charged", renewSub, keep, { end: newEnd, remaining: 3 })) === 200, "renew: the renewal's first charge is applied");
   s = await stored(keep);
   check(s.rzp.subscriptionId === renewSub && !s.rzp.next && s.proUntil === iso(newEnd * 1000) && s.plan === "pro" && JSON.stringify(s.cats) === '["web_app","industry"]' && s.sweepsPerDay === 2
-    && s.paidFor.sub === renewSub && s.paidFor.months === 3 && s.rzp.cancelAtPeriodEnd === false && s.rzp.remaining === 3,
+    && s.paidFor.sub === renewSub && s.paidFor.months === 12 && s.rzp.cancelAtPeriodEnd === false && s.rzp.remaining === 3,
     "renew: the renewal becomes the plan, with its categories, emails a day and period, and renews from then on");
   const before = JSON.stringify(s);
   check((await send("cancelled", "sub_T34KEEP0001", keep, { end: endS })) === 200 && JSON.stringify(await stored(keep)) === before, "renew: a late event for the old plan changes nothing");
@@ -3826,14 +3819,14 @@ const iso = (ms) => new Date(ms).toISOString();
   check(!s.rzp.next && s.rzp.subscriptionId === "sub_T34FAIL0001" && s.plan === "pro" && s.proUntil === until, "renew: a renewal that fails is dropped; the running plan is untouched");
 
   // after the end: Free, and the page gets the last plan to fill in
-  const lapsed = await add("lapsed34@example.com", { plan: "free", proSource: null, proUntil: null, paidFor: { sub: "sub_T34LAPS0001", catCount: 2, perDay: 4, months: 6, price: 1 },
-    rzp: paidRzp("sub_T34LAPS0001", { status: "cancelled", choice: { cats: ["gov_policy", "industry"], perDay: 4, months: 6, price: 1 } }) });
+  const lapsed = await add("lapsed34@example.com", { plan: "free", proSource: null, proUntil: null, paidFor: { sub: "sub_T34LAPS0001", months: 12, price: 1 },
+    rzp: paidRzp("sub_T34LAPS0001", { status: "cancelled", choice: { cats: ["gov_policy", "industry"], perDay: 4, months: 12, price: 1 } }) });
   r = await act(lapsed, "set-plan", { cats: null, sweepsPerDay: 1 });
   const g = mockRes();
   await acct({ method: "GET", headers: { host: "site.example" }, query: { id: lapsed.id, t: lapsed.token } }, g);
-  check(JSON.stringify(g.json().lastPlan) === JSON.stringify({ cats: ["gov_policy", "industry"], perDay: 4, months: 6 }) && g.json().canRenew === false && g.json().effectivePlan === "free",
+  check(JSON.stringify(g.json().lastPlan) === JSON.stringify({ cats: ["gov_policy", "industry"], perDay: 4, months: 12 }) && g.json().canRenew === false && g.json().effectivePlan === "free",
     "renew after the end: the account gives the last plan paid for, to fill the card in");
-  r = await act(lapsed, "checkout", { cats: ["gov_policy", "industry"], sweepsPerDay: 4, months: 6 });
+  r = await act(lapsed, "checkout", { cats: ["gov_policy", "industry"], sweepsPerDay: 4, months: 12 });
   check(r.code === 200 && !("start_at" in rzpCalls.at(-1).json) && r.json().renewing === false, "renew after the end: an ordinary checkout, starting now");
 
   // the warning a week before a plan that won't renew ends

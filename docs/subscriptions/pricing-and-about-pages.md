@@ -95,7 +95,7 @@ Then `npm run check` and `npm test`.
 
 ## Rule for go-live
 
-> **Changed by T33 (2026-10-25):** prices now live only in `plan.json`'s `pricing`, and Razorpay charges them with one
+> **Changed by T33 (2026-10-25):** prices now live only in `plan.json`'s `monthly` and `yearly` (one Pro price, since 2026-10-26), and Razorpay charges them with one
 > ₹1 plan per billing period (`RAZORPAY_PLANS`) and the price as the subscription's quantity. So `/pricing/` and
 > checkout can't disagree, and a price change needs no new Razorpay plan: change `plan.json` and deploy. Existing
 > subscribers keep the quantity they signed up at. The rule below is how it worked before.

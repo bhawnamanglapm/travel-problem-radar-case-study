@@ -517,7 +517,7 @@ It isn't secret and isn't served (the build reads it from the repository root).
 |---|---|---|
 | `paid` | `false` while Pro is free and switched on by hand; `true` at go-live (T27) | Switches the blocks below |
 | `currency` | `"INR"`, the only one the pages are written for | |
-| `pricing` | Pro's price (T33), or `null` until set: `byCategories` (whole rupees a month for 1, 2, 3 and 4 categories), `perExtraEmail` (whole rupees a month for each email a day above one, 0 or more) and `periods` (the billing periods on sale, 1, 3, 6 or 12 months, each with how many months it charges, so a longer period can cost less a month). A plan's price is `(byCategories[n] + perExtraEmail × (emails a day − 1)) × periods[months]`, rounded to whole rupees. **While testing, every value is ₹1** | `{{PRO_PRICE}}` ("₹1 for 1, 3, 6 or 12 months"; with real prices "from ₹… a month, ₹… for 3 months, …", Indian digit grouping), `{{PRO_PRICE_SHORT}}` (the lowest price), `{{PRO_PERIODS}}` ("1, 3, 6 or 12 months") |
+| `monthly`, `yearly` | Pro's price for each billing period, whole rupees, or `null` when that period isn't on sale. There is **one Pro plan** (owner, 2026-10-26): categories and emails a day don't change the price. **While testing, both are ₹1** | `{{PRO_PRICE}}` ("₹1 a month or ₹1 a year", Indian digit grouping), `{{PRO_PRICE_SHORT}}` (the monthly price, else the yearly), `{{PRO_PERIODS}}` ("monthly or yearly") |
 | `gst` | The exact line, for example "GST included" | `{{PRO_GST}}` |
 | `trialDays` | `0` for no trial, or the days | `{{PRO_TRIAL}}` ("No free trial." or "A 7-day free trial.") |
 | `refund` | The one or two sentences of the refund rule | `{{PRO_REFUND}}` |
@@ -533,14 +533,13 @@ each (T23 A4).
 `true` it does the opposite. A `<template>` never renders, so GitHub Pages, which serves `index.html` as it is,
 still shows today's text.
 
-**What fails the build.** A shipped page using a slot whose value is `null`; `paid: true` with no `pricing`; the old
-`monthly` or `yearly` keys; anything malformed. `npm run check` catches the same things before a merge.
+**What fails the build.** A shipped page using a slot whose value is `null`; `paid: true` with neither `monthly` nor
+`yearly`; a `pricing` block (per-category prices were dropped on 2026-10-26); anything malformed. `npm run check` catches the same things before a merge.
 
-**How Razorpay charges a price it has no plan for (T33).** A Pro plan is any mix of categories, emails a day and
-billing period, so there are up to 80 prices. Instead of one Razorpay plan per price, there is one **₹1 plan per
-billing period**, and each subscription's `quantity` is the price in rupees: 3 months at ₹825 is the 3-month plan
-× 825. A new price in `plan.json` needs no new Razorpay plan. `RAZORPAY_PLANS` maps months to the plan ids:
-`{"1":"plan_…","3":"plan_…","6":"plan_…","12":"plan_…"}`. A period with no plan there isn't offered for payment.
+**How Razorpay charges the price (T33).** There is one **₹1 plan per billing period** (monthly and yearly), and each
+subscription's `quantity` is the price in rupees: ₹299 a month is the monthly plan × 299. So a price change in
+`plan.json` needs no new Razorpay plan. `RAZORPAY_PLANS` maps months to the plan ids: `{"1":"plan_…","12":"plan_…"}`.
+A period with no plan there isn't offered for payment.
 
 **Making and checking the plans.** Run this in your own shell, with test keys for the staging Preview and live keys
 for Production. `--create` makes the ₹1 plan for every period that has none and prints the `RAZORPAY_PLANS` value
@@ -552,8 +551,8 @@ RAZORPAY_KEY_ID=… RAZORPAY_KEY_SECRET=… RAZORPAY_PLANS='{"1":"plan_…",…}
 ```
 
 Exit `0` is a match, `1` a difference or a failed call, `2` something not set up. Amounts are in paise (₹1 is 100).
-**Verify** on the first test run: that Razorpay accepts a monthly plan with interval 3 and 6 (12 months is made as
-yearly, interval 1), and that Checkout shows quantity × ₹1 as the amount.
+Monthly is made as monthly, interval 1; yearly as yearly, interval 1. **Verify** on the first test run that Checkout
+shows quantity × ₹1 as the amount.
 
 ### Environment variables
 
@@ -578,7 +577,7 @@ yearly, interval 1), and that Checkout shows quantity × ₹1 as the amount.
 | `BOARD_PAYWALL` | You (at go-live) | `/api/data` | `1` locks the board: not signed in `401`, Free or lapsed Pro `402`, Pro the data, and every reply `private, no-store`. Anything else, or unset, means off: the replies and their public cache header are as before. Needs `SESSION_SECRET`, or nobody can sign in to see it. Read only by a new deployment |
 | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | You (for paid Pro) | `/api/account`; `/api/razorpay-webhook` (the webhook secret only; without it the endpoint answers `503`) | The Razorpay API keys and the webhook's signing secret. The key id is public: Checkout needs it in the browser. The two secrets never leave the server. Test keys start `rzp_test_`, and test and live are separate in Razorpay, so test plans don't work with live keys |
 | `RAZORPAY_PLANS` | You (for paid Pro) | `/api/account` | JSON from billing period in months to its ₹1 Razorpay plan, for example `{"1":"plan_…","3":"plan_…"}` (T33). `check-plan.mjs --create` makes the plans and prints it. Only `plan_…` ids for periods in `plan.json` count; a period without one isn't offered for payment. Replaces `RAZORPAY_PLAN_ID` |
-| `RAZORPAY_TOTAL_COUNT` | You (for paid Pro) | `/api/account` | How many **months** a subscription runs before it ends; a whole number of 1 or more. Each subscription gets `total_count` = this ÷ its period, rounded up (12 gives 12 monthly cycles, 4 of 3 months, 2 of 6, 1 of 12). Payments count as on only when this, `RAZORPAY_PLANS` with at least one plan, and the three above are all set; otherwise `/manage/` shows Request Pro and the payment actions answer `503` |
+| `RAZORPAY_TOTAL_COUNT` | You (for paid Pro) | `/api/account` | How many **months** a subscription runs before it ends; a whole number of 1 or more. Each subscription gets `total_count` = this ÷ its period, rounded up (12 gives 12 monthly cycles, or 1 yearly). Payments count as on only when this, `RAZORPAY_PLANS` with at least one plan, and the three above are all set; otherwise `/manage/` shows Request Pro and the payment actions answer `503` |
 | `RESEND_WEBHOOK_SECRET` | You (optional) | `/api/resend-webhook` | The Resend webhook's signing secret. If it is unset, the endpoint answers `503` and does nothing |
 | `SITE_URL` | You (optional) | The subscriber endpoints, `/api/sweep` | Base of the links in subscriber emails. If unset, `https://` plus `VERCEL_PROJECT_PRODUCTION_URL`; **on a Preview**, `https://` plus `VERCEL_BRANCH_URL` instead, never the production domain. With neither, subscriber email is off |
 | `LEGAL_NAME`, `LEGAL_ADDRESS`, `LEGAL_PHONE` | You (`LEGAL_NAME` now; the rest once their pages ship) | The build (`scripts/fill-legal.mjs`) | Filled into the `{{LEGAL_…}}` slots of the policy pages at build time, HTML-escaped; a newline in the address becomes a line break. Kept out of the repository so they are not in its history. If `legal/` is built and one is unset, the build fails |
@@ -1028,8 +1027,8 @@ No new function: the three actions below are on `/api/account`, so the site stil
 With payments on:
 
 - **A confirmed Free account** sees **Upgrade to Pro** on `/manage/`, from an email link or signed in. It opens the
-  plan card (T33): categories (all four, just one, or several), emails a day (1 to the cap) and the billing period,
-  each period showing its price for that choice, worked out from `plan.json`'s table, which `/api/account` sends.
+  plan card (T33): categories (all four, just one, or several), emails a day (1 to the cap) and monthly or
+  yearly, each with its price from `plan.json`, which `/api/account` sends. Categories and emails don't change it.
   **Pay with Razorpay** loads Razorpay's `https://checkout.razorpay.com/v1/checkout.js` (only then), and
   `action: "checkout"` with `cats`, `sweepsPerDay` and `months` creates a subscription on that period's ₹1 plan
   with `quantity` = the price, the choice in its notes, and the choice stored as `rzp.choice`. Checkout opens;
@@ -1038,9 +1037,8 @@ With payments on:
   as `proRequest` with the request, and `grant-pro` applies its categories and emails a day. Asking again with
   another choice updates it without emailing the owner again.
 - **The first payment** (the webhook's first grant for a subscription) applies `rzp.choice` to the record and
-  stores `paidFor` (`sub`, `catCount`, `perDay`, `months`, `price`). After that the member changes categories and
-  emails a day with **Save changes** (`action: "set-plan"`), up to anything that costs no more than what they paid
-  for over the same period; more is `403 change_plan`. `set-cats` and `set-freq` follow the same rule.
+  stores `paidFor` (`sub`, `months`, `price`). After that the member changes categories and emails a day freely
+  with **Save changes** (`action: "set-plan"`): the price doesn't depend on them.
 - **After paying**, the page sends Checkout's result to `action: "checkout-return"`. The signature is checked with the
   key secret against the subscription id we saved, and the record's `rzp.status` becomes `authenticated`. The page
   says "Payment received; Pro starts in a minute or two". **It does not grant Pro**: only Razorpay's signed webhook

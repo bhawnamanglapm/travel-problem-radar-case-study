@@ -13,6 +13,9 @@
 > for each, in Razorpay test mode first. It changes the [final Pro plan](../pricing.md#final-pro-plan-2026-10-24)
 > (one price, ₹299 a month, monthly only) and brings forward the tier decision [T31](T31-measure-and-add-tiers.md)
 > had left until after launch.
+>
+> **Simplified 2026-10-26 by the owner:** one Pro price, whatever categories and emails a day are chosen, paid
+> monthly or yearly. See "Built" below; the "Why" and "Owner inputs" sections are kept as they were asked.
 
 ## Why
 
@@ -90,48 +93,50 @@ paying with one button; a plan change up and down; a Pro trying to save more tha
 screen amount equal to the page's for each. Results and date in the pull request. T27 repeats the essentials before
 go-live.
 
-## Built (2026-10-25, on `fixes`, not deployed)
+## Built (2026-10-25, simplified 2026-10-26; on `fixes`, not deployed)
 
-The owner chose P1 (a) on 2026-10-25: "a price per number of categories, plus an amount per extra email a day", and
-**₹1 for every choice while testing** (P2). P3 to P5 use the defaults above until the owner says otherwise.
+**Owner's decision, 2026-10-26:** "do not charge extra for categories and daily email frequency, just one pro plan
+is enough, though keep plans for monthly and yearly." So P1 is settled as **one price**, whatever categories and
+emails a day are chosen, with a **monthly** and a **yearly** price; 3 and 6 months are dropped. Both prices are
+**₹1 while testing** (P2). P3 to P5 use the defaults above until the owner says otherwise. (On 2026-10-25 a price
+per number of categories plus per extra email was built first; this replaces it.)
 
-- **Prices.** `plan.json`'s `monthly`/`yearly` are replaced by `pricing`: `byCategories` (1 to 4), `perExtraEmail`
-  and `periods` (`{"1":1,"3":1,"6":1,"12":1}`, months on sale → months charged). Every value is 1 today. Nothing
-  else holds a price: `api/_lib/plan.js` has the one `priceOf`, used by `/api/account`, the webhook, `fill-plan`
-  and `check-plan`; `/manage/` works prices out from the same table, which `/api/account` sends.
-- **Razorpay plans: one ₹1 plan per period, not one per price.** A subscription's `quantity` is the price in rupees,
-  so up to 80 prices need only 4 plans, and a price change needs none. `RAZORPAY_PLANS` (JSON, months → plan id)
-  replaces `RAZORPAY_PLAN_ID`; it is a Vercel variable rather than `plan.json` so test and live plans can't mix.
-  `check-plan.mjs --create` makes the missing plans (monthly every 1, 3 or 6; yearly for 12) and prints the value;
-  without `--create` it checks each is ₹1, INR, and the right period. `RAZORPAY_TOTAL_COUNT` now counts months.
-- **`/manage/`.** One plan card replaces the Categories and Emails-a-day cards: categories as **All four**, **Just one**
-  (a list) or **Choose which** (checkboxes); emails a day 1 to the cap; and, for Free, the billing period with each
-  period's price for that choice, and a summary line. Free presses **Upgrade to Pro** (payments on) or **Request Pro**
-  (payments off) to open it, then **Pay with Razorpay** or **Send my request**. A Pro sees the same card with
-  **Save changes** (`set-plan`).
-- **Checkout** takes `cats`, `sweepsPerDay` and `months`, uses that period's plan with `quantity` = price and
-  `total_count` = `RAZORPAY_TOTAL_COUNT` ÷ months (rounded up), puts the choice in `notes`, and stores it as
+- **Prices.** `plan.json` has `monthly` and `yearly` (whole rupees, or `null` when not on sale), both 1 today.
+  `api/_lib/plan.js` has the one `priceOf(months)`, used by `/api/account`, the webhook, `fill-plan` and
+  `check-plan`; `/manage/` shows the prices `/api/account` sends.
+- **Razorpay plans: one ₹1 plan per period.** A subscription's `quantity` is the price in rupees, so a price change
+  needs no new Razorpay plan. `RAZORPAY_PLANS` (JSON, `{"1":"plan_…","12":"plan_…"}`) replaces `RAZORPAY_PLAN_ID`;
+  it is a Vercel variable so test and live plans can't mix. `check-plan.mjs --create` makes the missing plans
+  (monthly; yearly) and prints the value; without `--create` it checks each is ₹1, INR, and the right period.
+  `RAZORPAY_TOTAL_COUNT` counts months (12 gives 12 monthly cycles or 1 yearly).
+- **`/manage/`.** One plan card replaces the Categories and Emails-a-day cards: categories as **All four**, **Just
+  one** (a list) or **Choose which** (checkboxes); emails a day 1 to the cap; and, for Free, **Monthly** or **Yearly**
+  with its price, and a summary line. Free presses **Upgrade to Pro** (payments on) or **Request Pro** (payments
+  off) to open it, then **Pay with Razorpay** or **Send my request**. A Pro sees the same card with **Save changes**
+  (`set-plan`) and may pick anything: the price doesn't depend on it.
+- **Checkout** takes `cats`, `sweepsPerDay` and `months` (1 or 12), uses that period's plan with `quantity` = price
+  and `total_count` = `RAZORPAY_TOTAL_COUNT` ÷ months (rounded up), puts the choice in `notes`, and stores it as
   `rzp.choice`. The same choice within an hour reuses the unpaid subscription; a different one gets its own.
-- **The first grant** for a subscription applies the choice and stores `paidFor`. A paid Pro may then save anything
-  that costs no more than what they paid for over the same period (`set-plan`, `set-cats`, `set-freq`; more is
-  `403 change_plan`). Owner-granted Pro, and paid Pro from before T33, choose freely.
+- **The first grant** for a subscription applies the chosen categories and emails a day and stores `paidFor`
+  (`sub`, `months`, `price`).
 - **Request Pro** stores the choice as `proRequest`; `grant-pro` applies it. Asking again with another choice updates
   it and doesn't email the owner again.
 - **Pages.** "Renews automatically every month" is now "at the end of each billing period" on the home, plans,
-  sign-up, pricing, manage, live, terms and refunds pages; `/pricing/` says the price depends on categories, emails a
-  day and period (`{{PRO_PERIODS}}`).
-- Tests: `priceOf`, `pricingErrors`, `razorpayPlans`, `offers`, the price words; `check-plan` against a fake Plans
-  API, `--create` in test and live mode; `readChoice`, `withinPaid`, checkout's plan, quantity, cycles, notes and
-  reuse; the webhook's first grant and a later charge; `set-plan` within and beyond `paidFor`; request-pro with a
-  choice; `grant-pro` applying it. The manage page was clicked through in headless Chrome against a stub API: request,
-  pay (Checkout opened with "Pro, 6 months"), a Pro over what they paid for.
+  sign-up, pricing, manage, live, terms and refunds pages; `/pricing/` says Pro costs the same whatever you choose,
+  paid monthly or yearly.
+- Tests: `priceOf`, `priceErrors`, `periodsOf`, `priceTable`, `razorpayPlans`, the price words; `check-plan` against
+  a fake Plans API, `--create` in test and live mode; `readChoice`; checkout's plan, quantity, cycles, notes and
+  reuse; the webhook's first grant and a later charge; `set-plan` (more categories and emails than at checkout are
+  fine); request-pro with a choice; `grant-pro` applying it. The manage page was clicked through in headless Chrome
+  against a stub API: request, pay (yearly), and a Pro saving 5 a day.
 
-**Not built yet:** **Change plan** to a bigger plan mid-period (the page says to choose it when this one ends; T34's
-"start later" path is the likely way); the `/pricing/` calculator (the owner asked for it last); the test-mode run.
+**Not built yet:** the `/pricing/` calculator (the owner asked for it last); the test-mode run. Changing plan
+mid-period is no longer needed for categories or emails; moving between monthly and yearly is done by cancelling
+and choosing the other period with Keep renewing (T34).
 
 ## Acceptance criteria
 
-- [ ] P1 (a) and P2 (₹1 while testing) answered 2026-10-25; P3 to P5 on defaults until confirmed; record in in [decisions.md](../../decisions.md)
+- [x] P1 (one price, monthly and yearly, 2026-10-26) and P2 (₹1 while testing) answered; P3 to P5 on defaults until confirmed; recorded in in [decisions.md](../../decisions.md)
 - [ ] With `paid: false`, `public/` is unchanged apart from what this task deliberately adds behind the switch
 - [ ] `check-plan.mjs` matches every test plan; the same script is ready for the live ones (T27)
 - [x] `/manage/` takes categories, emails a day and period as one choice and one Pay button

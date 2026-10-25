@@ -32,7 +32,7 @@ The work is in phases. Each phase ships on its own and leaves the site working. 
 out the [final Pro plan](../pricing.md#final-pro-plan-2026-10-24): the owner's launch steps and a measurement gate
 after launch. T32 (added 2026-10-24) lets each Pro member choose 1 to 5 emails a day and replaces T28's fixed 2 a
 day. T33 to T35 (added 2026-10-25, at the owner's request) make Pro one plan the member builds and pays for
-(categories, emails a day, and 1, 3, 6 or 12 months), add renewal, and keep the sweep slots right when GitHub runs
+(categories and emails a day chosen freely, one price paid monthly or yearly, simplified 2026-10-26), add renewal, and keep the sweep slots right when GitHub runs
 late. T33 brings forward the tier decision T31 had left until after launch.
 
 ```mermaid
@@ -154,7 +154,7 @@ themselves. It is built only if the Phase 1 numbers pass the owner's gate ([pric
 | [T30](T30-owner-launch-checklist.md) | Owner launch checklist: credit, Vercel Pro, Razorpay activation, terms, limits, refunds | Owner | L | — |
 | [T31](T31-measure-and-add-tiers.md) | After launch: measure, then adjust T33's prices | Owner + Dev | S | T27 + 20 to 30 paying members |
 | [T32](T32-sweeps-per-day.md) | Each Pro member chooses 1 to 5 emails a day; the site sweeps only as often as needed; schedule wording on every page | Dev | L | — |
-| [T33](T33-pro-plan-builder.md) | One Pro plan: categories (one, several, all), 1 to 5 emails a day and 1, 3, 6 or 12 months, priced and paid together; test mode on an up-to-date `staging` first | Owner + Dev | L | Owner inputs P1 to P5, T14, T32 |
+| [T33](T33-pro-plan-builder.md) | One Pro plan: categories (one, several, all) and 1 to 5 emails a day, one price, paid monthly or yearly; test mode on an up-to-date `staging` first | Owner + Dev | L | Owner inputs P1 to P5, T14, T32 |
 | [T34](T34-renew-pro.md) | Renewing Pro: resume a cancelled plan, renew after it ends, warn before a plan that won't renew ends | Dev | M | T22, T33 |
 | [T35](T35-sweep-slots-on-time.md) | Sweep slots that survive GitHub's late runs: the due slot sent by the workflow, one sweep per slot | Dev | S | — |
 

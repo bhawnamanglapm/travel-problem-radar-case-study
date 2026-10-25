@@ -213,7 +213,7 @@ check(/Gathered by an AI model with web search\. Items are not verified/.test(pr
 check(/fetch\("\/api\/session\?action=me"\)/.test(pricePage) && /a\.href = "\.\.\/manage\/"/.test(pricePage) && /id="getpro" href="\.\.\/signup\/\?pro=1"/.test(pricePage), "pricing/index.html: Get Pro goes to sign-up with Pro ticked, or to the account page when signed in");
 check(/<th scope="col">Free<\/th><th scope="col">Pro<\/th>/.test(pricePage), "pricing/index.html shows Free and Pro side by side in one table (T23 B1, C1)");
 // T23 rules a script can check, on every shipped page (and pricing, which ships once filled), in both versions.
-const SAMPLE_PLAN = { ...plan, pricing: { byCategories: { 1: 100, 2: 150, 3: 200, 4: 250 }, perExtraEmail: 25, periods: { 1: 1, 3: 3, 6: 5, 12: 10 } }, gst: "GST included", trialDays: 0, refund: "Sample refund rule.", refundDays: 7, methods: ["cards"] }; // only for this check
+const SAMPLE_PLAN = { ...plan, monthly: 150, yearly: 1500, gst: "GST included", trialDays: 0, refund: "Sample refund rule.", refundDays: 7, methods: ["cards"] }; // only for this check
 const ruled = [...new Set([...shippedPages, "pricing/index.html", "about/index.html", "signup/index.html"])].filter((f) => existsSync(f));
 for (const f of ruled) {
   const t = readFileSync(f, "utf8");

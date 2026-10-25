@@ -8,8 +8,7 @@
 // Vercel (test keys make test plans, for the staging Preview; live keys live ones, for Production).
 // Prints no key. Exit 0 match, 1 differs or a call failed, 2 not set up.
 // GET /v1/plans/:id returns period, interval, item.amount and item.currency (Razorpay's "Fetch a Plan With ID"
-// docs, read 2026-10-23); amounts are in paise. **Verify** at build time that a plan can repeat every 3 or 6
-// months (monthly, interval 3 or 6); 12 months is made as yearly, interval 1.
+// docs, read 2026-10-23); amounts are in paise. Monthly is made as monthly, interval 1; yearly as yearly, interval 1.
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -44,10 +43,10 @@ export async function main(argv, { env = process.env, fetchFn = fetch, log = con
   try { plan = JSON.parse(readFileSync(planFile, "utf8")); } catch (e) { error(`check-plan: can't read plan.json (${e.message})`); return 2; }
   const errs = planErrors(plan);
   if (errs.length) { error(`check-plan: plan.json: ${errs.join("; ")}`); return 2; }
-  if (!plan.pricing) { error("check-plan: plan.json has no pricing yet"); return 2; }
+  if (!periodsOf(plan).length) { error("check-plan: plan.json has no monthly or yearly price yet"); return 2; }
   let ids = {};
   try { ids = JSON.parse(val(env, "RAZORPAY_PLANS") || "{}"); } catch (e) { error("check-plan: RAZORPAY_PLANS isn't JSON"); return 2; }
-  const periods = periodsOf(plan.pricing);
+  const periods = periodsOf(plan);
   const bad = periods.filter((m) => ids[m] !== undefined && !/^plan_[A-Za-z0-9]+$/.test(String(ids[m])));
   if (bad.length) { error(`check-plan: RAZORPAY_PLANS: the plan for ${bad.join(", ")} months should look like plan_…`); return 2; }
   const missing = periods.filter((m) => !ids[m]);
@@ -70,7 +69,7 @@ export async function main(argv, { env = process.env, fetchFn = fetch, log = con
   if (create) {
     for (const m of missing) {
       const { period, interval } = cycleOf(m);
-      const r = await ask("POST", "/plans", { period, interval, item: { name: `Travel Problem Radar Pro, ${m === 1 ? "1 month" : m + " months"}`, amount: UNIT_PAISE, currency: plan.currency } });
+      const r = await ask("POST", "/plans", { period, interval, item: { name: `Travel Problem Radar Pro, ${m === 12 ? "yearly" : "monthly"}`, amount: UNIT_PAISE, currency: plan.currency } });
       if (r.err || !r.body || !/^plan_[A-Za-z0-9]+$/.test(String(r.body.id))) { error(`check-plan: creating the ${m}-month plan failed: ${r.err || "no plan id in the reply"}`); return 1; }
       ids[m] = r.body.id;
       log(`check-plan: created the ${mode} ${m}-month plan`);

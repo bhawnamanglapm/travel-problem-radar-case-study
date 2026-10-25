@@ -9,7 +9,7 @@
 import { readdirSync, readFileSync, writeFileSync, existsSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { periodsOf, priceOf, pricingErrors } from "../api/_lib/plan.js";
+import { periodsOf, priceErrors, priceOf } from "../api/_lib/plan.js";
 
 export const SLOTS = ["PRO_PRICE", "PRO_PRICE_SHORT", "PRO_PERIODS", "PRO_GST", "PRO_REFUND", "PRO_REFUND_DAYS", "PRO_METHODS", "PRO_TRIAL", "PRO_CONTACT"];
 export const PLAN_FILE = fileURLToPath(new URL("../plan.json", import.meta.url));
@@ -26,39 +26,33 @@ export function planErrors(plan) {
   if (!plan || typeof plan !== "object") return ["plan.json is not an object"];
   if (typeof plan.paid !== "boolean") errs.push("paid must be true or false");
   if (plan.currency !== "INR") errs.push('currency must be "INR" (the only one the pages are written for)');
-  // Pro's price (T33): by number of categories, plus an amount per extra email a day, for each billing period.
-  if ("monthly" in plan || "yearly" in plan) errs.push("monthly and yearly are replaced by pricing (T33)");
-  if (plan.pricing !== null) errs.push(...pricingErrors(plan.pricing));
+  // Pro's price: one plan, whatever categories and emails a day are chosen; a price per billing period (T33).
+  if ("pricing" in plan) errs.push("pricing is replaced by monthly and yearly: one price per billing period");
+  errs.push(...priceErrors(plan));
   for (const k of ["gst", "refund", "contact"]) if (plan[k] !== null && !text(plan[k])) errs.push(`${k} must be null or text`);
   for (const k of ["trialDays", "refundDays"]) if (plan[k] !== null && !count(plan[k])) errs.push(`${k} must be null or a whole number of days`);
   if (plan.methods !== null && !(Array.isArray(plan.methods) && plan.methods.length && plan.methods.every(text))) errs.push("methods must be null or a list of payment methods");
-  if (plan.paid === true && plan.pricing === null) errs.push("paid is true but pricing is null: there's no price to show");
+  if (plan.paid === true && !periodsOf(plan).length) errs.push("paid is true but monthly and yearly are both null: there's no price to show");
   return errs;
 }
 
-const months = (m) => (m === 1 ? "1 month" : m + " months");
 const or = (list) => (list.length < 2 ? list.join("") : list.slice(0, -1).join(", ") + " or " + list[list.length - 1]);
+const PERIOD_WORDS = { 1: ["a month", "monthly"], 12: ["a year", "yearly"] };
 
-// Pro's prices in words: the lowest price for each period (1 category, 1 email a day), led by "from" when a
-// bigger choice costs more. One price for every period reads "₹1 for 1, 3, 6 or 12 months".
+// Pro's price in words, one for each period on sale: "₹1 a month or ₹1 a year".
 export function priceWords(p) {
-  const ps = periodsOf(p);
-  const low = ps.map((m) => priceOf({ catCount: 1, perDay: 1, months: m }, p));
-  const high = ps.map((m) => priceOf({ catCount: 4, perDay: 5, months: m }, p));
-  const from = low.some((v, i) => v !== high[i]) ? "from " : "";
-  if (low.every((v) => v === low[0])) return `${from}${rupees(low[0])} for ${or(ps.map(String))} ${ps.length === 1 && ps[0] === 1 ? "month" : "months"}`;
-  return from + or(ps.map((m, i) => (m === 1 ? `${rupees(low[i])} a month` : `${rupees(low[i])} for ${months(m)}`)));
+  return or(periodsOf(p).map((m) => `${rupees(priceOf(m, p))} ${PERIOD_WORDS[m][0]}`));
 }
 
 // Each slot's text, or null while plan.json has no value for it.
 export function slotValues(plan) {
   const has = (v) => v !== null && v !== undefined;
-  const priced = has(plan.pricing) && pricingErrors(plan.pricing).length === 0;
-  const ps = priced ? periodsOf(plan.pricing) : [];
+  const ps = periodsOf(plan);
+  const priced = ps.length > 0;
   return {
-    PRO_PRICE: priced ? priceWords(plan.pricing) : null,
-    PRO_PRICE_SHORT: priced ? rupees(Math.min(...ps.map((m) => priceOf({ catCount: 1, perDay: 1, months: m }, plan.pricing)))) : null,
-    PRO_PERIODS: priced ? or(ps.map(String)) + (ps.length === 1 && ps[0] === 1 ? " month" : " months") : null,
+    PRO_PRICE: priced ? priceWords(plan) : null,
+    PRO_PRICE_SHORT: priced ? rupees(priceOf(ps[0], plan)) : null,
+    PRO_PERIODS: priced ? or(ps.map((m) => PERIOD_WORDS[m][1])) : null,
     PRO_GST: has(plan.gst) ? plan.gst.trim() : null,
     PRO_REFUND: has(plan.refund) ? plan.refund.trim() : null,
     PRO_REFUND_DAYS: has(plan.refundDays) ? String(plan.refundDays) : null,

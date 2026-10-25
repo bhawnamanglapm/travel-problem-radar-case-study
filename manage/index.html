@@ -65,9 +65,9 @@
       <template data-when="paid"><p>Pro opens the live board and sends 1 to 5 emails a day, as many as you choose (2 unless you change it), instead of one a day. Payments aren&rsquo;t open right now; please check back later.</p></template>
     </div>
     <div id="buy" hidden>
-      <!-- when:free-test --><p>Pro opens the live board, and you choose which categories you get, how many emails a day (1 to 5) and how long you pay for at a time. Payment is handled by Razorpay.</p>
+      <!-- when:free-test --><p>Pro opens the live board, and you choose which categories you get, how many emails a day (1 to 5), all for one price, paid monthly or yearly. Payment is handled by Razorpay.</p>
       <button id="choose" type="button">Upgrade to Pro</button><!-- /when -->
-      <template data-when="paid"><p>Pro opens the live board, and you choose which categories you get, how many emails a day (1 to 5) and how long you pay for at a time ({{PRO_PERIODS}}).</p>
+      <template data-when="paid"><p>Pro opens the live board, and you choose which categories you get, how many emails a day (1 to 5), all for one price, paid {{PRO_PERIODS}}.</p>
       <p><strong>{{PRO_PRICE}}, {{PRO_GST}}.</strong> Renews automatically at the end of each billing period until you cancel. Cancel here any time; Pro stays on until the end of the period you&rsquo;ve paid for.</p>
       <p>{{PRO_REFUND}}</p>
       <p>Payments are handled by Razorpay. <a href="../pricing/">Pricing details</a>.</p>
@@ -164,14 +164,12 @@
   function sayPlan(text, isErr) { planStatus.textContent = text; planStatus.className = isErr ? "err" : ""; }
   var CAT_NAMES = { traveler_pain: "Traveler pain", gov_policy: "Gov & policy", web_app: "Website & app", industry: "Industry" };
 
-  // The price, worked out from the table the server sends (plan.json), the same way api/_lib/plan.js does:
-  // (by number of categories + per extra email a day) × months charged. The page holds no price of its own.
-  function priceOf(p, catCount, perDay, months) {
-    if (!p || !p.periods || !p.periods[months] || !p.byCategories[catCount]) return null;
-    return Math.max(1, Math.round((p.byCategories[catCount] + p.perExtraEmail * (perDay - 1)) * p.periods[months]));
-  }
+  // One Pro plan: the price depends only on the billing period, from the table the server sends (plan.json's
+  // monthly and yearly). Categories and emails a day don't change it. The page holds no price of its own.
+  function priceOf(p, months) { return p && Number.isInteger(p[months]) ? p[months] : null; }
   function rupees(n) { return "₹" + n.toLocaleString("en-IN"); }
-  function monthsWords(m) { return m === 1 ? "1 month" : m + " months"; }
+  function monthsWords(m) { return m === 12 ? "yearly" : m === 1 ? "monthly" : m + " months"; }
+  function periodWords(m) { return m === 12 ? "Yearly" : "Monthly"; }
   // No choice saved (null) means the default, 2; numbers above the owner's cap aren't offered.
   function perDay(a) { return a.sweepsPerDay || Math.min(a.sweepsPerDayDefault || 2, a.sweepsPerDayMax || 5); }
 
@@ -211,7 +209,7 @@
       r.parentNode.hidden = v > max;
       r.checked = v === Math.min(n, max);
     });
-    // The billing periods, each with its price for this choice (rebuilt as the choice changes).
+    // The billing periods, each with its price.
     while (periodsBox.firstChild) periodsBox.removeChild(periodsBox.firstChild);
     var ps = cardPeriods(a);
     ps.forEach(function (m) {
@@ -232,21 +230,17 @@
     catsBox.hidden = mode !== "some";
     var cats = chosenCats(), n = chosenPerDay() || perDay(acct), count = cats ? cats.length : 4;
     Array.prototype.forEach.call(periodsBox.querySelectorAll("label"), function (label) {
-      var m = Number(label.querySelector("input").value), price = priceOf(acct.pricing, count || 1, n, m);
-      label.querySelector("span").textContent = monthsWords(m) + (price !== null ? ": " + rupees(price) : "");
+      var m = Number(label.querySelector("input").value), price = priceOf(acct.pricing, m);
+      label.querySelector("span").textContent = periodWords(m) + (price !== null ? ": " + rupees(price) + (m === 12 ? " a year" : " a month") : "");
     });
     if (mode === "some" && count === 0) { summary.textContent = "Pick at least one category."; return; }
     var months = chosenMonths();
     if (cardMode === "pro") {
       var paid = acct.paidFor;
-      summary.textContent = "Your plan: " + choiceWords(cats, n, null) + "." + (paid ? " Paid for " + monthsWords(paid.months) + " at a time." : "");
-      // A paid Pro may pick anything that costs no more than what they paid for (T33); a bigger plan is bought when this one ends.
-      var over = paid && priceOf(acct.pricing, count, n, paid.months) > paid.price;
-      savePlan.disabled = !!over;
-      if (over) sayPlan("That costs more than the plan you paid for. Pick fewer categories or emails, or choose a bigger plan when this one ends.", true);
+      summary.textContent = "Your plan: " + choiceWords(cats, n, null) + "." + (paid ? " Paid " + monthsWords(paid.months) + "." : "");
       return;
     }
-    var price = months ? priceOf(acct.pricing, count, n, months) : null;
+    var price = months ? priceOf(acct.pricing, months) : null;
     summary.textContent = "Pro: " + choiceWords(cats, n, months) + (price !== null ? ": " + rupees(price) : "") + ".";
   }
   function changed() { sayPlan("", false); update(); }
@@ -263,7 +257,7 @@
     planTitle.textContent = isPro ? "Your Pro plan" : mode === "renew" ? "Keep Pro renewing" : "Choose your Pro plan";
     planNote.textContent = isPro ? "Choose which categories your Pro emails include and how many you get each day. Each email has everything found since the one before."
       : mode === "renew" ? "Choose the plan that starts when this one ends, on " + day(a.proUntil) + ". You approve it with Razorpay now; the first charge is on that day, so nothing is charged twice."
-      : mode === "pay" ? "Choose what you get and how long you pay for at a time. The price is for the whole period; you pay it with Razorpay on the next step."
+      : mode === "pay" ? "Choose what you get, then monthly or yearly. Pro costs the same whatever categories and emails you pick; you pay with Razorpay on the next step."
       : "Choose what you’d like. When Pro is turned on for you, it starts with this plan.";
     savePlan.hidden = !isPro;
     upgrade.hidden = mode !== "pay" && mode !== "renew";
@@ -338,10 +332,10 @@
         document.getElementById("billingLine").textContent = a.billing === "pending"
           ? "Your renewal payment didn’t go through, and Razorpay is trying again."
           : a.renewal
-          ? "Paid until " + day(a.proUntil) + ". Then it renews for " + monthsWords(a.renewal.months) + " at " + rupees(a.renewal.price) + ", which you’ve approved."
+          ? "Paid until " + day(a.proUntil) + ". Then it renews " + monthsWords(a.renewal.months) + " at " + rupees(a.renewal.price) + ", which you’ve approved."
           : a.cancelAtPeriodEnd
           ? "Pro until " + day(a.proUntil) + "; it won’t renew."
-          : "Renews on " + day(a.proUntil) + (a.paidFor ? ", for " + monthsWords(a.paidFor.months) + "." : ".");
+          : "Renews on " + day(a.proUntil) + (a.paidFor ? " (" + monthsWords(a.paidFor.months) + ")." : ".");
         // Cancelled (T34): Keep renewing sets up the next plan; after that, cancel stops the renewal instead.
         renewPlan.hidden = !(a.canRenew && (a.payPeriods || []).length);
         cancelPlan.hidden = a.cancelAtPeriodEnd && !a.renewal;
@@ -512,14 +506,13 @@
     sayPlan("Saving…", false);
     call("POST", { id: id, t: t, action: "set-plan", cats: c.cats, sweepsPerDay: c.sweepsPerDay }).then(function (x) {
       if (x.status === 200) { show(x.body); sayPlan("Saved. Your next Pro email has " + choiceWords(x.body.cats, perDay(x.body), null) + ".", false); }
-      else if (x.status === 403 && x.body.error === "change_plan") { sayPlan("That costs more than the plan you paid for.", true); }
       else if (x.status === 403) { sayPlan("Choosing categories and emails a day is a Pro feature.", true); }
       else if (x.status === 400) { sayPlan(choiceError(x), true); }
       else if (x.status === 409) { sayPlan("Confirm your address first, using the email we sent you.", true); }
       else fail(x);
     }).catch(function () {
       sayPlan("Couldn’t reach the server. Please try again in a minute.", true);
-    }).then(function () { savePlan.disabled = false; if (cardMode === "pro") update(); });
+    }).then(function () { savePlan.disabled = false; });
   });
 
   // Cancel a paid Pro: the first click asks, the second cancels. Pro lasts until the period ends.

@@ -25,7 +25,7 @@ whether someone has paid; the site only records what Razorpay tells it.
 ## Setup in Razorpay (once)
 
 1. ~~Create a **Plan** in the dashboard and copy its id into `RAZORPAY_PLAN_ID`.~~ **Changed by T33 (2026-10-25):**
-   one ₹1 plan per billing period (1, 3, 6, 12 months), made by `node scripts/check-plan.mjs --create`, with the ids
+   one ₹1 plan per billing period (monthly and yearly), made by `node scripts/check-plan.mjs --create`, with the ids
    in `RAZORPAY_PLANS`; each subscription's `quantity` is the price in rupees. See DEPLOYMENT.md, "How Razorpay
    charges a price it has no plan for".
 2. Create API keys. Use the **test** key pair first.

@@ -9,7 +9,7 @@
 | Unblocks | T27 |
 
 > Added 2026-10-25 at the owner's request ("add facility to renew also"), with
-> [T33](T33-pro-plan-builder.md)'s 1, 3, 6 and 12 month periods.
+> [T33](T33-pro-plan-builder.md)'s billing periods (monthly and yearly since 2026-10-26).
 
 ## Why
 

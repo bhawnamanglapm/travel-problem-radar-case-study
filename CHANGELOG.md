@@ -3,6 +3,14 @@
 Built from the git history. Dates are commit dates. The project has no version numbers or releases, so entries are
 grouped by date.
 
+## 2026-10-26
+
+- One Pro price (owner's decision). Categories and emails a day no longer change the price; Pro is paid **monthly or
+  yearly** (3 and 6 months dropped). `plan.json` has `monthly` and `yearly` again, both ₹1 while testing, and its
+  per-category `pricing` block is gone. `/manage/`'s plan card shows Monthly and Yearly with their prices; a Pro
+  may now save any categories and emails a day (the `change_plan` refusal is gone). `RAZORPAY_PLANS` needs only
+  `"1"` and `"12"`; `check-plan.mjs --create` makes those two. The pages read "₹1 a month or ₹1 a year".
+
 ## 2026-10-25
 
 - Renewing Pro (T34, built, not deployed). A cancelled paid Pro whose period is still running gets **Keep renewing**:

@@ -28,7 +28,7 @@
 | LR-06 | T22 built: Pro expiry with a grace period, unsubscribing on paid Pro, key safety | Dev | To do | LR-07 | RM-06, [T22](../../docs/subscriptions/tasks/T22-pro-lifecycle-and-go-live.md) |
 | LR-07 | Test-mode run on a Preview: every row of T27's table passes, with the date in the pull request | Owner and dev | To do | Go-live | RM-07 |
 | LR-08 | Razorpay live activation, which includes a review of the website | Owner | To do | LR-09, LR-10 | RM-03, D-05 |
-| LR-09 | Live ₹1 Razorpay plans, one per billing period, made by `check-plan.mjs --create` with the live keys and set as `RAZORPAY_PLANS` on Production; `plan.json`'s `pricing` set to the real prices (₹1 while testing, T33) | Owner | To do | Merging `paid: true` | T27 go-live steps 2–3 |
+| LR-09 | Live ₹1 Razorpay plans, one per billing period, made by `check-plan.mjs --create` with the live keys and set as `RAZORPAY_PLANS` on Production; `plan.json`'s `monthly` and `yearly` set to the real prices (₹1 while testing, T33) | Owner | To do | Merging `paid: true` | T27 go-live steps 2–3 |
 | LR-10 | The live webhook Enabled, with a new `RAZORPAY_WEBHOOK_SECRET` on Production only | Owner | To do | Go-live: without it a paid account stays Free | R-06 |
 
 ### Legal and tax

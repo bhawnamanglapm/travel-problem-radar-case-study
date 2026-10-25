@@ -74,9 +74,9 @@ export const paymentsReady = (env) => razorpayConfigured(env) && totalCount(env)
 const cyclesFor = (env, months) => Math.max(1, Math.ceil(totalCount(env) / months));
 
 // A Pro plan choice sent by the manage page (T33): categories (null for all four), emails a day and billing
-// months. Missing parts take the defaults (all four, the default emails a day, the shortest period), so an old
+// months (1 or 12). Missing parts take the defaults (all four, the default emails a day, monthly), so an old
 // page that sends nothing still works. `months` must be on sale, and with `forPayment` have a Razorpay plan.
-// Returns { ok, cats, perDay, months, catCount, price } or { ok: false, error }.
+// The price depends on the period only. Returns { ok, cats, perDay, months, price } or { ok: false, error }.
 export function readChoice({ cats, sweepsPerDay, months }, env, { forPayment = false } = {}) {
   const max = sweepLimits(env).max;
   let chosenCats = null;
@@ -94,19 +94,9 @@ export function readChoice({ cats, sweepsPerDay, months }, env, { forPayment = f
   const onSale = forPayment ? periodsOf().filter((m) => razorpayPlans(env)[m]) : periodsOf();
   const m = months === undefined || months === null ? onSale[0] : months;
   if (!Number.isInteger(m) || !onSale.includes(m)) return { ok: false, error: "unknown period" };
-  const catCount = chosenCats ? chosenCats.length : 4;
-  const price = priceOf({ catCount, perDay, months: m });
+  const price = priceOf(m);
   if (price === null) return { ok: false, error: "unknown period" };
-  return { ok: true, cats: chosenCats, perDay, months: m, catCount, price };
-}
-
-// A paid Pro may change categories and emails a day only to a choice that costs no more than what they paid
-// for, over the same period (T33). Owner-granted Pro, and paid Pro from before T33, may choose anything.
-export function withinPaid(record, catCount, perDay) {
-  const p = record.proSource === "razorpay" && record.paidFor && typeof record.paidFor === "object" ? record.paidFor : null;
-  if (!p) return true;
-  const price = priceOf({ catCount, perDay, months: p.months });
-  return price !== null && Number.isInteger(p.price) && price <= p.price;
+  return { ok: true, cats: chosenCats, perDay, months: m, price };
 }
 const PAYMENT_ID = /^pay_[A-Za-z0-9]+$/;
 
@@ -480,8 +470,8 @@ const accountView = (record, t, env) => ({
   sweepsPerDayDefault: DEFAULT_SWEEPS_PER_DAY,
   sweepsPerDayMax: sweepLimits(env).max,
   emailOff: record.emailOff || null,
-  // The plan card's prices (T33): the price table from plan.json, the periods on sale, and those that can be
-  // paid now (each needs a Razorpay plan). The page works prices out from the table; it holds none of its own.
+  // The plan card's prices (T33): the price of each period on sale (months → rupees, from plan.json), the periods
+  // on sale, and those that can be paid now (each needs a Razorpay plan). The page holds no price of its own.
   pricing: priceTable(),
   periods: periodsOf(),
   payPeriods: paymentsReady(env) ? periodsOf().filter((m) => razorpayPlans(env)[m]) : [],
@@ -553,7 +543,6 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
         if (effectivePlan(record, t) !== "pro") return sendJson(res, 403, { error: "pro_only" });
         const chosen = normaliseCats(cats);
         if (!chosen.ok) return sendJson(res, 400, { error: "unknown category" });
-        if (!withinPaid(record, chosen.cats ? chosen.cats.length : 4, sweepsPerDayOf(record, sweepLimits(env).max))) return sendJson(res, 403, { error: "change_plan" });
         const { record: updated, changed } = await save((r) => (effectivePlan(r, t) === "pro" ? { ...r, cats: chosen.cats } : null));
         if (!updated) return gone();
         if (!changed) return sendJson(res, 403, { error: "pro_only" });
@@ -564,7 +553,6 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
         if (effectivePlan(record, t) !== "pro") return sendJson(res, 403, { error: "pro_only" });
         const chosen = normaliseSweepsPerDay(sweepsPerDay, sweepLimits(env).max);
         if (!chosen.ok) return sendJson(res, 400, { error: chosen.error });
-        if (!withinPaid(record, Array.isArray(record.cats) ? record.cats.length : 4, chosen.value)) return sendJson(res, 403, { error: "change_plan" });
         const { record: updated, changed } = await save((r) => (effectivePlan(r, t) === "pro" ? { ...r, sweepsPerDay: chosen.value } : null));
         if (!updated) return gone();
         if (!changed) return sendJson(res, 403, { error: "pro_only" });
@@ -577,7 +565,6 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
         if (cats === undefined || sweepsPerDay === undefined) return sendJson(res, 400, { error: "unknown category" });
         const c = readChoice({ cats, sweepsPerDay }, env);
         if (!c.ok) return sendJson(res, 400, { error: c.error });
-        if (!withinPaid(record, c.catCount, c.perDay)) return sendJson(res, 403, { error: "change_plan" });
         const { record: updated, changed } = await save((r) => (effectivePlan(r, t) === "pro" ? { ...r, cats: c.cats, sweepsPerDay: c.perDay } : null));
         if (!updated) return gone();
         if (!changed) return sendJson(res, 403, { error: "pro_only" });
@@ -1196,12 +1183,12 @@ export function applyRzpEvent(record, kind, entity, eventAt, t) {
   const paid = record.proSource === "razorpay";
   if (RZP_GRANT.has(kind) && currentEnd) {
     next = { ...next, plan: "pro", proSource: "razorpay", proUntil: currentEnd, proRequestedAt: null };
-    // The first grant for a subscription applies the plan chosen at checkout (T33) and records what was paid
-    // for; later charges keep the member's own changes within it.
+    // The first grant for a subscription applies the categories and emails a day chosen at checkout (T33) and
+    // records the period paid for; later charges keep the member's own changes.
     const c = rzp.choice;
     if (c && typeof c === "object" && (!record.paidFor || record.paidFor.sub !== rzp.subscriptionId)) {
       next = { ...next, cats: c.cats || null, sweepsPerDay: c.perDay,
-        paidFor: { sub: rzp.subscriptionId, catCount: Array.isArray(c.cats) ? c.cats.length : 4, perDay: c.perDay, months: c.months, price: c.price } };
+        paidFor: { sub: rzp.subscriptionId, months: c.months, price: c.price } };
       delete next.proRequest;
     }
   }

@@ -52,7 +52,7 @@ Write the results and date in the pull request.
 ## Go-live (owner)
 
 1. Live activation approved.
-2. Set the real prices in `plan.json`'s `pricing` (₹1 everywhere while testing, T33). Make the live ₹1 plans with
+2. Set the real prices in `plan.json`'s `monthly` and `yearly` (₹1 each while testing, T33). Make the live ₹1 plans with
    `check-plan.mjs --create` and the live keys. Set live `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`,
    `RAZORPAY_PLANS` (the value it prints), `RAZORPAY_TOTAL_COUNT` and `RAZORPAY_WEBHOOK_SECRET` for **Production
    only**; live webhook to the production URL with a new secret. Never paste keys into chat, issues or commits.
