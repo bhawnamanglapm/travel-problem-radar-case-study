@@ -226,6 +226,7 @@ Open **Settings → Environment Variables** and add:
 | `MAX_SIGNINS_PER_DAY` | A whole number | **Production only** | No. Defaults to 50 sign-in emails a day; `0` stops them |
 | `MAX_MANUAL_SWEEPS_PER_DAY` | A whole number | **Production only** | No. Defaults to 3 manual sweeps a UTC day (5.5); `0` stops them. Scheduled sweeps aren't limited by it |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | The OAuth client from Google Cloud (see [Google sign-in](#google-sign-in-optional)) | **Production only**, the secret marked Sensitive | No. Both, with `SESSION_SECRET`, show "Continue with Google" |
+| `ADMIN_USER`, `ADMIN_PASSWORD` | A user name, and a password of at least 16 characters (see [Admin dashboard](#admin-dashboard)) | **Production and Preview**, the password marked Sensitive; a different password for each is better | No. Without both, `/admin/` says it isn't set up and `/api/admin` answers `503` |
 | `BOARD_PAYWALL` | `1` | **Production only**, at go-live | No. Locks the live board to signed-in Pro accounts; see [The locked board](#the-locked-board-t17). Leave it unset until then |
 | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `RAZORPAY_PLANS`, `RAZORPAY_TOTAL_COUNT` | Razorpay test-mode keys, a webhook secret, the ₹1 plan for each billing period as JSON (printed by `check-plan.mjs --create`) and how many months a subscription runs (see [Paid Pro checkout](#paid-pro-checkout-t20)) | **Preview only** while testing, the two secrets marked Sensitive. Never test keys on Production; live keys go there at T22 | No. All five turn on **Upgrade to Pro** on `/manage/`; with any of them unset the page keeps Request Pro |
 | `RESEND_WEBHOOK_SECRET` | The signing secret (`whsec_…`) of the Resend webhook | **Production only** | No. Turns on `/api/resend-webhook`; see [Subscriber email](#subscriber-email-optional) |
@@ -574,6 +575,7 @@ shows quantity × ₹1 as the amount.
 | `SESSION_SECRET` | You (for sign-in) | `/api/session`, `/api/confirm`, `/api/account` | Signs the login cookie (HMAC-SHA256). At least 32 characters; shorter counts as unset. Unset means sign-in answers `503`, Confirm sets no cookie, and `/manage/` works only from an email link. Use a different value on Preview and Production. Changing it signs everyone out |
 | `MAX_SIGNINS_PER_DAY` | You (optional) | `/api/session` | Sign-in emails per UTC day, across all addresses. Default 50; `0` stops them. Once reached, every sign-in request is told so ("Sign-in emails have hit today's limit"), whatever the address. Separate from `MAX_CONFIRMS_PER_DAY`, so a burst of sign-ups can't stop subscribers signing in |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | You (optional) | `/api/session` | The Google OAuth client. With both and `SESSION_SECRET`, the pages show "Continue with Google"; with either unset the button stays hidden and `?action=google` answers `503`. The secret never leaves the server |
+| `ADMIN_USER`, `ADMIN_PASSWORD` | You (optional) | `/api/admin` | The owner's sign-in for `/admin/`. The password must be at least 16 characters; shorter, or either unset, means `503`. Both are compared in constant time on the server and never sent back. They also make the admin cookie's signing key, so changing either signs the admin out. Read only by a new deployment |
 | `BOARD_PAYWALL` | You (at go-live) | `/api/data` | `1` locks the board: not signed in `401`, Free or lapsed Pro `402`, Pro the data, and every reply `private, no-store`. Anything else, or unset, means off: the replies and their public cache header are as before. Needs `SESSION_SECRET`, or nobody can sign in to see it. Read only by a new deployment |
 | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | You (for paid Pro) | `/api/account`; `/api/razorpay-webhook` (the webhook secret only; without it the endpoint answers `503`) | The Razorpay API keys and the webhook's signing secret. The key id is public: Checkout needs it in the browser. The two secrets never leave the server. Test keys start `rzp_test_`, and test and live are separate in Razorpay, so test plans don't work with live keys |
 | `RAZORPAY_PLANS` | You (for paid Pro) | `/api/account` | JSON from billing period in months to its ₹1 Razorpay plan, for example `{"1":"plan_…","3":"plan_…"}` (T33). `check-plan.mjs --create` makes the plans and prints it. Only `plan_…` ids for periods in `plan.json` count; a period without one isn't offered for payment. Replaces `RAZORPAY_PLAN_ID` |
@@ -588,23 +590,26 @@ shows quantity × ₹1 as the amount.
 
 All objects live under `radar/` in the private store, one folder per kind of key (since 2026-10-26; before that
 every file sat directly in `radar/` as `radar/radar-<key>.json`, and nothing reads those any more). The mapping is in
-`api/_lib/storage.js`. In a file name, anything that is not a letter or digit becomes `-`. A key the mapping doesn't
-know is stored under `radar/other/`.
+`api/_lib/storage.js`. Files written over time are named by kind and UTC time, `<kind>-YYYY-MM-DD-HH-MM-…`, so the
+Blob browser sorts them by time; records that live on (subscribers, the Razorpay index) and the one-off files are
+named without a time. Only the file name carries the dashes: the logical keys keep their compact form
+(`radar:event:20261021-080910123-…`). In a file name, anything that is not a letter or digit becomes `-`. A key the
+mapping doesn't know is stored under `radar/other/`.
 
 | Logical key | Blob path | Contents | Readable through `/api/data` |
 |---|---|---|---|
 | `radar:history` | `radar/history/index.json` | Index of saved sweeps (id, time, counts), last 60 | Yes |
-| `radar:sweep:<id>` | `radar/sweeps/<id>.json` | One sweep's items | Yes |
+| `radar:sweep:<id>` | `radar/sweeps/sweep-YYYY-MM-DD-HH-MM-<id>.json` | One sweep's items | Yes |
 | `radar:seenIds` | `radar/history/seen-ids.json` | Up to 800 item IDs already seen, used for the New flag | No |
 | `radar:lastScheduled` | `radar/state/last-scheduled.json` | When the last scheduled sweep started, saved or not, and its slot (`{ at, slotAt }`; before T35 just the time); the one-sweep-per-slot rule reads it | No |
-| `radar:llmlog:<id>` | `radar/logs/<id>.json` | One sweep's LLM log: each Claude call's request (prompt, model, limits, tools; never the headers or key) and response (thinking, search queries, answer, stop reason, usage), and a summary of input and output tokens, searches, and the pages search found, **as links only** (page contents are encrypted and left out). Written for every sweep that ran: saved, empty, or not saved. `<id>` is the sweep's id. Deleted after 30 days by the day's first sweep. Read with `scripts/llm-logs.mjs` | No |
+| `radar:llmlog:<id>` | `radar/logs/llm-log-YYYY-MM-DD-HH-MM-<id>.json` | One sweep's LLM log: each Claude call's request (prompt, model, limits, tools; never the headers or key) and response (thinking, search queries, answer, stop reason, usage), and a summary of input and output tokens, searches, and the pages search found, **as links only** (page contents are encrypted and left out). Written for every sweep that ran: saved, empty, or not saved. `<id>` is the sweep's id. Deleted after 30 days by the day's first sweep. Read with `scripts/llm-logs.mjs` | No |
 | `radar:sub:<id>` | `radar/subscribers/<id>.json` | One subscriber: address, status, plan, token, dates, and chosen categories (`cats`, Pro only). Since T16 also `signin` (the SHA-256 of an unused sign-in code, its expiry and when it was sent; `null` once used) and, optionally, `sessionVer` (raising it by hand signs that subscriber out on every browser). Since T17, a Pro record whose emails stopped has `emailOff`: `unsubscribed`, `bounced` or `complained`. `<id>` is the SHA-256 of the canonical address (Gmail without dots or `+tags`, and `+tags` dropped for the big providers; see [email-signup.md](docs/subscriptions/email-signup.md#flow)). Records made before 2026-10-22 keep the SHA-256 of the lowercased address | No |
-| `radar:event:<YYYYMMDD>-<time>-<type>-<random>` | `radar/events/….json` | One sign-up, confirmation, sign-in email, unsubscribe, emails-off, account-deleted, Pro, bounce or complaint event: type, time and plan, **no address or id**. Kept until `prune-events` deletes it | No |
-| `radar:deliveries:<YYYYMMDD>` | `radar/deliveries/<YYYYMMDD>.json` | Record ids already sent that day's Free digest. Deleted by the sweep after 7 days | No |
+| `radar:event:<YYYYMMDD>-<time>-<type>-<random>` | `radar/events/event-YYYY-MM-DD-HH-MM-SS-mmm-<type>-<random>.json` | One sign-up, confirmation, sign-in email, unsubscribe, emails-off, account-deleted, Pro, bounce or complaint event: type, time and plan, **no address or id**. Kept until `prune-events` deletes it | No |
+| `radar:deliveries:<YYYYMMDD>` | `radar/deliveries/deliveries-YYYY-MM-DD.json` (one a day, no time) | Record ids already sent that day's Free digest. Deleted by the sweep after 7 days | No |
 | `radar:subscriberCount` | `radar/state/subscriber-count.json` | Pending plus active records at the last saved sweep; the sign-up cap reads it | No |
-| `radar:iphit:<YYYYMMDDHH>-<16 hex>-<6 hex>` | `radar/ip-hits/….json` | One sign-up attempt: its time only. The 16 hex are from a SHA-256 of the client IP; **the IP itself is not stored**. Deleted by the sweep after 2 hours | No |
+| `radar:iphit:<YYYYMMDDHH>-<16 hex>-<6 hex>` | `radar/ip-hits/ip-hit-YYYY-MM-DD-HH-<16 hex>-<6 hex>.json` (the hour is what the limit counts) | One sign-up attempt: its time only. The 16 hex are from a SHA-256 of the client IP; **the IP itself is not stored**. Deleted by the sweep after 2 hours | No |
 | `radar:rzpsub:<subscription id>` | `radar/razorpay/subscriptions/sub-….json` | `{ id }`: the subscriber record a Razorpay subscription belongs to, written at checkout (T20) so the webhook finds the record without listing | No |
-| `radar:rzp-event:<YYYYMMDD>-<event id>` | `radar/razorpay/events/….json` | One Razorpay event already applied (`{ at }`), so a redelivery changes nothing. `<YYYYMMDD>` is the event's day. Deleted by the sweep after 30 days | No |
+| `radar:rzp-event:<YYYYMMDD>-<HHMM>-<event id>` | `radar/razorpay/events/razorpay-event-YYYY-MM-DD-HH-MM-<event id>.json` | One Razorpay event already applied (`{ at }`), so a redelivery changes nothing. `<YYYYMMDD>` is the event's day. Deleted by the sweep after 30 days | No |
 
 `/api/data` allows only `radar:history` and `radar:sweep:<id>`; the tests check that every subscriber key is refused.
 
@@ -1215,6 +1220,35 @@ node --env-file=.env.local scripts/llm-logs.mjs show <id|latest>
 
 The Blob store's browser in the Vercel dashboard (**Storage**, then the store, under `radar/`) lists the log files
 too; whether it opens a private file is **not confirmed**.
+
+### Admin dashboard
+
+`/admin/` shows every subscriber with their address, status, plan, type (monthly, yearly or granted by the owner),
+price paid, categories, emails a day, sign-up and confirmation dates, Pro end date and billing state (renews,
+cancelled, payment retrying or failed). Above the list: counts (Free, Pro, monthly, yearly, renewing, asked for Pro,
+emails off), Pro's categories and emails a day, the paid Pro value per month (a yearly price counted as a twelfth),
+and a day-by-day table of sign-ups, confirmations, unsubscribes, Pro requests, bounces and Free digests sent (7, 30 or
+90 days, UTC). The list can be searched and filtered, and **Download CSV** saves the rows shown. The page isn't
+linked from anywhere and isn't indexed.
+
+**Setting it up.** Add `ADMIN_USER` and `ADMIN_PASSWORD` (16 characters or more; a password manager's random one is
+best) in Vercel → Settings → Environment Variables, tick **Sensitive** for the password, and redeploy. Nothing goes
+in the repository.
+
+**How it signs in.** The page posts the user and password to `/api/admin`, which checks them in constant time and
+sets an admin cookie: `HttpOnly`, `Secure`, `SameSite=Strict`, sent only to `/api/admin`, ending when the browser
+closes and at most 8 hours later. The cookie is signed with a key made from the user and password, so changing the
+password signs every admin browser out. A wrong try waits a second and is counted; after 5 wrong tries from one IP in
+a UTC hour the endpoint refuses that IP until the next hour (the counts are kept beside the sign-up counts in
+`radar/ip-hits/` and the sweep deletes them). Logs say only "admin login refused" or "admin signed in": no user name,
+password, IP or address. A POST from another site is refused (`403`).
+
+**What a load costs.** Each load or Refresh reads every subscriber record and lists the events and delivery files:
+3 Blob advanced operations (Hobby allows 2,000 a month) and one simple read per subscriber, plus one per
+unsubscribe event in the period. Wrong logins add a list each.
+
+`scripts/subscribers.mjs stats` prints the same day-by-day counts in the terminal; `grant-pro`, `revoke-pro` and
+`delete` are still done with the script, not the page.
 
 ### Managing subscribers
 

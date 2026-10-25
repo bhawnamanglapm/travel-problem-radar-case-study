@@ -1137,7 +1137,7 @@ export function makeResendWebhookHandler({ env, storage, now, randomBytes = cryp
 // ---- subscription events from Razorpay (T21)
 
 // Razorpay delivers at least once and in no set order. Each applied event leaves a marker,
-// radar:rzp-event:<YYYYMMDD of the event>-<x-razorpay-event-id>, so a redelivery is a no-op; a
+// radar:rzp-event:<YYYYMMDD-HHMM of the event>-<x-razorpay-event-id>, so a redelivery is a no-op; a
 // redelivery has the same created_at, so its key is known without listing. The sweep deletes markers
 // after RZP_EVENT_KEEP_DAYS (Razorpay stops retrying after 24 hours).
 export const KEY_RZPEVENT_PREFIX = "radar:rzp-event:";
@@ -1246,7 +1246,7 @@ export function makeRazorpayWebhookHandler({ env, storage, now, randomBytes = cr
       return jsonResponse(200, { ok: true, ignored: true });
     }
     const eventId = String(request.headers.get("x-razorpay-event-id") || "");
-    const marker = RZP_EVENT_ID.test(eventId) ? `${KEY_RZPEVENT_PREFIX}${eventAt.slice(0, 10).replace(/-/g, "")}-${eventId}` : null;
+    const marker = RZP_EVENT_ID.test(eventId) ? `${KEY_RZPEVENT_PREFIX}${eventAt.slice(0, 10).replace(/-/g, "")}-${eventAt.slice(11, 16).replace(":", "")}-${eventId}` : null;
 
     const t = now();
     try {

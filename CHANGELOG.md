@@ -5,11 +5,21 @@ grouped by date.
 
 ## 2026-10-26
 
+- Admin dashboard: `/admin/` and `/api/admin` (the tenth function). Every subscriber with their address, plan, type
+  (monthly, yearly, granted), price, categories, emails a day, dates and billing state, with search, filters and a
+  CSV download; counts, Pro's categories and emails a day, the paid value per month, and the day-by-day sign-up
+  counts `scripts/subscribers.mjs stats` prints (`computeStats` moved to `api/_lib/admin.js`). Sign-in takes
+  `ADMIN_USER` and `ADMIN_PASSWORD` (16+ characters) from Vercel; the endpoint checks them and sets a strict,
+  HttpOnly cookie for `/api/admin` only, for at most 8 hours. 5 wrong tries per IP an hour, each waiting a second.
+  Tests in `scripts/test-admin.mjs`.
 - Blob folders. Each kind of key now has its own folder under `radar/`: `logs/` (LLM logs), `sweeps/`, `history/`
   (the sweep index and seen ids), `state/` (last scheduled run, subscriber count), `subscribers/`, `events/`,
-  `deliveries/`, `ip-hits/` and `razorpay/` (`subscriptions/`, `events/`). Files written before this, directly in
-  `radar/` as `radar-….json`, are no longer read; the data was test data, so there is no migration. Delete them by
-  hand in the Blob browser.
+  `deliveries/`, `ip-hits/` and `razorpay/` (`subscriptions/`, `events/`). Files written over time are named by kind
+  and UTC time, e.g. `logs/llm-log-2026-10-25-17-18-<id>.json`; subscribers, the Razorpay index and one-off files
+  have no time in the name. A Razorpay event marker's key now carries the event's minute
+  (`radar:rzp-event:<YYYYMMDD>-<HHMM>-<event id>`). Files written before this, directly in `radar/` as
+  `radar-….json`, are no longer read; the data was test data, so there is no migration. Delete them by hand in the
+  Blob browser.
 - One Pro price (owner's decision). Categories and emails a day no longer change the price; Pro is paid **monthly or
   yearly** (3 and 6 months dropped). `plan.json` has `monthly` and `yearly` again, both ₹1 while testing, and its
   per-category `pricing` block is gone. `/manage/`'s plan card shows Monthly and Yearly with their prices; a Pro

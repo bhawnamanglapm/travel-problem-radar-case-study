@@ -1,5 +1,6 @@
 // Owner admin tool for subscribers (docs/subscriptions/tasks/T11). Runs on your own machine against
 // the Blob store; it is not part of the deployment (.vercelignore skips scripts/) and adds no endpoint.
+// The read-only view of the same data is the admin dashboard, /admin/ (api/_lib/admin.js).
 //
 //   node --env-file=.env.local scripts/subscribers.mjs stats [--days 30]
 //   node --env-file=.env.local scripts/subscribers.mjs list [--plan pro|free|pending|requested]
@@ -19,9 +20,9 @@ import {
   recordEvent, updateSubscriber, utcDay,
 } from "../api/_lib/subscribers.js";
 import { KEY_RZPSUB_PREFIX, KEY_SUBSCRIBER_COUNT } from "../api/_lib/subscription-handlers.js";
+import { computeStats } from "../api/_lib/admin.js";
 
 const DAY_MS = 24 * 3600 * 1000;
-const KEY_DELIVERIES_PREFIX = "radar:deliveries:";
 const EVENT_RE = /^(\d{8})-\d{9}-([a-z]+)-[0-9a-f]{6}$/; // suffix after "radar:event:"
 
 export class UsageError extends Error {}
@@ -77,62 +78,8 @@ export function untilToIso(s) {
 
 // ---- stats
 
-// Counts now, from the records, and per UTC day, from event records and delivery files. No addresses.
-export async function computeStats(storage, { now, days = 30 }) {
-  const { records, skipped } = await listSubscribers(storage);
-  const cur = { pending: 0, free: 0, pro: 0, proExpiring7d: 0, proRequested: 0, unreadable: skipped };
-  for (const r of records) {
-    if (r.status === "pending") cur.pending++;
-    else if (r.status === "active") {
-      if (effectivePlan(r, now) === "pro") {
-        cur.pro++;
-        if (r.proUntil != null && Date.parse(r.proUntil) <= now + 7 * DAY_MS) cur.proExpiring7d++;
-      } else {
-        cur.free++;
-        if (r.proRequestedAt) cur.proRequested++; // asked for Pro, not granted yet
-      }
-    } else cur.unreadable++;
-  }
-
-  const first = utcDay(now - (days - 1) * DAY_MS);
-  const dayList = [];
-  for (let i = days - 1; i >= 0; i--) dayList.push(utcDay(now - i * DAY_MS));
-  const perDay = new Map(dayList.map((d) => [d, { day: d, subscribed: 0, confirmsent: 0, noticesent: 0, confirmed: 0, unsubscribedFree: 0, unsubscribedPro: 0, expired: 0, bounced: 0, complained: 0, prorequested: 0, signinsent: 0, freeDelivered: 0 }]));
-  const totals = { subscribed: 0, confirmsent: 0, noticesent: 0, confirmed: 0, unsubscribed: 0, expired: 0, bounced: 0, complained: 0, prorequested: 0, signinsent: 0 };
-
-  for (const suffix of await storage.list(KEY_EVENT_PREFIX)) {
-    const m = EVENT_RE.exec(suffix);
-    if (!m || m[1] < first || m[1] > dayList[dayList.length - 1]) continue;
-    const [, day, type] = m;
-    const row = perDay.get(day);
-    if (!row) continue;
-    if (type === "emailoff") {
-      // A Pro who unsubscribes keeps the account (T17), so its unsubscribe is recorded as emailoff.
-      row.unsubscribedPro++;
-      totals.unsubscribed++;
-    } else if (type === "unsubscribed") {
-      let plan = null;
-      try { plan = JSON.parse(await storage.get(KEY_EVENT_PREFIX + suffix)).plan; } catch (e) { /* counted as free below */ }
-      if (plan === "pro") row.unsubscribedPro++; else row.unsubscribedFree++;
-      totals.unsubscribed++;
-    } else if (type in totals) {
-      row[type]++;
-      totals[type]++;
-    }
-  }
-  for (const suffix of await storage.list(KEY_DELIVERIES_PREFIX)) {
-    const row = perDay.get(suffix);
-    if (!row) continue;
-    try {
-      const f = JSON.parse(await storage.get(KEY_DELIVERIES_PREFIX + suffix));
-      row.freeDelivered = Array.isArray(f && f.free) ? f.free.length : 0;
-    } catch (e) { /* an unreadable file counts as 0 */ }
-  }
-  return {
-    now: cur, days, totals, perDay: dayList.map((d) => perDay.get(d)),
-    confirmRate: totals.subscribed > 0 ? totals.confirmed / totals.subscribed : null,
-  };
-}
+// computeStats lives in api/_lib/admin.js, which the dashboard (/admin/) uses too.
+export { computeStats };
 
 export function formatStats(s) {
   const pad = (v, n) => String(v).padStart(n);

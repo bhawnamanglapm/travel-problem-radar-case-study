@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<script>
+  // GitHub Pages also serves this file but has no /api/: send the visit to the Vercel copy, which does.
+  if (/\.github\.io$/.test(location.hostname)) location.replace("https://travel-problem-radar.vercel.app" + location.pathname.replace(/^\/travel-problem-radar-case-study/, "") + location.search + location.hash);
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex" />
+<meta name="referrer" content="no-referrer" />
+<title>Travel Problem Radar admin</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #0B0B0D; color: #F4F4F7; }
+  body { font: 15px/1.55 -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 0 16px; }
+  main { max-width: 1180px; margin: 0 auto; padding: 40px 0 56px; }
+  h1 { font-size: 26px; line-height: 1.25; margin: 0 0 12px; }
+  h2 { font-size: 16px; margin: 0 0 10px; color: #F4F4F7; }
+  p { margin: 0 0 14px; color: #C9C9D2; }
+  a { color: #C6FF3D; }
+  .nav { font: 12px/1.5 ui-monospace, 'JetBrains Mono', monospace; color: #93939F; margin: 0 0 28px; }
+  .nav a { color: #F4F4F7; }
+  .card { border: 1px solid #2A2A34; background: #131318; border-radius: 8px; padding: 16px 18px; margin: 0 0 20px; }
+  #login { max-width: 420px; }
+  label.f { display: block; margin: 0 0 12px; color: #C9C9D2; font-size: 14px; }
+  input[type=text], input[type=password], input[type=search], select {
+    font: inherit; background: #0B0B0D; color: #F4F4F7; border: 1px solid #3A3A46; border-radius: 6px; padding: 8px 10px; }
+  label.f input { display: block; width: 100%; margin-top: 4px; }
+  button { font: inherit; font-weight: 600; background: #C6FF3D; color: #0B0B0D; border: 0; border-radius: 6px;
+    padding: 9px 18px; cursor: pointer; }
+  button:hover { background: #d8ff6f; }
+  button[disabled] { opacity: .6; cursor: default; }
+  button.plain { background: transparent; color: #C6FF3D; border: 1px solid #3A3A46; }
+  .status { min-height: 1.6em; margin: 12px 0 0; color: #F4F4F7; }
+  .status.err { color: #FF8A80; }
+  .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin: 0 0 20px; }
+  .bar .small { margin: 0; }
+  .bar .actions { display: flex; gap: 8px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin: 0 0 20px; }
+  .tile { border: 1px solid #2A2A34; background: #131318; border-radius: 8px; padding: 12px 14px; }
+  .tile .n { font-size: 26px; font-weight: 600; color: #F4F4F7; line-height: 1.2; }
+  .tile .n.hi { color: #C6FF3D; }
+  .tile .l { font-size: 13px; color: #93939F; }
+  .tile .d { font-size: 12px; color: #C9C9D2; margin-top: 4px; }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin: 0 0 20px; }
+  .grid2 .card { margin: 0; }
+  .meter { display: grid; grid-template-columns: 130px 1fr 36px; gap: 10px; align-items: center; margin: 0 0 8px; font-size: 14px; }
+  .meter .track { height: 8px; background: #22222B; border-radius: 4px; overflow: hidden; }
+  .meter .fill { height: 100%; background: #C6FF3D; border-radius: 4px; }
+  .meter .v { text-align: right; color: #F4F4F7; font-variant-numeric: tabular-nums; }
+  .scroll { overflow-x: auto; border: 1px solid #2A2A34; border-radius: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #22222B; white-space: nowrap; vertical-align: top; }
+  th { color: #93939F; font-weight: 600; background: #131318; position: sticky; top: 0; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr:last-child td { border-bottom: 0; }
+  td.wrap { white-space: normal; min-width: 160px; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; border: 1px solid #3A3A46; color: #C9C9D2; }
+  .pill.pro { border-color: #C6FF3D; color: #C6FF3D; }
+  .pill.pending { color: #FFD27A; border-color: #6B5A2E; }
+  .pill.warn { color: #FF8A80; border-color: #6B3A36; }
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; }
+  .filters input[type=search] { flex: 1 1 220px; min-width: 0; }
+  .small { font-size: 13px; color: #93939F; }
+  [hidden] { display: none !important; }
+  footer { margin-top: 36px; padding-top: 16px; border-top: 1px solid #2A2A34; }
+  .site-foot { font-size: 13px; color: #93939F; }
+  .site-foot a { display: inline-block; min-height: 24px; line-height: 24px; }
+  @media (max-width: 520px) { .meter { grid-template-columns: 100px 1fr 30px; } }
+</style>
+</head>
+<body>
+<main>
+  <p class="nav"><a href="../">&larr; Home</a> &middot; Admin</p>
+  <h1>Admin</h1>
+
+  <form class="card" id="login" hidden>
+    <h2>Sign in</h2>
+    <p class="small">The admin user and password are set in Vercel (ADMIN_USER, ADMIN_PASSWORD).</p>
+    <label class="f">User <input type="text" id="user" autocomplete="username" required /></label>
+    <label class="f">Password <input type="password" id="password" autocomplete="current-password" required /></label>
+    <button type="submit" id="signIn">Sign in</button>
+    <p class="status" id="loginStatus" role="status"></p>
+  </form>
+
+  <p class="status" id="status" role="status">Loading&hellip;</p>
+
+  <div id="dash" hidden>
+    <div class="bar">
+      <p class="small" id="updated"></p>
+      <div class="actions">
+        <button type="button" class="plain" id="refresh">Refresh</button>
+        <button type="button" class="plain" id="signOut">Sign out</button>
+      </div>
+    </div>
+
+    <div class="tiles" id="tiles"></div>
+
+    <div class="grid2">
+      <div class="card">
+        <h2>Pro categories</h2>
+        <div id="cats"></div>
+        <p class="small" id="catsNote"></p>
+      </div>
+      <div class="card">
+        <h2>Pro emails a day</h2>
+        <div id="perDay"></div>
+      </div>
+      <div class="card">
+        <h2>Pro plans</h2>
+        <div id="plans"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="bar" style="margin-bottom:12px">
+        <h2 style="margin:0">Subscribers</h2>
+        <button type="button" class="plain" id="csv">Download CSV</button>
+      </div>
+      <div class="filters">
+        <input type="search" id="q" placeholder="Search address" aria-label="Search address" />
+        <select id="fPlan" aria-label="Plan">
+          <option value="">All plans</option>
+          <option value="pro">Pro</option>
+          <option value="free">Free</option>
+          <option value="pending">Not confirmed</option>
+          <option value="waiting">Asked for Pro</option>
+          <option value="lapsed">Pro ended</option>
+        </select>
+        <select id="fType" aria-label="Subscription type">
+          <option value="">All types</option>
+          <option value="monthly">Monthly</option>
+          <option value="yearly">Yearly</option>
+          <option value="owner">Granted by owner</option>
+        </select>
+        <span class="small" id="count"></span>
+      </div>
+      <div class="scroll">
+        <table>
+          <thead><tr>
+            <th scope="col">Address</th><th scope="col">Status</th><th scope="col">Plan</th><th scope="col">Type</th><th scope="col" class="num">Price</th><th scope="col">Categories</th>
+            <th scope="col" class="num">Emails/day</th><th scope="col">Signed up</th><th scope="col">Confirmed</th><th scope="col">Pro until</th><th scope="col">Billing</th>
+          </tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="bar" style="margin-bottom:12px">
+        <h2 style="margin:0">Day by day (UTC)</h2>
+        <select id="days" aria-label="Days">
+          <option value="7">Last 7 days</option>
+          <option value="30" selected>Last 30 days</option>
+          <option value="90">Last 90 days</option>
+        </select>
+      </div>
+      <div class="scroll">
+        <table>
+          <thead><tr>
+            <th scope="col">Day</th><th scope="col" class="num">Sign-ups</th><th scope="col" class="num">Confirmed</th><th scope="col" class="num">Unsubscribed</th>
+            <th scope="col" class="num">Asked for Pro</th><th scope="col" class="num">Bounced</th><th scope="col" class="num">Free digests sent</th>
+          </tr></thead>
+          <tbody id="dayRows"></tbody>
+        </table>
+      </div>
+      <p class="small" id="dayNote" style="margin-top:10px"></p>
+    </div>
+  </div>
+
+  <footer><nav class="site-foot" aria-label="Site"><a href="../">Home</a> &middot; <a href="../about/">About</a> &middot; <a href="../pricing/">Pricing</a> &middot; <a href="../legal/contact/">Contact</a> &middot; <a href="../legal/privacy/">Privacy</a> &middot; <a href="../legal/refunds/">Refunds</a></nav></footer>
+</main>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var loginForm = $("login"), dash = $("dash"), statusEl = $("status");
+  var CAT_NAMES = { traveler_pain: "Traveler pain", gov_policy: "Gov & policy", web_app: "Website & app", industry: "Industry" };
+  var data = null;
+
+  function say(el, text, isErr) { el.textContent = text; el.className = "status" + (isErr ? " err" : ""); }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function day(iso) { return iso ? String(iso).slice(0, 10) : ""; }
+  function rupees(n) { return n == null ? "" : "₹" + Number(n).toLocaleString("en-IN"); }
+  function ymd(d) { return d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6, 8); }
+  function catWords(r) {
+    if (r.plan !== "pro") return "All (Free)";
+    return r.cats ? r.cats.map(function (k) { return CAT_NAMES[k] || k; }).join(", ") : "All";
+  }
+  function typeWords(r) {
+    if (r.plan !== "pro") return "";
+    if (r.proSource === "owner") return "Granted by owner";
+    return r.period === "yearly" ? "Yearly" : r.period === "monthly" ? "Monthly" : "Paid";
+  }
+  function billingWords(r) {
+    if (!r.billing) return r.proSource === "owner" && r.proUntil ? "Ends" : "";
+    var w = { renews: "Renews", cancelled: "Cancelled, ends", pending: "Payment retrying", halted: "Payment failed" }[r.billing] || r.billing;
+    return r.renewal ? w + "; renewal approved (" + (r.renewal.period || "") + ")" : w;
+  }
+  function statusPill(r) {
+    if (r.status === "pending") return '<span class="pill pending">Not confirmed</span>';
+    if (r.emailOff) return '<span class="pill warn">Emails off (' + esc(r.emailOff) + ")</span>";
+    return '<span class="pill">' + esc(r.status === "active" ? "Active" : r.status) + "</span>";
+  }
+  function planPill(r) {
+    if (r.status === "pending") return "";
+    if (r.plan === "pro") return '<span class="pill pro">Pro</span>';
+    return '<span class="pill">Free</span>' + (r.lapsed ? ' <span class="pill warn">Pro ended</span>' : "") +
+      (r.proRequestedAt ? ' <span class="pill pending">Asked for Pro</span>' : "");
+  }
+
+  function api(method, body, query) {
+    return fetch("/api/admin" + (query || ""), {
+      method: method, credentials: "same-origin",
+      headers: body ? { "content-type": "application/json" } : {},
+      body: body ? JSON.stringify(body) : undefined,
+    }).then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { code: r.status, json: j }; }); });
+  }
+
+  function showLogin(text, isErr) {
+    dash.hidden = true; loginForm.hidden = false; statusEl.textContent = "";
+    say($("loginStatus"), text || "", isErr);
+    $("user").focus();
+  }
+
+  function load() {
+    say(statusEl, "Loading…");
+    return api("GET", null, "?days=" + encodeURIComponent($("days").value)).then(function (r) {
+      if (r.code === 401) return showLogin("");
+      if (r.code === 503) return say(statusEl, "The admin page isn't set up: set ADMIN_USER and ADMIN_PASSWORD (16 characters or more) in Vercel, then redeploy.", true);
+      if (r.code !== 200) return say(statusEl, "Couldn't load the data (" + (r.json.error || r.code) + "). Try Refresh.", true);
+      data = r.json;
+      loginForm.hidden = true; dash.hidden = false; statusEl.textContent = "";
+      render();
+    }).catch(function () { say(statusEl, "Couldn't reach the server. Try Refresh.", true); });
+  }
+
+  function tile(n, label, detail, hi) {
+    return '<div class="tile"><div class="n' + (hi ? " hi" : "") + '">' + esc(n) + '</div><div class="l">' + esc(label) + "</div>" +
+      (detail ? '<div class="d">' + esc(detail) + "</div>" : "") + "</div>";
+  }
+  function meters(pairs) {
+    var max = Math.max.apply(null, pairs.map(function (p) { return p[1]; }).concat([1]));
+    return pairs.map(function (p) {
+      return '<div class="meter"><span>' + esc(p[0]) + '</span><span class="track"><span class="fill" style="width:' +
+        Math.round(p[1] / max * 100) + '%;display:block"></span></span><span class="v">' + esc(p[1]) + "</span></div>";
+    }).join("");
+  }
+
+  function render() {
+    var s = data.summary, st = data.stats;
+    $("updated").textContent = "Updated " + data.generatedAt.replace("T", " ").slice(0, 16) + " UTC" +
+      (data.unreadable ? " · " + data.unreadable + " record(s) couldn't be read" : "");
+    $("tiles").innerHTML = [
+      tile(s.total, "Records", s.pending + " not confirmed"),
+      tile(s.free, "Free"),
+      tile(s.pro, "Pro", s.proBySource.razorpay + " paid · " + s.proBySource.owner + " granted", true),
+      tile(s.proByPeriod.monthly, "Monthly"),
+      tile(s.proByPeriod.yearly, "Yearly"),
+      tile(s.billing.renews, "Renewing", s.billing.cancelled + " cancelled · " + (s.billing.pending + s.billing.halted) + " payment problems"),
+      tile(s.waitingForPro, "Asked for Pro"),
+      tile(rupees(s.monthlyValue), "Paid Pro per month", "yearly counted as 1/12"),
+      tile(st.confirmRate == null ? "–" : Math.round(st.confirmRate * 100) + "%", "Confirm rate", "last " + st.days + " days"),
+      tile(s.emailOff, "Emails off", s.lapsed + " Pro ended"),
+    ].join("");
+    $("cats").innerHTML = meters([["All four", s.allCats]].concat(Object.keys(CAT_NAMES).map(function (k) { return [CAT_NAMES[k], s.cats[k] || 0]; })));
+    $("catsNote").textContent = "Pro members only; one member can pick several. Free gets all four.";
+    var perDayKeys = Object.keys(s.perDay).sort();
+    $("perDay").innerHTML = perDayKeys.length ? meters(perDayKeys.map(function (k) { return [k === "default" ? "Default (2)" : k + " a day", s.perDay[k]]; })) : '<p class="small">No Pro members yet.</p>';
+    $("plans").innerHTML = meters([["Monthly", s.proByPeriod.monthly], ["Yearly", s.proByPeriod.yearly], ["Granted", s.proBySource.owner]]) +
+      '<p class="small">Paid now: ' + esc(rupees(s.paid.monthly)) + " monthly, " + esc(rupees(s.paid.yearly)) + " yearly.</p>";
+    renderRows();
+    $("dayRows").innerHTML = st.perDay.slice().reverse().map(function (d) {
+      return "<tr><td>" + esc(ymd(d.day)) + '</td><td class="num">' + d.subscribed + '</td><td class="num">' + d.confirmed + '</td><td class="num">' +
+        (d.unsubscribedFree + d.unsubscribedPro) + '</td><td class="num">' + d.prorequested + '</td><td class="num">' + d.bounced + '</td><td class="num">' + d.freeDelivered + "</td></tr>";
+    }).join("");
+    var t = st.totals;
+    $("dayNote").textContent = "Totals: " + t.subscribed + " sign-ups, " + t.confirmed + " confirmed, " + t.unsubscribed + " unsubscribed, " + t.prorequested + " asked for Pro.";
+  }
+
+  function filtered() {
+    var q = $("q").value.trim().toLowerCase(), fp = $("fPlan").value, ft = $("fType").value;
+    return data.subscribers.filter(function (r) {
+      if (q && r.email.indexOf(q) < 0) return false;
+      if (fp === "pro" && r.plan !== "pro") return false;
+      if (fp === "free" && !(r.status === "active" && r.plan !== "pro")) return false;
+      if (fp === "pending" && r.status !== "pending") return false;
+      if (fp === "waiting" && !(r.plan !== "pro" && r.proRequestedAt)) return false;
+      if (fp === "lapsed" && !r.lapsed) return false;
+      if (ft === "owner" && !(r.plan === "pro" && r.proSource === "owner")) return false;
+      if ((ft === "monthly" || ft === "yearly") && !(r.plan === "pro" && r.period === ft)) return false;
+      return true;
+    });
+  }
+
+  function renderRows() {
+    var rows = filtered();
+    $("count").textContent = rows.length + " of " + data.subscribers.length;
+    $("rows").innerHTML = rows.length ? rows.map(function (r) {
+      return "<tr><td>" + esc(r.email) + "</td><td>" + statusPill(r) + "</td><td>" + planPill(r) + "</td><td>" + esc(typeWords(r)) +
+        '</td><td class="num">' + esc(r.plan === "pro" ? rupees(r.price) : "") + '</td><td class="wrap">' + esc(r.status === "pending" ? "" : catWords(r)) +
+        '</td><td class="num">' + esc(r.plan === "pro" ? (r.sweepsPerDay || "2") : "") + "</td><td>" + esc(day(r.createdAt)) + "</td><td>" + esc(day(r.confirmedAt)) +
+        "</td><td>" + esc(r.plan === "pro" ? day(r.proUntil) || "No end" : "") + "</td><td>" + esc(billingWords(r)) + "</td></tr>";
+    }).join("") : '<tr><td colspan="11" class="small">No subscribers match.</td></tr>';
+  }
+
+  function csv() {
+    var head = ["email", "status", "plan", "type", "price", "categories", "emails_per_day", "signed_up", "confirmed", "pro_until", "billing", "asked_for_pro", "emails_off"];
+    var cell = function (v) { v = String(v == null ? "" : v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+    var lines = [head.join(",")].concat(filtered().map(function (r) {
+      return [r.email, r.status, r.status === "pending" ? "" : r.plan, typeWords(r), r.plan === "pro" ? r.price : "", r.status === "pending" ? "" : catWords(r),
+        r.plan === "pro" ? (r.sweepsPerDay || 2) : "", r.createdAt, r.confirmedAt, r.plan === "pro" ? r.proUntil : "", billingWords(r), r.proRequestedAt, r.emailOff].map(cell).join(",");
+    }));
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([lines.join("\n") + "\n"], { type: "text/csv" }));
+    a.download = "subscribers-" + data.generatedAt.slice(0, 10) + ".csv";
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+
+  loginForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+    $("signIn").disabled = true;
+    say($("loginStatus"), "Signing in…");
+    api("POST", { action: "login", user: $("user").value, password: $("password").value }).then(function (r) {
+      $("signIn").disabled = false;
+      if (r.code === 200) { $("password").value = ""; say($("loginStatus"), ""); return load(); }
+      var msg = { wrong_login: "Wrong user or password.", too_many_tries: "Too many wrong tries from here. Try again next hour.", admin_not_set_up: "The admin page isn't set up yet." }[r.json.error];
+      say($("loginStatus"), msg || "Couldn't sign in (" + (r.json.error || r.code) + ").", true);
+    }).catch(function () { $("signIn").disabled = false; say($("loginStatus"), "Couldn't reach the server.", true); });
+  });
+  $("signOut").addEventListener("click", function () {
+    api("POST", { action: "logout" }).then(function () { data = null; $("rows").innerHTML = ""; showLogin("Signed out."); });
+  });
+  $("refresh").addEventListener("click", load);
+  $("days").addEventListener("change", load);
+  ["q", "fPlan", "fType"].forEach(function (id) { $(id).addEventListener(id === "q" ? "input" : "change", function () { if (data) renderRows(); }); });
+  $("csv").addEventListener("click", function () { if (data) csv(); });
+  load();
+})();
+</script>
+</body>
+</html>

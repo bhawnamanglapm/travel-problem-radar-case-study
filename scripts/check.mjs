@@ -71,6 +71,13 @@ const siteBuild = JSON.parse(readFileSync("package.json", "utf8")).scripts["buil
 check(vercelJson.buildCommand === "npm run build:site" && siteBuild.length > 0, "vercel.json's buildCommand runs package.json's build:site (Vercel allows 256 characters, too few for the list)");
 check(/\bcp -r [^&]*\bsubscribe\b[^&]* public\//.test(siteBuild), "build:site copies subscribe into public/");
 
+// Admin page: self-contained, ships, talks to /api/admin, not indexed, and holds no credential or address.
+const adminPage = existsSync("admin/index.html") ? readFileSync("admin/index.html", "utf8") : "";
+check(/\bcp -r [^&]*\badmin\b[^&]* public\//.test(siteBuild) && /fetch\("\/api\/admin"/.test(adminPage) && !/<script[^>]*\ssrc=|<link[^>]*rel=["']?stylesheet/i.test(adminPage),
+  "admin/index.html ships, is self-contained and reads /api/admin");
+check(/<meta name="robots" content="noindex"/.test(adminPage) && /<meta name="referrer" content="no-referrer"/.test(adminPage) && !/@[a-z0-9-]+\.[a-z]{2,}/i.test(adminPage),
+  "admin/index.html is not indexed, sends no Referer and holds no email address");
+
 // 4c. Manage page (Vercel): self-contained, talks to /api/account, never leaks its token link.
 const manPage = existsSync("manage/index.html") ? readFileSync("manage/index.html", "utf8") : "";
 check(/fetch\("\/api\/account"/.test(manPage) && /action: "request-pro"/.test(manPage), "manage/index.html reads /api/account and posts the request-pro action");
@@ -154,7 +161,8 @@ const fns = readdirSync("api").filter((f) => f.endsWith(".js"));
 check(fns.length <= 12, `at most 12 functions in api/, Hobby's limit (${fns.length}: ${fns.join(", ")})`);
 // Checkout and cancel are actions on /api/account (T20); the Razorpay webhook (T21) is the one payments function.
 check(existsSync("api/razorpay-webhook.js"), "api/razorpay-webhook.js exists (subscription events from Razorpay)");
-check(fns.length === 9, `9 functions in api/ after T21 (${fns.length})`);
+// The admin dashboard (/admin/) is the tenth.
+check(fns.length === 10 && fns.includes("admin.js"), `10 functions in api/ after T21 and the admin dashboard (${fns.length})`);
 for (const f of ["subscribe/index.html", "manage/index.html", "signin/index.html", "signup/index.html", "live/index.html", "pricing/index.html"]) {
   const t = existsSync(f) ? readFileSync(f, "utf8") : "";
   check(t.includes('if (/\\.github\\.io$/.test(location.hostname)) location.replace("https://travel-problem-radar.vercel.app" + location.pathname'), `${f} sends a GitHub Pages visit to the Vercel copy (Pages has no /api/)`);

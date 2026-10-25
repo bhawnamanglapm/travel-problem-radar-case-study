@@ -77,17 +77,39 @@ const iso = (ms) => new Date(ms).toISOString();
     "radar:iphit:2026102112-0123456789abcdef-aabbcc", "radar:rzpsub:sub_ABC", "radar:rzp-event:20261021-evt_X", "radar:mystery"];
   for (const k of keys) await blobStorage(fakePut).set(k, "{}");
   const want = ["radar/history/index.json", "radar/history/seen-ids.json", "radar/state/last-scheduled.json", "radar/state/subscriber-count.json",
-    "radar/sweeps/1792948701207.json", "radar/logs/1792948701207.json", "radar/subscribers/abc.json", "radar/events/20261021-080910123-confirmed-112233.json",
-    "radar/deliveries/20261021.json", "radar/ip-hits/2026102112-0123456789abcdef-aabbcc.json", "radar/razorpay/subscriptions/sub-ABC.json",
-    "radar/razorpay/events/20261021-evt-X.json", "radar/other/radar-mystery.json"];
-  check(JSON.stringify(where) === JSON.stringify(want), `blob paths: one folder per kind of key (${where.join(", ")})`);
-  const lists = [];
-  const fakeList = { list: async ({ prefix }) => { lists.push(prefix); return { blobs: [{ pathname: "radar/logs/17.json" }], hasMore: false }; } };
-  check((await blobStorage(fakeList).list("radar:llmlog:")).join() === "17" && lists[0] === "radar/logs/", "blob list: the LLM logs are listed from radar/logs/");
+    "radar/sweeps/sweep-2026-10-25-17-18-1792948701207.json", "radar/logs/llm-log-2026-10-25-17-18-1792948701207.json", "radar/subscribers/abc.json",
+    "radar/events/event-2026-10-21-08-09-10-123-confirmed-112233.json", "radar/deliveries/deliveries-2026-10-21.json",
+    "radar/ip-hits/ip-hit-2026-10-21-12-0123456789abcdef-aabbcc.json", "radar/razorpay/subscriptions/sub-ABC.json",
+    "radar/razorpay/events/razorpay-event-2026-10-21-evt-X.json", "radar/other/radar-mystery.json"];
+  check(JSON.stringify(where) === JSON.stringify(want), `blob paths: one folder per kind of key, timestamped names (${where.join(", ")})`);
+  await blobStorage(fakePut).set("radar:rzp-event:20261021-1405-evt_Y", "{}");
+  await blobStorage(fakePut).set("radar:sweep:s1", "{}");
+  check(where.at(-2) === "radar/razorpay/events/razorpay-event-2026-10-21-14-05-evt-Y.json" && where.at(-1) === "radar/sweeps/sweep-s1.json",
+    "blob paths: a Razorpay marker carries its minute; an id that isn't a time is used as it is");
+
+  // list() turns the dated file names back into the logical suffixes, for every prefix the code lists with.
+  const stored = new Set();
+  const store = {
+    put: async (p) => { stored.add(p); },
+    list: async ({ prefix }) => ({ blobs: [...stored].filter((p) => p.startsWith(prefix)).map((pathname) => ({ pathname })), hasMore: false }),
+  };
+  const st2 = blobStorage(store);
+  const written = ["radar:llmlog:1792948701207", "radar:llmlog:1790000000000", "radar:sweep:1792948701207", "radar:deliveries:20261021",
+    "radar:iphit:2026102112-0123456789abcdef-aabbcc", "radar:iphit:2026102113-0123456789abcdef-ddeeff", "radar:rzp-event:20261021-1405-evtY",
+    "radar:rzp-event:20261021-evtOLD", "radar:event:20261021-080910123-confirmed-112233", "radar:sub:abc"];
+  for (const k of written) await st2.set(k, "{}");
+  const roundTrip = [
+    ["radar:llmlog:", "1790000000000,1792948701207"], ["radar:deliveries:", "20261021"],
+    ["radar:iphit:", "2026102112-0123456789abcdef-aabbcc,2026102113-0123456789abcdef-ddeeff"], ["radar:iphit:2026102112-0123456789abcdef-", "aabbcc"],
+    ["radar:rzp-event:", "20261021-1405-evtY,20261021-evtOLD"], ["radar:event:20261021-", "080910123-confirmed-112233"], ["radar:sub:", "abc"],
+  ];
+  const bad = [];
+  for (const [prefix, want2] of roundTrip) { const got2 = (await st2.list(prefix)).join(); if (got2 !== want2) bad.push(`${prefix} -> ${got2}`); }
+  check(!bad.length, `blob list: dated file names map back to the key suffixes (${bad.join("; ") || "all " + roundTrip.length})`);
 
   // The prefix countEvents uses ends in "-", and a real day's events must be counted through blobStorage, not only the memory store.
-  const evFiles = ["radar/events/20261021-080910123-confirmsent-aabbcc.json", "radar/events/20261021-090910123-confirmsent-ddeeff.json",
-    "radar/events/20261021-080910123-confirmed-112233.json", "radar/events/20261022-080910123-confirmsent-445566.json"];
+  const evFiles = ["radar/events/event-2026-10-21-08-09-10-123-confirmsent-aabbcc.json", "radar/events/event-2026-10-21-09-09-10-123-confirmsent-ddeeff.json",
+    "radar/events/event-2026-10-21-08-09-10-123-confirmed-112233.json", "radar/events/event-2026-10-22-08-09-10-123-confirmsent-445566.json"];
   const evBlob = blobStorage({ list: async ({ prefix }) => ({ blobs: evFiles.filter((p) => p.startsWith(prefix)).map((pathname) => ({ pathname })), hasMore: false }) });
   check(JSON.stringify(await evBlob.list("radar:event:20261021-")) === '["080910123-confirmed-112233","080910123-confirmsent-aabbcc","090910123-confirmsent-ddeeff"]', "blob list: a day's prefix ending in '-' works");
   check((await countEvents(evBlob, { day: "20261021", type: "confirmsent" })) === 2 && (await countEvents(evBlob, { day: "20261022", type: "confirmsent" })) === 1,
@@ -3485,8 +3507,8 @@ const iso = (ms) => new Date(ms).toISOString();
     const w = world();
     const rec = await w.add("dup@example.com");
     let r = await w.send(ev("activated", rec, { status: "active" }), { id: "evt_DUP000001" });
-    const marker = `${KEY_RZPEVENT_PREFIX}${utcDay(S * 1000)}-evt_DUP000001`;
-    check(r.code === 200 && w.st.m.has(marker), "duplicate: an applied event leaves radar:rzp-event:<day>-<event id>");
+    const marker = `${KEY_RZPEVENT_PREFIX}${utcDay(S * 1000)}-${new Date(S * 1000).toISOString().slice(11, 16).replace(":", "")}-evt_DUP000001`;
+    check(r.code === 200 && w.st.m.has(marker), "duplicate: an applied event leaves radar:rzp-event:<day>-<HHMM>-<event id>");
     await w.send(ev("halted", rec, { at: S + 5 }), { id: "evt_DUP000002" });
     const snap = JSON.stringify([...w.st.m]);
     // A redelivery repeats the body, including created_at, so it maps to the same marker.
