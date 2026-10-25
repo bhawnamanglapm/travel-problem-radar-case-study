@@ -70,6 +70,27 @@ export const KEY_RZPSUB_PREFIX = "radar:rzpsub:";
 export const CHECKOUT_REUSE_MINUTES = 60;
 const totalCount = (env) => positiveInt(env.RAZORPAY_TOTAL_COUNT);
 export const paymentsReady = (env) => razorpayConfigured(env) && totalCount(env) !== null;
+// Why payments are on or off, for the admin dashboard: what is missing or unreadable, by variable name only,
+// never a value. `on` is paymentsReady; `periods` are those with a usable plan.
+const PAY_VARS = ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET", "RAZORPAY_WEBHOOK_SECRET", "RAZORPAY_PLANS", "RAZORPAY_TOTAL_COUNT"];
+export function paymentsCheck(env) {
+  const v = (n) => String(env[n] || "").trim();
+  const problems = PAY_VARS.filter((n) => !v(n)).map((n) => `${n} is not set on this deployment`);
+  const id = v("RAZORPAY_KEY_ID");
+  if (id && !/^rzp_(test|live)_[A-Za-z0-9]+$/.test(id)) problems.push("RAZORPAY_KEY_ID doesn't look like rzp_test_… or rzp_live_…");
+  if (v("RAZORPAY_PLANS")) {
+    let raw;
+    try { raw = JSON.parse(v("RAZORPAY_PLANS")); } catch (e) { raw = undefined; }
+    if (raw === undefined) problems.push(`RAZORPAY_PLANS isn't valid JSON: paste it exactly as check-plan.mjs printed it, {"1":"plan_…","12":"plan_…"}, with no quotes around it`);
+    else if (!raw || typeof raw !== "object" || Array.isArray(raw)) problems.push(`RAZORPAY_PLANS should be {"1":"plan_…","12":"plan_…"}; it looks quoted twice`);
+    else for (const m of periodsOf()) if (!razorpayPlans(env)[m]) problems.push(`RAZORPAY_PLANS has no usable plan_… id for "${m}" (${m === 12 ? "yearly" : "monthly"}), so that period isn't offered`);
+  }
+  if (v("RAZORPAY_TOTAL_COUNT") && totalCount(env) === null) problems.push("RAZORPAY_TOTAL_COUNT must be a whole number of 1 or more (months)");
+  return {
+    on: paymentsReady(env), mode: id.startsWith("rzp_live_") ? "live" : id.startsWith("rzp_test_") ? "test" : null,
+    deployment: env.VERCEL_ENV || null, periods: periodsOf().filter((m) => razorpayPlans(env)[m]), problems,
+  };
+}
 // RAZORPAY_TOTAL_COUNT counts months (T33): a plan billed every `months` runs for that many months, rounded up.
 const cyclesFor = (env, months) => Math.max(1, Math.ceil(totalCount(env) / months));
 

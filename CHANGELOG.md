@@ -5,6 +5,8 @@ grouped by date.
 
 ## 2026-10-26
 
+- Admin dashboard: a Payments card saying whether payments are on for that deployment and, if not, which `RAZORPAY_*`
+  variable is missing or unreadable (names only).
 - Pick a plan, pay, and Pro starts at once (payments on only). `/signup/` (paid build) shows Monthly or Yearly when
   Pro is ticked; confirming the email redirects to `/manage/?pay=1`, which opens Razorpay's Checkout for that plan.
   `checkout-return` now starts Pro as soon as Checkout's signature checks out and Razorpay's subscription agrees

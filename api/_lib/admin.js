@@ -8,7 +8,7 @@ import { allowMethods, BodyTooLargeError, readFields, sendJson } from "./http.js
 import { CATS } from "./radar.js";
 import { originOk, parseCookies } from "./session.js";
 import { KEY_EVENT_PREFIX, effectivePlan, listSubscribers, utcDay } from "./subscribers.js";
-import { KEY_IPHIT_PREFIX, clientIp, utcHour } from "./subscription-handlers.js";
+import { KEY_IPHIT_PREFIX, clientIp, paymentsCheck, utcHour } from "./subscription-handlers.js";
 
 const DAY_MS = 24 * 3600 * 1000;
 const KEY_DELIVERIES_PREFIX = "radar:deliveries:";
@@ -193,7 +193,8 @@ export async function computeStats(storage, { now, days = 30, list = null }) {
 
 // ---- the endpoint
 
-// GET ?days=N (1 to 90, default 30): the dashboard's data, for a signed-in admin; 401 otherwise.
+// GET ?days=N (1 to 90, default 30): the dashboard's data, for a signed-in admin; 401 otherwise. `payments` says
+// whether Razorpay payments are on for this deployment and, if not, which variables are missing (names only).
 // POST {action: "login", user, password}: sets the admin cookie, or 401 after a one-second wait; 429 once an IP
 // has had ADMIN_MAX_FAILS_PER_HOUR wrong tries this hour. POST {action: "logout"} clears it. A POST must come from
 // this site (originOk). With ADMIN_USER or ADMIN_PASSWORD unset or too short, every request is 503.
@@ -237,7 +238,7 @@ export function makeAdminHandler({ env, storage, now, randomBytes, log = console
     const list = await listSubscribers(storage);
     const rows = list.records.map((r) => adminRow(r, t)).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
     const stats = await computeStats(storage, { now: t, days, list });
-    return sendJson(res, 200, { generatedAt: new Date(t).toISOString(), summary: summarize(rows), unreadable: list.skipped, subscribers: rows, stats },
+    return sendJson(res, 200, { generatedAt: new Date(t).toISOString(), payments: paymentsCheck(env), summary: summarize(rows), unreadable: list.skipped, subscribers: rows, stats },
       { "x-robots-tag": "noindex" });
   };
 }

@@ -132,6 +132,29 @@ async function world(env = ENV) {
   check(w.logs.every((l) => !l.includes("@")), "admin: no address in the logs");
 }
 
+// ---- why payments are on or off (names only, never values)
+{
+  const { paymentsCheck } = await import("../api/_lib/subscription-handlers.js");
+  const PAY = { RAZORPAY_KEY_ID: "rzp_test_Fixture000001", RAZORPAY_KEY_SECRET: "secret-value-xyz", RAZORPAY_WEBHOOK_SECRET: "wh-value-xyz",
+    RAZORPAY_PLANS: '{"1":"plan_00000000000001","12":"plan_00000000000012"}', RAZORPAY_TOTAL_COUNT: "120", VERCEL_ENV: "production" };
+  const ok = paymentsCheck(PAY);
+  check(ok.on && ok.mode === "test" && ok.deployment === "production" && ok.periods.join() === "1,12" && ok.problems.length === 0, "payments check: all five set gives on, the mode and both periods");
+  const none = paymentsCheck({});
+  check(!none.on && none.problems.length === 5 && none.problems.every((p) => /is not set on this deployment$/.test(p)), "payments check: nothing set names all five variables");
+  const quoted = paymentsCheck({ ...PAY, RAZORPAY_PLANS: `'${PAY.RAZORPAY_PLANS}'` });
+  check(!quoted.on && /isn't valid JSON/.test(quoted.problems.join()), "payments check: RAZORPAY_PLANS pasted with the shell's single quotes is named");
+  const twice = paymentsCheck({ ...PAY, RAZORPAY_PLANS: JSON.stringify(PAY.RAZORPAY_PLANS) });
+  check(!twice.on && /quoted twice/.test(twice.problems.join()), "payments check: RAZORPAY_PLANS quoted twice is named");
+  const half = paymentsCheck({ ...PAY, RAZORPAY_PLANS: '{"1":"plan_00000000000001"}' });
+  check(half.on && half.periods.join() === "1" && /"12" \(yearly\)/.test(half.problems.join()), "payments check: a missing yearly plan is named; monthly still works");
+  const badCount = paymentsCheck({ ...PAY, RAZORPAY_TOTAL_COUNT: "ten" });
+  check(!badCount.on && /RAZORPAY_TOTAL_COUNT must be a whole number/.test(badCount.problems.join()), "payments check: an unusable RAZORPAY_TOTAL_COUNT is named");
+  check(![ok, none, quoted, twice, half, badCount].some((c) => /secret-value|wh-value|plan_0/.test(JSON.stringify(c))), "payments check: no secret or plan id in what it returns");
+  const w = await world({ ...ENV, ...PAY });
+  const d = (await w.call({ cookie: w.cookieOf(await w.login()) })).json();
+  check(d.payments && d.payments.on === true && d.payments.mode === "test", "admin: the dashboard data says whether payments are on");
+}
+
 // ---- rows from odd records
 {
   const odd = adminRow({ id: "x", status: "weird", plan: "pro", proSource: "razorpay", paidFor: { months: 3, price: "x" }, rzp: "nope" }, T0);

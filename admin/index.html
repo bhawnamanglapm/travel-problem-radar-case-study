@@ -95,6 +95,12 @@
       </div>
     </div>
 
+    <div class="card" id="payCard">
+      <h2>Payments</h2>
+      <p id="payLine" style="margin:0"></p>
+      <ul id="payProblems" class="small" style="margin:8px 0 0;padding-left:20px"></ul>
+    </div>
+
     <div class="tiles" id="tiles"></div>
 
     <div class="grid2">
@@ -247,8 +253,18 @@
     }).join("");
   }
 
+  function renderPayments(p) {
+    if (!p) { $("payCard").hidden = true; return; }
+    var periods = (p.periods || []).map(function (m) { return m === 12 ? "yearly" : "monthly"; }).join(" and ");
+    $("payLine").innerHTML = p.on
+      ? '<span class="pill pro">On</span> ' + esc((p.mode || "") + " mode, " + (periods || "no period") + (p.deployment ? ", " + p.deployment + " deployment" : ""))
+      : '<span class="pill warn">Off</span> ' + esc("Members see “Payments aren’t open right now”" + (p.deployment ? " on this " + p.deployment + " deployment" : "") + ". Fix these in Vercel → Settings → Environment Variables, then redeploy:");
+    $("payProblems").innerHTML = (p.problems || []).map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("");
+  }
+
   function render() {
     var s = data.summary, st = data.stats;
+    renderPayments(data.payments);
     $("updated").textContent = "Updated " + data.generatedAt.replace("T", " ").slice(0, 16) + " UTC" +
       (data.unreadable ? " · " + data.unreadable + " record(s) couldn't be read" : "");
     $("tiles").innerHTML = [

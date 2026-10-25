@@ -1339,7 +1339,9 @@ price paid, categories, emails a day, sign-up and confirmation dates, Pro end da
 cancelled, payment retrying or failed). Above the list: counts (Free, Pro, monthly, yearly, renewing, asked for Pro,
 emails off), Pro's categories and emails a day, the paid Pro value per month (a yearly price counted as a twelfth),
 and a day-by-day table of sign-ups, confirmations, unsubscribes, Pro requests, bounces and Free digests sent (7, 30 or
-90 days, UTC). The list can be searched and filtered, and **Download CSV** saves the rows shown. The page isn't
+90 days, UTC). The list can be searched and filtered, and **Download CSV** saves the rows shown. A **Payments** card
+at the top says whether Razorpay payments are on for that deployment (test or live mode, which periods) and, if
+they're off, why: each of the five `RAZORPAY_*` variables that is missing or unreadable, by name only, never a value. The page isn't
 linked from anywhere and isn't indexed.
 
 **Setting it up.** Add `ADMIN_USER` and `ADMIN_PASSWORD` (16 characters or more; a password manager's random one is
