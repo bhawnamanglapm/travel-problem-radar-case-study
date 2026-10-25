@@ -3,7 +3,7 @@
 //   node scripts/test-sweep.mjs
 import { makeDataHandler, makeSweepHandler } from "../api/_lib/handlers.js";
 import { CATS, KEY_LLMLOG_PREFIX, extractProblems, llmLogKey, runDailySweep, scanCategory, sweepKey, trimSeen } from "../api/_lib/radar.js";
-import { SLOTS_BY_FREQ, normaliseSweepsPerDay, previousSlotAt, siteSweepsPerDay, slotOf, sweepLimits, sweepsPerDayOf } from "../api/_lib/schedule.js";
+import { SLOTS_BY_FREQ, dueSlot, normaliseSweepsPerDay, previousSlotAt, siteSweepsPerDay, slotOf, sweepLimits, sweepsPerDayOf } from "../api/_lib/schedule.js";
 import { check, finish, memStorage, mockRes } from "./test-helpers.mjs";
 
 const item = (n, over = {}) => ({
@@ -87,23 +87,41 @@ const sweepOpts = (storage, byCat, now) => ({
   check(dup.status === "skipped", "a repeat scheduled run within 2 h is still skipped");
 }
 
-// ---- a scheduled sweep that saves nothing still starts the 2-hour gap
+// ---- a scheduled sweep that saves nothing still uses up its slot (T35: one scheduled sweep per slot)
 {
   const st = memStorage();
   const t0 = Date.UTC(2026, 9, 18, 1, 30);
   const allFail = { traveler_pain: "http", gov_policy: "http", web_app: "http", industry: "http" };
   const one = { traveler_pain: [item(1)], gov_policy: [], web_app: [], industry: [] };
   const empty = await runDailySweep(sweepOpts(st, allFail, () => t0));
-  check(empty.status === "empty" && JSON.parse(st.m.get("radar:lastScheduled")) === new Date(t0).toISOString(), "an empty scheduled sweep records when it started");
+  const started0 = { at: new Date(t0).toISOString(), slotAt: Date.UTC(2026, 9, 18, 0) };
+  check(empty.status === "empty" && JSON.stringify(JSON.parse(st.m.get("radar:lastScheduled"))) === JSON.stringify(started0), "an empty scheduled sweep records when it started and its slot");
   const soon = await runDailySweep(sweepOpts(st, one, () => t0 + 1 * 3600 * 1000));
-  check(soon.status === "skipped" && !st.m.has("radar:history"), "a scheduled run 1 h after an empty one is skipped");
+  check(soon.status === "skipped" && !st.m.has("radar:history"), "a scheduled run later in the same slot as an empty one is skipped");
   const manual = await runDailySweep({ ...sweepOpts(st, one, () => t0 + 1.5 * 3600 * 1000), manual: true });
-  check(manual.status === "saved" && JSON.parse(st.m.get("radar:lastScheduled")) === new Date(t0).toISOString(),
-    "a manual run still goes ahead and doesn't move the scheduled start time");
-  const later = await runDailySweep(sweepOpts(st, one, () => t0 + 2.5 * 3600 * 1000));
-  check(later.status === "saved", "a scheduled run 2.5 h after the empty one goes ahead");
-  const repeat = await runDailySweep(sweepOpts(st, one, () => t0 + 3 * 3600 * 1000));
-  check(repeat.status === "skipped", "and the gap then counts from that run");
+  check(manual.status === "saved" && JSON.stringify(JSON.parse(st.m.get("radar:lastScheduled"))) === JSON.stringify(started0),
+    "a manual run still goes ahead and doesn't move the scheduled start");
+  const later = await runDailySweep(sweepOpts(st, one, () => t0 + 4 * 3600 * 1000));
+  check(later.status === "saved", "the next slot's scheduled run goes ahead");
+  const repeat = await runDailySweep(sweepOpts(st, one, () => t0 + 4.5 * 3600 * 1000));
+  check(repeat.status === "skipped", "and a repeat in that slot is skipped");
+
+  // radar:lastScheduled written before T35 held only the time; its slot is used
+  const pre = memStorage();
+  pre.m.set("radar:lastScheduled", JSON.stringify(new Date(t0).toISOString()));
+  check((await runDailySweep(sweepOpts(pre, one, () => t0 + 3600 * 1000))).status === "skipped"
+    && (await runDailySweep(sweepOpts(pre, one, () => t0 + 4 * 3600 * 1000))).status === "saved", "an old time-only start still blocks its own slot, not the next");
+
+  // T35: a late GitHub run sweeps as the slot it was due for, and doesn't block the next slot
+  const late = memStorage();
+  const s00 = { hour: 0, at: Date.UTC(2026, 9, 25, 0) };
+  const r1 = await runDailySweep({ ...sweepOpts(late, one, () => Date.UTC(2026, 9, 25, 4, 49)), slot: s00 });
+  const r2 = await runDailySweep({ ...sweepOpts(late, one, () => Date.UTC(2026, 9, 25, 5, 17)), slot: { hour: 5, at: Date.UTC(2026, 9, 25, 5) } });
+  check(r1.status === "saved" && r1.slot === 0 && r2.status === "saved" && r2.slot === 5, "a slot-00 run at 04:49 and the slot-05 run at 05:17 both sweep, each as its own slot");
+  const backstop = memStorage();
+  await runDailySweep({ ...sweepOpts(backstop, one, () => Date.UTC(2026, 9, 25, 1, 30)), slot: s00 });
+  check((await runDailySweep({ ...sweepOpts(backstop, one, () => Date.UTC(2026, 9, 25, 4, 49)), slot: s00 })).status === "skipped",
+    "the Vercel backstop and a late slot-00 GitHub run don't both sweep");
 
   // a history saved before this change, with no start time stored, still holds back the next run
   const old = memStorage();
@@ -606,6 +624,31 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   check(manual.res.json().status === "saved" && manual.res.json().trigger === "manual" && !("slot" in mIdx[0]) && !("slotAt" in mIdx[0]), "handler: a manual run in an unneeded slot still sweeps, with no slot saved");
   const unread = await run({ st: broken(), t: day + 20 * H + 17 * 60_000 });
   check(unread.res.json().status !== "skipped" && unread.scans === 4 && unread.logs.some((l) => /couldn't read the subscriber list/.test(l)), "handler: if the list can't be read, the slot runs and the log says why");
+}
+
+// ---- T35: the slot a scheduled run was due for
+{
+  const H = 3600 * 1000, d = Date.UTC(2026, 9, 25);
+  check(dueSlot(d + 15 * H + 5 * 60000, "10").hour === 10 && dueSlot(d + 15 * H + 5 * 60000, "10").at === d + 10 * H, "dueSlot: a slot-10 run starting at 15:05 is slot 10");
+  check(dueSlot(d + 30 * 60000, "20").at === d - 4 * H, "dueSlot: a slot-20 run starting after midnight is yesterday's slot 20");
+  check(dueSlot(d + 23 * H, "10").hour === 20, "dueSlot: a header slot that began 12 h or more ago is ignored for the run's own slot");
+  check(["", "7", "abc", "05x", undefined].every((h) => dueSlot(d + 11 * H, h).hour === 10), "dueSlot: a missing or bad header gives the run's own slot");
+  check(dueSlot(d + 9 * H, "5").hour === 5 && dueSlot(d + 9 * H, "05").hour === 5, "dueSlot: the header can be 5 or 05");
+
+  // the handler: the header's slot is used, and the reply says how late the run was
+  const env = { CRON_SECRET: "abc123", ANTHROPIC_API_KEY: "k", SWEEPS_PER_DAY_MIN: "2" };
+  const call = async (t, slotHeader) => {
+    const st = memStorage();
+    const h = makeSweepHandler({ env, storage: st, fetchFn: fakeFetch({ traveler_pain: [item(1)], gov_policy: [], web_app: [], industry: [] }), now: () => t, log: () => {} });
+    const res = mockRes();
+    await h({ headers: { authorization: "Bearer abc123", "x-sweep-trigger": "scheduled", "x-sweep-slot": slotHeader } }, res);
+    return res.json();
+  };
+  const lateRun = await call(d + 15 * H + 5 * 60000, "10");
+  check(lateRun.status === "saved" && lateRun.slot === 10 && lateRun.lateMinutes === 305 && lateRun.slotAt === new Date(d + 10 * H).toISOString(),
+    "handler: a run due at slot 10 that starts at 15:05 sweeps as slot 10 and reports 305 minutes late");
+  const noHeader = await call(d + 15 * H + 5 * 60000, "");
+  check(noHeader.status === "skipped" && /slot 15 not needed/.test(noHeader.reason) && noHeader.lateMinutes === 5, "handler: without the header the run counts as its own slot (15, not needed at 2 a day), 5 minutes in");
 }
 
 // ---- /api/data

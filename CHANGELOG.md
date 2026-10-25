@@ -5,6 +5,40 @@ grouped by date.
 
 ## 2026-10-25
 
+- Renewing Pro (T34, built, not deployed). A cancelled paid Pro whose period is still running gets **Keep renewing**:
+  a new subscription for the plan they choose, starting when the paid period ends (Razorpay's `start_at`), so nothing
+  is charged twice; its first charge makes it the plan, and Pro holds 6 hours if the old plan's end arrives first.
+  Cancelling again stops the renewal. A Free member who paid before sees **Renew Pro** with their last plan filled in.
+  A Pro that won't renew (cancelled, last billing cycle, or owner-granted with an end date) gets one email 7 days
+  before it ends; the sweep reply counts it as `endWarning`.
+- One Pro plan, chosen and paid for together (T33, built, not deployed). `/manage/` has one plan card: categories
+  (all four, just one, or several), emails a day, and for Free the billing period (1, 3, 6 or 12 months) with each
+  period's price. **Upgrade to Pro** opens it and **Pay with Razorpay** checks out that choice; with payments off,
+  **Request Pro** opens it and **Send my request** stores the choice for `grant-pro`. A Pro saves changes with the new
+  `set-plan`, and a paid Pro can't save more than they paid for. The owner chose the price model "a price per number
+  of categories, plus an amount per extra email a day"; `plan.json`'s `monthly` (₹299) is replaced by `pricing`, set to
+  **₹1 for every choice while testing**. Razorpay charges it with one ₹1 plan per period and the price as the
+  subscription's quantity, so `RAZORPAY_PLANS` (made by `check-plan.mjs --create`) replaces `RAZORPAY_PLAN_ID`, and
+  `RAZORPAY_TOTAL_COUNT` counts months. The pages say Pro renews "at the end of each billing period".
+- Sweep slots survive GitHub's late runs (T35). `sweep.yml` has one cron line per slot and sends the slot the run
+  was due for as `X-Sweep-Slot`; the sweep uses it if that slot began under 12 hours ago. The 2-hour gap becomes one
+  scheduled sweep per slot, so the Vercel backstop and a late slot-00 run sweep once, and a late run no longer holds
+  back the next slot. Scheduled replies add `slotAt` and `lateMinutes`. A leaked secret now allows at most 8 sweeps
+  a day instead of about 15.
+- New tasks from the owner's Pro plan request, after checking the code: [T33](docs/subscriptions/tasks/T33-pro-plan-builder.md)
+  (one plan from categories, 1 to 5 emails a day and 1, 3, 6 or 12 months, priced and paid together, test mode first),
+  [T34](docs/subscriptions/tasks/T34-renew-pro.md) (renewal) and [T35](docs/subscriptions/tasks/T35-sweep-slots-on-time.md)
+  (GitHub's runs start up to 4 h 35 m late; past about 4 h 43 m a run lands in the wrong slot). Found while checking:
+  T14 and T32 are combined only in delivery; Production shows no pay button because no Razorpay variables are set
+  there (by design until T27); `staging`, where payment is tested, is 121 commits behind `main`. The tasks index,
+  progress, T27, T31, T32, pricing.md, the decision log and the roadmap follow. Docs only.
+- Sweeps run again (RM-01, LR-01; I-01 closed). The owner put a new Anthropic key with credit in Vercel; after the
+  17:00 UTC deploy, a manual sweep at 17:18 UTC saved all four categories (18 items) on `claude-haiku-5-5`: 101,309
+  input and 9,306 output tokens, 10 searches, 90 pages, about 20 seconds. Every sweep from 2026-10-23 15:09 UTC had
+  failed with "Your credit balance is too low". Docs that named `claude-sonnet-5-5` as the default now say Haiku,
+  the default since `533ab15`.
+- `scripts/test-compare.mjs` compares Sonnet with Haiku again: `533ab15` had set both of its model constants to Haiku,
+  failing 7 checks and the `check` workflow on `main`.
 - Each sweep that runs saves an LLM log in the private Blob store (`radar:llmlog:<id>`), because Vercel's Hobby plan
   keeps function logs for an hour. It holds every Claude call's request and response (thinking, search queries,
   answer, stop reason, usage; encrypted page contents left out) and a summary: input and output tokens, searches,

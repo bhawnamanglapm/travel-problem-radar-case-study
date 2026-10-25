@@ -39,7 +39,6 @@ Open on 2026-10-24:
 
 | ID | Issue | Effect | Next step | Source |
 |---|---|---|---|---|
-| I-01 | Every scheduled sweep since 2026-10-23 15:09 UTC failed: Anthropic answered HTTP 400 for all four categories | Nothing new saved; Pro members get no new findings. The last good sweep was at 10:09 UTC that day | Owner: put a key from the owner's own Anthropic account, with credit, in Vercel Production and redeploy (RM-01). The exact reason is unknown; the next failure notice will give it (I-02, closed) | GitHub Actions run logs; the failure email |
 | I-03 | Outlook.com files the emails in Junk; Gmail filed the first confirmation as spam | See R-05 | Recheck as the domain ages; perhaps the owner's own domain for the site (RM-16) | [progress.md](../../docs/subscriptions/tasks/progress.md) |
 | I-04 | Chrome showed a "Dangerous site" warning on the confirm link (2026-10-22) | New visitors may stop there. The cause is unknown | Parked by the owner: move to the owner's own domain, then ask Google for a review | [account-flows.md](../../docs/subscriptions/account-flows.md#what-should-change) #1 |
 | I-05 | The terms page waits for an adviser's liability clause | Razorpay's website review may not pass until terms ships (**verify** the required pages), so live payments wait too | Owner, with an adviser (RM-04) | [decisions.md](../../docs/decisions.md) 2026-10-23 |
@@ -48,6 +47,7 @@ Closed, kept for the record:
 
 | ID | Issue | Fix | Source |
 |---|---|---|---|
+| I-01 | Every scheduled sweep from 2026-10-23 15:09 UTC failed: Anthropic answered HTTP 400 for all four categories. The reason, once logged (I-02): "Your credit balance is too low" | A new key with credit in Vercel Production, deployed 2026-10-25 17:00 UTC; a manual sweep at 17:18 UTC saved all four categories (RM-01) | GitHub Actions run 40215787749; [CHANGELOG](../../CHANGELOG.md) 2026-10-25 |
 | I-06 | The first production sweep saved items from only 1 of 4 categories | The output token limit was raised to 16,000, because thinking counts toward it; a test covers a cut-off reply | `f200a79`; [CHANGELOG](../../CHANGELOG.md) 2026-10-21 |
 | I-07 | One inbox could subscribe several times under different spellings (Gmail dots, `+tags`) | One subscription per inbox, keyed on the canonical address | `33d1ef1`; [decisions.md](../../docs/decisions.md) 2026-10-22 |
 | I-02 | The failure notice said only `http 400`: the code dropped Anthropic's error message, so the cause of I-01 had to be guessed | The notice gives the error's type and message on one line, capped at 200 characters, with the key blanked if it appears (RM-02) | `1ff7825`, PR #79; [CHANGELOG](../../CHANGELOG.md) 2026-10-24 |
@@ -58,7 +58,7 @@ Closed, kept for the record:
 
 | ID | Depends on | For | Limit or condition that matters | Source |
 |---|---|---|---|---|
-| D-01 | Anthropic API | Every sweep: `claude-sonnet-5-5` with web search | Needs a key with credit; see R-03 and I-01 | `api/_lib/handlers.js`, `api/_lib/radar.js` |
+| D-01 | Anthropic API | Every sweep: `claude-haiku-5-5` (the default since 2026-10-25; `RADAR_MODEL` overrides it) with web search | Needs a key with credit; see R-03 and I-01 (closed) | `api/_lib/handlers.js`, `api/_lib/radar.js` |
 | D-02 | Vercel | Pages, the 9 functions, Blob storage, environment variables | Hobby: 12 functions (9 used), 2,000 Blob advanced operations a month, one rate-limit rule, no commercial use | [T23](../../docs/subscriptions/tasks/T23-pro-display-standards.md) C9; [decisions.md](../../docs/decisions.md) 2026-10-22 |
 | D-03 | GitHub Actions | Calls the sweep every 5 hours | Runs can start late when GitHub delays them; Vercel's daily cron is the backstop | `.github/workflows/sweep.yml`; T23 B2 |
 | D-04 | Resend | Confirmation, sign-in and digest emails | Free plan: 100 emails a day. The sending domain is verified with DMARC (D8) | [decisions.md](../../docs/decisions.md) D7, D8 |

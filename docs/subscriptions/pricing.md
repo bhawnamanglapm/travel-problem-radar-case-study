@@ -47,6 +47,11 @@ IST), though GitHub can start scheduled runs late.
 
 ## Final Pro plan (2026-10-24)
 
+> **Changed by the owner on 2026-10-25:** Pro becomes one plan the member builds and pays for: categories (one,
+> several or all), 1 to 5 emails a day, and 1, 3, 6 or 12 months, each with its own price, tested in Razorpay test
+> mode first. The pricing model and prices are open ([T33](tasks/T33-pro-plan-builder.md) inputs P1 to P5), and
+> renewal is [T34](tasks/T34-renew-pro.md). Until T33 ships, the table below is what the code does.
+
 > **Decided by the owner on 2026-10-24** ([decision log](../decisions.md)). It is phase 1 of the tier plan below.
 > Payments are still off (`plan.json` `paid: false`) until T27. The tasks that carry it out are
 > [T29 to T32](tasks/README.md#task-list); T32 replaced T28 the same day.

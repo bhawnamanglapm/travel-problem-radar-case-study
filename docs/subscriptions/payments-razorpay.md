@@ -24,13 +24,15 @@ whether someone has paid; the site only records what Razorpay tells it.
 
 ## Setup in Razorpay (once)
 
-1. Create a **Plan** in the dashboard (period, interval, amount, currency). Copy its id into `RAZORPAY_PLAN_ID`.
-   Create one plan per price point (monthly, yearly).
+1. ~~Create a **Plan** in the dashboard and copy its id into `RAZORPAY_PLAN_ID`.~~ **Changed by T33 (2026-10-25):**
+   one ₹1 plan per billing period (1, 3, 6, 12 months), made by `node scripts/check-plan.mjs --create`, with the ids
+   in `RAZORPAY_PLANS`; each subscription's `quantity` is the price in rupees. See DEPLOYMENT.md, "How Razorpay
+   charges a price it has no plan for".
 2. Create API keys. Use the **test** key pair first.
 3. Add a **webhook** pointing at `https://<site>/api/razorpay-webhook`, choose the subscription events below, and set a
    webhook secret.
 4. Add four variables in Vercel (Production only; the two secrets marked Sensitive): `RAZORPAY_KEY_ID`,
-   `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `RAZORPAY_PLAN_ID`. Test keys start with `rzp_test_`. Add a
+   `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `RAZORPAY_PLANS` (was `RAZORPAY_PLAN_ID` before T33). Test keys start with `rzp_test_`. Add a
    pattern for them to the secret scan in `scripts/check.mjs`.
 
 ## Flow

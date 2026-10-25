@@ -77,7 +77,9 @@ check(/fetch\("\/api\/account"/.test(manPage) && /action: "request-pro"/.test(ma
 check(/<meta name="referrer" content="no-referrer"/.test(manPage) && /<meta name="robots" content="noindex"/.test(manPage), "manage/index.html sends no Referer and is not indexed (its URL carries a token)");
 // T14: the categories form posts set-cats, with one checkbox per category key.
 const manBoxes = [...manPage.matchAll(/<input type="checkbox" value="([a-z_]+)"/g)].map((m) => m[1]);
-check(/action: "set-cats"/.test(manPage) && JSON.stringify(manBoxes) === JSON.stringify(CATS), "manage/index.html posts set-cats and has one checkbox per category, in order");
+const manOptions = [...manPage.matchAll(/<option value="([a-z_]+)"/g)].map((m) => m[1]);
+check(JSON.stringify(manBoxes) === JSON.stringify(CATS) && JSON.stringify(manOptions) === JSON.stringify(CATS) && /name="catMode" value="all"/.test(manPage) && /name="catMode" value="one"/.test(manPage) && /name="catMode" value="some"/.test(manPage),
+  "manage/index.html offers all four, just one (a list) or several (one checkbox per category, in order) (T14, T33)");
 check(!/\.innerHTML\s*=/.test(manPage), "manage/index.html writes server data with textContent only, never innerHTML");
 check(manPage.length > 0 && !/<script[^>]*\ssrc=|<link[^>]*rel=["']?stylesheet|@import|url\(\s*["']?https?:/i.test(manPage), "manage/index.html is self-contained (no external script, stylesheet, import or font URL)");
 check(/\bcp -r [^&]*\bmanage\b[^&]* public\//.test(siteBuild), "build:site copies manage into public/");
@@ -85,10 +87,14 @@ check(existsSync("api/account.js"), "api/account.js exists (the manage page's en
 check(/fetch\("\/api\/session"/.test(manPage) && /action: "signout"/.test(manPage), "manage/index.html has a Sign out button that posts to /api/session");
 check(/action: "delete-account"/.test(manPage) && />Delete my account</.test(manPage) && /This can’t be undone/.test(manPage) && /action: "email-on"/.test(manPage),
   "manage/index.html has Delete my account (asked twice) and Turn emails back on (T17)");
-// T32: the Emails a day card posts set-freq, with one radio button for each number, 1 to 5, in order.
+// T32, T33: one plan card for categories, emails a day (one radio button for each number, 1 to 5, in order) and the
+// billing period. A Pro saves with set-plan; Free sends the same choice with checkout, or with request-pro.
 const manFreq = [...manPage.matchAll(/<input type="radio" name="freq" value="(\d)"/g)].map((m) => m[1]);
-check(/action: "set-freq"/.test(manPage) && manFreq.join() === "1,2,3,4,5" && /id="freqCard"/.test(manPage) && /sweepsPerDayMax/.test(manPage) && /"freqCard", "deleteCard"/.test(manPage),
-  "manage/index.html has the Emails a day card: posts set-freq, radios 1 to 5, hides numbers above the cap, hidden after delete (T32)");
+check(/action: "set-plan"/.test(manPage) && manFreq.join() === "1,2,3,4,5" && /id="planCard"/.test(manPage) && /sweepsPerDayMax/.test(manPage) && /"planCard", "deleteCard"/.test(manPage),
+  "manage/index.html has the plan card: posts set-plan, emails a day 1 to 5, hides numbers above the cap, hidden after delete (T32, T33)");
+check(/action: "checkout", cats: c\.cats, sweepsPerDay: c\.sweepsPerDay, months: c\.months/.test(manPage) && /action: "request-pro", cats: c\.cats, sweepsPerDay: c\.sweepsPerDay, months: c\.months/.test(manPage)
+  && /a\.payPeriods/.test(manPage) && /acct\.pricing/.test(manPage) && !/₹\s?\d/.test(manPage),
+  "manage/index.html sends the chosen plan with checkout and request-pro, offers only periods that can be paid for, and holds no price of its own (T33)");
 // T20: the one script loaded from elsewhere is Razorpay's Checkout, and only on the Upgrade click.
 // Request Pro stays for while payments are off.
 const manSrcs = [...manPage.matchAll(/\.src\s*=\s*([^;]+);/g)].map((m) => m[1].trim());
@@ -207,7 +213,7 @@ check(/Gathered by an AI model with web search\. Items are not verified/.test(pr
 check(/fetch\("\/api\/session\?action=me"\)/.test(pricePage) && /a\.href = "\.\.\/manage\/"/.test(pricePage) && /id="getpro" href="\.\.\/signup\/\?pro=1"/.test(pricePage), "pricing/index.html: Get Pro goes to sign-up with Pro ticked, or to the account page when signed in");
 check(/<th scope="col">Free<\/th><th scope="col">Pro<\/th>/.test(pricePage), "pricing/index.html shows Free and Pro side by side in one table (T23 B1, C1)");
 // T23 rules a script can check, on every shipped page (and pricing, which ships once filled), in both versions.
-const SAMPLE_PLAN = { ...plan, monthly: 299, gst: "GST included", trialDays: 0, refund: "Sample refund rule.", refundDays: 7, methods: ["cards"] }; // only for this check
+const SAMPLE_PLAN = { ...plan, pricing: { byCategories: { 1: 100, 2: 150, 3: 200, 4: 250 }, perExtraEmail: 25, periods: { 1: 1, 3: 3, 6: 5, 12: 10 } }, gst: "GST included", trialDays: 0, refund: "Sample refund rule.", refundDays: 7, methods: ["cards"] }; // only for this check
 const ruled = [...new Set([...shippedPages, "pricing/index.html", "about/index.html", "signup/index.html"])].filter((f) => existsSync(f));
 for (const f of ruled) {
   const t = readFileSync(f, "utf8");
@@ -222,8 +228,8 @@ for (const f of ruled) {
 const stillFree = ruled.filter((f) => /being tested|switched on by hand/i.test(fillPlan.fill(readFileSync(f, "utf8"), { ...SAMPLE_PLAN, paid: true }).out));
 check(stillFree.length === 0, `with Pro paid, no page says Pro is free while being tested or switched on by hand (T26)${stillFree.length ? " (" + stillFree.join(", ") + ")" : ""}`);
 const manPaid = fillPlan.fill(manPage, { ...SAMPLE_PLAN, paid: true }).out;
-check(manPage.includes("{{PRO_PRICE}}, {{PRO_GST}}.</strong> Renews automatically every month until you cancel") && manPage.includes("<p>{{PRO_REFUND}}</p>")
-  && />Pay with Razorpay</.test(manPaid) && !/id="req"/.test(manPaid) && /if \(req\) req\.addEventListener/.test(manPage),
+check(manPage.includes("{{PRO_PRICE}}, {{PRO_GST}}.</strong> Renews automatically at the end of each billing period until you cancel") && manPage.includes("<p>{{PRO_REFUND}}</p>")
+  && />Pay with Razorpay</.test(manPaid) && !/id="req"|id="sendReq"/.test(manPaid) && /if \(req\) req\.addEventListener/.test(manPage) && /if \(sendReq\) sendReq\.addEventListener/.test(manPage),
   "manage/index.html, with Pro paid: price, GST, renewal and the refund rule above Pay with Razorpay, and no Request Pro (T26)");
 check(manPage.includes('a.billing === "pending"') && manPage.includes('a.billing === "halted"') && /"payment_retrying"/.test(manPage) && /ondismiss/.test(manPage),
   "manage/index.html explains a failed renewal, offers no second checkout while Razorpay retries, and says when the payment window closes (T26)");
@@ -232,7 +238,7 @@ check(livePage.includes('<template data-when="paid"><meta name="tpr-pro-price" c
 check(!pricingShipped || !draftLegal.some((s) => pricePage.includes(`legal/${s}/`)), "pricing/index.html, once shipped, links no policy page the build doesn't ship");
 // The policy pages take Pro's facts from plan.json too, so they say what /pricing/ says (T23 A1, A2, A4).
 const termsPage = readFileSync("legal/terms/index.html", "utf8"), refundsPage = readFileSync("legal/refunds/index.html", "utf8");
-check(termsPage.includes("{{PRO_PRICE}}, {{PRO_GST}}") && termsPage.includes("Renews automatically every month until you cancel"), "legal/terms takes Pro's price and GST from plan.json and says it renews");
+check(termsPage.includes("{{PRO_PRICE}}, {{PRO_GST}}") && termsPage.includes("Renews automatically at the end of each billing period until you cancel") && !/every month|monthly payments/.test(termsPage), "legal/terms takes Pro's price and GST from plan.json and says it renews");
 check(refundsPage.includes("<p>{{PRO_REFUND}}</p>") && refundsPage.includes("{{PRO_REFUND_DAYS}}"), "legal/refunds takes the refund rule and its days from plan.json, the same text as /pricing/");
 
 // 4f. About page and site footer (T25). Every shipped page ends with one footer: Home, About, Pricing, Contact, Terms,

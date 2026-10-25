@@ -6,7 +6,8 @@ import { DEFAULT_FROM, buildAlreadySubscribedEmail, buildConfirmEmail, buildProR
 import { BodyTooLargeError, allowMethods, esc, readFields, sendJson, sendPage } from "./http.js";
 import { OAUTH_COOKIE, OAUTH_MINUTES, clearOAuthCookie, googleConfigured, googleFinish, googleStart, readOAuthCookie, readSignupCookie, signupCookie } from "./google.js";
 import { cancelSubscription, createSubscription, razorpayConfigured, verifyCheckout, verifyWebhook } from "./razorpay.js";
-import { DEFAULT_SWEEPS_PER_DAY, normaliseSweepsPerDay, sweepLimits } from "./schedule.js";
+import { DEFAULT_SWEEPS_PER_DAY, normaliseSweepsPerDay, sweepLimits, sweepsPerDayOf } from "./schedule.js";
+import { periodsOf, priceOf, priceTable, razorpayPlans } from "./plan.js";
 import { clearCookie, originOk, parseCookies, readSession, sessionCookie, sessionSecret, signSession } from "./session.js";
 import {
   CONFIRM_RESEND_MINUTES, KEY_SUB_PREFIX, MAX_CONFIRMS_PER_ADDRESS, PENDING_TTL_DAYS, countEvents, deleteSubscriber, effectivePlan, findSubscriber, getSubscriber, newPending, normaliseCats, normaliseEmail, putSubscriber,
@@ -69,6 +70,44 @@ export const KEY_RZPSUB_PREFIX = "radar:rzpsub:";
 export const CHECKOUT_REUSE_MINUTES = 60;
 const totalCount = (env) => positiveInt(env.RAZORPAY_TOTAL_COUNT);
 export const paymentsReady = (env) => razorpayConfigured(env) && totalCount(env) !== null;
+// RAZORPAY_TOTAL_COUNT counts months (T33): a plan billed every `months` runs for that many months, rounded up.
+const cyclesFor = (env, months) => Math.max(1, Math.ceil(totalCount(env) / months));
+
+// A Pro plan choice sent by the manage page (T33): categories (null for all four), emails a day and billing
+// months. Missing parts take the defaults (all four, the default emails a day, the shortest period), so an old
+// page that sends nothing still works. `months` must be on sale, and with `forPayment` have a Razorpay plan.
+// Returns { ok, cats, perDay, months, catCount, price } or { ok: false, error }.
+export function readChoice({ cats, sweepsPerDay, months }, env, { forPayment = false } = {}) {
+  const max = sweepLimits(env).max;
+  let chosenCats = null;
+  if (cats !== undefined && cats !== null) {
+    const c = normaliseCats(cats);
+    if (!c.ok) return { ok: false, error: "unknown category" };
+    chosenCats = c.cats;
+  }
+  let perDay = Math.min(DEFAULT_SWEEPS_PER_DAY, max);
+  if (sweepsPerDay !== undefined && sweepsPerDay !== null) {
+    const f = normaliseSweepsPerDay(sweepsPerDay, max);
+    if (!f.ok) return { ok: false, error: f.error };
+    perDay = f.value;
+  }
+  const onSale = forPayment ? periodsOf().filter((m) => razorpayPlans(env)[m]) : periodsOf();
+  const m = months === undefined || months === null ? onSale[0] : months;
+  if (!Number.isInteger(m) || !onSale.includes(m)) return { ok: false, error: "unknown period" };
+  const catCount = chosenCats ? chosenCats.length : 4;
+  const price = priceOf({ catCount, perDay, months: m });
+  if (price === null) return { ok: false, error: "unknown period" };
+  return { ok: true, cats: chosenCats, perDay, months: m, catCount, price };
+}
+
+// A paid Pro may change categories and emails a day only to a choice that costs no more than what they paid
+// for, over the same period (T33). Owner-granted Pro, and paid Pro from before T33, may choose anything.
+export function withinPaid(record, catCount, perDay) {
+  const p = record.proSource === "razorpay" && record.paidFor && typeof record.paidFor === "object" ? record.paidFor : null;
+  if (!p) return true;
+  const price = priceOf({ catCount, perDay, months: p.months });
+  return price !== null && Number.isInteger(p.price) && price <= p.price;
+}
 const PAYMENT_ID = /^pay_[A-Za-z0-9]+$/;
 
 // Unset or unreadable gives the default; an explicit 0 closes confirmations.
@@ -417,6 +456,17 @@ export function makeUnsubscribeHandler({ env, storage, now, randomBytes = crypto
 const RZP_BILLING = new Set(["pending", "halted"]);
 const rzpOf = (record) => (record.rzp && typeof record.rzp === "object" ? record.rzp : {});
 const paidPro = (record, t) => record.proSource === "razorpay" && effectivePlan(record, t) === "pro";
+// A renewal (T34) is a second subscription, rzp.next, that starts when the cancelled one ends.
+const nextOf = (record) => (rzpOf(record).next && typeof rzpOf(record).next === "object" ? rzpOf(record).next : null);
+const renewalOf = (record) => {
+  const n = nextOf(record);
+  return n && n.status === "authenticated" && n.choice ? { months: n.choice.months, price: n.choice.price, startsAt: n.startAt || null } : null;
+};
+const canRenew = (record, t) => paidPro(record, t) && rzpOf(record).cancelAtPeriodEnd === true && !renewalOf(record);
+const lastPlanOf = (record) => {
+  const c = rzpOf(record).choice;
+  return c && typeof c === "object" ? { cats: c.cats || null, perDay: c.perDay, months: c.months } : null;
+};
 const accountView = (record, t, env) => ({
   status: record.status,
   plan: record.plan === "pro" ? "pro" : "free",
@@ -430,6 +480,18 @@ const accountView = (record, t, env) => ({
   sweepsPerDayDefault: DEFAULT_SWEEPS_PER_DAY,
   sweepsPerDayMax: sweepLimits(env).max,
   emailOff: record.emailOff || null,
+  // The plan card's prices (T33): the price table from plan.json, the periods on sale, and those that can be
+  // paid now (each needs a Razorpay plan). The page works prices out from the table; it holds none of its own.
+  pricing: priceTable(),
+  periods: periodsOf(),
+  payPeriods: paymentsReady(env) ? periodsOf().filter((m) => razorpayPlans(env)[m]) : [],
+  paidFor: record.paidFor || null,
+  proRequest: record.proRequest || null,
+  // Renewing (T34): the plan last chosen at checkout, to fill the card in again; a renewal already set up to start
+  // when a cancelled plan ends; and whether one can be set up now.
+  lastPlan: lastPlanOf(record),
+  renewal: renewalOf(record),
+  canRenew: canRenew(record, t),
   payments: paymentsReady(env),
   paymentPending: rzpOf(record).status === "authenticated" && effectivePlan(record, t) !== "pro",
   cancelAtPeriodEnd: paidPro(record, t) && rzpOf(record).cancelAtPeriodEnd === true,
@@ -456,10 +518,11 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
     let action = "";
     let cats;
     let sweepsPerDay;
+    let months;
     try {
       params = await linkParams(req, { queryOnly: false });
       if (params.fields && typeof params.fields.action === "string") action = params.fields.action;
-      if (params.fields) ({ cats, sweepsPerDay } = params.fields);
+      if (params.fields) ({ cats, sweepsPerDay, months } = params.fields);
     } catch (e) {
       if (e instanceof BodyTooLargeError) return sendJson(res, 413, { error: "request too large" });
       throw e;
@@ -490,6 +553,7 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
         if (effectivePlan(record, t) !== "pro") return sendJson(res, 403, { error: "pro_only" });
         const chosen = normaliseCats(cats);
         if (!chosen.ok) return sendJson(res, 400, { error: "unknown category" });
+        if (!withinPaid(record, chosen.cats ? chosen.cats.length : 4, sweepsPerDayOf(record, sweepLimits(env).max))) return sendJson(res, 403, { error: "change_plan" });
         const { record: updated, changed } = await save((r) => (effectivePlan(r, t) === "pro" ? { ...r, cats: chosen.cats } : null));
         if (!updated) return gone();
         if (!changed) return sendJson(res, 403, { error: "pro_only" });
@@ -500,7 +564,21 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
         if (effectivePlan(record, t) !== "pro") return sendJson(res, 403, { error: "pro_only" });
         const chosen = normaliseSweepsPerDay(sweepsPerDay, sweepLimits(env).max);
         if (!chosen.ok) return sendJson(res, 400, { error: chosen.error });
+        if (!withinPaid(record, Array.isArray(record.cats) ? record.cats.length : 4, chosen.value)) return sendJson(res, 403, { error: "change_plan" });
         const { record: updated, changed } = await save((r) => (effectivePlan(r, t) === "pro" ? { ...r, sweepsPerDay: chosen.value } : null));
+        if (!updated) return gone();
+        if (!changed) return sendJson(res, 403, { error: "pro_only" });
+        return sendJson(res, 200, { ok: true, ...view(updated) });
+      }
+      // POST action "set-plan" (T33): a Pro saves categories and emails a day together, from the one plan card.
+      if (action === "set-plan") {
+        if (record.status !== "active") return sendJson(res, 409, { error: "not_confirmed" });
+        if (effectivePlan(record, t) !== "pro") return sendJson(res, 403, { error: "pro_only" });
+        if (cats === undefined || sweepsPerDay === undefined) return sendJson(res, 400, { error: "unknown category" });
+        const c = readChoice({ cats, sweepsPerDay }, env);
+        if (!c.ok) return sendJson(res, 400, { error: c.error });
+        if (!withinPaid(record, c.catCount, c.perDay)) return sendJson(res, 403, { error: "change_plan" });
+        const { record: updated, changed } = await save((r) => (effectivePlan(r, t) === "pro" ? { ...r, cats: c.cats, sweepsPerDay: c.perDay } : null));
         if (!updated) return gone();
         if (!changed) return sendJson(res, 403, { error: "pro_only" });
         return sendJson(res, 200, { ok: true, ...view(updated) });
@@ -530,16 +608,33 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
         const keyId = String(env.RAZORPAY_KEY_ID).trim();
         if (action === "checkout") {
           if (record.status !== "active") return sendJson(res, 409, { error: "not_confirmed" });
-          if (effectivePlan(record, t) === "pro") return sendJson(res, 409, { error: "already_pro" });
+          // A paid Pro that has cancelled may set up a renewal that starts when the paid period ends (T34).
+          if (effectivePlan(record, t) === "pro" && !canRenew(record, t)) {
+            return sendJson(res, 409, { error: renewalOf(record) ? "already_renewed" : "already_pro" });
+          }
+          const renewing = effectivePlan(record, t) === "pro";
           // Paid, and the webhook hasn't arrived: a second checkout would charge twice.
           if (rzp.status === "authenticated") return sendJson(res, 409, { error: "payment_pending" });
           // Razorpay is still retrying a failed renewal: a new subscription could charge twice too.
           if (rzp.status === "pending") return sendJson(res, 409, { error: "payment_retrying" });
-          const age = t - Date.parse(rzp.createdAt);
-          if (rzp.status === "created" && rzp.subscriptionId && age >= 0 && age < CHECKOUT_REUSE_MINUTES * 60 * 1000) {
-            return sendJson(res, 200, { ok: true, keyId, subscriptionId: rzp.subscriptionId });
+          // The plan chosen on the page (T33): its period picks the ₹1 Razorpay plan, its price the quantity.
+          const choice = readChoice({ cats, sweepsPerDay, months }, env, { forPayment: true });
+          if (!choice.ok) return sendJson(res, 400, { error: choice.error });
+          const picked = { cats: choice.cats, perDay: choice.perDay, months: choice.months, price: choice.price };
+          // A renewal's first charge is when the paid period ends, so there's no gap and nothing is charged twice.
+          const startAt = renewing ? Math.floor(Date.parse(record.proUntil) / 1000) : null;
+          // A checkout for the same plan, still unpaid, is reused for a while; a different plan gets its own.
+          const open = renewing ? nextOf(record) || {} : rzp;
+          const age = t - Date.parse(open.createdAt);
+          if (open.status === "created" && open.subscriptionId && age >= 0 && age < CHECKOUT_REUSE_MINUTES * 60 * 1000
+            && JSON.stringify(open.choice || null) === JSON.stringify(picked)) {
+            return sendJson(res, 200, { ok: true, keyId, subscriptionId: open.subscriptionId, price: picked.price, months: picked.months, renewing });
           }
-          const sub = await createSubscription({ env, fetchFn, subscriberId: record.id, totalCount: totalCount(env) });
+          const sub = await createSubscription({
+            env, fetchFn, subscriberId: record.id, planId: razorpayPlans(env)[choice.months], quantity: choice.price,
+            totalCount: cyclesFor(env, choice.months), startAt,
+            extraNotes: { months: String(choice.months), perday: String(choice.perDay), cats: choice.cats ? choice.cats.join("+") : "all", ...(renewing ? { renews: "1" } : {}) },
+          });
           if (sub.error) {
             log("account", "checkout: razorpay error " + sub.error);
             return sendJson(res, 502, { error: "payment_provider" });
@@ -548,20 +643,38 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
           // Checked again on the stored record: a payment that landed meanwhile keeps its subscription.
           const { record: updated, changed } = await save((r) => {
             const cur = rzpOf(r);
+            if (renewing) {
+              if (!canRenew(r, t) || cur.subscriptionId !== rzp.subscriptionId) return null;
+              return { ...r, rzp: { ...cur, next: { subscriptionId: sub.id, status: "created", createdAt: new Date(t).toISOString(), startAt: r.proUntil, choice: picked } } };
+            }
             if (effectivePlan(r, t) === "pro" || cur.status === "authenticated" || cur.status === "pending") return null;
-            return { ...r, rzp: { subscriptionId: sub.id, status: "created", createdAt: new Date(t).toISOString(), currentEnd: null, cancelAtPeriodEnd: false, lastEventAt: null } };
+            return { ...r, rzp: { subscriptionId: sub.id, status: "created", createdAt: new Date(t).toISOString(), currentEnd: null, cancelAtPeriodEnd: false, lastEventAt: null, choice: picked } };
           });
           if (!updated) return gone();
-          if (!changed) return sendJson(res, 409, { error: effectivePlan(updated, t) === "pro" ? "already_pro" : "payment_pending" });
-          await recordEvent(storage, "checkoutstarted", { now: t, randomBytes, plan: "free" });
-          return sendJson(res, 200, { ok: true, keyId, subscriptionId: sub.id });
+          if (!changed) {
+            const error = renewing ? (renewalOf(updated) ? "already_renewed" : "not_paid_pro") : effectivePlan(updated, t) === "pro" ? "already_pro" : "payment_pending";
+            return sendJson(res, 409, { error });
+          }
+          await recordEvent(storage, "checkoutstarted", { now: t, randomBytes, plan: renewing ? "pro" : "free" });
+          return sendJson(res, 200, { ok: true, keyId, subscriptionId: sub.id, price: picked.price, months: picked.months, renewing });
         }
         if (action === "checkout-return") {
           const f = params.fields || {};
-          // Checked against the subscription saved here, not only the one Checkout sends back.
-          const good = rzp.subscriptionId && f.subscriptionId === rzp.subscriptionId && typeof f.paymentId === "string" && PAYMENT_ID.test(f.paymentId)
-            && verifyCheckout({ paymentId: f.paymentId, subscriptionId: rzp.subscriptionId, signature: f.signature }, String(env.RAZORPAY_KEY_SECRET).trim());
+          // Checked against the subscription saved here, not only the one Checkout sends back: the plan's own, or a
+          // renewal waiting to start (T34).
+          const next = nextOf(record);
+          const ours = next && f.subscriptionId === next.subscriptionId ? next.subscriptionId : rzp.subscriptionId;
+          const good = ours && f.subscriptionId === ours && typeof f.paymentId === "string" && PAYMENT_ID.test(f.paymentId)
+            && verifyCheckout({ paymentId: f.paymentId, subscriptionId: ours, signature: f.signature }, String(env.RAZORPAY_KEY_SECRET).trim());
           if (!good) return sendJson(res, 400, { error: "bad_signature" });
+          if (next && ours === next.subscriptionId) {
+            const { record: updated } = await save((r) => {
+              const n = nextOf(r);
+              return n && n.subscriptionId === ours && n.status === "created" ? { ...r, rzp: { ...rzpOf(r), next: { ...n, status: "authenticated" } } } : null;
+            });
+            if (!updated) return gone();
+            return sendJson(res, 200, { ok: true, message: "Renewal set up; it starts when this period ends.", ...view(updated) });
+          }
           // Only "created" moves on, judged on the stored record: if the webhook got here first, even
           // while this request was running, its status and its Pro stay.
           const { record: updated } = await save((r) => {
@@ -573,7 +686,24 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
         }
         // cancel: a paid Pro stops renewing; Pro lasts until proUntil, and the webhook (T21) ends it.
         if (!paidPro(record, t) || !rzp.subscriptionId) return sendJson(res, 409, { error: "not_paid_pro" });
-        if (rzp.cancelAtPeriodEnd === true) return sendJson(res, 200, { ok: true, ...view(record) });
+        if (rzp.cancelAtPeriodEnd === true) {
+          // Cancelling again after setting up a renewal (T34) stops the renewal before it starts.
+          const next = nextOf(record);
+          if (!next) return sendJson(res, 200, { ok: true, ...view(record) });
+          if (next.status === "authenticated") {
+            const stop = await cancelSubscription({ env, fetchFn, subscriptionId: next.subscriptionId, atCycleEnd: false });
+            if (stop.error) {
+              log("account", "cancel: razorpay error " + stop.error);
+              return sendJson(res, 502, { error: "payment_provider" });
+            }
+          }
+          const { record: updated } = await save((r) => {
+            const { next: gone_, ...cur } = rzpOf(r);
+            return gone_ && gone_.subscriptionId === next.subscriptionId ? { ...r, rzp: cur } : null;
+          });
+          if (!updated) return gone();
+          return sendJson(res, 200, { ok: true, ...view(updated) });
+        }
         const done = await cancelSubscription({ env, fetchFn, subscriptionId: rzp.subscriptionId, atCycleEnd: true });
         if (done.error) {
           log("account", "cancel: razorpay error " + done.error);
@@ -589,9 +719,20 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
       if (action !== "request-pro") return sendJson(res, 400, { error: "unknown action" });
       if (record.status !== "active") return sendJson(res, 409, { error: "not_confirmed" });
       if (effectivePlan(record, t) === "pro") return sendJson(res, 409, { error: "already_pro" });
-      if (record.proRequestedAt) return sendJson(res, 200, { ok: true, ...view(record) }); // a repeat click
+      // The plan chosen on the page, if one was sent (T33), is kept with the request, so the owner's grant-pro
+      // applies its categories and emails a day. A repeat request only updates the choice; the owner hears once.
+      const sent = cats !== undefined || sweepsPerDay !== undefined || months !== undefined;
+      const choice = sent ? readChoice({ cats, sweepsPerDay, months }, env) : null;
+      if (choice && !choice.ok) return sendJson(res, 400, { error: choice.error });
+      const proRequest = choice ? { cats: choice.cats, perDay: choice.perDay, months: choice.months } : null;
+      if (record.proRequestedAt) {
+        if (!proRequest) return sendJson(res, 200, { ok: true, ...view(record) }); // a repeat click
+        const { record: again } = await save((r) => (r.proRequestedAt && effectivePlan(r, t) !== "pro" ? { ...r, proRequest } : null));
+        return again ? sendJson(res, 200, { ok: true, ...view(again) }) : gone();
+      }
       // Two clicks at once write one request and tell the owner once.
-      const { record: updated, changed } = await save((r) => (r.proRequestedAt || effectivePlan(r, t) === "pro" ? null : { ...r, proRequestedAt: new Date(t).toISOString() }));
+      const { record: updated, changed } = await save((r) => (r.proRequestedAt || effectivePlan(r, t) === "pro" ? null
+        : { ...r, proRequestedAt: new Date(t).toISOString(), ...(proRequest ? { proRequest } : {}) }));
       if (!updated) return gone();
       if (changed) {
         await recordEvent(storage, "prorequested", { now: t, randomBytes, plan: "free" });
@@ -1021,6 +1162,24 @@ const RZP_STATUS = /^[a-z_]{1,20}$/;
 const RZP_GRANT = new Set(["activated", "charged", "resumed"]);
 const RZP_REVOKE = new Set(["halted", "paused"]);
 const RZP_ENDING = new Set(["cancelled", "completed"]);
+export const RENEW_GRACE_HOURS = 6;
+
+// An event for a renewal waiting to start (T34). Approving it marks it authenticated; its first charge makes it the
+// plan (the cancelled one is done with, and its later events are ignored); if it ends or fails first, it is dropped.
+export function applyRenewalEvent(record, kind, entity, eventAt, t) {
+  const rzp = rzpOf(record);
+  const n = rzp.next;
+  if (kind === "authenticated") return n.status === "created" ? { ...record, rzp: { ...rzp, next: { ...n, status: "authenticated" } } } : record;
+  if (RZP_GRANT.has(kind) && secondsIso(entity.current_end)) {
+    const promoted = { ...record, rzp: { subscriptionId: n.subscriptionId, status: n.status, createdAt: n.createdAt, currentEnd: null, cancelAtPeriodEnd: false, lastEventAt: null, choice: n.choice } };
+    return applyRzpEvent(promoted, kind, entity, eventAt, t);
+  }
+  if (RZP_ENDING.has(kind) || RZP_REVOKE.has(kind)) {
+    const { next: dropped, ...rest } = rzp;
+    return { ...record, rzp: rest };
+  }
+  return record;
+}
 const secondsIso = (s) => (Number.isInteger(s) && s > 0 && s < 1e11 ? new Date(s * 1000).toISOString() : null);
 
 // The record after one subscription event (kind: "activated", "halted", ...). Only a paid Pro
@@ -1031,12 +1190,27 @@ export function applyRzpEvent(record, kind, entity, eventAt, t) {
   const currentEnd = secondsIso(entity.current_end) || rzp.currentEnd || null;
   let status = typeof entity.status === "string" && RZP_STATUS.test(entity.status) ? entity.status : rzp.status || null;
   if (kind === "authenticated" && rzp.status && rzp.status !== "created") status = rzp.status; // never back from active
-  let next = { ...record, rzp: { ...rzp, status, currentEnd, lastEventAt: eventAt } };
+  // remaining_count 0 means this is the last cycle: the plan won't renew (T34's warning).
+  const remaining = Number.isInteger(entity.remaining_count) && entity.remaining_count >= 0 ? entity.remaining_count : rzp.remaining ?? null;
+  let next = { ...record, rzp: { ...rzp, status, currentEnd, lastEventAt: eventAt, remaining } };
   const paid = record.proSource === "razorpay";
-  if (RZP_GRANT.has(kind) && currentEnd) next = { ...next, plan: "pro", proSource: "razorpay", proUntil: currentEnd, proRequestedAt: null };
+  if (RZP_GRANT.has(kind) && currentEnd) {
+    next = { ...next, plan: "pro", proSource: "razorpay", proUntil: currentEnd, proRequestedAt: null };
+    // The first grant for a subscription applies the plan chosen at checkout (T33) and records what was paid
+    // for; later charges keep the member's own changes within it.
+    const c = rzp.choice;
+    if (c && typeof c === "object" && (!record.paidFor || record.paidFor.sub !== rzp.subscriptionId)) {
+      next = { ...next, cats: c.cats || null, sweepsPerDay: c.perDay,
+        paidFor: { sub: rzp.subscriptionId, catCount: Array.isArray(c.cats) ? c.cats.length : 4, perDay: c.perDay, months: c.months, price: c.price } };
+      delete next.proRequest;
+    }
+  }
   else if (RZP_REVOKE.has(kind) && paid) next = { ...next, plan: "free", proSource: null, proUntil: null };
   else if (RZP_ENDING.has(kind) && paid) {
-    next = Date.parse(currentEnd) > t ? { ...next, proUntil: currentEnd } : { ...next, plan: "free", proSource: null, proUntil: null };
+    // A renewal the member approved (T34) starts at this end; Pro holds for RENEW_GRACE_HOURS while its first charge lands.
+    const waiting = rzp.next && rzp.next.status === "authenticated";
+    const until = waiting ? new Date(Math.max(Date.parse(currentEnd) || 0, t) + RENEW_GRACE_HOURS * 3600_000).toISOString() : currentEnd;
+    next = Date.parse(until) > t ? { ...next, proUntil: until } : { ...next, plan: "free", proSource: null, proUntil: null };
   }
   return next;
 }
@@ -1054,7 +1228,7 @@ async function findRzpRecord(storage, entity) {
   if (v === null) return null;
   let record;
   try { record = JSON.parse(v); } catch (e) { return null; }
-  return record && record.id === id && rzpOf(record).subscriptionId === entity.id ? record : null;
+  return record && record.id === id && (rzpOf(record).subscriptionId === entity.id || (nextOf(record) || {}).subscriptionId === entity.id) ? record : null;
 }
 
 // POST /api/razorpay-webhook. Signed with RAZORPAY_WEBHOOK_SECRET (HMAC-SHA256 of the raw body, hex,
@@ -1106,6 +1280,7 @@ export function makeRazorpayWebhookHandler({ env, storage, now, randomBytes = cr
         const cur = rzpOf(r);
         before = effectivePlan(r, t);
         why = "unknown";
+        if (cur.next && cur.next.subscriptionId === entity.id && cur.subscriptionId !== entity.id) return applyRenewalEvent(r, kind, entity, eventAt, t);
         if (cur.subscriptionId !== entity.id) return null;
         const last = Date.parse(cur.lastEventAt);
         if (Number.isFinite(last) && Date.parse(eventAt) < last) { why = "stale"; return null; }

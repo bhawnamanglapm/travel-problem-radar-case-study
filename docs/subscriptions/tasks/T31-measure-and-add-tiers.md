@@ -8,6 +8,10 @@
 | Depends on | T27, and 20 to 30 paying members |
 | Unblocks | Plus and Starter tiers, a yearly plan, "Pro Max" (each its own task if chosen) |
 
+> **Changed 2026-10-25:** the owner chose to sell a plan built from categories, emails a day and period before
+> launch ([T33](T33-pro-plan-builder.md)). This task now measures that plan and adjusts its prices; it no longer
+> decides whether tiers exist.
+>
 > Added 2026-10-24 with the [final Pro plan](../pricing.md#final-pro-plan-2026-10-24). This is phase 2 of the
 > [tier plan's rollout](../pricing.md#tiers-by-categories-and-sweeps-draft-2026-10-24).
 

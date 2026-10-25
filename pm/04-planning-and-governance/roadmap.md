@@ -9,7 +9,7 @@
 
 | ID | Item | Why | Who | Blocked by | Source |
 |---|---|---|---|---|---|
-| RM-01 | Get the sweeps running again | Every scheduled sweep since 2026-10-23 15:09 UTC failed: Anthropic refused all four categories with HTTP 400, and nothing was saved | Owner: put a key from the owner's own Anthropic account in Vercel, with credit, and redeploy | — | GitHub Actions run logs; I-01 in the [RAID log](raid-log.md) |
+| RM-01 | Get the sweeps running again | **Done** 2026-10-25: the owner put a key with credit in Vercel; a manual sweep at 17:18 UTC saved all four categories (18 items). Every scheduled sweep from 2026-10-23 15:09 UTC until then had failed: "Your credit balance is too low" | Owner: put a key from the owner's own Anthropic account in Vercel, with credit, and redeploy | — | GitHub Actions run logs; I-01 in the [RAID log](raid-log.md) |
 | RM-02 | Record why Anthropic refused a call | **Done** 2026-10-24 (PR #79, `1ff7825`): the failure email said only `http 400`; it now gives the error's type and message | Dev | — | [api/_lib/radar.js](../../api/_lib/radar.js) |
 | RM-03 | Razorpay live activation | Live payments need it | Owner | RM-04 (Razorpay reviews the website) | [payments-razorpay.md](../../docs/subscriptions/payments-razorpay.md#prerequisites) |
 | RM-04 | Ship the terms page | Razorpay's website review; the footer's last missing page | Owner, with an adviser | The liability clause | [decisions.md](../../docs/decisions.md) 2026-10-23 |
@@ -20,6 +20,9 @@
 | RM-09 | Answer the open inputs: international cards, a yearly plan, domain renewal | T27 lists cards, the liability clause and a yearly plan as still open; they change what `/pricing/` and the payment methods say | Owner | — | [T27](../../docs/subscriptions/tasks/T27-razorpay-test-run-and-go-live.md#before-starting-owner); [T23](../../docs/subscriptions/tasks/T23-pro-display-standards.md) |
 | RM-26 | T32: each Pro member chooses 1 to 5 emails a day, and every page says so (replaces T28's fixed 2 a day) | The owner asked for the choice; the site sweeps only as often as members need, so unneeded runs cost nothing. Server side **done** 2026-10-24 (#88); the manage card and wording are next | Dev | RM-01, for the check after deploy | [T32](../../docs/subscriptions/tasks/T32-sweeps-per-day.md) |
 | RM-27 | T30: the owner's launch steps in one order | RM-03, RM-04, RM-05 and RM-08 are owner steps that wait on others; [T30](../../docs/subscriptions/tasks/T30-owner-launch-checklist.md) orders them: terms first, then Razorpay activation, which reviews the website | Owner | — | [T30](../../docs/subscriptions/tasks/T30-owner-launch-checklist.md) |
+| RM-29 | T33: one Pro plan built from categories, emails a day and 1, 3, 6 or 12 months, priced and paid together | The owner's request (2026-10-25); replaces the single ₹299 monthly price. Includes RM-20's yearly plan | Owner (prices), then dev | The owner's pricing inputs | [T33](../../docs/subscriptions/tasks/T33-pro-plan-builder.md) |
+| RM-30 | T34: renewing Pro | A confirmed cancel can't be undone, and a plan whose cycles run out ends without warning | Dev | RM-29, RM-06 | [T34](../../docs/subscriptions/tasks/T34-renew-pro.md) |
+| RM-31 | T35: sweep slots on time | GitHub starts the scheduled runs hours late; past about 4 h 43 m a run is counted in the wrong slot and a Pro email is missed | Dev | — | [T35](../../docs/subscriptions/tasks/T35-sweep-slots-on-time.md) |
 | RM-25 | Fix what the 2026-10-24 code audit found | **Done** 2026-10-24 (PRs #81 to #84): 9 bugs and 3 design risks, among them a payment that could leave the payer on Free, and a forwarded digest that could sign the reader in. Still unverified: the real Blob conditional write (until T27) and the artifact's model settings (until a sweep runs inside a Claude artifact) | Dev | — | I-09 in the [RAID log](raid-log.md); [CHANGELOG](../../CHANGELOG.md) 2026-10-24 |
 
 ## Next: checks that are still open
@@ -41,7 +44,7 @@
 | RM-17 | Return to the starting page after sign-in | [account-flows.md](../../docs/subscriptions/account-flows.md#what-should-change) #6 |
 | RM-18 | A code in the sign-in email for signing in on another device | account-flows.md #8 |
 | RM-19 | "New" tracks events, not headlines | [PRD](../02-product-definition/prd.md#open-questions) open question 3 |
-| RM-20 | A yearly plan | PRD non-goals: only if paying up front matters |
+| RM-20 | A yearly plan: **moved into RM-29** (T33) on 2026-10-25 | PRD non-goals: only if paying up front matters |
 | RM-21 | Handle Razorpay refund and dispute events automatically | [costing.md](../../docs/subscriptions/costing.md#risks-and-safeguards): manual today |
 | RM-22 | An admin command to clear a bounce | [decisions.md](../../docs/decisions.md) 2026-10-23: none yet |
 | RM-23 | A cheaper model for the sweep, after a quality comparison | DSC-08; [haiku-test.md](../../docs/subscriptions/haiku-test.md) (estimated, not run) |

@@ -26,8 +26,8 @@ from the browser without a key, which only works inside Claude's app. That is wh
 GitHub Actions, every 5 hours (00:17, 05:17, 10:17, 15:17, 20:17 UTC); a slot no Pro member needs is
   skipped before any Claude call (T32)
   + Vercel cron, once a day (01:30 UTC), as a backstop
-  -> /api/sweep   (refuses calls without the secret; a scheduled call skips if a scheduled sweep ran in
-                   the last 2 hours; a manual call with the secret always runs)
+  -> /api/sweep   (refuses calls without the secret; each slot sweeps once, counted as the slot the
+                   GitHub run was due for even when it starts late (T35); a manual call always runs)
        4 Claude calls with web search, one per category, same prompts as the component
        merge, de-duplicate, flag "New", keep the last 60 sweeps -> private Vercel Blob store
        then post the digest (or a failure notice) to Slack and by email, for each one that is set up
@@ -53,7 +53,7 @@ Subscriber -> links in each email -> /manage/ (/api/account: plan, Request Pro o
 2. Add `CRON_SECRET` (any long random string) and `ANTHROPIC_API_KEY` as secret environment variables.
    Add the same `CRON_SECRET` as a GitHub Actions repository secret, for the 5-hour schedule.
 3. Set a monthly spend limit in the Anthropic Console. That is the real cost cap.
-4. Optional: `RADAR_MODEL` to choose the model (default `claude-sonnet-5-5`).
+4. Optional: `RADAR_MODEL` to choose the model (default `claude-haiku-5-5`).
 5. Optional: `SLACK_WEBHOOK_URL` (a Slack incoming webhook) to post each sweep's digest to a channel.
 6. Optional: `RESEND_API_KEY` and `EMAIL_TO` to email each sweep's digest through Resend. No domain is needed:
    it sends from Resend's shared address, which delivers only to the Resend account's own email.
@@ -74,10 +74,10 @@ Email has been sent through a real Resend account since 21 Oct 2026, from the ve
 | `demo/` | The demo page; `demo/radar.js` is built from the component and the sample |
 | `live/` | The live page; `live/radar-live.js` is built from the component |
 | `subscribe/` | The sign-up page (one self-contained file); posts to `/api/subscribe` |
-| `manage/` | A subscriber's own page, reached from the link in each email or signed in: plan, Request Pro, or Upgrade to Pro and cancel once payments are on (T20), unsubscribe |
+| `manage/` | A subscriber's own page, reached from the link in each email or signed in: plan, and one plan card (T33) for categories, emails a day and billing period, priced from `plan.json`. Free opens it with Request Pro (payments off) or Upgrade to Pro, then Pay with Razorpay (T20); Pro saves changes to it. Cancel, unsubscribe |
 | `api/sweep.js` | Scheduled job: runs the 4 searches, saves the result, then sends the owner's and subscribers' email (needs a secret to call) |
 | `api/data.js` | Read-only feed the live page uses (allow-listed keys only) |
-| `api/subscribe.js`, `api/confirm.js`, `api/unsubscribe.js`, `api/account.js` | Sign-up, the Confirm button, unsubscribe (also one-click from mail apps), and the manage page's data and actions: Request Pro, and checkout, checkout-return and cancel when payments are on |
+| `api/subscribe.js`, `api/confirm.js`, `api/unsubscribe.js`, `api/account.js` | Sign-up, the Confirm button, unsubscribe (also one-click from mail apps), and the manage page's data and actions: Request Pro (with the chosen plan), set-plan, and checkout (with the chosen plan), checkout-return and cancel when payments are on |
 | `api/resend-webhook.js` | Resend's signed bounce and complaint events: a hard bounce or a spam complaint deletes the address |
 | `api/razorpay-webhook.js` | Razorpay's signed subscription events (T21): activated or charged makes the account Pro until the paid period ends; halted makes a paid Pro Free; cancelled lets it run out. Duplicates and out-of-order events change nothing |
 | `api/_lib/radar.js`, `handlers.js` | Sweep logic and the sweep and data handlers |
@@ -87,6 +87,7 @@ Email has been sent through a real Resend account since 21 Oct 2026, from the ve
 | `api/_lib/subscribers.js` | Subscriber records, tokens, plans and event records |
 | `api/_lib/subscription-handlers.js` | The four subscriber endpoints, the per-IP sign-up limit and the Resend webhook |
 | `api/_lib/subscriber-delivery.js` | After a saved sweep: Pro and Free sends, the 24-hour roll-up, resuming a cut-off send |
+| `api/_lib/plan.js` | Pro's price from `plan.json` (T33): categories, emails a day and billing period priced together, the periods on sale, and `RAZORPAY_PLANS` (one ₹1 Razorpay plan per period; a subscription's quantity is the price). Used by `/api/account`, `fill-plan` and `check-plan` |
 | `api/_lib/razorpay.js` | Razorpay for paid Pro (T19): create, cancel and fetch a subscription, and the webhook and Checkout signature checks. Used by `/api/account`'s checkout, checkout-return and cancel (T20) |
 | `vercel.json` | Daily backstop cron (01:30 UTC), 300 s limit, build that publishes `index.html`, `demo/`, `live/`, `subscribe/`, `manage/` |
 | `travel-problem-radar.jsx` | The dashboard component (live in Claude's app, demo on the web) |

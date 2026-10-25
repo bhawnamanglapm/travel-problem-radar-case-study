@@ -197,8 +197,13 @@ export async function grantPro(storage, email, { until = null, apply, now, rando
   if (!apply) return { code: 1, message: `would change: ${summary}. Nothing changed; add --yes to apply.`, changed: false };
   // The request is answered, so it leaves the waiting list (the prorequested event keeps the history).
   // Written only if the record is still active and not paid Pro (a payment may land meanwhile).
-  const { changed } = await updateSubscriber(storage, r.id, (cur) => (cur.status === "active" && cur.proSource !== "razorpay"
-    ? { ...cur, plan: "pro", proSource: "owner", proUntil, proRequestedAt: null } : null));
+  // The categories and emails a day chosen with the request (T33) are applied; the request then goes.
+  const { changed } = await updateSubscriber(storage, r.id, (cur) => {
+    if (cur.status !== "active" || cur.proSource === "razorpay") return null;
+    const { proRequest, ...rest } = cur;
+    const chose = proRequest && typeof proRequest === "object" ? { cats: proRequest.cats || null, ...(Number.isInteger(proRequest.perDay) ? { sweepsPerDay: proRequest.perDay } : {}) } : {};
+    return { ...rest, ...chose, plan: "pro", proSource: "owner", proUntil, proRequestedAt: null };
+  });
   if (!changed) return { code: 1, message: "refused: the record changed meanwhile (deleted, or paid Pro now); run it again", changed: false };
   await recordEvent(storage, "progranted", { now, randomBytes: rb, plan: "pro" });
   return { code: 0, message: `done: ${summary}`, changed: true };

@@ -28,11 +28,17 @@
   button:hover { background: #d8ff6f; }
   button[disabled] { opacity: .6; cursor: default; }
   #status { min-height: 1.6em; margin: 12px 0 0; color: #F4F4F7; }
-  #status.err, #catStatus.err, #freqStatus.err { color: #FF8A80; }
-  #catStatus, #freqStatus, #delStatus { min-height: 1.6em; margin: 12px 0 0; color: #F4F4F7; }
+  #status.err, #planStatus.err { color: #FF8A80; }
+  #planStatus, #delStatus { min-height: 1.6em; margin: 12px 0 0; color: #F4F4F7; }
   #delStatus.err { color: #FF8A80; }
   #delCancel { margin-left: 8px; }
   h2 { font-size: 16px; margin: 0 0 8px; color: #F4F4F7; }
+  h3 { font-size: 14px; margin: 16px 0 6px; color: #C9C9D2; font-weight: 600; }
+  .cats.sub { margin-left: 26px; }
+  select { font: inherit; background: #0B0B0D; color: #F4F4F7; border: 1px solid #3A3A46; border-radius: 6px; padding: 6px 8px; margin: 0 0 14px 26px; }
+  .sum { color: #F4F4F7; font-weight: 600; }
+  #planCard button { margin: 0 8px 8px 0; }
+  #ask button, #buy button, #billing button { margin: 0 0 14px; }
   .cats { border: 0; margin: 0 0 14px; padding: 0; }
   .cats label { display: block; margin: 0 0 6px; color: #F4F4F7; }
   .cats input { margin-right: 8px; accent-color: #C6FF3D; }
@@ -54,21 +60,22 @@
     <p class="plan" id="plan">Loading&hellip;</p>
     <p id="detail"></p>
     <div id="ask" hidden>
-      <!-- when:free-test --><p>Pro opens the live board and sends 1 to 5 emails a day, as many as you choose (2 unless you change it), instead of one a day. It&rsquo;s free while it&rsquo;s being tested and is switched on by hand, so it can take a day.</p>
+      <!-- when:free-test --><p>Pro opens the live board, and you choose which categories you get and how many emails a day (1 to 5) instead of one a day. It&rsquo;s free while it&rsquo;s being tested and is switched on by hand, so it can take a day.</p>
       <button id="req" type="button">Request Pro</button><!-- /when -->
       <template data-when="paid"><p>Pro opens the live board and sends 1 to 5 emails a day, as many as you choose (2 unless you change it), instead of one a day. Payments aren&rsquo;t open right now; please check back later.</p></template>
     </div>
     <div id="buy" hidden>
-      <!-- when:free-test --><p>Pro opens the live board and sends 1 to 5 emails a day, as many as you choose (2 unless you change it), instead of one a day. Payment is handled by Razorpay.</p>
-      <button id="upgrade" type="button">Upgrade to Pro</button><!-- /when -->
-      <template data-when="paid"><p>Pro opens the live board and sends 1 to 5 emails a day, as many as you choose (2 unless you change it), instead of one a day.</p>
-      <p><strong>{{PRO_PRICE}}, {{PRO_GST}}.</strong> Renews automatically every month until you cancel. Cancel here any time; Pro stays on until the end of the period you&rsquo;ve paid for.</p>
+      <!-- when:free-test --><p>Pro opens the live board, and you choose which categories you get, how many emails a day (1 to 5) and how long you pay for at a time. Payment is handled by Razorpay.</p>
+      <button id="choose" type="button">Upgrade to Pro</button><!-- /when -->
+      <template data-when="paid"><p>Pro opens the live board, and you choose which categories you get, how many emails a day (1 to 5) and how long you pay for at a time ({{PRO_PERIODS}}).</p>
+      <p><strong>{{PRO_PRICE}}, {{PRO_GST}}.</strong> Renews automatically at the end of each billing period until you cancel. Cancel here any time; Pro stays on until the end of the period you&rsquo;ve paid for.</p>
       <p>{{PRO_REFUND}}</p>
       <p>Payments are handled by Razorpay. <a href="../pricing/">Pricing details</a>.</p>
-      <button id="upgrade" type="button">Pay with Razorpay</button></template>
+      <button id="choose" type="button">Choose your Pro plan</button></template>
     </div>
     <div id="billing" hidden>
       <p id="billingLine"></p>
+      <button id="renewPlan" type="button" hidden>Keep renewing</button>
       <button id="cancelPlan" class="plain" type="button">Cancel at the end of this period</button>
       <button id="cancelKeep" class="plain" type="button" hidden>Keep Pro</button>
     </div>
@@ -77,22 +84,29 @@
     <p id="status" role="status" aria-live="polite"></p>
   </div>
 
-  <div class="card" id="catsCard" hidden>
-    <h2>Categories</h2>
-    <p id="catsNote">Choose which categories your Pro emails include.</p>
-    <fieldset class="cats" id="cats">
+  <!-- One Pro plan (T33): categories, emails a day and, when buying or asking, the billing period, priced together. -->
+  <div class="card" id="planCard" hidden>
+    <h2 id="planTitle">Your Pro plan</h2>
+    <p id="planNote"></p>
+    <h3>Categories</h3>
+    <fieldset class="cats" id="catMode" aria-label="Categories">
+      <label><input type="radio" name="catMode" value="all" /><span>All four</span></label>
+      <label><input type="radio" name="catMode" value="one" /><span>Just one</span></label>
+      <label><input type="radio" name="catMode" value="some" /><span>Choose which</span></label>
+    </fieldset>
+    <select id="oneCat" aria-label="Which category" hidden>
+      <option value="traveler_pain">Traveler pain</option>
+      <option value="gov_policy">Gov &amp; policy</option>
+      <option value="web_app">Website &amp; app</option>
+      <option value="industry">Industry</option>
+    </select>
+    <fieldset class="cats sub" id="cats" aria-label="Which categories" hidden>
       <label><input type="checkbox" value="traveler_pain" /><span>Traveler pain</span></label>
       <label><input type="checkbox" value="gov_policy" /><span>Gov &amp; policy</span></label>
       <label><input type="checkbox" value="web_app" /><span>Website &amp; app</span></label>
       <label><input type="checkbox" value="industry" /><span>Industry</span></label>
     </fieldset>
-    <button id="saveCats" type="button">Save categories</button>
-    <p id="catStatus" role="status" aria-live="polite"></p>
-  </div>
-
-  <div class="card" id="freqCard" hidden>
-    <h2>Emails a day</h2>
-    <p id="freqNote">How many Pro emails you get each day. Each one has everything found since the one before.</p>
+    <h3>Emails a day</h3>
     <fieldset class="cats" id="freq" aria-label="Emails a day">
       <label><input type="radio" name="freq" value="1" /><span>1 a day: about 05:47 IST</span></label>
       <label><input type="radio" name="freq" value="2" /><span>2 a day: about 05:47 and 15:47 IST</span></label>
@@ -100,8 +114,16 @@
       <label><input type="radio" name="freq" value="4" /><span>4 a day: about 05:47, 10:47, 15:47 and 20:47 IST</span></label>
       <label><input type="radio" name="freq" value="5" /><span>5 a day: about 01:47, 05:47, 10:47, 15:47 and 20:47 IST</span></label>
     </fieldset>
-    <button id="saveFreq" type="button">Save emails a day</button>
-    <p id="freqStatus" role="status" aria-live="polite"></p>
+    <div id="periodRow" hidden>
+      <h3>Billing period</h3>
+      <fieldset class="cats" id="periods" aria-label="Billing period"></fieldset>
+    </div>
+    <p class="sum" id="summary"></p>
+    <button id="savePlan" type="button" hidden>Save changes</button>
+    <button id="upgrade" type="button" hidden>Pay with Razorpay</button>
+    <!-- when:free-test --><button id="sendReq" type="button" hidden>Send my request</button><!-- /when -->
+    <button id="planClose" class="plain" type="button" hidden>Not now</button>
+    <p id="planStatus" role="status" aria-live="polite"></p>
   </div>
 
   <div class="card" id="deleteCard" hidden>
@@ -124,40 +146,146 @@
   var id = q.get("id") || "", t = q.get("t") || "";
   var planEl = document.getElementById("plan"), detail = document.getElementById("detail");
   var ask = document.getElementById("ask"), req = document.getElementById("req");
-  var buy = document.getElementById("buy"), upgrade = document.getElementById("upgrade");
+  var buy = document.getElementById("buy"), choose = document.getElementById("choose");
   var billing = document.getElementById("billing"), cancelPlan = document.getElementById("cancelPlan"), cancelKeep = document.getElementById("cancelKeep");
   var statusEl = document.getElementById("status");
-  var catsCard = document.getElementById("catsCard"), catsNote = document.getElementById("catsNote");
-  var saveCats = document.getElementById("saveCats"), catStatus = document.getElementById("catStatus");
+  var planCard = document.getElementById("planCard"), planTitle = document.getElementById("planTitle"), planNote = document.getElementById("planNote");
+  var oneCat = document.getElementById("oneCat"), catsBox = document.getElementById("cats");
+  var modes = Array.prototype.slice.call(document.querySelectorAll("#catMode input"));
   var boxes = Array.prototype.slice.call(document.querySelectorAll("#cats input"));
-  var freqCard = document.getElementById("freqCard"), freqNote = document.getElementById("freqNote");
-  var saveFreq = document.getElementById("saveFreq"), freqStatus = document.getElementById("freqStatus");
   var radios = Array.prototype.slice.call(document.querySelectorAll("#freq input"));
+  var periodRow = document.getElementById("periodRow"), periodsBox = document.getElementById("periods");
+  var summary = document.getElementById("summary"), planStatus = document.getElementById("planStatus");
+  var savePlan = document.getElementById("savePlan"), upgrade = document.getElementById("upgrade");
+  var sendReq = document.getElementById("sendReq"), planClose = document.getElementById("planClose");
+  var renewPlan = document.getElementById("renewPlan");
+  var acct = null, cardMode = null; // cardMode: "pro" (change your plan), "pay" (choose, then pay), "renew" (T34) or "request"
   function say(text, isErr) { statusEl.textContent = text; statusEl.className = isErr ? "err" : ""; }
-  function sayCats(text, isErr) { catStatus.textContent = text; catStatus.className = isErr ? "err" : ""; }
-  function sayFreq(text, isErr) { freqStatus.textContent = text; freqStatus.className = isErr ? "err" : ""; }
-  // Pro only (T14). No choice saved (null) means every category.
-  function showCats(a) {
-    catsCard.hidden = false;
-    var isPro = a.effectivePlan === "pro";
-    boxes.forEach(function (b) { b.checked = !a.cats || a.cats.indexOf(b.value) !== -1; b.disabled = !isPro; });
-    saveCats.hidden = !isPro;
-    catsNote.textContent = isPro ? "Choose which categories your Pro emails include." : "Choosing categories is a Pro feature. The daily digest always has all four.";
+  function sayPlan(text, isErr) { planStatus.textContent = text; planStatus.className = isErr ? "err" : ""; }
+  var CAT_NAMES = { traveler_pain: "Traveler pain", gov_policy: "Gov & policy", web_app: "Website & app", industry: "Industry" };
+
+  // The price, worked out from the table the server sends (plan.json), the same way api/_lib/plan.js does:
+  // (by number of categories + per extra email a day) × months charged. The page holds no price of its own.
+  function priceOf(p, catCount, perDay, months) {
+    if (!p || !p.periods || !p.periods[months] || !p.byCategories[catCount]) return null;
+    return Math.max(1, Math.round((p.byCategories[catCount] + p.perExtraEmail * (perDay - 1)) * p.periods[months]));
   }
-  // Pro only (T32). No choice saved (null) means the default, 2; numbers above the owner's cap aren't offered.
+  function rupees(n) { return "₹" + n.toLocaleString("en-IN"); }
+  function monthsWords(m) { return m === 1 ? "1 month" : m + " months"; }
+  // No choice saved (null) means the default, 2; numbers above the owner's cap aren't offered.
   function perDay(a) { return a.sweepsPerDay || Math.min(a.sweepsPerDayDefault || 2, a.sweepsPerDayMax || 5); }
-  function showFreq(a) {
-    freqCard.hidden = false;
-    var isPro = a.effectivePlan === "pro", max = a.sweepsPerDayMax || 5, n = perDay(a);
+
+  // What the card has chosen: cats null for all four.
+  function catMode() { var m = modes.filter(function (r) { return r.checked; })[0]; return m ? m.value : "all"; }
+  function chosenCats() {
+    var mode = catMode();
+    if (mode === "one") return [oneCat.value];
+    if (mode === "some") {
+      var c = boxes.filter(function (b) { return b.checked; }).map(function (b) { return b.value; });
+      return c.length === 4 ? null : c;
+    }
+    return null;
+  }
+  function chosenPerDay() { var r = radios.filter(function (x) { return x.checked; })[0]; return r ? Number(r.value) : null; }
+  function chosenMonths() { var r = periodsBox.querySelector("input:checked"); return r ? Number(r.value) : null; }
+  function catWords(cats) {
+    if (!cats) return "all four categories";
+    return cats.map(function (c) { return CAT_NAMES[c] || c; }).join(", ");
+  }
+  function choiceWords(cats, n, months) {
+    return catWords(cats) + ", " + n + (n === 1 ? " email" : " emails") + " a day" + (months ? ", " + monthsWords(months) : "");
+  }
+  // Which periods the card offers: those that can be paid for now, or all on sale when asking by hand.
+  function cardPeriods(a) { return cardMode === "pay" || cardMode === "renew" ? a.payPeriods || [] : cardMode === "request" ? a.periods || [] : []; }
+
+  // Fills the card from a saved choice. Called on load and whenever the server sends the account back.
+  function fillCard(a, choice) {
+    var cats = choice.cats, n = choice.perDay, months = choice.months;
+    var mode = !cats || cats.length === 4 ? "all" : cats.length === 1 ? "one" : "some";
+    modes.forEach(function (r) { r.checked = r.value === mode; });
+    if (cats && cats.length === 1) oneCat.value = cats[0];
+    boxes.forEach(function (b) { b.checked = !cats || cats.indexOf(b.value) !== -1; });
+    var max = a.sweepsPerDayMax || 5;
     radios.forEach(function (r) {
       var v = Number(r.value);
       r.parentNode.hidden = v > max;
-      r.checked = v === n;
-      r.disabled = !isPro;
+      r.checked = v === Math.min(n, max);
     });
-    saveFreq.hidden = !isPro;
-    freqNote.textContent = isPro ? "How many Pro emails you get each day. Each one has everything found since the one before." : "Choosing how many emails a day is a Pro feature. Free gets one a day.";
+    // The billing periods, each with its price for this choice (rebuilt as the choice changes).
+    while (periodsBox.firstChild) periodsBox.removeChild(periodsBox.firstChild);
+    var ps = cardPeriods(a);
+    ps.forEach(function (m) {
+      var label = document.createElement("label"), input = document.createElement("input"), span = document.createElement("span");
+      input.type = "radio"; input.name = "period"; input.value = String(m);
+      input.checked = m === (ps.indexOf(months) !== -1 ? months : ps[0]);
+      label.appendChild(input); label.appendChild(span); periodsBox.appendChild(label);
+    });
+    periodRow.hidden = ps.length === 0;
+    update();
   }
+
+  // Keeps the visible parts of the card and the summary line in step with the choice.
+  function update() {
+    if (!acct) return;
+    var mode = catMode();
+    oneCat.hidden = mode !== "one";
+    catsBox.hidden = mode !== "some";
+    var cats = chosenCats(), n = chosenPerDay() || perDay(acct), count = cats ? cats.length : 4;
+    Array.prototype.forEach.call(periodsBox.querySelectorAll("label"), function (label) {
+      var m = Number(label.querySelector("input").value), price = priceOf(acct.pricing, count || 1, n, m);
+      label.querySelector("span").textContent = monthsWords(m) + (price !== null ? ": " + rupees(price) : "");
+    });
+    if (mode === "some" && count === 0) { summary.textContent = "Pick at least one category."; return; }
+    var months = chosenMonths();
+    if (cardMode === "pro") {
+      var paid = acct.paidFor;
+      summary.textContent = "Your plan: " + choiceWords(cats, n, null) + "." + (paid ? " Paid for " + monthsWords(paid.months) + " at a time." : "");
+      // A paid Pro may pick anything that costs no more than what they paid for (T33); a bigger plan is bought when this one ends.
+      var over = paid && priceOf(acct.pricing, count, n, paid.months) > paid.price;
+      savePlan.disabled = !!over;
+      if (over) sayPlan("That costs more than the plan you paid for. Pick fewer categories or emails, or choose a bigger plan when this one ends.", true);
+      return;
+    }
+    var price = months ? priceOf(acct.pricing, count, n, months) : null;
+    summary.textContent = "Pro: " + choiceWords(cats, n, months) + (price !== null ? ": " + rupees(price) : "") + ".";
+  }
+  function changed() { sayPlan("", false); update(); }
+  modes.concat(boxes, radios).forEach(function (el) { el.addEventListener("change", changed); });
+  oneCat.addEventListener("change", changed);
+  periodsBox.addEventListener("change", changed);
+
+  // Opens the card. "pay" and "request" show the billing period and the button that sends the choice.
+  function openCard(a, mode) {
+    if (cardMode !== mode) sayPlan("", false);
+    cardMode = mode;
+    planCard.hidden = false;
+    var isPro = mode === "pro";
+    planTitle.textContent = isPro ? "Your Pro plan" : mode === "renew" ? "Keep Pro renewing" : "Choose your Pro plan";
+    planNote.textContent = isPro ? "Choose which categories your Pro emails include and how many you get each day. Each email has everything found since the one before."
+      : mode === "renew" ? "Choose the plan that starts when this one ends, on " + day(a.proUntil) + ". You approve it with Razorpay now; the first charge is on that day, so nothing is charged twice."
+      : mode === "pay" ? "Choose what you get and how long you pay for at a time. The price is for the whole period; you pay it with Razorpay on the next step."
+      : "Choose what you’d like. When Pro is turned on for you, it starts with this plan.";
+    savePlan.hidden = !isPro;
+    upgrade.hidden = mode !== "pay" && mode !== "renew";
+    if (sendReq) sendReq.hidden = mode !== "request";
+    planClose.hidden = isPro;
+    // A renewal, or a Free member who paid before, starts from the plan last paid for (T34).
+    var last = a.lastPlan;
+    var start = isPro ? { cats: a.cats, perDay: perDay(a), months: null }
+      : mode === "renew" ? { cats: a.cats, perDay: perDay(a), months: a.paidFor ? a.paidFor.months : last ? last.months : null }
+      : a.proRequest ? { cats: a.proRequest.cats, perDay: a.proRequest.perDay, months: a.proRequest.months }
+      : last && mode === "pay" ? { cats: last.cats, perDay: last.perDay, months: last.months }
+      : { cats: null, perDay: perDay(a), months: null };
+    fillCard(a, start);
+  }
+  // A Pro member's card stays open as their plan; anyone else's closes.
+  function closeCard() {
+    sayPlan("", false);
+    if (acct && acct.status === "active" && acct.effectivePlan === "pro") { openCard(acct, "pro"); return; }
+    planCard.hidden = true; cardMode = null;
+  }
+  planClose.addEventListener("click", closeCard);
+
   function day(iso) { return iso ? iso.slice(0, 10) : ""; }
   function setPlan(name, rest) {
     planEl.textContent = "Your plan: ";
@@ -178,10 +306,12 @@
     document.getElementById("emailOnRow").hidden = a.emailOff !== "unsubscribed";
   }
   function show(a) {
+    acct = a;
     ask.hidden = buy.hidden = billing.hidden = true;
     document.getElementById("signOutRow").hidden = !a.signedIn;
     if (a.status !== "active") {
       setPlan("not confirmed yet", "Press Confirm in the email we sent you first; nothing is sent until then.");
+      closeCard();
       return;
     }
     var isPro = a.effectivePlan === "pro";
@@ -198,36 +328,48 @@
     }
     showEmail(a);
     document.getElementById("deleteCard").hidden = false;
-    showCats(a);
-    showFreq(a);
     if (isPro) {
       var paid = a.proSource === "razorpay";
       setPlan("Pro", (a.emailOff ? "The live board" : "The live board and " + perDay(a) + (perDay(a) === 1 ? " email" : " emails") + " a day") + (a.proUntil && !paid ? ", until " + day(a.proUntil) + "." : "."));
+      openCard(a, "pro");
       // Paid through Razorpay (T20): renews each period until cancelled. A Pro the owner granted has no billing.
       if (paid) {
         billing.hidden = false;
         document.getElementById("billingLine").textContent = a.billing === "pending"
           ? "Your renewal payment didn’t go through, and Razorpay is trying again."
+          : a.renewal
+          ? "Paid until " + day(a.proUntil) + ". Then it renews for " + monthsWords(a.renewal.months) + " at " + rupees(a.renewal.price) + ", which you’ve approved."
           : a.cancelAtPeriodEnd
           ? "Pro until " + day(a.proUntil) + "; it won’t renew."
-          : "Renews on " + day(a.proUntil) + ".";
-        cancelPlan.hidden = a.cancelAtPeriodEnd;
+          : "Renews on " + day(a.proUntil) + (a.paidFor ? ", for " + monthsWords(a.paidFor.months) + "." : ".");
+        // Cancelled (T34): Keep renewing sets up the next plan; after that, cancel stops the renewal instead.
+        renewPlan.hidden = !(a.canRenew && (a.payPeriods || []).length);
+        cancelPlan.hidden = a.cancelAtPeriodEnd && !a.renewal;
+        if (!cancelArmed) cancelPlan.textContent = a.renewal ? "Cancel the renewal" : "Cancel at the end of this period";
       }
-    } else if (a.paymentPending) {
+      return;
+    }
+    if (cardMode === "pro") closeCard();
+    if (a.paymentPending) {
       setPlan("Free", "Payment received; Pro starts in a minute or two.");
+      closeCard();
     } else if (a.billing === "pending") {
       // The paid period has ended and Razorpay is retrying the renewal (T26): no second checkout.
       setPlan("Free", "Your renewal payment didn’t go through, and Razorpay is trying again. Pro comes back as soon as a payment succeeds.");
-    } else if (a.payments) {
+      closeCard();
+    } else if (a.payments && (a.payPeriods || []).length) {
       setPlan("Free", a.billing === "halted"
         ? "Razorpay stopped trying to take your renewal payment, so you’re on Free: one email a day. You can start Pro again below."
         : "One email a day, after the first sweep of the UTC day (about 05:47 IST).");
-      buy.hidden = false;
+      buy.hidden = !!cardMode;
+      choose.textContent = a.lastPlan ? "Renew Pro" : choose.getAttribute("data-label") || choose.textContent;
     } else if (a.proRequestedAt) {
-      setPlan("Free", "One email a day. You asked for Pro on " + day(a.proRequestedAt) + "; it will be switched on shortly.");
+      setPlan("Free", "One email a day. You asked for Pro on " + day(a.proRequestedAt)
+        + (a.proRequest ? " (" + choiceWords(a.proRequest.cats, a.proRequest.perDay, a.proRequest.months) + ")" : "") + "; it will be switched on shortly.");
+      if (req) { ask.hidden = !!cardMode; req.textContent = "Change my request"; }
     } else {
       setPlan("Free", "One email a day, after the first sweep of the UTC day (about 05:47 IST).");
-      ask.hidden = false;
+      ask.hidden = !!cardMode;
     }
   }
   function call(method, body) {
@@ -253,21 +395,61 @@
   call("GET").then(function (x) { if (x.status === 200) show(x.body); else fail(x); })
     .catch(function () { say("Couldn’t reach the server. Please try again in a minute.", true); });
 
-  // The paid build has no Request Pro button.
+  // The choice the card sends with checkout, request-pro and set-plan. Null when it isn't complete.
+  function cardChoice(withPeriod) {
+    var cats = chosenCats(), n = chosenPerDay(), months = chosenMonths();
+    if (cats && !cats.length) { sayPlan("Pick at least one category.", true); return null; }
+    if (!n) { sayPlan("Pick how many emails a day.", true); return null; }
+    if (withPeriod && !months) { sayPlan("Pick a billing period.", true); return null; }
+    var c = { cats: cats, sweepsPerDay: n };
+    if (withPeriod) c.months = months;
+    return c;
+  }
+  function choiceError(x) {
+    if (x.body.error === "over the limit") return "That number of emails isn’t offered right now. Reload the page.";
+    if (x.body.error === "unknown period") return "That billing period isn’t offered right now. Reload the page.";
+    return "That choice couldn’t be saved. Reload the page and try again.";
+  }
+
+  // Request Pro (payments off): opens the card; Send my request sends the choice. The paid build has neither.
   if (req) req.addEventListener("click", function () {
-    req.disabled = true;
-    say("Sending…", false);
-    call("POST", { id: id, t: t, action: "request-pro" }).then(function (x) {
-      if (x.status === 200) { show(x.body); say("Request received. You’ll get the daily digest until Pro is switched on.", false); }
-      else if (x.status === 409 && x.body.error === "already_pro") { say("You already have Pro.", false); }
-      else if (x.status === 409) { say("Confirm your address first, using the email we sent you.", true); }
+    if (!acct) return;
+    ask.hidden = true;
+    say("", false);
+    openCard(acct, "request");
+  });
+  if (sendReq) sendReq.addEventListener("click", function () {
+    var c = cardChoice(true);
+    if (!c) return;
+    sendReq.disabled = true;
+    sayPlan("Sending…", false);
+    call("POST", { id: id, t: t, action: "request-pro", cats: c.cats, sweepsPerDay: c.sweepsPerDay, months: c.months }).then(function (x) {
+      if (x.status === 200) { closeCard(); show(x.body); say("Request received. You’ll get the daily digest until Pro is switched on.", false); }
+      else if (x.status === 409 && x.body.error === "already_pro") { sayPlan("You already have Pro. Reload the page.", false); }
+      else if (x.status === 409) { sayPlan("Confirm your address first, using the email we sent you.", true); }
+      else if (x.status === 400) { sayPlan(choiceError(x), true); }
       else fail(x);
     }).catch(function () {
-      say("Couldn’t reach the server. Please try again in a minute.", true);
-    }).then(function () { req.disabled = false; });
+      sayPlan("Couldn’t reach the server. Please try again in a minute.", true);
+    }).then(function () { sendReq.disabled = false; });
   });
 
-  // Upgrade to Pro (T20): Razorpay's Checkout script loads only on this click. The checkout's reply
+  // Upgrade to Pro (payments on): opens the card; Pay with Razorpay starts the checkout for the choice.
+  choose.setAttribute("data-label", choose.textContent);
+  renewPlan.addEventListener("click", function () {
+    if (!acct) return;
+    say("", false);
+    openCard(acct, "renew");
+    planCard.scrollIntoView({ block: "start" });
+  });
+  choose.addEventListener("click", function () {
+    if (!acct) return;
+    buy.hidden = true;
+    say("", false);
+    openCard(acct, "pay");
+  });
+
+  // Pay with Razorpay (T20, T33): Razorpay's Checkout script loads only on this click. The checkout's reply
   // is recorded, but Pro starts when Razorpay's webhook arrives. No address is sent to Checkout.
   var CHECKOUT_JS = "https://checkout.razorpay.com/v1/checkout.js";
   var PAY_ERR = "The payment service couldn’t be reached. Please try again in a minute.";
@@ -282,7 +464,7 @@
   function checkoutDone(resp) {
     say("Checking the payment…", false);
     call("POST", { id: id, t: t, action: "checkout-return", paymentId: resp.razorpay_payment_id, subscriptionId: resp.razorpay_subscription_id, signature: resp.razorpay_signature }).then(function (x) {
-      if (x.status === 200) { show(x.body); say("", false); } // show() says the payment was received
+      if (x.status === 200) { cardMode = null; show(x.body); say(x.body.renewal ? "Renewal set up. It starts when this period ends." : "", false); } // show() says the payment was received
       else if (x.status === 400) { say("The payment couldn’t be checked here. If you were charged, Pro starts when Razorpay confirms it; write to pehchanthetraveller19@gmail.com if it hasn’t within an hour.", true); }
       else fail(x);
     }).catch(function () {
@@ -290,32 +472,54 @@
     });
   }
   upgrade.addEventListener("click", function () {
+    var c = cardChoice(true);
+    if (!c) return;
     upgrade.disabled = true;
-    say("Opening the payment window…", false);
-    call("POST", { id: id, t: t, action: "checkout" }).then(function (x) {
+    sayPlan("Opening the payment window…", false);
+    call("POST", { id: id, t: t, action: "checkout", cats: c.cats, sweepsPerDay: c.sweepsPerDay, months: c.months }).then(function (x) {
       if (x.status === 200) {
         return loadCheckout().then(function () {
           new window.Razorpay({
             key: x.body.keyId,
             subscription_id: x.body.subscriptionId,
             name: "Travel Problem Radar",
-            description: "Pro",
+            description: (x.body.renewing ? "Pro renewal, " : "Pro, ") + monthsWords(x.body.months) + ": " + rupees(x.body.price),
             handler: checkoutDone,
-            modal: { ondismiss: function () { say("The payment window was closed.", false); } }
+            modal: { ondismiss: function () { sayPlan("The payment window was closed.", false); } }
           }).open();
-          say("", false);
-        }, function () { say(PAY_ERR, true); });
+          sayPlan("", false);
+        }, function () { sayPlan(PAY_ERR, true); });
       }
-      if (x.status === 409 && x.body.error === "already_pro") say("You already have Pro. Reload the page.", false);
-      else if (x.status === 409 && x.body.error === "payment_pending") say("Payment received; Pro starts in a minute or two.", false);
-      else if (x.status === 409 && x.body.error === "payment_retrying") say("Razorpay is still trying to take your renewal payment. Reload the page.", false);
-      else if (x.status === 409) say("Confirm your address first, using the email we sent you.", true);
-      else if (x.status === 502) say(PAY_ERR, true);
-      else if (x.status === 503 && x.body.error === "payments_off") say("Payments aren’t open right now. Reload the page.", true);
+      if (x.status === 409 && x.body.error === "already_pro") sayPlan("You already have Pro. Reload the page.", false);
+      else if (x.status === 409 && x.body.error === "already_renewed") sayPlan("Your renewal is already set up. Reload the page.", false);
+      else if (x.status === 409 && x.body.error === "payment_pending") sayPlan("Payment received; Pro starts in a minute or two.", false);
+      else if (x.status === 409 && x.body.error === "payment_retrying") sayPlan("Razorpay is still trying to take your renewal payment. Reload the page.", false);
+      else if (x.status === 409) sayPlan("Confirm your address first, using the email we sent you.", true);
+      else if (x.status === 400) sayPlan(choiceError(x), true);
+      else if (x.status === 502) sayPlan(PAY_ERR, true);
+      else if (x.status === 503 && x.body.error === "payments_off") sayPlan("Payments aren’t open right now. Reload the page.", true);
       else fail(x);
     }).catch(function () {
-      say("Couldn’t reach the server. Please try again in a minute.", true);
+      sayPlan("Couldn’t reach the server. Please try again in a minute.", true);
     }).then(function () { upgrade.disabled = false; });
+  });
+
+  // A Pro member saves categories and emails a day together (T33).
+  savePlan.addEventListener("click", function () {
+    var c = cardChoice(false);
+    if (!c) return;
+    savePlan.disabled = true;
+    sayPlan("Saving…", false);
+    call("POST", { id: id, t: t, action: "set-plan", cats: c.cats, sweepsPerDay: c.sweepsPerDay }).then(function (x) {
+      if (x.status === 200) { show(x.body); sayPlan("Saved. Your next Pro email has " + choiceWords(x.body.cats, perDay(x.body), null) + ".", false); }
+      else if (x.status === 403 && x.body.error === "change_plan") { sayPlan("That costs more than the plan you paid for.", true); }
+      else if (x.status === 403) { sayPlan("Choosing categories and emails a day is a Pro feature.", true); }
+      else if (x.status === 400) { sayPlan(choiceError(x), true); }
+      else if (x.status === 409) { sayPlan("Confirm your address first, using the email we sent you.", true); }
+      else fail(x);
+    }).catch(function () {
+      sayPlan("Couldn’t reach the server. Please try again in a minute.", true);
+    }).then(function () { savePlan.disabled = false; if (cardMode === "pro") update(); });
   });
 
   // Cancel a paid Pro: the first click asks, the second cancels. Pro lasts until the period ends.
@@ -388,7 +592,7 @@
     sayDel("Deleting…", false);
     call("POST", { id: id, t: t, action: "delete-account" }).then(function (x) {
       if (x.status === 200) {
-        ["ask", "buy", "billing", "catsCard", "freqCard", "deleteCard", "leave", "leaveByLink", "signOutRow", "emailLine", "emailOnRow"].forEach(function (k) { document.getElementById(k).hidden = true; });
+        ["ask", "buy", "billing", "planCard", "deleteCard", "leave", "leaveByLink", "signOutRow", "emailLine", "emailOnRow"].forEach(function (k) { document.getElementById(k).hidden = true; });
         planEl.textContent = "Your account is deleted";
         detail.textContent = "Your address is gone and nothing more will be sent. You can sign up again any time.";
         say("", false);
@@ -399,40 +603,6 @@
     }).catch(function () {
       sayDel("Couldn’t reach the server. Please try again in a minute.", true);
     }).then(function () { del.disabled = false; });
-  });
-
-  saveCats.addEventListener("click", function () {
-    var cats = boxes.filter(function (b) { return b.checked; }).map(function (b) { return b.value; });
-    if (!cats.length) { sayCats("Pick at least one category.", true); return; }
-    saveCats.disabled = true;
-    sayCats("Saving…", false);
-    call("POST", { id: id, t: t, action: "set-cats", cats: cats }).then(function (x) {
-      if (x.status === 200) { showCats(x.body); sayCats(x.body.cats ? "Saved. Your next Pro email has only these categories." : "Saved. You get every category.", false); }
-      else if (x.status === 403) { sayCats("Choosing categories is a Pro feature.", true); }
-      else if (x.status === 400) { sayCats("That choice couldn’t be saved. Reload the page and try again.", true); }
-      else if (x.status === 409) { sayCats("Confirm your address first, using the email we sent you.", true); }
-      else fail(x);
-    }).catch(function () {
-      sayCats("Couldn’t reach the server. Please try again in a minute.", true);
-    }).then(function () { saveCats.disabled = false; });
-  });
-
-  saveFreq.addEventListener("click", function () {
-    var pick = radios.filter(function (r) { return r.checked; })[0];
-    if (!pick) { sayFreq("Pick how many emails a day.", true); return; }
-    var n = Number(pick.value);
-    saveFreq.disabled = true;
-    sayFreq("Saving…", false);
-    call("POST", { id: id, t: t, action: "set-freq", sweepsPerDay: n }).then(function (x) {
-      if (x.status === 200) { show(x.body); sayFreq("Saved. You get " + n + (n === 1 ? " email" : " emails") + " a day, starting with the next one.", false); }
-      else if (x.status === 403) { sayFreq("Choosing how many emails a day is a Pro feature.", true); }
-      else if (x.status === 400 && x.body.error === "over the limit") { sayFreq("That number isn’t offered right now. Reload the page.", true); }
-      else if (x.status === 400) { sayFreq("That choice couldn’t be saved. Reload the page and try again.", true); }
-      else if (x.status === 409) { sayFreq("Confirm your address first, using the email we sent you.", true); }
-      else fail(x);
-    }).catch(function () {
-      sayFreq("Couldn’t reach the server. Please try again in a minute.", true);
-    }).then(function () { saveFreq.disabled = false; });
   });
 })();
 </script>

@@ -2,6 +2,7 @@
 // mirror travel-problem-radar.jsx (the single-file Claude artifact); scripts/check.mjs
 // fails if the prompt or category text drifts between the two.
 // Storage and fetch are passed in, so the offline tests can stub both.
+import { slotOf } from "./schedule.js";
 
 export const CATS = [
   { key: "traveler_pain", label: "Traveler pain",
@@ -217,24 +218,29 @@ async function saveLlmLog(storage, id, record, { t, tidy }) {
 // flag what is new, keep the last 60 sweeps. Saves nothing if every category failed.
 // Scheduled runs come in up to 5 slots a day from GitHub Actions (the sweep handler skips the
 // slots no Pro member needs, T32), plus Vercel's daily cron as a backstop. A scheduled run passes
-// its `slot` (slotOf in schedule.js), which is saved with the sweep so delivery knows which it was. The 2-hour gap stops them doubling up (a repeated cron delivery, or both
-// schedulers firing close together). A manual run skips the gap and is left out of it, so it
-// never cancels the next scheduled sweep. The gap counts from when a scheduled sweep started,
-// so one that saves nothing (still billed) holds back the next one too.
+// its `slot` (dueSlot in schedule.js), which is saved with the sweep so delivery knows which it was. Each slot
+// sweeps at most once (T35), which stops them doubling up (a repeated cron delivery, or both schedulers in one
+// slot). A manual run skips that rule and is left out of it, so it never cancels a scheduled sweep. A slot counts
+// as swept once its sweep starts, so one that saves nothing (still billed) isn't retried until the next slot.
 // Every sweep that ran also leaves an LLM log (saveLlmLog): each call's request and response, and a
 // summary of tokens, searches and the pages search found (links only).
-export async function runDailySweep({ storage, scan, now = () => Date.now(), minGapHours = 2, manual = false, slot = null, log = () => {} }) {
+export async function runDailySweep({ storage, scan, now = () => Date.now(), manual = false, slot = null, log = () => {} }) {
   const hist0 = await readJSON(storage, KEY_INDEX);
   let hist = Array.isArray(hist0) ? hist0 : [];
   if (!manual) {
+    // One scheduled sweep per slot (T35), so the Vercel backstop and a late GitHub run of the same slot can't
+    // both sweep, while a late run never holds back the next slot's own run. `radar:lastScheduled` holds when
+    // the last scheduled sweep started and its slot; before T35 it held only the time, whose slot is used.
+    const slotAt = (slot || slotOf(now())).at;
     const saved = hist.filter((e) => !e.manual).pop();
     const started = await readJSON(storage, KEY_LAST_SCHEDULED);
-    const last = [saved && saved.at, typeof started === "string" ? started : null]
-      .filter(Boolean).sort((a, b) => new Date(a) - new Date(b)).pop();
-    if (last && now() - new Date(last).getTime() < minGapHours * 3600 * 1000) {
-      return { status: "skipped", reason: `last scheduled sweep ${last} is under ${minGapHours} h old` };
+    const startedSlot = started && typeof started === "object" && Number.isFinite(started.slotAt) ? started.slotAt
+      : typeof started === "string" ? slotOf(Date.parse(started)).at : null;
+    const savedSlot = saved ? (saved.slotAt ? Date.parse(saved.slotAt) : slotOf(Date.parse(saved.at)).at) : null;
+    if (startedSlot === slotAt || savedSlot === slotAt) {
+      return { status: "skipped", reason: `slot ${new Date(slotAt).toISOString()} already swept` };
     }
-    await storage.set(KEY_LAST_SCHEDULED, JSON.stringify(new Date(now()).toISOString()));
+    await storage.set(KEY_LAST_SCHEDULED, JSON.stringify({ at: new Date(now()).toISOString(), slotAt }));
   }
 
   const seen0 = await readJSON(storage, KEY_SEEN);

@@ -8,7 +8,7 @@
 Travel Problem Radar is a live MVP. About 5 times a day it finds recent travel-industry problems on the web, each
 with a source and a product idea. Free members get a daily teaser and Pro members the live board; Pro is given by hand
 because payments aren't open. **The product is not ready to charge**:
-- sweeps have failed since 2026-10-23 (I-01);
+- sweeps failed from 2026-10-23 until a new key went in on 2026-10-25 (I-01, closed); only one full sweep has run since;
 - no finding has been scored (R-01);
 - no one besides the owner is recorded as a user.
 
@@ -20,7 +20,7 @@ to get sweeps running and score them, and only then decide whether to spend on c
 | | Status | Source |
 |---|---|---|
 | Product | Live: demo, sign-up, Free and Pro emails, a Pro-only live board, accounts, checkout built | [PRD v2](../02-product-definition/prd.md) |
-| Sweeps | **Failing** since 2026-10-23 15:09 UTC: Anthropic answers HTTP 400 for every category; the board shows the last good sweep | I-01 in the [RAID log](../04-planning-and-governance/raid-log.md#issues) |
+| Sweeps | **Running again** since 2026-10-25: a manual sweep at 17:18 UTC saved all four categories (18 items). They failed from 2026-10-23 15:09 UTC for lack of credit | I-01 in the [RAID log](../04-planning-and-governance/raid-log.md#issues) |
 | Quality | Not measured. No real sweep scored against the draft rubric | R-01; KPI-01 to KPI-05 |
 | Users | None recorded besides the owner. No interviews run | [discovery log](../01-discovery/discovery-log.md) |
 | Payments | Not open. A test checkout and webhook passed on staging on 2026-10-23 | [launch plan](../05-business-case-and-launch/launch-plan.md#test-mode-run) |

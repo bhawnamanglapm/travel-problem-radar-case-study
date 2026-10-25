@@ -46,6 +46,11 @@ the [final Pro plan](../pricing.md#final-pro-plan-2026-10-24) budgets about ₹4
 `SWEEPS_PER_DAY_MAX` is the owner's cap. Charging more for more sweeps needs a Razorpay Plan per number; that is left to
 [T31](T31-measure-and-add-tiers.md).
 
+**Checked 2026-10-25 from the GitHub runs:** at 2 a day, slots 00 and 10 swept and 05, 15 and 20 were skipped, as
+designed. But GitHub started every run 2 h 15 m to 4 h 35 m late, and the slot is taken from the start time, so a
+run over about 4 h 43 m late would be counted in the next slot. [T35](T35-sweep-slots-on-time.md) fixes that. Price
+per number of emails a day: [T33](T33-pro-plan-builder.md).
+
 ## PR 1: server (done, #88, 2026-10-24)
 
 - `api/_lib/schedule.js`: the slots, the two limits, a member's choice and the site's number.
@@ -94,7 +99,7 @@ the [final Pro plan](../pricing.md#final-pro-plan-2026-10-24) budgets about ₹4
   headless Chrome against a stub `/api/account`)
 - [x] No site page, built file or email says "5 times a day", "every 5 hours" or "about 5 a day" (PR 2; `check.mjs`)
 - [ ] After deploy, with no Pro choice set, one day of GitHub Actions logs shows slots 05 to 20 `skipped` and slot 00
-  saved (needs RM-01)
+  saved (RM-01 done 2026-10-25; read from 2026-10-26's runs)
 - [ ] A test Pro set to 3 on `/manage/` gets 3 emails the next day, at 00, 10 and 15 UTC
 
 ## Tests

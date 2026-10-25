@@ -8,7 +8,7 @@ import { bearerOk, sendJson } from "./http.js";
 import { deliverToSubscribers } from "./subscriber-delivery.js";
 import { readSession } from "./session.js";
 import { countEvents, effectivePlan, recordEvent, utcDay } from "./subscribers.js";
-import { SLOTS_BY_FREQ, siteSweepsPerDay, slotOf } from "./schedule.js";
+import { SLOTS_BY_FREQ, dueSlot, siteSweepsPerDay } from "./schedule.js";
 
 const DEFAULT_MODEL = "claude-haiku-5-5";
 // Manual runs a UTC day (MAX_MANUAL_SWEEPS_PER_DAY; "0" turns them off). Each costs a full sweep,
@@ -36,14 +36,17 @@ export function makeSweepHandler({ env, storage, fetchFn, now, randomBytes = cry
     const trigger = scheduled ? "scheduled" : "manual";
     // A scheduled run sweeps only in a slot some Pro member's choice needs (T32). Skipped here, it
     // saves nothing and doesn't count towards the 2-hour gap, so it costs no Anthropic credit.
-    const slot = scheduled ? slotOf(now()) : null;
+    // The slot comes from GitHub's X-Sweep-Slot when it names the slot the run was due for (T35); `late` is how
+    // many minutes after that slot began the run started, logged so GitHub's delays can be watched.
+    const slot = scheduled ? dueSlot(now(), req.headers["x-sweep-slot"]) : null;
+    const late = slot ? { slotAt: new Date(slot.at).toISOString(), lateMinutes: Math.round((now() - slot.at) / 60000) } : {};
     if (scheduled) {
       const site = await siteSweepsPerDay({ env, storage, now: now() });
       if (site.error) log("sweep", JSON.stringify({ model, trigger, slot: slot.hour, error: site.error }));
       if (!SLOTS_BY_FREQ[site.perDay].includes(slot.hour)) {
         const reason = `slot ${String(slot.hour).padStart(2, "0")} not needed: ${site.perDay} a day`;
-        log("sweep", JSON.stringify({ model, trigger, status: "skipped", reason }));
-        return sendJson(res, 200, { model, trigger, status: "skipped", reason });
+        log("sweep", JSON.stringify({ model, trigger, status: "skipped", reason, ...late }));
+        return sendJson(res, 200, { model, trigger, status: "skipped", reason, ...late });
       }
     }
     if (!scheduled) {
@@ -100,7 +103,7 @@ export function makeSweepHandler({ env, storage, fetchFn, now, randomBytes = cry
       const failed = { at: new Date(now()).toISOString(), perCat: out.perCat };
       Object.assign(summary, await deliver(buildFailureNotice(failed), buildFailureEmail(failed)));
     }
-    return sendJson(res, out.status === "saved" || out.status === "skipped" ? 200 : 502, { model, trigger, ...summary });
+    return sendJson(res, out.status === "saved" || out.status === "skipped" ? 200 : 502, { model, trigger, ...late, ...summary });
   };
 }
 

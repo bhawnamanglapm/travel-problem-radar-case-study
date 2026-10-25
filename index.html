@@ -257,7 +257,7 @@ dialog::backdrop{background:rgba(0,0,0,.65);}
             <li>1 to 5 emails a day; you choose how many</li>
             <li>Choose which of the four categories you get</li>
             <!-- when:free-test --><li>Ask for it when you create your account; it&rsquo;s switched on by hand</li><!-- /when -->
-            <template data-when="paid"><li>{{PRO_PRICE}}, {{PRO_GST}}. Renews automatically every month until you cancel; cancel any time on your account page</li></template>
+            <template data-when="paid"><li>{{PRO_PRICE}}, {{PRO_GST}}. Renews automatically at the end of each billing period until you cancel; cancel any time on your account page</li></template>
           </ul>
           <!-- when:free-test --><a id="proBtn" class="btn sec" href="https://travel-problem-radar.vercel.app/signup/?pro=1" data-open="up" data-pro="1">Ask for Pro</a><!-- /when -->
           <template data-when="paid"><a id="proBtn" class="btn sec" href="https://travel-problem-radar.vercel.app/pricing/">Get Pro</a></template>
@@ -271,7 +271,7 @@ dialog::backdrop{background:rgba(0,0,0,.65);}
     <div class="wrap faq">
       <p class="label">Questions</p>
       <h2 id="faq-h">Good to know</h2>
-      <details><summary>What does it cost?</summary><p>The account and the daily email are free. <!-- when:free-test -->Pro is also free while it&rsquo;s being tested.<!-- /when --><template data-when="paid">Pro is {{PRO_PRICE}}, {{PRO_GST}}. It renews automatically every month until you cancel, and you can cancel any time on your account page. <a href="https://travel-problem-radar.vercel.app/pricing/">Pricing details</a>.</template></p></details>
+      <details><summary>What does it cost?</summary><p>The account and the daily email are free. <!-- when:free-test -->Pro is also free while it&rsquo;s being tested.<!-- /when --><template data-when="paid">Pro is {{PRO_PRICE}}, {{PRO_GST}}. It renews automatically at the end of each billing period until you cancel, and you can cancel any time on your account page. <a href="https://travel-problem-radar.vercel.app/pricing/">Pricing details</a>.</template></p></details>
       <details><summary>Is there a password?</summary><p>No. Your email address is your account. To sign in, ask for a link and open it from your inbox.</p></details>
       <details><summary>How do I stop the emails?</summary><p>Every email has an unsubscribe link. Unsubscribing deletes a free account; a Pro account keeps the board with its emails off. You can also delete your account on the manage page.</p></details>
       <details><summary>What do you store about me?</summary><p>Your email address, the dates you signed up and confirmed, and whether you asked for Pro. Signing in sets one cookie on that browser so the site knows it&rsquo;s you. It holds no address and lasts until you close the browser or sign out (12 hours at most).</p></details>
@@ -303,7 +303,7 @@ dialog::backdrop{background:rgba(0,0,0,.65);}
       <form id="fUp" method="post" action="/api/subscribe">
         <label class="field" for="upEmail">Your email address</label>
         <input id="upEmail" name="email" type="email" autocomplete="email" required maxlength="254" placeholder="you@example.com" />
-        <label class="check"><input id="upPro" name="wantsPro" type="checkbox" value="1" /> <span><!-- when:free-test -->I&rsquo;d also like Pro (the live board and 1 to 5 emails a day). You&rsquo;ll get the daily email until it&rsquo;s switched on.<!-- /when --><template data-when="paid">I&rsquo;d like Pro: the live board and 1 to 5 emails a day, {{PRO_PRICE}}, {{PRO_GST}}. It renews automatically every month until you cancel. You&rsquo;ll pay on your account page after confirming your email.</template></span></label>
+        <label class="check"><input id="upPro" name="wantsPro" type="checkbox" value="1" /> <span><!-- when:free-test -->I&rsquo;d also like Pro (the live board and 1 to 5 emails a day). You&rsquo;ll get the daily email until it&rsquo;s switched on.<!-- /when --><template data-when="paid">I&rsquo;d like Pro: the live board and 1 to 5 emails a day, {{PRO_PRICE}}, {{PRO_GST}}. It renews automatically at the end of each billing period until you cancel. You&rsquo;ll pay on your account page after confirming your email.</template></span></label>
         <div class="trap"><label for="upWebsite">Leave this field empty (it is a trap for automated sign-ups)</label><input id="upWebsite" name="website" type="text" tabindex="-1" autocomplete="off" /></div>
         <button class="btn pri" id="upGo" type="submit">Create account</button>
       </form>
