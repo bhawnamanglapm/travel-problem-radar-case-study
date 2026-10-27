@@ -1130,9 +1130,20 @@ const iso = (ms) => new Date(ms).toISOString();
     };
     return { st, mk };
   };
-  const run = async (st, argv, { now = T0 } = {}) => {
+  // Razorpay is faked: each call is kept in adminRzp, and `rzpReply(url, init)` may answer instead of the usual reply.
+  const adminRzp = [];
+  let rzpReply = null;
+  const ADMIN_RZP_ENV = { RAZORPAY_KEY_ID: "rzp_test_admin", RAZORPAY_KEY_SECRET: "admin-secret" };
+  const adminFetch = async (url, init) => {
+    adminRzp.push({ url, ...init });
+    const given = rzpReply && rzpReply(url, init);
+    if (given) return given;
+    const id = url.split("/").at(url.endsWith("/cancel") ? -2 : -1);
+    return { ok: true, status: 200, json: async () => ({ id, status: "cancelled" }) };
+  };
+  const run = async (st, argv, { now = T0, env = ADMIN_RZP_ENV } = {}) => {
     const out = []; const err = [];
-    const code = await admin.main(argv, { storage: st, now, rb: seeded(70), out: (s) => out.push(s), err: (s) => err.push(s) });
+    const code = await admin.main(argv, { storage: st, now, rb: seeded(70), out: (s) => out.push(s), err: (s) => err.push(s), env, fetchFn: adminFetch });
     return { code, out: out.join("\n"), err: err.join("\n"), all: out.concat(err).join("\n") };
   };
   const rec = async (st, n) => JSON.parse(st.m.get("radar:sub:" + subscriberId(`p${n}@example.com`)));
@@ -1208,7 +1219,7 @@ const iso = (ms) => new Date(ms).toISOString();
   r = await run(st, ["delete", "p1@example.com", "--yes"]);
   check(r.code === 1 && /not found/.test(r.err), "delete again: not found");
 
-  // delete and Razorpay: a subscription that will still charge is refused; otherwise its index goes too
+  // delete and Razorpay (2026-10-27): every subscription is cancelled at once, then the record and its index go
   {
     const RZPSUB = "radar:rzpsub:";
     ({ st, mk } = await world());
@@ -1221,18 +1232,27 @@ const iso = (ms) => new Date(ms).toISOString();
       await mk(4, { ...paid, proUntil: iso(T0 - DAY), rzp: rzp(4, { status: "cancelled" }) }),
     ];
     for (const x of recs) await st.set(RZPSUB + x.rzp.subscriptionId, JSON.stringify({ id: x.id }));
+    adminRzp.length = 0;
+    r = await run(st, ["delete", "p1@example.com"]);
+    check(r.code === 1 && /would cancel Razorpay subscription sub_ADMIN00000001 at once and delete/.test(r.err) && st.m.has("radar:sub:" + recs[0].id) && adminRzp.length === 0,
+      "delete without --yes on a renewing Pro: names the subscription it would cancel; nothing called or deleted");
     r = await run(st, ["delete", "p1@example.com", "--yes"]);
-    check(r.code === 1 && /cancel it first/.test(r.err) && st.m.has("radar:sub:" + recs[0].id) && st.m.has(RZPSUB + recs[0].rzp.subscriptionId), "delete: a renewing Razorpay Pro is refused; record and index kept");
+    check(r.code === 0 && adminRzp.length === 1 && adminRzp[0].url.endsWith("/subscriptions/sub_ADMIN00000001/cancel") && adminRzp[0].body === '{"cancel_at_cycle_end":false}'
+      && !st.m.has("radar:sub:" + recs[0].id) && !st.m.has(RZPSUB + recs[0].rzp.subscriptionId) && /Razorpay subscriptions cancelled/.test(r.out),
+      "delete --yes on a renewing Razorpay Pro: the subscription is cancelled at once, then record and index deleted");
+    rzpReply = (url) => ({ ok: false, status: 500, json: async () => ({}) });
     r = await run(st, ["delete", "p3@example.com", "--yes"]);
-    check(r.code === 1 && /cancel it first/.test(r.err) && st.m.has("radar:sub:" + recs[2].id), "delete: paid and waiting for the webhook (authenticated) is refused");
-    r = await run(st, ["delete", "p2@example.com"]);
-    check(r.code === 1 && /and the files that name it/.test(r.err) && st.m.has("radar:sub:" + recs[1].id), "delete without --yes on a Pro set to end: says the files that name it go too; nothing deleted");
+    check(r.code === 1 && /Razorpay didn't cancel sub_ADMIN00000003/.test(r.err) && st.m.has("radar:sub:" + recs[2].id) && !/admin-secret/.test(r.all),
+      "delete: Razorpay unreachable for a plan that could charge (authenticated): refused, nothing deleted, no key printed");
+    r = await run(st, ["delete", "p3@example.com", "--yes"], { env: {} });
+    check(r.code === 1 && st.m.has("radar:sub:" + recs[2].id), "delete: with no Razorpay keys in the shell, a plan that could charge is refused");
+    rzpReply = null;
     r = await run(st, ["delete", "p2@example.com", "--yes"]);
-    check(r.code === 0 && !st.m.has("radar:sub:" + recs[1].id) && !st.m.has(RZPSUB + recs[1].rzp.subscriptionId), "delete --yes on a Pro set to end: record and its radar:rzpsub: index deleted");
-    r = await run(st, ["delete", "p4@example.com", "--yes"]);
-    check(r.code === 0 && !st.m.has("radar:sub:" + recs[3].id) && !st.m.has(RZPSUB + recs[3].rzp.subscriptionId), "delete --yes on a lapsed Razorpay record: record and index deleted");
-    r = await run(st, ["delete", "p1@example.com", "--yes"], { now: T0 + 10 * DAY });
-    check(r.code === 0 && !st.m.has(RZPSUB + recs[0].rzp.subscriptionId), "delete: judged at the run's time; once the paid period has passed, it goes");
+    check(r.code === 0 && !st.m.has("radar:sub:" + recs[1].id) && !st.m.has(RZPSUB + recs[1].rzp.subscriptionId), "delete --yes on a Pro set to end: cancelled at once, record and index deleted");
+    adminRzp.length = 0;
+    r = await run(st, ["delete", "p4@example.com", "--yes"], { env: {} });
+    check(r.code === 0 && adminRzp.length === 0 && !st.m.has("radar:sub:" + recs[3].id) && !st.m.has(RZPSUB + recs[3].rzp.subscriptionId),
+      "delete --yes on a record whose plan is already over at Razorpay: no call needed, record and index deleted");
   }
 
   // show and list
@@ -2870,7 +2890,7 @@ const iso = (ms) => new Date(ms).toISOString();
     check(r.code === 404 && Boolean(await w.get()), "account delete-account with a wrong token: 404, kept");
     w = await world({ plan: "pro", proSource: "razorpay", proUntil: iso(T0 + 30 * DAY) });
     r = await w.call({ body: { action: "delete-account" } });
-    check(r.code === 409 && r.json().error === "cancel_first" && Boolean(await w.get()) && w.evs("deleted").length === 0, "account delete-account: a paying Razorpay Pro gets 409 cancel_first, kept");
+    check(r.code === 200 && !(await w.get()) && w.evs("deleted").length === 1, "account delete-account: a paying Razorpay Pro (no subscription on record) is deleted at once");
     w = await world({ plan: "pro", proSource: "razorpay", proUntil: iso(T0 - DAY) });
     r = await w.call({ body: { action: "delete-account" } });
     check(r.code === 200 && !(await w.get()), "account delete-account: a lapsed Razorpay Pro can delete");
@@ -3328,8 +3348,9 @@ const iso = (ms) => new Date(ms).toISOString();
     check(r.code === 200 && w.rzpCalls.length === 1, "cancel: a repeat is 200 with no new call");
     await w.st.set("radar:rzpsub:sub_T20PAID", JSON.stringify({ id: paid.id }));
     r = await w.act(paid, "delete-account");
-    check(r.code === 200 && r.json().deleted === true && !(await w.stored(paid)) && !w.st.m.has("radar:rzpsub:sub_T20PAID") && w.rzpCalls.length === 1,
-      "delete-account: a cancelled paid Pro is deleted at once, index too, with no call to Razorpay (nothing left to charge)");
+    check(r.code === 200 && r.json().deleted === true && !(await w.stored(paid)) && !w.st.m.has("radar:rzpsub:sub_T20PAID") && w.rzpCalls.length === 2
+      && w.rzpCalls[1].url.endsWith("/subscriptions/sub_T20PAID/cancel") && w.rzpCalls[1].body === '{"cancel_at_cycle_end":false}',
+      "delete-account: a cancelled paid Pro is deleted at once, index too, and its subscription cancelled now rather than at the period end");
     const paid2 = await w.add("payer2@example.com", { plan: "pro", proSource: "razorpay", proUntil: until, rzp: { subscriptionId: "sub_T20PAID2", status: "active", createdAt: iso(T0), currentEnd: until, cancelAtPeriodEnd: false, lastEventAt: null } });
     w.setReply({ ok: false, status: 400, json: async () => ({ error: { code: "BAD_REQUEST_ERROR", description: "nope" } }) });
     r = await w.act(paid2, "cancel");
@@ -3338,25 +3359,28 @@ const iso = (ms) => new Date(ms).toISOString();
     check(w.replies.every((b) => !b.includes("@") && !b.includes(paid.token)), "cancel: no reply holds an address or a token");
   }
 
-  // delete-account (2026-10-27): at once unless a plan will still charge; everything that names the account goes
+  // delete-account (2026-10-27): at once, Razorpay cancelled first; everything that names the account goes
   {
     const DAY = 24 * 3600_000;
     const until = iso(T0 + 20 * DAY);
     const sub = (id, over = {}) => ({ subscriptionId: id, status: "active", createdAt: iso(T0 - 10 * DAY), currentEnd: until, cancelAtPeriodEnd: false, lastEventAt: null, ...over });
     let w = await world();
     const renewing = await w.add("renews@example.com", { plan: "pro", proSource: "razorpay", proUntil: until, rzp: sub("sub_DELRENEW") });
+    const cancelled = () => w.rzpCalls.filter((c) => c.url.endsWith("/cancel")).map((c) => c.url.split("/").at(-2) + " " + c.body);
     let r = await w.act(renewing, "delete-account");
-    check(r.code === 409 && r.json().error === "cancel_first" && await w.stored(renewing) && w.rzpCalls.length === 0, "delete-account: a paid Pro that will renew must be cancelled first; kept");
+    check(r.code === 200 && !(await w.stored(renewing)) && cancelled().join() === 'sub_DELRENEW {"cancel_at_cycle_end":false}',
+      "delete-account: a paid Pro that would renew is deleted at once, its subscription cancelled at Razorpay now");
     const renewal = await w.add("renewal@example.com", { plan: "pro", proSource: "razorpay", proUntil: until,
       rzp: sub("sub_DELOLD", { cancelAtPeriodEnd: true, next: { subscriptionId: "sub_DELNEXT", status: "authenticated", startAt: until, choice: { months: 1, price: 1, perDay: 2, cats: null } } }) });
     r = await w.act(renewal, "delete-account");
-    check(r.code === 409 && r.json().error === "cancel_first" && await w.stored(renewal), "delete-account: cancelled, but with a renewal set up to start: cancel the renewal first");
+    check(r.code === 200 && !(await w.stored(renewal)) && cancelled().slice(1).join() === 'sub_DELOLD {"cancel_at_cycle_end":false},sub_DELNEXT {"cancel_at_cycle_end":false}',
+      "delete-account: a cancelled plan with a renewal set up: both subscriptions cancelled at once, then deleted");
     const waiting = await w.add("waiting@example.com", { rzp: sub("sub_DELWAIT", { status: "authenticated" }) });
     r = await w.act(waiting, "delete-account");
     check(r.code === 409 && r.json().error === "payment_pending" && await w.stored(waiting), "delete-account: paid but Pro not started yet is 409 payment_pending; kept");
     const owner = await w.add("granted@example.com", { plan: "pro", proSource: "owner", proUntil: until });
     r = await w.act(owner, "delete-account");
-    check(r.code === 200 && !(await w.stored(owner)) && w.rzpCalls.length === 0, "delete-account: an owner-granted Pro (no billing) is deleted at once");
+    check(r.code === 200 && !(await w.stored(owner)) && cancelled().length === 3, "delete-account: an owner-granted Pro (no billing) is deleted at once, no call to Razorpay");
 
     // Everything that names the account goes; other accounts' files stay.
     const gone = await w.add("leaving@example.com", { plan: "pro", proSource: "razorpay", proUntil: until, rzp: sub("sub_DELNOW", { cancelAtPeriodEnd: true }) });
@@ -3372,7 +3396,7 @@ const iso = (ms) => new Date(ms).toISOString();
     check(w.st.m.has("radar:rzpsub:sub_DELSTAY") && w.st.m.has("radar:rzpsub:sub_DELBAD") && await w.stored(stays), "delete-account: another account's index, an unreadable one, and other records stay");
     check(JSON.parse(w.st.m.get("radar:deliveries:20261026")).free.join() === stays.id && w.st.m.get("radar:deliveries:20261027") === before,
       "delete-account: its id is taken out of the delivery files; files without it are left as they are");
-    check(w.evs("confirmed").length === 1 && w.evs("deleted").length === 2, "delete-account: event counts (no address or id) stay; a deleted event is added");
+    check(w.evs("confirmed").length === 1 && w.evs("deleted").length === 4, "delete-account: event counts (no address or id) stay; a deleted event is added each time");
     check(w.st.m.size > 0 && [...w.st.m.values()].every((v) => !v.includes(gone.id) && !v.includes("leaving@")) && [...w.st.m.keys()].every((k) => !k.includes(gone.id)),
       "delete-account: nothing stored names the account any more");
 
@@ -3404,6 +3428,37 @@ const iso = (ms) => new Date(ms).toISOString();
     r = await w.act(unpaid, "delete-account");
     check(r.code === 200 && !(await w.stored(unpaid)) && w.rzpCalls.some((c) => c.url.endsWith("/subscriptions/sub_DELOPEN/cancel")),
       "delete-account: an unpaid checkout is cancelled as a courtesy; a failure there doesn't stop the deletion");
+  }
+
+  // Unsubscribing a Free account deletes it the same way: Razorpay first (2026-10-27)
+  {
+    const DAY = 24 * 3600_000;
+    for (const fails of [false, true]) {
+      const st = memStorage();
+      const calls = [];
+      const fetchFn = async (url, init) => {
+        calls.push(url);
+        if (fails) return { ok: false, status: 500, json: async () => ({}) };
+        return { ok: true, status: 200, json: async () => ({ id: url.split("/").at(-2), status: "cancelled" }) };
+      };
+      const rec = { ...newPending("lapsed@example.com", { now: T0 - 40 * DAY, randomBytes: seeded(77) }), status: "active", confirmedAt: iso(T0 - 39 * DAY),
+        plan: "pro", proSource: "razorpay", proUntil: iso(T0 - DAY), rzp: { subscriptionId: "sub_UNSUBHALT", status: "halted", cancelAtPeriodEnd: false } };
+      await putSubscriber(st, rec);
+      await st.set("radar:rzpsub:sub_UNSUBHALT", JSON.stringify({ id: rec.id }));
+      const logs = [];
+      const unsub = makeUnsubscribeHandler({ env: { ...BASE, ...RZP }, storage: st, fetchFn, now: () => T0, randomBytes: seeded(78), log: (...a) => logs.push(a.join(" ")) });
+      const res = mockRes();
+      await unsub({ method: "POST", headers: { host: "site.example" }, query: { id: rec.id, t: rec.token } }, res);
+      const after = await getSubscriber(st, rec.id);
+      if (!fails) {
+        check(res.code === 200 && /You(&#39;|')re unsubscribed/.test(res.body) && !after && !st.m.has("radar:rzpsub:sub_UNSUBHALT") && calls.some((u) => u.endsWith("/subscriptions/sub_UNSUBHALT/cancel")),
+          "unsubscribe: a lapsed Free account's Razorpay plan (halted) is cancelled, then the account and its index deleted");
+      } else {
+        check(res.code === 200 && /Your emails are off/.test(res.body) && /couldn(&rsquo;|')t cancel your payment plan/.test(res.body) && after && after.emailOff === "unsubscribed"
+          && logs.some((l) => /unsubscribe razorpay error/.test(l)),
+          "unsubscribe: if Razorpay won't cancel, the account stays with emails off, and the page says so");
+      }
+    }
   }
 
   // T33: one Pro plan. Categories and emails a day are chosen freely; only monthly or yearly changes the price.

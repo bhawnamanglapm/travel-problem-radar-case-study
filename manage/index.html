@@ -356,12 +356,10 @@
     showEmail(a);
     showPw(a);
     document.getElementById("deleteCard").hidden = false;
-    // A plan that will still charge is cancelled first; anything else is deleted at once (2026-10-27).
+    // Deleting is immediate, paid Pro too: the server cancels the Razorpay plan first (2026-10-27).
     var paidPro = isPro && a.proSource === "razorpay";
-    document.getElementById("deleteNote").textContent = (paidPro && !a.cancelAtPeriodEnd) || a.renewal
-      ? "Your Pro plan still renews, so cancel it above first. Then you can delete your account straight away."
-      : "Deletes your address and everything stored with it, and signs this browser out. Nothing more is sent."
-        + (paidPro ? " Pro ends at once instead of on " + day(a.proUntil) + ", and the rest of the paid period isn’t refunded." : "");
+    document.getElementById("deleteNote").textContent = "Deletes your address and everything stored with it, and signs this browser out. Nothing more is sent."
+      + (paidPro ? " It also cancels your Pro plan with Razorpay, so nothing more is charged. Pro ends at once instead of on " + day(a.proUntil) + ", and the rest of the paid period isn’t refunded." : "");
     if (isPro) {
       var paid = a.proSource === "razorpay";
       setPlan("Pro", (a.emailOff ? "The live board" : "The live board and " + perDay(a) + (perDay(a) === 1 ? " email" : " emails") + " a day") + (a.proUntil && !paid ? ", until " + day(a.proUntil) + "." : "."));
@@ -697,15 +695,12 @@
         planEl.textContent = "Your account is deleted";
         detail.textContent = "Your address is gone and nothing more will be sent. You can sign up again any time.";
         say("", false);
-      } else if (x.status === 409 && x.body.error === "cancel_first") {
-        disarm();
-        sayDel("Your Pro plan still renews. Cancel it above first, then delete your account straight away.", true);
       } else if (x.status === 409 && x.body.error === "payment_pending") {
         disarm();
         sayDel("Your payment is still being confirmed. Try again in a few minutes.", true);
       } else if (x.status === 502) {
         disarm();
-        sayDel("Couldn’t reach Razorpay to stop your plan’s payments, so nothing was deleted. Please try again in a few minutes.", true);
+        sayDel("Couldn’t reach Razorpay to cancel your plan, so nothing was deleted and nothing changed. Please try again in a few minutes.", true);
       } else { disarm(); fail(x); }
     }).catch(function () {
       sayDel("Couldn’t reach the server. Please try again in a minute.", true);

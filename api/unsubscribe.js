@@ -2,4 +2,4 @@
 import { makeUnsubscribeHandler } from "./_lib/subscription-handlers.js";
 import { blobStorage } from "./_lib/storage.js";
 
-export default makeUnsubscribeHandler({ env: process.env, storage: blobStorage(), now: Date.now });
+export default makeUnsubscribeHandler({ env: process.env, storage: blobStorage(), fetchFn: fetch, now: Date.now });

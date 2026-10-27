@@ -19,7 +19,7 @@ import {
   KEY_EVENT_PREFIX, deleteSubscriberData, effectivePlan, findSubscriber, getSubscriber, listSubscribers, normaliseEmail,
   recordEvent, updateSubscriber, utcDay,
 } from "../api/_lib/subscribers.js";
-import { KEY_SUBSCRIBER_COUNT } from "../api/_lib/subscription-handlers.js";
+import { KEY_SUBSCRIBER_COUNT, stopRazorpay } from "../api/_lib/subscription-handlers.js";
 import { computeStats } from "../api/_lib/admin.js";
 
 const DAY_MS = 24 * 3600 * 1000;
@@ -170,19 +170,21 @@ export async function revokePro(storage, email, { apply, now, randomBytes: rb = 
   return { code: 0, message: `done: ${summary}`, changed: true };
 }
 
-// A Razorpay subscription that will still charge (paid Pro not set to end, or paid and waiting for
-// its webhook) is refused: deleting the record wouldn't stop Razorpay. Its radar:rzpsub: index files and its id in
-// the delivery files go too (deleteSubscriberData).
-export async function removeSubscriber(storage, email, { apply, now }) {
+// As Delete my account does (deleteAccount): its Razorpay subscriptions are cancelled at once (RAZORPAY_KEY_ID and
+// RAZORPAY_KEY_SECRET from the shell), then the record, its radar:rzpsub: index files and its id in the delivery
+// files go. If Razorpay won't cancel a plan that could still charge, nothing is deleted.
+export async function removeSubscriber(storage, email, { apply, env = {}, fetchFn = fetch }) {
   const r = await findSubscriber(storage, email);
   if (!r) return { code: 1, message: "not found: no subscriber with that address", changed: false };
   const rzp = r.rzp && typeof r.rzp === "object" ? r.rzp : {};
-  const renewing = (r.proSource === "razorpay" && effectivePlan(r, now) === "pro" && rzp.cancelAtPeriodEnd !== true) || rzp.status === "authenticated";
-  if (renewing) return { code: 1, message: "refused: this Razorpay subscription will still charge; cancel it first (in Razorpay, or Cancel on the manage page), then delete", changed: false };
+  const subs = [rzp.subscriptionId, rzp.next && rzp.next.subscriptionId].filter((x) => typeof x === "string" && x);
   const what = `the ${r.status} ${r.plan} record`;
-  if (!apply) return { code: 1, message: `would delete ${what} and the files that name it. Nothing changed; add --yes to apply.`, changed: false };
+  const cancels = subs.length ? `, cancel Razorpay subscription ${subs.join(" and ")} at once` : "";
+  if (!apply) return { code: 1, message: `would${cancels ? cancels.slice(1) + " and" : ""} delete ${what} and the files that name it. Nothing changed; add --yes to apply.`, changed: false };
+  const stopped = await stopRazorpay(r, { env, fetchFn });
+  if (stopped) return { code: 1, message: `refused: Razorpay didn't cancel ${subs.join(" or ")} (${stopped}); nothing deleted. Check the keys in the shell, or cancel it in Razorpay's dashboard, then delete again`, changed: false };
   const gone = await deleteSubscriberData(storage, r.id);
-  return { code: 0, message: `done: deleted ${what}, ${gone.indexes} Razorpay index file(s) and its id in ${gone.deliveries} delivery file(s)`, changed: true };
+  return { code: 0, message: `done: deleted ${what}, ${gone.indexes} Razorpay index file(s) and its id in ${gone.deliveries} delivery file(s)${subs.length ? "; Razorpay subscriptions cancelled" : ""}`, changed: true };
 }
 
 export async function pruneEvents(storage, { olderThanDays, apply, now }) {
@@ -209,7 +211,7 @@ export async function recount(storage, { apply, now }) {
 
 // ---- the command line
 
-export async function main(argv, { storage, now = Date.now(), rb = randomBytes, out = console.log, err = console.error } = {}) {
+export async function main(argv, { storage, now = Date.now(), rb = randomBytes, out = console.log, err = console.error, env = process.env, fetchFn = fetch } = {}) {
   let parsed;
   try {
     parsed = parseArgs(argv);
@@ -246,7 +248,7 @@ export async function main(argv, { storage, now = Date.now(), rb = randomBytes, 
     }
     const res = cmd === "grant-pro" ? await grantPro(storage, email, { until: flags.until || null, apply, now, randomBytes: rb })
       : cmd === "revoke-pro" ? await revokePro(storage, email, { apply, now, randomBytes: rb })
-        : await removeSubscriber(storage, email, { apply, now });
+        : await removeSubscriber(storage, email, { apply, env, fetchFn });
     (res.code === 0 ? out : err)(res.message);
     return res.code;
   } catch (e) {

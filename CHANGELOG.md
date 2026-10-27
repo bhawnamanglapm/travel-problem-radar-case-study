@@ -5,10 +5,11 @@ grouped by date.
 
 ## 2026-10-27
 
-- Delete my account deletes at once unless a plan will still charge. A cancelled paid Pro no longer waits for its
-  period end (Pro ends then, with no refund for the rest; the page says so first). Only a paid Pro that will renew,
-  or one with a renewal set up, is asked to cancel first. A lapsed plan Razorpay is still retrying is cancelled at
-  Razorpay before the account goes, and an unpaid checkout too. Deleting now removes every file that names the
+- Delete my account deletes at once, paid Pro included: the account's Razorpay subscriptions (the plan and any
+  renewal set up) are cancelled immediately first, so nothing more is charged. Pro ends with the account and the
+  rest of the period isn't refunded; the page says so first. If Razorpay won't cancel a plan that could still
+  charge, nothing is deleted. Unsubscribing, bounces and complaints, and the `delete` admin command cancel
+  Razorpay the same way (unsubscribing keeps the account with emails off if Razorpay won't cancel). Deleting now removes every file that names the
   account, not only the record: its Razorpay index files and its id in the daily delivery files
   (`deleteSubscriberData`), also used by unsubscribing, bounces and complaints, and the `delete` admin command.
 

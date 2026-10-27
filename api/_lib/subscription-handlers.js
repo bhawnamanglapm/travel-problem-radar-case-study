@@ -464,7 +464,7 @@ export function makeConfirmHandler({ env, storage, fetchFn = fetch, now, randomB
   };
 }
 
-export function makeUnsubscribeHandler({ env, storage, now, randomBytes = cryptoRandomBytes, log = console.log }) {
+export function makeUnsubscribeHandler({ env, storage, fetchFn = fetch, now, randomBytes = cryptoRandomBytes, log = console.log }) {
   return async function unsubscribe(req, res) {
     return handleLink({
       req, res, env, storage, now,
@@ -498,7 +498,13 @@ export function makeUnsubscribeHandler({ env, storage, now, randomBytes = crypto
           if (changed) await recordEvent(storage, "emailoff", { now: t, randomBytes, plan: "pro" });
           return sendPage(res, 200, { title: "Your emails are off", body: `<p>Nothing more will be sent. Your Pro account stays; you can turn emails back on, or delete the account, on the ${manage}.</p>` });
         }
-        await deleteSubscriberData(storage, record.id);
+        // A Razorpay plan that won't cancel keeps the account, with emails off, rather than leave it charging.
+        if (await deleteAccount(record, { env, fetchFn, storage })) {
+          log("unsubscribe", "razorpay error; emails turned off instead");
+          await updateSubscriber(storage, record.id, (r) => (r.emailOff ? null : { ...r, emailOff: "unsubscribed" }));
+          await recordEvent(storage, "emailoff", { now: t, randomBytes, plan: effectivePlan(record, t) });
+          return sendPage(res, 200, { title: "Your emails are off", body: `<p>Nothing more will be sent. We couldn&rsquo;t cancel your payment plan with Razorpay just now, so your account stays: delete it on the ${manage}, or write to pehchanthetraveller19@gmail.com.</p>` });
+        }
         await recordEvent(storage, "unsubscribed", { now: t, randomBytes, plan: effectivePlan(record, t) });
         return sendPage(res, 200, { title: "You're unsubscribed", body: "<p>Your address has been deleted. Nothing more will be sent.</p>" });
       },
@@ -513,27 +519,32 @@ export function makeUnsubscribeHandler({ env, storage, now, randomBytes = crypto
 // is "pending" while Razorpay retries a failed renewal and "halted" once it has given up, else null.
 const RZP_BILLING = new Set(["pending", "halted"]);
 const RZP_ENDED = new Set(["cancelled", "completed", "expired"]);
-// Before an account is deleted: stops what Razorpay could still charge. A lapsed plan whose payment Razorpay is
-// retrying (pending, halted) is cancelled now, and must be: one that won't cancel, and isn't over at Razorpay
-// either, returns the error and the account stays. Checkouts never paid (created) are cancelled too, so a Checkout
-// left open in another tab can't charge later, but only as a courtesy. A plan cancelled at its period end has
-// nothing left to charge. Returns null, or the error.
-async function stopRazorpay(record, { env, fetchFn }) {
+const RZP_CHARGES = new Set(["authenticated", "active", "pending", "halted"]);
+// Deleting an account cancels its Razorpay subscriptions first (2026-10-27): the plan and any renewal set up to
+// follow it (T34), at once rather than at the period end, so nothing more is charged and nothing is left running.
+// One that could still charge must stop: if Razorpay refuses and doesn't report it as over, the error comes back
+// and the caller keeps the account. One that can't (an unpaid checkout, or a plan already set to end) is cancelled
+// as a courtesy, and a failure there is ignored. Returns null, or the error.
+export async function stopRazorpay(record, { env, fetchFn }) {
   const rzp = rzpOf(record);
-  const next = nextOf(record);
-  const must = rzp.subscriptionId && RZP_BILLING.has(rzp.status) ? [rzp.subscriptionId] : [];
-  const tidy = [rzp.status === "created" && rzp.subscriptionId, next && next.status === "created" && next.subscriptionId].filter(Boolean);
-  if (!razorpayConfigured(env)) return must.length ? "not configured" : null;
-  for (const subscriptionId of must) {
-    const done = await cancelSubscription({ env, fetchFn, subscriptionId, atCycleEnd: false });
-    if (done.error) {
-      const live = await fetchSubscription({ env, fetchFn, subscriptionId });
-      if (live.error || !RZP_ENDED.has(live.status)) return done.error;
-    }
+  const subs = [rzp, nextOf(record)].filter((x) => x && typeof x.subscriptionId === "string" && x.subscriptionId && !RZP_ENDED.has(x.status));
+  for (const x of subs) {
+    const charges = RZP_CHARGES.has(x.status) && !(x === rzp && x.cancelAtPeriodEnd === true);
+    let done;
+    try { done = await cancelSubscription({ env, fetchFn, subscriptionId: x.subscriptionId, atCycleEnd: false }); } catch (e) { done = { error: "network" }; }
+    if (!done.error || !charges) continue;
+    const live = await fetchSubscription({ env, fetchFn, subscriptionId: x.subscriptionId });
+    if (live.error || !RZP_ENDED.has(live.status)) return done.error;
   }
-  for (const subscriptionId of tidy) {
-    try { await cancelSubscription({ env, fetchFn, subscriptionId, atCycleEnd: false }); } catch (e) { /* best effort */ }
-  }
+  return null;
+}
+
+// Deletes an account: its Razorpay subscriptions are cancelled (stopRazorpay), then everything stored that names it
+// goes (deleteSubscriberData). Returns null, or Razorpay's error, in which case nothing was deleted.
+export async function deleteAccount(record, { env, fetchFn, storage }) {
+  const stopped = await stopRazorpay(record, { env, fetchFn });
+  if (stopped) return stopped;
+  await deleteSubscriberData(storage, record.id);
   return null;
 }
 const rzpOf = (record) => (record.rzp && typeof record.rzp === "object" ? record.rzp : {});
@@ -677,18 +688,15 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
         return sendJson(res, 200, { ok: true, ...view(updated) });
       }
       if (action === "delete-account") {
-        // A plan that will still charge is cancelled first, with this page's Cancel button, since deleting the record
-        // doesn't stop Razorpay: a paid Pro not set to end, or a renewal set up to start (T34). A Pro that is
-        // cancelled, or not running, is deleted at once (2026-10-27), giving up whatever is left of the paid period.
-        if ((paidPro(record, t) && rzpOf(record).cancelAtPeriodEnd !== true) || renewalOf(record)) return sendJson(res, 409, { error: "cancel_first" });
-        // Paid, and Pro not started yet (neither Checkout's return nor the webhook has landed): deleting would lose it.
+        // Deleted at once (2026-10-27), paid Pro too: its Razorpay plan is cancelled now, so nothing more is charged,
+        // and whatever is left of the paid period is given up. The one wait: paid, with Pro not started yet (neither
+        // Checkout's return nor the webhook has landed), where cancelling would lose the payment.
         if (rzpOf(record).status === "authenticated" && effectivePlan(record, t) !== "pro") return sendJson(res, 409, { error: "payment_pending" });
-        const stopped = await stopRazorpay(record, { env, fetchFn });
+        const stopped = await deleteAccount(record, { env, fetchFn, storage });
         if (stopped) {
           log("account", "delete-account: razorpay error " + stopped);
           return sendJson(res, 502, { error: "payment_provider" });
         }
-        await deleteSubscriberData(storage, record.id);
         await recordEvent(storage, "deleted", { now: t, randomBytes, plan: effectivePlan(record, t) });
         res.setHeader("set-cookie", clearCookie());
         return sendJson(res, 200, { ok: true, deleted: true });
@@ -1292,7 +1300,7 @@ function webhookAction(event) {
 // deletes that subscriber's record, or for a Pro turns its emails off (T17: the account stays), and
 // records an event with no address. Works while subscriptions are switched off, like unsubscribe:
 // removing an address is always allowed.
-export function makeResendWebhookHandler({ env, storage, now, randomBytes = cryptoRandomBytes, log = console.log }) {
+export function makeResendWebhookHandler({ env, storage, fetchFn = fetch, now, randomBytes = cryptoRandomBytes, log = console.log }) {
   return async function resendWebhook(request) {
     if (request.method !== "POST") return new Response(null, { status: 405, headers: { allow: "POST" } });
     const secret = String(env.RESEND_WEBHOOK_SECRET || "").trim();
@@ -1328,8 +1336,8 @@ export function makeResendWebhookHandler({ env, storage, now, randomBytes = cryp
         const record = await findSubscriber(storage, email);
         if (!record) continue; // not a subscriber, e.g. the owner's own EMAIL_TO
         const plan = effectivePlan(record, t);
-        if (plan === "pro") await updateSubscriber(storage, record.id, (r) => ({ ...r, emailOff: action }));
-        else await deleteSubscriberData(storage, record.id);
+        // A Free account goes, Razorpay first; one whose Razorpay plan won't cancel is kept with emails off, like Pro.
+        if (plan === "pro" || await deleteAccount(record, { env, fetchFn, storage })) await updateSubscriber(storage, record.id, (r) => ({ ...r, emailOff: action }));
         await recordEvent(storage, action, { now: t, randomBytes, plan });
         matched++;
       }

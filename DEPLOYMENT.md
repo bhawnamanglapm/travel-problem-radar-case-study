@@ -1055,15 +1055,16 @@ can sign in. It is set on Production only, so a Preview with the switch on shows
   `radar:rzpsub:` index file pointing at it (older checkouts too), and its id in the `radar:deliveries:` files.
   Event counts hold no address or id and stay. Unsubscribing a Free account, a bounce or complaint on one, and the
   `delete` admin command clear the same files.
-  - **Who must cancel first** (`409 cancel_first`): a paid Pro that will renew, or a cancelled one with a renewal
-    set up (T34). The page says to press Cancel above, then delete. Deleting the record alone wouldn't stop Razorpay.
-  - **Deleted at once:** Free, owner-granted Pro, lapsed Pro, and a paid Pro that is cancelled (it ends at once,
-    not at the period end, and the rest of the period isn't refunded; the page says so before the click).
-  - **Razorpay is told first.** A lapsed plan Razorpay is still retrying (`pending`, `halted`) is cancelled at once;
-    if Razorpay refuses and doesn't report the plan as over, the answer is `502` and nothing is deleted. An unpaid
-    checkout (`created`) is cancelled too, as a courtesy, so a Checkout left open can't charge later.
-  - Paid with Pro not started yet (`authenticated`, waiting for the webhook) is `409 payment_pending`: try again in
-    a few minutes.
+  - **Razorpay is cancelled first** (`deleteAccount` and `stopRazorpay` in `api/_lib/subscription-handlers.js`):
+    the plan and any renewal set up to follow it (T34), at once (`cancel_at_cycle_end: false`), whether it would
+    renew or was already set to end. Pro ends with the account; the rest of the period isn't refunded, and the page
+    says so before the click. Nobody is asked to cancel first any more.
+  - **If Razorpay won't cancel** a plan that could still charge (`authenticated`, `active`, `pending`, `halted`) and
+    doesn't report it as over either, nothing is deleted: Delete my account answers `502` ("try again in a few
+    minutes"); unsubscribing and a bounce or complaint turn the emails off instead and keep the account; the admin
+    command refuses. An unpaid checkout (`created`) is cancelled too, but a failure there doesn't stop anything.
+  - Paid with Pro not started yet (`authenticated`, waiting for the webhook) is `409 payment_pending`: cancelling
+    then would lose the payment, so the page says to try again in a few minutes.
 
 ### Paid Pro checkout (T20)
 
@@ -1434,7 +1435,7 @@ node --env-file=.env.local scripts/subscribers.mjs recount [--yes]
 | `show` | One record without its token |
 | `grant-pro` | Only for an active (confirmed) subscriber. Pro with `proSource: owner`, and the Pro request is cleared (the `prorequested` event keeps the history). `--until 2027-01-31` makes Pro run through the end of that UTC day; leave it out for no end date. A past date is accepted and acts as Free. Refuses a paid Razorpay record |
 | `revoke-pro` | Back to Free, clearing the end date. Refuses a Razorpay record |
-| `delete` | Deletes the record, the `radar:rzpsub:` index files pointing at it, and its id in the `radar:deliveries:` files (since 2026-10-27; before, the id stayed there until the sweep deleted the file after 7 days). This is the answer to a deletion request. Event records hold no address or id. Refused while a Razorpay plan will still charge |
+| `delete` | Deletes the record, the `radar:rzpsub:` index files pointing at it, and its id in the `radar:deliveries:` files (since 2026-10-27; before, the id stayed there until the sweep deleted the file after 7 days). This is the answer to a deletion request. Event records hold no address or id. Cancels the account's Razorpay subscriptions at once first, with `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` from the shell (`--env-file`); refused, with nothing deleted, if Razorpay won't cancel one that could still charge |
 | `prune-events` | Deletes event records older than N days |
 | `recount` | Counts pending and active records and writes `radar:subscriberCount`, as the sweep does. For a store that has never swept (sign-up treats a missing count as full), or after deleting records. Unlike the sweep it doesn't expire old pending sign-ups, so it may count a few more |
 

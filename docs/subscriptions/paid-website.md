@@ -75,9 +75,8 @@ an account are the same thing.
    - Free: the Unsubscribe link deletes the record, as today.
    - **Pro: unsubscribing stops email but keeps the account** (`emailOff: "unsubscribed"`), because they paid for
      the board. A hard bounce or a spam complaint does the same for Pro (`"bounced"`, `"complained"`). Built in T17.
-   - `/manage/` has **Delete my account** (T17), which deletes the account and every file that names it, at once.
-     Only a paid plan that will still renew gets "cancel first" (`409`); a cancelled one is deleted straight away
-     (2026-10-27).
+   - `/manage/` has **Delete my account** (T17), which deletes the account and every file that names it, at once
+     (2026-10-27). A paid plan's Razorpay subscription is cancelled first, immediately, so nothing more is charged.
 
 ## The login cookie
 
