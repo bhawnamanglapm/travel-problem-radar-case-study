@@ -32,7 +32,7 @@
 <main>
   <p class="nav"><a href="../../">&larr; Home</a> &middot; <a href="../../signup/">Create account</a> &middot; <a href="../../signin/">Sign in</a></p>
   <h1>Privacy policy</h1>
-  <p class="small">Last updated: 23 October 2026</p>
+  <p class="small">Last updated: 27 October 2026</p>
 
   <p>This page covers the Travel Problem Radar website and email digest, run by <span data-fill>{{LEGAL_NAME}}</span>. Questions or requests: <a href="mailto:pehchanthetraveller19@gmail.com">pehchanthetraveller19@gmail.com</a>.</p>
 
@@ -44,9 +44,10 @@
     <li>the dates you signed up, were sent a confirmation, confirmed, were sent an &ldquo;already subscribed&rdquo; email, and asked for Pro;</li>
     <li>a random code that makes the links in your emails work;</li>
     <li>if you continue with Google: only the email address Google gives us, which it says it has verified. We don&rsquo;t keep your Google account id, name, photo or any Google token;</li>
+    <li>if you choose a password: a one-way hash of it (scrypt, with a random salt), never the password itself, and how many wrong passwords were tried in the last hour. Removing the password on the manage page deletes the hash;</li>
     <li>when you ask for a sign-in link: a one-way hash of that link&rsquo;s code, when it was sent and when it expires (15 minutes later). It is cleared once you use the link.</li>
   </ul>
-  <p>We also count events, such as a sign-up, a sign-in email or an unsubscribe, with only the type, the time and the plan. These counts hold no address, so they stay after you leave. To limit automated sign-ups, we keep a shortened, one-way hash of the connection&rsquo;s IP address (never the address itself) and delete it within a few hours.</p>
+  <p>We also count events, such as a sign-up, a sign-in email or an unsubscribe, with only the type, the time and the plan. These counts hold no address, so they stay after you leave. To limit automated sign-ups and password guessing, we keep a shortened, one-way hash of the connection&rsquo;s IP address (never the address itself) and delete it within a few hours.</p>
 
   <h2>Cookies</h2>
   <p>When you confirm your address or sign in, we set one cookie, <code>tpr_session</code>, so the site knows it&rsquo;s you. It holds your record&rsquo;s id (a one-way hash of your address, not the address itself), an expiry date and a signature. It lasts until you close the browser or sign out, and 12 hours at most. If you continue with Google, a second cookie, <code>tpr_oauth</code>, holds random values that check the reply comes from the sign-in you started. If your address has no account yet, it then holds that address while you decide whether to create one. It lasts 10 minutes at most and is deleted when you sign in or create the account. We set no advertising or tracking cookies.</p>

@@ -30,7 +30,13 @@
   #status { min-height: 1.6em; margin: 12px 0 0; color: #F4F4F7; }
   #status.err, #planStatus.err { color: #FF8A80; }
   #planStatus, #delStatus { min-height: 1.6em; margin: 12px 0 0; color: #F4F4F7; }
-  #delStatus.err { color: #FF8A80; }
+  #delStatus.err, #pwStatus.err { color: #FF8A80; }
+  #pwStatus { min-height: 1.6em; margin: 12px 0 0; color: #F4F4F7; }
+  label.field { display: block; font-weight: 600; margin: 0 0 6px; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 12px; }
+  input[type=password] { flex: 1 1 220px; min-width: 0; font: inherit; color: #F4F4F7; background: #0B0B0D;
+    border: 1px solid #3A3A46; border-radius: 6px; padding: 10px 12px; }
+  input[type=password]:focus { outline: 2px solid #C6FF3D; outline-offset: 1px; }
   #delCancel { margin-left: 8px; }
   h2 { font-size: 16px; margin: 0 0 8px; color: #F4F4F7; }
   h3 { font-size: 14px; margin: 16px 0 6px; color: #C9C9D2; font-weight: 600; }
@@ -124,6 +130,21 @@
     <!-- when:free-test --><button id="sendReq" type="button" hidden>Send my request</button><!-- /when -->
     <button id="planClose" class="plain" type="button" hidden>Not now</button>
     <p id="planStatus" role="status" aria-live="polite"></p>
+  </div>
+
+  <div class="card" id="pwCard" hidden>
+    <h2>Password</h2>
+    <p id="pwNote"></p>
+    <form id="pwForm" hidden>
+      <label class="field" for="newPw">New password</label>
+      <div class="row">
+        <input id="newPw" name="password" type="password" autocomplete="new-password" required minlength="10" maxlength="128" aria-describedby="pwHint" />
+        <button id="pwSave" type="submit">Set password</button>
+      </div>
+      <p class="small" id="pwHint">At least 10 characters. Saving it signs you out on your other browsers.</p>
+    </form>
+    <button id="pwRemove" class="plain" type="button" hidden>Remove my password</button>
+    <p id="pwStatus" role="status" aria-live="polite"></p>
   </div>
 
   <div class="card" id="deleteCard" hidden>
@@ -333,6 +354,7 @@
       document.getElementById("leaveByLink").hidden = false;
     }
     showEmail(a);
+    showPw(a);
     document.getElementById("deleteCard").hidden = false;
     if (isPro) {
       var paid = a.proSource === "razorpay";
@@ -595,6 +617,58 @@
     }).then(function () { emailOn.disabled = false; });
   });
 
+  // Password (2026-10-27): set, changed or removed only when signed in on this browser. The server refuses it through
+  // an email's manage link, which a forwarded digest carries, so that page only says to sign in.
+  var pwForm = document.getElementById("pwForm"), newPw = document.getElementById("newPw");
+  var pwSave = document.getElementById("pwSave"), pwRemove = document.getElementById("pwRemove"), pwStatus = document.getElementById("pwStatus");
+  function sayPw(text, isErr) { pwStatus.textContent = text; pwStatus.className = isErr ? "err" : ""; }
+  function showPw(a) {
+    document.getElementById("pwCard").hidden = false;
+    var note = document.getElementById("pwNote");
+    pwForm.hidden = pwRemove.hidden = !a.signedIn;
+    if (!a.signedIn) {
+      note.textContent = (a.hasPassword ? "You have a password. To change or remove it, " : "You can add a password to sign in without waiting for an email. To add one, ");
+      var link = document.createElement("a"); link.href = "../signin/"; link.textContent = "sign in on this browser";
+      note.appendChild(link); note.appendChild(document.createTextNode(" first."));
+      return;
+    }
+    note.textContent = a.hasPassword
+      ? "You sign in with your email address and password. Forgot it? A sign-in link by email still works; then set a new one here."
+      : "You sign in with a link we email you, or with Google. Add a password to sign in without waiting for an email.";
+    pwSave.textContent = a.hasPassword ? "Change password" : "Set password";
+    pwRemove.hidden = !a.hasPassword;
+  }
+  function pwFail(x) {
+    if (x.status === 403) sayPw("Sign in on this browser first, then try again.", true);
+    else if (x.status === 400 && x.body && x.body.error) sayPw(x.body.error.charAt(0).toUpperCase() + x.body.error.slice(1) + ".", true);
+    else fail(x);
+  }
+  pwForm.addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var had = acct && acct.hasPassword;
+    pwSave.disabled = true;
+    sayPw("Saving…", false);
+    call("POST", { action: "set-password", password: newPw.value }).then(function (x) {
+      if (x.status === 200) {
+        newPw.value = "";
+        show(x.body);
+        sayPw(had ? "Password changed. Your other browsers are signed out." : "Password set. Next time, sign in with your email address and this password.", false);
+      } else pwFail(x);
+    }).catch(function () {
+      sayPw("Couldn’t reach the server. Please try again in a minute.", true);
+    }).then(function () { pwSave.disabled = false; });
+  });
+  pwRemove.addEventListener("click", function () {
+    pwRemove.disabled = true;
+    sayPw("Removing…", false);
+    call("POST", { action: "remove-password" }).then(function (x) {
+      if (x.status === 200) { show(x.body); sayPw("Password removed. Sign in with a link we email you, or with Google.", false); }
+      else pwFail(x);
+    }).catch(function () {
+      sayPw("Couldn’t reach the server. Please try again in a minute.", true);
+    }).then(function () { pwRemove.disabled = false; });
+  });
+
   // Delete my account: the first click asks, the second deletes.
   var del = document.getElementById("del"), delCancel = document.getElementById("delCancel");
   var delStatus = document.getElementById("delStatus"), armed = false;
@@ -613,7 +687,7 @@
     sayDel("Deleting…", false);
     call("POST", { id: id, t: t, action: "delete-account" }).then(function (x) {
       if (x.status === 200) {
-        ["ask", "buy", "billing", "planCard", "deleteCard", "leave", "leaveByLink", "signOutRow", "emailLine", "emailOnRow"].forEach(function (k) { document.getElementById(k).hidden = true; });
+        ["ask", "buy", "billing", "planCard", "deleteCard", "pwCard", "leave", "leaveByLink", "signOutRow", "emailLine", "emailOnRow"].forEach(function (k) { document.getElementById(k).hidden = true; });
         planEl.textContent = "Your account is deleted";
         detail.textContent = "Your address is gone and nothing more will be sent. You can sign up again any time.";
         say("", false);

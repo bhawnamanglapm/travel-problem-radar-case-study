@@ -9,7 +9,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="referrer" content="no-referrer" />
 <title>Sign in to Travel Problem Radar</title>
-<meta name="description" content="Sign in to Travel Problem Radar with Google or a link sent to your email. No password." />
+<meta name="description" content="Sign in to Travel Problem Radar with your email and password, a link sent to your email, or Google." />
 <style>
   * { box-sizing: border-box; }
   html, body { margin: 0; background: #0B0B0D; color: #F4F4F7; }
@@ -24,9 +24,10 @@
   form { margin: 20px 0 8px; }
   label.field { display: block; font-weight: 600; margin: 0 0 6px; }
   .row { display: flex; flex-wrap: wrap; gap: 10px; }
-  input[type=email] { flex: 1 1 240px; min-width: 0; font: inherit; color: #F4F4F7; background: #131318;
+  input[type=email], input[type=password] { flex: 1 1 240px; min-width: 0; font: inherit; color: #F4F4F7; background: #131318;
     border: 1px solid #3A3A46; border-radius: 6px; padding: 10px 12px; }
-  input[type=email]:focus { outline: 2px solid #C6FF3D; outline-offset: 1px; }
+  input[type=email]:focus, input[type=password]:focus { outline: 2px solid #C6FF3D; outline-offset: 1px; }
+  form .row { margin: 0 0 14px; }
   button { font: inherit; font-weight: 600; background: #C6FF3D; color: #0B0B0D; border: 0; border-radius: 6px;
     padding: 10px 20px; cursor: pointer; }
   button:hover { background: #d8ff6f; }
@@ -34,7 +35,7 @@
   button.plain { background: transparent; color: #C6FF3D; border: 1px solid #3A3A46; }
   /* The trap field: off-screen rather than display:none, which some bots skip. */
   .trap { position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden; }
-  #status, #outStatus { min-height: 1.6em; margin: 12px 0 0; color: #F4F4F7; }
+  #status, #outStatus { min-height: 1.6em; margin: 12px 0 14px; color: #F4F4F7; }
   #status.err, #outStatus.err { color: #FF8A80; }
   .small { font-size: 13px; color: #93939F; }
   .gbtn { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 48px;
@@ -65,13 +66,19 @@
   </div>
 
   <div id="signIn">
-    <p>Enter the address you subscribed with. We&rsquo;ll email you a link that signs you in; there&rsquo;s no password.</p>
+    <p>Sign in with your email address and password. No password, or forgot it? Leave it empty and we&rsquo;ll email you a link that signs you in.</p>
     <form id="f" method="post" action="/api/session">
-      <input type="hidden" name="action" value="request" />
       <label class="field" for="email">Your email address</label>
       <div class="row">
-        <input id="email" name="email" type="email" autocomplete="email" required maxlength="254" placeholder="you@example.com" />
-        <button id="go" type="submit">Email me a link</button>
+        <input id="email" name="email" type="email" autocomplete="username" required maxlength="254" placeholder="you@example.com" />
+      </div>
+      <label class="field" for="password">Password</label>
+      <div class="row">
+        <input id="password" name="password" type="password" autocomplete="current-password" maxlength="128" />
+      </div>
+      <div class="row">
+        <button id="go" type="submit">Sign in</button>
+        <button id="link" class="plain" type="button">Email me a sign-in link</button>
       </div>
       <div class="trap">
         <label for="website">Leave this field empty (it is a trap for automated sign-ins)</label>
@@ -84,10 +91,11 @@
       <a class="gbtn" id="gbtn" href="/api/session?action=google"><svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>Continue with Google</a>
       <p class="small">New here? You&rsquo;ll confirm before a free account is created.</p>
     </div>
+    <p class="small">Forgot your password? Sign in with an emailed link, then set a new one on the <a href="../manage/">manage page</a>.</p>
     <p class="small">No account yet? <a href="../signup/">Create one</a>; confirming your address signs you in.</p>
   </div>
 
-  <p class="small">Signing in sets one cookie on this browser so the site knows it&rsquo;s you. It holds no address and lasts until you close the browser or sign out (12 hours at most). If you continue with Google, we receive only your email address from it. <a href="../legal/privacy/">Privacy policy</a></p>
+  <p class="small">Your password is stored only as a one-way hash, never as typed. Signing in sets one cookie on this browser so the site knows it&rsquo;s you. It holds no address and lasts until you close the browser or sign out (12 hours at most). If you continue with Google, we receive only your email address from it. <a href="../legal/privacy/">Privacy policy</a></p>
   <p class="small">Questions: email <a href="mailto:pehchanthetraveller19@gmail.com">pehchanthetraveller19@gmail.com</a>.</p>
   <footer><nav class="site-foot" aria-label="Site"><a href="../">Home</a> &middot; <a href="../about/">About</a> &middot; <a href="../pricing/">Pricing</a> &middot; <a href="../legal/contact/">Contact</a> &middot; <a href="../legal/privacy/">Privacy</a> &middot; <a href="../legal/refunds/">Refunds</a></nav></footer>
 </main>
@@ -95,7 +103,7 @@
 (function () {
   var form = document.getElementById("f");
   var statusEl = document.getElementById("status"), outStatus = document.getElementById("outStatus");
-  var btn = document.getElementById("go"), out = document.getElementById("out");
+  var btn = document.getElementById("go"), linkBtn = document.getElementById("link"), out = document.getElementById("out");
   function say(el, text, isErr) { el.textContent = text; el.className = isErr ? "err" : ""; }
   function post(body) {
     return fetch("/api/session", {
@@ -117,19 +125,45 @@
     })
     .catch(function () { /* stay on the form */ });
 
+  function failed(x) {
+    if (x.body && x.body.error) say(statusEl, x.body.error.charAt(0).toUpperCase() + x.body.error.slice(1) + ".", true);
+    else say(statusEl, "Something went wrong. Please try again in a minute.", true);
+  }
+  // With a password: signs in here. Without one, the form asks for a link instead.
+  var PW_ERRORS = {
+    wrong_password: "That email address and password don’t match. No password yet, or forgot it? Press Email me a sign-in link.",
+    not_confirmed: "Confirm your email address first: open the link we sent when you signed up (check your spam or junk folder).",
+    too_many_tries: "Too many wrong tries. Wait an hour, or press Email me a sign-in link."
+  };
   form.addEventListener("submit", function (ev) {
     ev.preventDefault();
+    if (!form.password.value) { sendLink(); return; }
     btn.disabled = true;
+    say(statusEl, "Signing in…", false);
+    post({ action: "password", email: form.email.value, password: form.password.value, website: form.website.value }).then(function (x) {
+      if (x.status === 200 && x.body.ok) { say(statusEl, "Signed in.", false); location.assign(x.body.next || "../live/"); return; }
+      if (x.status === 503) say(statusEl, "Sign-in isn’t open yet. Use the Manage link in any digest email.", true);
+      else if (PW_ERRORS[x.body && x.body.error]) say(statusEl, PW_ERRORS[x.body.error], true);
+      else failed(x);
+      btn.disabled = false;
+    }).catch(function () {
+      say(statusEl, "Couldn’t reach the server. Please try again in a minute.", true);
+      btn.disabled = false;
+    });
+  });
+  function sendLink() {
+    if (!form.email.reportValidity()) return;
+    linkBtn.disabled = true;
     say(statusEl, "Sending…", false);
     post({ action: "request", email: form.email.value, website: form.website.value }).then(function (x) {
       if (x.status === 503) say(statusEl, "Sign-in isn’t open yet. Use the Manage link in any digest email.", true);
-      else if (x.status === 200 && x.body.message) { say(statusEl, x.body.message, false); form.email.value = ""; }
-      else if (x.body && x.body.error) say(statusEl, x.body.error.charAt(0).toUpperCase() + x.body.error.slice(1) + ".", true);
-      else say(statusEl, "Something went wrong. Please try again in a minute.", true);
+      else if (x.status === 200 && x.body.message) say(statusEl, x.body.message, false);
+      else failed(x);
     }).catch(function () {
       say(statusEl, "Couldn’t reach the server. Please try again in a minute.", true);
-    }).then(function () { btn.disabled = false; });
-  });
+    }).then(function () { linkBtn.disabled = false; });
+  }
+  linkBtn.addEventListener("click", sendLink);
 
   out.addEventListener("click", function () {
     out.disabled = true;

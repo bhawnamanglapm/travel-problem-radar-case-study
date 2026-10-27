@@ -9,7 +9,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="referrer" content="no-referrer" />
 <title>Create your Travel Problem Radar account</title>
-<meta name="description" content="Create a Travel Problem Radar account with Google or your email address. No password: confirm the link we email you and you're signed in." />
+<meta name="description" content="Create a Travel Problem Radar account with Google, or your email address and an optional password. Confirm the link we email you and you're signed in." />
 <style>
   * { box-sizing: border-box; }
   html, body { margin: 0; background: #0B0B0D; color: #F4F4F7; }
@@ -26,9 +26,13 @@
   form { margin: 20px 0 8px; }
   label.field { display: block; font-weight: 600; margin: 0 0 6px; }
   .row { display: flex; flex-wrap: wrap; gap: 10px; }
-  input[type=email] { flex: 1 1 240px; min-width: 0; font: inherit; color: #F4F4F7; background: #131318;
+  input[type=email], input[type=password] { flex: 1 1 240px; min-width: 0; font: inherit; color: #F4F4F7; background: #131318;
     border: 1px solid #3A3A46; border-radius: 6px; padding: 10px 12px; }
-  input[type=email]:focus { outline: 2px solid #C6FF3D; outline-offset: 1px; }
+  input[type=email]:focus, input[type=password]:focus { outline: 2px solid #C6FF3D; outline-offset: 1px; }
+  form .row { margin: 0 0 14px; }
+  form .row + .small { margin: -8px 0 14px; }
+  .opt { font-weight: 400; color: #93939F; }
+  .submit { margin: 16px 0 0; }
   button { font: inherit; font-weight: 600; background: #C6FF3D; color: #0B0B0D; border: 0; border-radius: 6px;
     padding: 10px 20px; cursor: pointer; }
   button:hover { background: #d8ff6f; }
@@ -72,20 +76,25 @@
   </div>
 
   <div id="signUp">
-    <p>There&rsquo;s no password. Your email address is your account:</p>
+    <p>Your email address is your account. A password is optional:</p>
     <ol class="steps">
-      <li>Enter your email address below.</li>
+      <li>Enter your email address below, and a password if you want one.</li>
       <li>We email you a confirmation link.</li>
-      <li>Open it and press <b>Confirm</b>. That creates your account and signs you in on that browser.</li>
+      <li>Open it and press <b>Confirm</b>. That creates your account, turns on your password, and signs you in on that browser.</li>
     </ol>
     <form id="f" method="post" action="/api/subscribe">
       <label class="field" for="email">Your email address</label>
       <div class="row">
-        <input id="email" name="email" type="email" autocomplete="email" required maxlength="254" placeholder="you@example.com" />
-        <button id="go" type="submit">Create account</button>
+        <input id="email" name="email" type="email" autocomplete="username" required maxlength="254" placeholder="you@example.com" />
       </div>
+      <label class="field" for="password">Password <span class="opt">(optional)</span></label>
+      <div class="row">
+        <input id="password" name="password" type="password" autocomplete="new-password" minlength="10" maxlength="128" aria-describedby="pwHint" />
+      </div>
+      <p class="small" id="pwHint">At least 10 characters. Leave it empty to sign in with a link we email you, or with Google. You can add one later on the manage page.</p>
       <label class="check"><input id="wantsPro" name="wantsPro" type="checkbox" value="1" /> <span><!-- when:free-test -->I&rsquo;d also like Pro (the live board and 1 to 5 emails a day). You&rsquo;ll get the daily digest until it&rsquo;s switched on. <a href="../subscribe/">Compare the plans</a>.<!-- /when --><template data-when="paid">I&rsquo;d like Pro: the live board and 1 to 5 emails a day, {{PRO_PRICE}}, {{PRO_GST}}. It renews automatically at the end of each billing period until you cancel. Confirm your email, pay with Razorpay, and Pro starts straight away. <a href="../pricing/">Pricing details</a>.</template></span></label>
       <template data-when="paid"><fieldset class="period" id="period" hidden><legend>Pay</legend><label><input type="radio" name="months" value="1" checked /> Monthly</label><label><input type="radio" name="months" value="12" /> Yearly</label></fieldset></template>
+      <p class="submit"><button id="go" type="submit">Create account</button></p>
       <div class="trap">
         <label for="website">Leave this field empty (it is a trap for automated sign-ups)</label>
         <input id="website" name="website" type="text" tabindex="-1" autocomplete="off" />
@@ -97,11 +106,11 @@
       <a class="gbtn" id="gbtn" href="/api/session?action=google"><svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>Continue with Google</a>
       <p class="small">New here? You&rsquo;ll confirm before a free account is created.</p>
     </div>
-    <p class="small">Already have an account? <a href="../signin/">Sign in</a> with a link sent to your email.</p>
+    <p class="small">Already have an account? <a href="../signin/">Sign in</a> with your password or a link sent to your email.</p>
   </div>
 
   <p class="small">Your account includes the free daily summary: how many travel-industry problems were found in the last 24 hours, and their headlines. Unsubscribing from it deletes the account.</p>
-  <p class="small">We store your email address, the dates you signed up and confirmed, and whether you asked for Pro (and the billing period you picked). Confirming or signing in sets one cookie on that browser so the site knows it&rsquo;s you; it holds no address and lasts until you close the browser or sign out (12 hours at most). If you continue with Google, we receive only your email address from it. Questions or a deletion request: email <a href="mailto:pehchanthetraveller19@gmail.com">pehchanthetraveller19@gmail.com</a>. <a href="../legal/privacy/">Privacy policy</a></p>
+  <p class="small">We store your email address, the dates you signed up and confirmed, whether you asked for Pro (and the billing period you picked), and, if you choose a password, a one-way hash of it (never the password itself). Confirming or signing in sets one cookie on that browser so the site knows it&rsquo;s you; it holds no address and lasts until you close the browser or sign out (12 hours at most). If you continue with Google, we receive only your email address from it. Questions or a deletion request: email <a href="mailto:pehchanthetraveller19@gmail.com">pehchanthetraveller19@gmail.com</a>. <a href="../legal/privacy/">Privacy policy</a></p>
   <p class="small">Gathered by an AI model with web search. Items are not verified; check each source link.</p>
   <footer><nav class="site-foot" aria-label="Site"><a href="../">Home</a> &middot; <a href="../about/">About</a> &middot; <a href="../pricing/">Pricing</a> &middot; <a href="../legal/contact/">Contact</a> &middot; <a href="../legal/privacy/">Privacy</a> &middot; <a href="../legal/refunds/">Refunds</a></nav></footer>
 </main>
@@ -141,13 +150,13 @@
     fetch("/api/subscribe", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email: form.email.value, website: form.website.value, wantsPro: form.wantsPro.checked ? "1" : "", months: pickedMonths() })
+      body: JSON.stringify({ email: form.email.value, password: form.password.value, website: form.website.value, wantsPro: form.wantsPro.checked ? "1" : "", months: pickedMonths() })
     }).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (b) { return { status: r.status, body: b }; });
     }).then(function (x) {
       if (x.status === 503) say(statusEl, "Sign-up isn’t open yet.", true);
       else if (x.status === 429) say(statusEl, "Too many tries from your connection. Please try again in a few minutes.", true);
-      else if (x.status === 200 && x.body.message) { say(statusEl, x.body.message, false); form.email.value = ""; }
+      else if (x.status === 200 && x.body.message) { say(statusEl, x.body.message, false); form.email.value = ""; form.password.value = ""; }
       else if (x.body && x.body.error) say(statusEl, x.body.error.charAt(0).toUpperCase() + x.body.error.slice(1) + ".", true);
       else say(statusEl, "Something went wrong. Please try again in a minute.", true);
     }).catch(function () {

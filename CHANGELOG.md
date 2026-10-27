@@ -3,6 +3,16 @@
 Built from the git history. Dates are commit dates. The project has no version numbers or releases, so entries are
 grouped by date.
 
+## 2026-10-27
+
+- Passwords, optional. `/signup/` takes one beside the email address; it turns on only when the confirmation link
+  sent for that sign-up is pressed (the link carries a key, so nobody can set a password on someone else's address).
+  `/signin/` signs in with email and password, and still emails a link when the password is left empty. The manage
+  page's **Password** card sets, changes or removes it when signed in (not through an email's manage link); setting
+  one signs other browsers out. scrypt hashes only; 10 wrong passwords per IP or per account an hour, then `429` for
+  the rest of the hour. The home, subscribe and pricing pages and the privacy policy no longer say there's no
+  password. Tests in `scripts/test-password.mjs`, run by `npm test`.
+
 ## 2026-10-26
 
 - Admin dashboard: a Payments card saying whether payments are on for that deployment and, if not, which `RAZORPAY_*`

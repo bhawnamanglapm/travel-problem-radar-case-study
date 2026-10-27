@@ -8,6 +8,7 @@ import { OAUTH_COOKIE, OAUTH_MINUTES, clearOAuthCookie, googleConfigured, google
 import { cancelSubscription, createSubscription, fetchSubscription, razorpayConfigured, verifyCheckout, verifyWebhook } from "./razorpay.js";
 import { DEFAULT_SWEEPS_PER_DAY, normaliseSweepsPerDay, sweepLimits, sweepsPerDayOf } from "./schedule.js";
 import { periodsOf, priceOf, priceTable, razorpayPlans } from "./plan.js";
+import { hashPassword, passwordProblem, storedHash, verifyPassword } from "./password.js";
 import { clearCookie, originOk, parseCookies, readSession, sessionCookie, sessionSecret, signSession } from "./session.js";
 import {
   CONFIRM_RESEND_MINUTES, KEY_SUB_PREFIX, MAX_CONFIRMS_PER_ADDRESS, PENDING_TTL_DAYS, countEvents, deleteSubscriber, effectivePlan, findSubscriber, getSubscriber, newPending, normaliseCats, normaliseEmail, putSubscriber,
@@ -192,6 +193,15 @@ const isYes = (v) => v === true || v === "1" || v === "on";
 // Where a subscriber sees their plan and asks for Pro (T20 adds checkout to the same page).
 export const managePath = (id, t) => `/manage/?id=${encodeURIComponent(id)}&t=${encodeURIComponent(t)}`;
 
+// The confirmation link's password key, stored only as this hash (with the pending password), compared in constant time.
+const pwKeyHash = (k) => createHash("sha256").update("radar-pw-key:" + k).digest("hex");
+function pwKeyOk(pending, k) {
+  if (!pending || typeof pending.k !== "string" || typeof k !== "string" || !k) return false;
+  const want = Buffer.from(pending.k);
+  const got = Buffer.from(pwKeyHash(k));
+  return got.length === want.length && timingSafeEqual(got, want);
+}
+
 // Tells the owner (EMAIL_TO) that someone asked for Pro. Names nobody. Never throws, and a
 // failed send never fails the request that caused it.
 async function notifyOwnerProRequest({ env, fetchFn, at, source, log }) {
@@ -207,20 +217,20 @@ async function notifyOwnerProRequest({ env, fetchFn, at, source, log }) {
 // "subscribed" for a new one and "confirmsent" always. The caller has checked MAX_CONFIRMS_PER_DAY.
 // A re-send is checked again on the stored record: if it was confirmed, or another request re-sent
 // the link, in the meantime, nothing is written or sent.
-async function sendConfirmation({ record, isNew, env, storage, fetchFn, t, randomBytes, log, logAs }) {
+async function sendConfirmation({ record, isNew, env, storage, fetchFn, t, randomBytes, log, logAs, pwKey = null }) {
   const site = siteUrl(env);
   if (isNew) await putSubscriber(storage, record);
   else {
     const { changed } = await updateSubscriber(storage, record.id, (r) => (r.status === "pending" && !confirmHeld(r, t)
       ? { ...r, confirmSentAt: record.confirmSentAt, confirmSends: record.confirmSends, proRequestedAt: r.proRequestedAt || record.proRequestedAt,
-        ...(record.proRequest ? { proRequest: record.proRequest } : {}) }
+        ...(record.proRequest ? { proRequest: record.proRequest } : {}), pendingPw: record.pendingPw || null }
       : null));
     if (!changed) return;
   }
   if (isNew) await recordEvent(storage, "subscribed", { now: t, randomBytes, plan: "free" });
   await recordEvent(storage, "confirmsent", { now: t, randomBytes, plan: "free" });
 
-  const mail = buildConfirmEmail({ confirmUrl: `${site}/api/confirm?id=${record.id}&t=${record.token}`, siteUrl: site });
+  const mail = buildConfirmEmail({ confirmUrl: `${site}/api/confirm?id=${record.id}&t=${record.token}${pwKey ? `&k=${pwKey}` : ""}`, siteUrl: site, withPassword: Boolean(pwKey) });
   const result = await sendOne({ apiKey: env.RESEND_API_KEY, from: env.EMAIL_FROM }, { to: record.email, ...mail }, {
     fetchFn,
     idempotencyKey: `confirm-${record.id.slice(0, 24)}-${Date.parse(record.confirmSentAt)}`,
@@ -254,6 +264,10 @@ export function makeSubscribeHandler({ env, storage, fetchFn, now, randomBytes =
     const email = normaliseEmail(fields.email);
     const wantsPro = isYes(fields.wantsPro); // counts only once the address is confirmed
     if (!email) return sendJson(res, 400, { error: "enter a valid email address" });
+    // A password is optional: without one, the account signs in by emailed link or Google.
+    const password = typeof fields.password === "string" && fields.password !== "" ? fields.password : null;
+    const pwProblem = password === null ? null : passwordProblem(password);
+    if (pwProblem) return sendJson(res, 400, { error: pwProblem });
 
     try {
       const t = now();
@@ -320,7 +334,15 @@ export function makeSubscribeHandler({ env, storage, fetchFn, now, randomBytes =
       // on sale is dropped: the plan card then asks for it.
       const picked = wantsPro && fields.months !== undefined ? readChoice({ months: Number(fields.months) }, env) : null;
       if (picked && picked.ok) record = { ...record, proRequest: { cats: picked.cats, perDay: picked.perDay, months: picked.months } };
-      await sendConfirmation({ record, isNew: !existing, env, storage, fetchFn, t, randomBytes, log, logAs: "subscribe confirm-email" });
+      // A password chosen here starts working only through the confirmation link sent for this request, which carries
+      // a key whose hash is stored beside it: whoever types an address in can't set the password of the person who
+      // owns the inbox and later confirms. A later sign-up for the address, with a password or without, replaces it.
+      let pwKey = null;
+      if (password) {
+        pwKey = Buffer.from(randomBytes(32)).toString("base64url");
+        record = { ...record, pendingPw: { ...(await hashPassword(password, { randomBytes })), k: pwKeyHash(pwKey) } };
+      } else if (record.pendingPw) record = { ...record, pendingPw: null };
+      await sendConfirmation({ record, isNew: !existing, env, storage, fetchFn, t, randomBytes, log, logAs: "subscribe confirm-email", pwKey });
       return reply();
     } catch (e) {
       log("subscribe", "error: " + ((e && e.name) || "Error"));
@@ -339,16 +361,16 @@ const INVALID = { title: "This link isn't valid", body: `<p>It may have expired.
 async function linkParams(req, { queryOnly }) {
   if (req.method === "POST" && !queryOnly) {
     const f = await readFields(req, { limit: 2048 });
-    return { id: typeof f.id === "string" ? f.id : "", t: typeof f.t === "string" ? f.t : "", fields: f };
+    return { id: typeof f.id === "string" ? f.id : "", t: typeof f.t === "string" ? f.t : "", k: typeof f.k === "string" ? f.k : "", fields: f };
   }
   let q = req.query;
   if (!q || typeof q !== "object") q = Object.fromEntries(new URL(req.url || "/", "http://x").searchParams);
-  return { id: typeof q.id === "string" ? q.id : "", t: typeof q.t === "string" ? q.t : "" };
+  return { id: typeof q.id === "string" ? q.id : "", t: typeof q.t === "string" ? q.t : "", k: typeof q.k === "string" ? q.k : "" };
 }
 
-// `name` is the secret's field: "t" for a token, "c" for a sign-in code.
-const hiddenForm = (action, id, secret, label, name = "t") =>
-  `<form method="post" action="${action}"><input type="hidden" name="id" value="${esc(id)}"><input type="hidden" name="${name}" value="${esc(secret)}"><p><button type="submit">${esc(label)}</button></p></form>`;
+// `name` is the secret's field: "t" for a token, "c" for a sign-in code. `k`: a confirmation link's password key.
+const hiddenForm = (action, id, secret, label, name = "t", k = "") =>
+  `<form method="post" action="${action}"><input type="hidden" name="id" value="${esc(id)}"><input type="hidden" name="${name}" value="${esc(secret)}">${k ? `<input type="hidden" name="k" value="${esc(k)}">` : ""}<p><button type="submit">${esc(label)}</button></p></form>`;
 
 // Shared by confirm and unsubscribe. Unknown id, bad token and missing fields are all the same
 // answer (the invalid page), so the endpoint can't be used to test ids.
@@ -398,6 +420,7 @@ export function makeConfirmHandler({ env, storage, fetchFn = fetch, now, randomB
           return sendPage(res, 200, {
             title: "You're subscribed",
             body: (secret ? `<p>Your account is ready, and you're signed in on this browser.</p>` : "")
+              + (rec.pw ? `<p>Next time, sign in with your email address and the password you chose.</p>` : "")
               + `<p>You'll get the daily digest after the first sweep of the UTC day (about 05:47 IST).</p>`
               + (effectivePlan(rec, t) === "pro" ? ""
                 // Payments on: one step left, paying, on the manage page with the plan card open (?pay=1).
@@ -415,13 +438,18 @@ export function makeConfirmHandler({ env, storage, fetchFn = fetch, now, randomB
         if (!post) {
           return sendPage(res, 200, {
             title: "Confirm your subscription",
-            body: `<p>One click to start getting the Travel Problem Radar digest by email.</p>${hiddenForm("/api/confirm", params.id, params.t, "Confirm")}`,
+            body: `<p>One click to start getting the Travel Problem Radar digest by email${params.k ? " and turn on the password you chose" : ""}.</p>${hiddenForm("/api/confirm", params.id, params.t, "Confirm", "t", params.k)}`,
           });
         }
         // Only the press that moves it from pending signs in: a second press at the same moment
         // (or a Google sign-in) that finds it active gets the already-subscribed page.
-        const { record: active, changed } = await updateSubscriber(storage, record.id, (r) => (r.status === "pending"
-          ? { ...r, status: "active", confirmedAt: new Date(t).toISOString() } : null));
+        // The password chosen at sign-up comes on only with the key from the same request's link (see makeSubscribeHandler).
+        const { record: active, changed } = await updateSubscriber(storage, record.id, (r) => {
+          if (r.status !== "pending") return null;
+          const { pendingPw, ...rest } = r;
+          const pw = pwKeyOk(pendingPw, params.k) ? storedHash(pendingPw) : null;
+          return { ...rest, status: "active", confirmedAt: new Date(t).toISOString(), ...(pw ? { pw } : {}) };
+        });
         if (!changed) return active && active.status === "active" && tokenOk(active, params.t) ? already() : sendPage(res, 404, INVALID);
         await recordEvent(storage, "confirmed", { now: t, randomBytes, plan: active.plan === "pro" ? "pro" : "free" });
         // A Pro request ticked at sign-up counts from here, once the address is proven. With payments on they pay
@@ -510,6 +538,7 @@ const accountView = (record, t, env) => ({
   sweepsPerDayDefault: DEFAULT_SWEEPS_PER_DAY,
   sweepsPerDayMax: sweepLimits(env).max,
   emailOff: record.emailOff || null,
+  hasPassword: Boolean(record.pw),
   // The plan card's prices (T33): the price of each period on sale (months → rupees, from plan.json), the periods
   // on sale, and those that can be paid now (each needs a Razorpay plan). The page holds no price of its own.
   pricing: priceTable(),
@@ -537,6 +566,7 @@ const accountView = (record, t, env) => ({
 // n being SWEEPS_PER_DAY_MAX (T32).
 // POST action "email-on" turns emails back on after an unsubscribe (not after a bounce or a
 // complaint), and "delete-account" deletes the record and signs this browser out (T17).
+// POST {action: "set-password", password} or {action: "remove-password"}, signed in only (2026-10-27).
 // With payments on (T20): "checkout" starts a Razorpay subscription and returns what Checkout
 // needs, "checkout-return" records Checkout's signed reply (only the webhook, T21, grants Pro),
 // and "cancel" stops a paid Pro renewing at the end of the period.
@@ -549,10 +579,11 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
     let cats;
     let sweepsPerDay;
     let months;
+    let password;
     try {
       params = await linkParams(req, { queryOnly: false });
       if (params.fields && typeof params.fields.action === "string") action = params.fields.action;
-      if (params.fields) ({ cats, sweepsPerDay, months } = params.fields);
+      if (params.fields) ({ cats, sweepsPerDay, months, password } = params.fields);
     } catch (e) {
       if (e instanceof BodyTooLargeError) return sendJson(res, 413, { error: "request too large" });
       throw e;
@@ -628,6 +659,26 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
         await recordEvent(storage, "deleted", { now: t, randomBytes, plan: effectivePlan(record, t) });
         res.setHeader("set-cookie", clearCookie());
         return sendJson(res, 200, { ok: true, deleted: true });
+      }
+      // Passwords (2026-10-27): set, change or remove one only when signed in on this browser, never through an
+      // email's link, which a forwarded digest carries. Signing in by emailed link is how a forgotten password is
+      // replaced, so the old one isn't asked for. A new password signs every other browser out (sessionVer).
+      if (action === "set-password" || action === "remove-password") {
+        if (!session || session.id !== record.id) return sendJson(res, 403, { error: "sign_in_first" });
+        if (action === "remove-password") {
+          const { record: updated } = await save((r) => { if (!r.pw) return null; const { pw, pwFails, ...rest } = r; return rest; });
+          return updated ? sendJson(res, 200, { ok: true, ...view(updated) }) : gone();
+        }
+        const problem = passwordProblem(password);
+        if (problem) return sendJson(res, 400, { error: problem });
+        const pw = await hashPassword(password, { randomBytes });
+        const { record: updated } = await save((r) => {
+          const { pwFails, ...rest } = r;
+          return { ...rest, pw, sessionVer: (Number.isInteger(r.sessionVer) && r.sessionVer >= 0 ? r.sessionVer : 0) + 1 };
+        });
+        if (!updated) return gone();
+        res.setHeader("set-cookie", sessionCookie(signSession(updated, { secret: sessionSecret(env), now: t })));
+        return sendJson(res, 200, { ok: true, ...view(updated) });
       }
       if (action === "checkout" || action === "checkout-return" || action === "cancel") {
         if (!paymentsReady(env)) return sendJson(res, 503, { error: "payments_off" });
@@ -812,6 +863,17 @@ const SIGNIN_INVALID = { title: "This sign-in link isn't valid", body: `<p>It ma
 
 const codeHash = (code) => createHash("sha256").update("radar-signin:" + code).digest("hex");
 
+export const MAX_PW_FAILS_PER_IP_HOUR = 10;
+export const MAX_PW_FAILS_PER_ACCOUNT_HOUR = 10;
+const pwFailPrefix = (ip, t) => `${KEY_IPHIT_PREFIX}${utcHour(t)}-${createHash("sha256").update("radar-pw-ip:" + ip).digest("hex").slice(0, 16)}-`;
+// An account's wrong passwords: { n, since }, counted from the first in the last hour.
+const pwFailsNow = (f, t) => (f && Number.isInteger(f.n) && t - Date.parse(f.since) < HOUR_MS ? f : null);
+const pwLocked = (record, t) => (pwFailsNow(record.pwFails, t)?.n ?? 0) >= MAX_PW_FAILS_PER_ACCOUNT_HOUR;
+const nextPwFails = (f, t) => {
+  const now = pwFailsNow(f, t);
+  return now ? { n: now.n + 1, since: now.since } : { n: 1, since: new Date(t).toISOString() };
+};
+
 // Whether today's sign-in emails have reached MAX_SIGNINS_PER_DAY. A count we can't read counts as reached.
 async function signinsCapped(env, storage, t) {
   const raw = String(env.MAX_SIGNINS_PER_DAY ?? "").trim();
@@ -866,6 +928,8 @@ async function sendSignInLink({ record, env, storage, fetchFn, t, randomBytes, l
 //   GET  ?action=google[&pro=1]                "Continue with Google": off to Google (google.js)
 //   GET  ?state&code (or ?state&error)         back from Google: signs in, or the Create account page
 //   POST {action: "google-signup", wantsPro}   that page's button: makes the account and signs in
+//   POST {action: "password", email, password} signs in with a password: {ok, next}, or 401 wrong_password,
+//                                              403 not_confirmed, 429 too_many_tries
 //   POST {action: "signout"}                   clears the cookie in this browser
 // The code is random, stored only as a hash, works once and expires after SIGNIN_MINUTES.
 export function makeSessionHandler({ env, storage, fetchFn = fetch, now, randomBytes = cryptoRandomBytes, log = console.log }) {
@@ -937,6 +1001,50 @@ export function makeSessionHandler({ env, storage, fetchFn = fetch, now, randomB
         return reply();
       } catch (e) {
         log("session", "error: " + ((e && e.name) || "Error"));
+        return sendJson(res, 500, { error: "could not process the request; try again later" });
+      }
+    }
+    // Email and password (2026-10-27). Wrong passwords are counted per IP and hour (beside the sign-up attempts, under
+    // their own hash) and per account; with either limit reached, the answer is 429 for the rest of that hour. The
+    // emailed link and Google still work then, and the link is the way back from a forgotten password.
+    if (fields.action === "password") {
+      if (env.SUBSCRIPTIONS_ENABLED !== "1" || !secret) return sendJson(res, 503, { error: "sign-in isn't set up yet" });
+      const email = normaliseEmail(fields.email);
+      const password = typeof fields.password === "string" ? fields.password : "";
+      if (!email || !password) return sendJson(res, 400, { error: "enter your email address and password" });
+      try {
+        const ip = clientIp(req.headers);
+        const prefix = ip ? pwFailPrefix(ip, t) : null;
+        if (prefix) {
+          let fails;
+          try { fails = (await storage.list(prefix)).length; } catch (e) { fails = Infinity; }
+          if (fails >= MAX_PW_FAILS_PER_IP_HOUR) return sendJson(res, 429, { error: "too_many_tries" });
+        }
+        const record = await findSubscriber(storage, email);
+        if (record && pwLocked(record, t)) return sendJson(res, 429, { error: "too_many_tries" });
+        // No account, or one without a password, takes as long to refuse (verifyPassword). A sign-up not confirmed
+        // yet is checked against the password it was made with, so its owner is told to confirm first. The honeypot
+        // gets the wrong-password answer.
+        const active = Boolean(record) && record.status === "active";
+        const ok = (await verifyPassword(password, active ? record.pw : record && record.status === "pending" ? record.pendingPw : null)) && !fields.website;
+        if (!ok) {
+          if (prefix) {
+            try { await storage.set(prefix + Buffer.from(randomBytes(3)).toString("hex"), JSON.stringify({ at: new Date(t).toISOString() })); } catch (e) { /* best effort */ }
+          }
+          if (record && (record.pw || record.pendingPw)) await updateSubscriber(storage, record.id, (r) => ({ ...r, pwFails: nextPwFails(r.pwFails, t) }));
+          return sendJson(res, 401, { error: "wrong_password" });
+        }
+        if (!active) return sendJson(res, 403, { error: "not_confirmed" });
+        let rec = record;
+        if (record.pwFails) {
+          const out = await updateSubscriber(storage, record.id, (r) => { const { pwFails, ...rest } = r; return rest; });
+          if (out.record) rec = out.record;
+        }
+        res.setHeader("set-cookie", sessionCookie(signSession(rec, { secret, now: t })));
+        // Ticked Pro with payments on and not paid yet: the plan card, as after Google; otherwise the board.
+        return sendJson(res, 200, { ok: true, next: rec.proRequestedAt && paymentsReady(env) && effectivePlan(rec, t) !== "pro" ? "/manage/?pay=1" : "/live/" });
+      } catch (e) {
+        log("session password", "error: " + ((e && e.name) || "Error"));
         return sendJson(res, 500, { error: "could not process the request; try again later" });
       }
     }
@@ -1063,8 +1171,12 @@ async function googleSignIn({ res, record, isNew = false, pro, env, storage, fet
     else {
       // Confirmed by its link meanwhile: it just signs in, as an active account does.
       const made = record;
-      const out = await updateSubscriber(storage, record.id, (r) => (r.status === "pending"
-        ? { ...r, status: "active", confirmedAt: at, proRequestedAt: r.proRequestedAt || made.proRequestedAt } : null));
+      // A password typed in at sign-up isn't turned on: only its own confirmation link does that.
+      const out = await updateSubscriber(storage, record.id, (r) => {
+        if (r.status !== "pending") return null;
+        const { pendingPw, ...rest } = r;
+        return { ...rest, status: "active", confirmedAt: at, proRequestedAt: r.proRequestedAt || made.proRequestedAt };
+      });
       if (!out.record) return page(400, GOOGLE_FAILED);
       record = out.record;
       if (!out.changed) return signedIn();

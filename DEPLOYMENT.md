@@ -603,11 +603,11 @@ mapping doesn't know is stored under `radar/other/`.
 | `radar:seenIds` | `radar/history/seen-ids.json` | Up to 800 item IDs already seen, used for the New flag | No |
 | `radar:lastScheduled` | `radar/state/last-scheduled.json` | When the last scheduled sweep started, saved or not, and its slot (`{ at, slotAt }`; before T35 just the time); the one-sweep-per-slot rule reads it | No |
 | `radar:llmlog:<id>` | `radar/logs/llm-log-YYYY-MM-DD-HH-MM-<id>.json` | One sweep's LLM log: each Claude call's request (prompt, model, limits, tools; never the headers or key) and response (thinking, search queries, answer, stop reason, usage), and a summary of input and output tokens, searches, and the pages search found, **as links only** (page contents are encrypted and left out). Written for every sweep that ran: saved, empty, or not saved. `<id>` is the sweep's id. Deleted after 30 days by the day's first sweep. Read with `scripts/llm-logs.mjs` | No |
-| `radar:sub:<id>` | `radar/subscribers/<id>.json` | One subscriber: address, status, plan, token, dates, and chosen categories (`cats`, Pro only). Since T16 also `signin` (the SHA-256 of an unused sign-in code, its expiry and when it was sent; `null` once used) and, optionally, `sessionVer` (raising it by hand signs that subscriber out on every browser). Since T17, a Pro record whose emails stopped has `emailOff`: `unsubscribed`, `bounced` or `complained`. `<id>` is the SHA-256 of the canonical address (Gmail without dots or `+tags`, and `+tags` dropped for the big providers; see [email-signup.md](docs/subscriptions/email-signup.md#flow)). Records made before 2026-10-22 keep the SHA-256 of the lowercased address | No |
+| `radar:sub:<id>` | `radar/subscribers/<id>.json` | One subscriber: address, status, plan, token, dates, and chosen categories (`cats`, Pro only). Since T16 also `signin` (the SHA-256 of an unused sign-in code, its expiry and when it was sent; `null` once used) and, optionally, `sessionVer` (raising it by hand signs that subscriber out on every browser). Since T17, a Pro record whose emails stopped has `emailOff`: `unsubscribed`, `bounced` or `complained`. Since 2026-10-27, optionally `pw` (a scrypt hash of the password; see [Passwords](#passwords)), `pendingPw` (a sign-up's password waiting for its confirmation link, with the SHA-256 of the link's key) and `pwFails` (wrong passwords this hour). `<id>` is the SHA-256 of the canonical address (Gmail without dots or `+tags`, and `+tags` dropped for the big providers; see [email-signup.md](docs/subscriptions/email-signup.md#flow)). Records made before 2026-10-22 keep the SHA-256 of the lowercased address | No |
 | `radar:event:<YYYYMMDD>-<time>-<type>-<random>` | `radar/events/event-YYYY-MM-DD-HH-MM-SS-mmm-<type>-<random>.json` | One sign-up, confirmation, sign-in email, unsubscribe, emails-off, account-deleted, Pro, bounce or complaint event: type, time and plan, **no address or id**. Kept until `prune-events` deletes it | No |
 | `radar:deliveries:<YYYYMMDD>` | `radar/deliveries/deliveries-YYYY-MM-DD.json` (one a day, no time) | Record ids already sent that day's Free digest. Deleted by the sweep after 7 days | No |
 | `radar:subscriberCount` | `radar/state/subscriber-count.json` | Pending plus active records at the last saved sweep; the sign-up cap reads it | No |
-| `radar:iphit:<YYYYMMDDHH>-<16 hex>-<6 hex>` | `radar/ip-hits/ip-hit-YYYY-MM-DD-HH-<16 hex>-<6 hex>.json` (the hour is what the limit counts) | One sign-up attempt: its time only. The 16 hex are from a SHA-256 of the client IP; **the IP itself is not stored**. Deleted by the sweep after 2 hours | No |
+| `radar:iphit:<YYYYMMDDHH>-<16 hex>-<6 hex>` | `radar/ip-hits/ip-hit-YYYY-MM-DD-HH-<16 hex>-<6 hex>.json` (the hour is what the limit counts) | One sign-up attempt, or one wrong password (under another hash, so the counts stay apart): its time only. The 16 hex are from a SHA-256 of the client IP; **the IP itself is not stored**. Deleted by the sweep after 2 hours | No |
 | `radar:rzpsub:<subscription id>` | `radar/razorpay/subscriptions/sub-….json` | `{ id }`: the subscriber record a Razorpay subscription belongs to, written at checkout (T20) so the webhook finds the record without listing | No |
 | `radar:rzp-event:<YYYYMMDD>-<HHMM>-<event id>` | `radar/razorpay/events/razorpay-event-YYYY-MM-DD-HH-MM-<event id>.json` | One Razorpay event already applied (`{ at }`), so a redelivery changes nothing. `<YYYYMMDD>` is the event's day. Deleted by the sweep after 30 days | No |
 
@@ -902,7 +902,8 @@ secret), `500` (a storage error, so Resend tries again). No reply or log line co
 
 ### Signing in (T16)
 
-A confirmed subscriber can sign in to the site with a link sent to their email; there are no passwords. Code:
+A confirmed subscriber can sign in to the site with a link sent to their email, or with a password if they chose one
+(see [Passwords](#passwords)). Code:
 `api/session.js` and `api/_lib/session.js`, with the logic in `makeSessionHandler` in
 `api/_lib/subscription-handlers.js`. Design: [paid-website.md](docs/subscriptions/paid-website.md). The board is
 locked only while `BOARD_PAYWALL` is on: see [The locked board](#the-locked-board-t17).
@@ -945,6 +946,35 @@ subscriber email needs (above). Until the secret is set, `/api/session` answers 
 sign-in isn't open yet; Confirm and the email links work as before.
 
 **Signing everyone out.** Set a new `SESSION_SECRET` and redeploy: every cookie stops working at once.
+
+### Passwords
+
+Optional, beside the emailed link and Google (2026-10-27). Nothing new to set up: passwords need only what sign-in
+needs (`SESSION_SECRET` and subscriber email). Code: `api/_lib/password.js`, with the handlers in
+`api/_lib/subscription-handlers.js`; tests in `scripts/test-password.mjs`.
+
+- **Sign-up.** `/signup/` has an optional password field (10 to 128 characters, no other rules). The account is
+  still made only by pressing Confirm in the email. The password waits on the pending record as `pendingPw`, and the
+  confirmation link carries a random key (`&k=`) whose SHA-256 is stored with it: only that link turns the
+  password on. So someone who types in another person's address with their own password can't sign in once the
+  owner confirms: signing up again (with or without a password) replaces or drops the waiting one, and Google or a
+  link without the key activates the account without it. Signing up with an address that already has an account
+  never changes its password.
+- **Sign-in.** `/signin/` posts `{action: "password", email, password}` to `/api/session`, which sets the usual
+  cookie and replies with where to go (`/live/`, or `/manage/?pay=1` if Pro was ticked and isn't paid yet). With the
+  password left empty, the same form asks for a sign-in link instead. An account not confirmed yet is told to
+  confirm first (only when the password is right).
+- **Limits.** Wrong passwords are counted per IP and hour (`radar:iphit:` files under their own hash, so they don't
+  share the sign-up count) and per account (`pwFails` on the record). 10 of either within the hour, and that IP or
+  account gets `429` until the hour is up, even with the right password; the emailed link and Google still work.
+  A right password clears the account's count.
+- **Manage page.** The **Password** card sets, changes or removes it, only when signed in on that browser. An
+  email's manage link (which a forwarded digest carries) can't: the endpoint answers `403 sign_in_first`. The old
+  password isn't asked for, since signing in by emailed link is the way back from a forgotten one. Setting a
+  password raises `sessionVer`, signing every other browser out.
+- **Storage.** Only a scrypt hash (N=2^15, r=8, p=3, 16-byte random salt, 32-byte key; the setting is kept with each
+  hash so it can be raised later). Checking one takes about a quarter of a second of CPU; an address without an
+  account or a password takes as long to refuse. A password is never logged or put in a reply.
 
 ### Google sign-in (optional)
 

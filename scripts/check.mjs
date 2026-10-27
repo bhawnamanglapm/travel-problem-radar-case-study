@@ -92,6 +92,8 @@ check(manPage.length > 0 && !/<script[^>]*\ssrc=|<link[^>]*rel=["']?stylesheet|@
 check(/\bcp -r [^&]*\bmanage\b[^&]* public\//.test(siteBuild), "build:site copies manage into public/");
 check(existsSync("api/account.js"), "api/account.js exists (the manage page's endpoint)");
 check(/fetch\("\/api\/session"/.test(manPage) && /action: "signout"/.test(manPage), "manage/index.html has a Sign out button that posts to /api/session");
+check(/action: "set-password"/.test(manPage) && /action: "remove-password"/.test(manPage) && /id="pwCard"/.test(manPage) && /autocomplete="new-password"/.test(manPage),
+  "manage/index.html has the Password card: set, change or remove");
 check(/action: "delete-account"/.test(manPage) && />Delete my account</.test(manPage) && /This can’t be undone/.test(manPage) && /action: "email-on"/.test(manPage),
   "manage/index.html has Delete my account (asked twice) and Turn emails back on (T17)");
 // T32, T33: one plan card for categories, emails a day (one radio button for each number, 1 to 5, in order) and the
@@ -120,6 +122,8 @@ check(/name="email"/.test(inPage) && /name="website"/.test(inPage), "signin/inde
 check(!/\.innerHTML\s*=/.test(inPage), "signin/index.html never uses innerHTML");
 check(inPage.length > 0 && !/<script[^>]*\ssrc=|<link[^>]*rel=["']?stylesheet|@import|url\(\s*["']?https?:/i.test(inPage), "signin/index.html is self-contained (no external script, stylesheet, import or font URL)");
 check(/\bcp -r [^&]*\bsignin\b[^&]* public\//.test(siteBuild), "build:site copies signin into public/");
+check(/type="password" autocomplete="current-password"/.test(inPage) && /action: "password"/.test(inPage) && /action: "request"/.test(inPage),
+  "signin/index.html signs in with a password, and still emails a link without one");
 check(existsSync("api/session.js"), "api/session.js exists (sign-in and the login cookie)");
 check(/href="\.\.\/signin\/"/.test(subPage), "subscribe/index.html links to the sign-in page");
 
@@ -131,7 +135,10 @@ check(!/\.innerHTML\s*=/.test(upPage), "signup/index.html never uses innerHTML")
 check(upPage.length > 0 && !/<script[^>]*\ssrc=|<link[^>]*rel=["']?stylesheet|@import|url\(\s*["']?https?:/i.test(upPage), "signup/index.html is self-contained (no external script, stylesheet, import or font URL)");
 check(/\bcp -r [^&]*\bsignup\b[^&]* public\//.test(siteBuild), "build:site copies signup into public/");
 check(/name="wantsPro"/.test(upPage) && /wantsPro: form\.wantsPro\.checked/.test(upPage) && /pro=1/.test(upPage), "signup/index.html has the \"I'd also like Pro\" box, sends it, and ticks it for ?pro=1");
-check(/We store your email address, the dates you signed up and confirmed, and whether you asked for Pro/.test(upPage), "signup/index.html has the privacy note");
+check(/We store your email address, the dates you signed up and confirmed, whether you asked for Pro/.test(upPage) && /a one-way hash of it \(never the password itself\)/.test(upPage), "signup/index.html has the privacy note, password hash included");
+// Passwords (2026-10-27): optional at sign-up, the first way in on /signin/, set or removed on /manage/ when signed in.
+check(/name="password" type="password" autocomplete="new-password" minlength="10" maxlength="128"/.test(upPage) && /password: form\.password\.value/.test(upPage),
+  "signup/index.html has an optional password field (new-password, 10 to 128 characters) and sends it");
 check(/Questions or a deletion request: email <a href="mailto:pehchanthetraveller19@gmail\.com">/.test(upPage) && /Gathered by an AI model with web search\. Items are not verified/.test(upPage), "signup/index.html has the contact address and the AI notice");
 check(/includes the free daily summary/.test(upPage) && /Unsubscribing from it deletes the account/.test(upPage), "signup/index.html says the account includes the daily summary and how to delete it");
 check(![page, subPage, upPage].some((s) => /everything found in the last 24 hours/i.test(s)), "home, subscribe and sign-up pages don't promise Free everything (it gets a summary, T18)");

@@ -2628,6 +2628,12 @@ const iso = (ms) => new Date(ms).toISOString();
     check(r.code === 303 && await signedInAs(w, r) === w.rec.id && act.status === "active" && act.confirmedAt === iso(T0) && act.token === "tok-secret-1" && act.createdAt === w.rec.createdAt,
       "google return: a never-confirmed address is activated (Google proved it) and signed in; token and createdAt kept");
     check(w.evs("confirmed").length === 1 && w.evs("subscribed").length === 0 && act.proRequestedAt === iso(T0) && w.sent.length === 1, "google return: confirmed is counted; the Pro box counts for it");
+    w = await gw({ status: "pending" });
+    await putSubscriber(w.st, { ...w.rec, pendingPw: { alg: "scrypt", N: 16384, r: 8, p: 1, salt: "c2FsdA", hash: "aGFzaA", k: "0".repeat(64) } });
+    await w.start();
+    r = await w.back();
+    check(r.code === 303 && (await w.now()).status === "active" && !("pendingPw" in await w.now()) && !("pw" in await w.now()),
+      "google return: a password typed in at sign-up isn't turned on (only its own confirmation link does that) and is dropped");
 
     // refused returns: an error page, no login cookie, nothing stored
     const refused = async (label, { setup = {}, prep, query, code = 400, page, tokenCalls = 1, link = true } = {}) => {
