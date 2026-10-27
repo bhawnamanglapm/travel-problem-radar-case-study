@@ -356,6 +356,12 @@
     showEmail(a);
     showPw(a);
     document.getElementById("deleteCard").hidden = false;
+    // A plan that will still charge is cancelled first; anything else is deleted at once (2026-10-27).
+    var paidPro = isPro && a.proSource === "razorpay";
+    document.getElementById("deleteNote").textContent = (paidPro && !a.cancelAtPeriodEnd) || a.renewal
+      ? "Your Pro plan still renews, so cancel it above first. Then you can delete your account straight away."
+      : "Deletes your address and everything stored with it, and signs this browser out. Nothing more is sent."
+        + (paidPro ? " Pro ends at once instead of on " + day(a.proUntil) + ", and the rest of the paid period isn’t refunded." : "");
     if (isPro) {
       var paid = a.proSource === "razorpay";
       setPlan("Pro", (a.emailOff ? "The live board" : "The live board and " + perDay(a) + (perDay(a) === 1 ? " email" : " emails") + " a day") + (a.proUntil && !paid ? ", until " + day(a.proUntil) + "." : "."));
@@ -693,7 +699,13 @@
         say("", false);
       } else if (x.status === 409 && x.body.error === "cancel_first") {
         disarm();
-        sayDel("Your Pro plan is paid, so the account can be deleted once Pro ends. Cancel it above so it doesn’t renew, or write to pehchanthetraveller19@gmail.com if you need it deleted sooner.", true);
+        sayDel("Your Pro plan still renews. Cancel it above first, then delete your account straight away.", true);
+      } else if (x.status === 409 && x.body.error === "payment_pending") {
+        disarm();
+        sayDel("Your payment is still being confirmed. Try again in a few minutes.", true);
+      } else if (x.status === 502) {
+        disarm();
+        sayDel("Couldn’t reach Razorpay to stop your plan’s payments, so nothing was deleted. Please try again in a few minutes.", true);
       } else { disarm(); fail(x); }
     }).catch(function () {
       sayDel("Couldn’t reach the server. Please try again in a minute.", true);

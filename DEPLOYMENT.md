@@ -1049,9 +1049,21 @@ can sign in. It is set on Production only, so a Preview with the switch on shows
 - `/manage/` shows "Email: off" and why. After an unsubscribe, **Turn emails back on** clears it. After a bounce or a
   complaint the page says to write to pehchanthetraveller19@gmail.com instead, because sending again to an address
   that refused mail hurts the domain. No admin command clears it yet.
-- **Delete my account** on `/manage/` (from an email link or signed in) asks once more, then deletes the record,
-  records a `deleted` event holding only the plan, and signs that browser out. A paying Razorpay Pro is told to
-  cancel first (`409`); there are none until T22.
+- **Delete my account** on `/manage/` (from an email link or signed in) asks once more, then deletes the account
+  at once, records a `deleted` event holding only the plan, and signs that browser out. Since 2026-10-27 that is
+  everything that names the account (`deleteSubscriberData` in `api/_lib/subscribers.js`): the record, every
+  `radar:rzpsub:` index file pointing at it (older checkouts too), and its id in the `radar:deliveries:` files.
+  Event counts hold no address or id and stay. Unsubscribing a Free account, a bounce or complaint on one, and the
+  `delete` admin command clear the same files.
+  - **Who must cancel first** (`409 cancel_first`): a paid Pro that will renew, or a cancelled one with a renewal
+    set up (T34). The page says to press Cancel above, then delete. Deleting the record alone wouldn't stop Razorpay.
+  - **Deleted at once:** Free, owner-granted Pro, lapsed Pro, and a paid Pro that is cancelled (it ends at once,
+    not at the period end, and the rest of the period isn't refunded; the page says so before the click).
+  - **Razorpay is told first.** A lapsed plan Razorpay is still retrying (`pending`, `halted`) is cancelled at once;
+    if Razorpay refuses and doesn't report the plan as over, the answer is `502` and nothing is deleted. An unpaid
+    checkout (`created`) is cancelled too, as a courtesy, so a Checkout left open can't charge later.
+  - Paid with Pro not started yet (`authenticated`, waiting for the webhook) is `409 payment_pending`: try again in
+    a few minutes.
 
 ### Paid Pro checkout (T20)
 
@@ -1422,7 +1434,7 @@ node --env-file=.env.local scripts/subscribers.mjs recount [--yes]
 | `show` | One record without its token |
 | `grant-pro` | Only for an active (confirmed) subscriber. Pro with `proSource: owner`, and the Pro request is cleared (the `prorequested` event keeps the history). `--until 2027-01-31` makes Pro run through the end of that UTC day; leave it out for no end date. A past date is accepted and acts as Free. Refuses a paid Razorpay record |
 | `revoke-pro` | Back to Free, clearing the end date. Refuses a Razorpay record |
-| `delete` | Deletes the record. This is the answer to a deletion request. Event records hold no address or id. The one place the record's hashed id (not the address) can remain is a `radar:deliveries:<date>` file, which the sweep deletes after 7 days |
+| `delete` | Deletes the record, the `radar:rzpsub:` index files pointing at it, and its id in the `radar:deliveries:` files (since 2026-10-27; before, the id stayed there until the sweep deleted the file after 7 days). This is the answer to a deletion request. Event records hold no address or id. Refused while a Razorpay plan will still charge |
 | `prune-events` | Deletes event records older than N days |
 | `recount` | Counts pending and active records and writes `radar:subscriberCount`, as the sweep does. For a store that has never swept (sign-up treats a missing count as full), or after deleting records. Unlike the sweep it doesn't expire old pending sign-ups, so it may count a few more |
 

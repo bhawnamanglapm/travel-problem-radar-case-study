@@ -16,10 +16,10 @@
 import { randomBytes } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import {
-  KEY_EVENT_PREFIX, deleteSubscriber, effectivePlan, findSubscriber, getSubscriber, listSubscribers, normaliseEmail,
+  KEY_EVENT_PREFIX, deleteSubscriberData, effectivePlan, findSubscriber, getSubscriber, listSubscribers, normaliseEmail,
   recordEvent, updateSubscriber, utcDay,
 } from "../api/_lib/subscribers.js";
-import { KEY_RZPSUB_PREFIX, KEY_SUBSCRIBER_COUNT } from "../api/_lib/subscription-handlers.js";
+import { KEY_SUBSCRIBER_COUNT } from "../api/_lib/subscription-handlers.js";
 import { computeStats } from "../api/_lib/admin.js";
 
 const DAY_MS = 24 * 3600 * 1000;
@@ -171,19 +171,18 @@ export async function revokePro(storage, email, { apply, now, randomBytes: rb = 
 }
 
 // A Razorpay subscription that will still charge (paid Pro not set to end, or paid and waiting for
-// its webhook) is refused: deleting the record wouldn't stop Razorpay. Its radar:rzpsub: index goes too.
+// its webhook) is refused: deleting the record wouldn't stop Razorpay. Its radar:rzpsub: index files and its id in
+// the delivery files go too (deleteSubscriberData).
 export async function removeSubscriber(storage, email, { apply, now }) {
   const r = await findSubscriber(storage, email);
   if (!r) return { code: 1, message: "not found: no subscriber with that address", changed: false };
   const rzp = r.rzp && typeof r.rzp === "object" ? r.rzp : {};
   const renewing = (r.proSource === "razorpay" && effectivePlan(r, now) === "pro" && rzp.cancelAtPeriodEnd !== true) || rzp.status === "authenticated";
   if (renewing) return { code: 1, message: "refused: this Razorpay subscription will still charge; cancel it first (in Razorpay, or Cancel on the manage page), then delete", changed: false };
-  const index = typeof rzp.subscriptionId === "string" && rzp.subscriptionId ? KEY_RZPSUB_PREFIX + rzp.subscriptionId : null;
-  const what = `the ${r.status} ${r.plan} record${index ? " and its Razorpay index" : ""}`;
-  if (!apply) return { code: 1, message: `would delete ${what}. Nothing changed; add --yes to apply.`, changed: false };
-  await deleteSubscriber(storage, r.id);
-  if (index) await storage.del(index);
-  return { code: 0, message: `done: deleted ${what}`, changed: true };
+  const what = `the ${r.status} ${r.plan} record`;
+  if (!apply) return { code: 1, message: `would delete ${what} and the files that name it. Nothing changed; add --yes to apply.`, changed: false };
+  const gone = await deleteSubscriberData(storage, r.id);
+  return { code: 0, message: `done: deleted ${what}, ${gone.indexes} Razorpay index file(s) and its id in ${gone.deliveries} delivery file(s)`, changed: true };
 }
 
 export async function pruneEvents(storage, { olderThanDays, apply, now }) {

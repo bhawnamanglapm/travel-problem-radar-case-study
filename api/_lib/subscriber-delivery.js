@@ -6,9 +6,9 @@ import { buildDigestEmail, buildPlanEndingEmail, sendBatch, withSubscriberFooter
 import { KEY_INDEX, sweepKey } from "./radar.js";
 import { IPHIT_KEEP_HOURS, KEY_IPHIT_PREFIX, KEY_RZPEVENT_PREFIX, KEY_SUBSCRIBER_COUNT, RZP_EVENT_KEEP_DAYS, managePath, senderOk, siteUrl, utcHour } from "./subscription-handlers.js";
 import { DEFAULT_SWEEPS_PER_DAY, SLOTS_BY_FREQ, previousSlotAt, slotOf, sweepLimits, sweepsPerDayOf } from "./schedule.js";
-import { PENDING_TTL_DAYS, deleteSubscriber, effectivePlan, listSubscribers, normaliseCats, recordEvent, updateSubscriber, utcDay } from "./subscribers.js";
+import { KEY_DELIVERIES_PREFIX, PENDING_TTL_DAYS, deleteSubscriber, effectivePlan, listSubscribers, normaliseCats, recordEvent, updateSubscriber, utcDay } from "./subscribers.js";
 
-export const KEY_DELIVERIES_PREFIX = "radar:deliveries:";
+export { KEY_DELIVERIES_PREFIX };
 const DAY_MS = 24 * 3600 * 1000;
 const KEEP_DELIVERY_DAYS = 7;
 const MAX_ROLLUP_SWEEPS = 12; // 24 h holds at most 5 scheduled sweeps; this leaves room for manual runs

@@ -8,6 +8,10 @@ import { CATS } from "./radar.js";
 
 export const KEY_SUB_PREFIX = "radar:sub:";
 export const KEY_EVENT_PREFIX = "radar:event:";
+// radar:rzpsub:<subscription id> holds { id }, the record a Razorpay subscription belongs to (subscription-handlers.js).
+export const KEY_RZPSUB_PREFIX = "radar:rzpsub:";
+// radar:deliveries:<YYYYMMDD> holds { free: [record ids] } sent that day's Free digest (subscriber-delivery.js).
+export const KEY_DELIVERIES_PREFIX = "radar:deliveries:";
 export const PENDING_TTL_DAYS = 7;
 // A lost confirmation can be asked for again after CONFIRM_RESEND_MINUTES, and one pending address
 // gets at most MAX_CONFIRMS_PER_ADDRESS confirmation emails in its PENDING_TTL_DAYS life.
@@ -134,6 +138,37 @@ export async function updateSubscriber(storage, id, change) {
 export async function deleteSubscriber(storage, id) {
   if (typeof id !== "string" || !ID_RE.test(id)) return;
   await storage.del(KEY_SUB_PREFIX + id);
+}
+
+// Deletes a subscriber and everything else that names them (2026-10-27): the Razorpay index files that point at the
+// record (found by reading each, since a record only knows its latest subscription) and its id in the daily delivery
+// files. The record goes last, so a failure part-way leaves it for another try. Event counts hold no address or id,
+// and IP hits no id, so they stay. Returns how many index and delivery files were changed.
+export async function deleteSubscriberData(storage, id) {
+  if (typeof id !== "string" || !ID_RE.test(id)) return { indexes: 0, deliveries: 0 };
+  let indexes = 0;
+  for (const sub of await storage.list(KEY_RZPSUB_PREFIX)) {
+    let owner = null;
+    try { owner = JSON.parse(await storage.get(KEY_RZPSUB_PREFIX + sub)).id; } catch (e) { /* unreadable: not this record's */ }
+    if (owner === id) { await storage.del(KEY_RZPSUB_PREFIX + sub); indexes++; }
+  }
+  let deliveries = 0;
+  for (const day of await storage.list(KEY_DELIVERIES_PREFIX)) {
+    const drop = (text) => {
+      let v;
+      try { v = JSON.parse(text); } catch (e) { return undefined; }
+      if (!v || !Array.isArray(v.free) || !v.free.includes(id)) return undefined;
+      return JSON.stringify({ ...v, free: v.free.filter((x) => x !== id) });
+    };
+    const key = KEY_DELIVERIES_PREFIX + day;
+    const before = await storage.get(key);
+    if (drop(before) === undefined) continue;
+    if (typeof storage.update === "function") await storage.update(key, drop);
+    else await storage.set(key, drop(before));
+    deliveries++;
+  }
+  await deleteSubscriber(storage, id);
+  return { indexes, deliveries };
 }
 
 // Every record, read with at most `concurrency` reads at once. A record that can't be read or
