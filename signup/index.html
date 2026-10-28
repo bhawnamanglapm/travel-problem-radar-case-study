@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <script>
   // GitHub Pages also serves this file but has no /api/: send the visit to the Vercel copy, which does.
-  if (/\.github\.io$/.test(location.hostname)) location.replace("https://travel-problem-radar.vercel.app" + location.pathname.replace(/^\/travel-problem-radar-case-study/, "") + location.search + location.hash);
+  if (/\.github\.io$/.test(location.hostname)) location.replace("https://radar.pehchanthetraveller.com" + location.pathname.replace(/^\/travel-problem-radar-case-study/, "") + location.search + location.hash);
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="referrer" content="no-referrer" />
@@ -65,7 +65,7 @@
 </head>
 <body>
 <main>
-  <p class="nav"><a href="../">&larr; Home</a> &middot; <a href="../live/">Live board (Pro)</a> &middot; <a href="../signin/">Sign in</a></p>
+  <p class="nav"><a href="../">&larr; Home</a> &middot; <a href="../live/">Live board (Pro)</a> &middot; <a id="acct" href="../signin/">Sign in</a></p>
   <h1>Create your account</h1>
 
   <div id="signedIn" class="card" hidden>
@@ -92,7 +92,7 @@
         <input id="password" name="password" type="password" autocomplete="new-password" minlength="10" maxlength="128" aria-describedby="pwHint" />
       </div>
       <p class="small" id="pwHint">At least 10 characters. Leave it empty to sign in with a link we email you, or with Google. You can add one later on the manage page.</p>
-      <label class="check"><input id="wantsPro" name="wantsPro" type="checkbox" value="1" /> <span><!-- when:free-test -->I&rsquo;d also like Pro (the live board and 1 to 5 emails a day). You&rsquo;ll get the daily digest until it&rsquo;s switched on. <a href="../subscribe/">Compare the plans</a>.<!-- /when --><template data-when="paid">I&rsquo;d like Pro: the live board and 1 to 5 emails a day, {{PRO_PRICE}}, {{PRO_GST}}. It renews automatically at the end of each billing period until you cancel. Confirm your email, pay with Razorpay, and Pro starts straight away. <a href="../pricing/">Pricing details</a>.</template></span></label>
+      <label class="check"><input id="wantsPro" name="wantsPro" type="checkbox" value="1" /> <span><!-- when:free-test -->I&rsquo;d also like Pro (the live board and 1 to 5 emails a day). You&rsquo;ll get the daily digest until it&rsquo;s switched on. <a href="../pricing/">Compare the plans</a>.<!-- /when --><template data-when="paid">I&rsquo;d like Pro: the live board and 1 to 5 emails a day, {{PRO_PRICE}}, {{PRO_GST}}. It renews automatically at the end of each billing period until you cancel. Confirm your email, pay with Razorpay, and Pro starts straight away. <a href="../pricing/">Pricing details</a>.</template></span></label>
       <template data-when="paid"><fieldset class="period" id="period" hidden><legend>Pay</legend><label><input type="radio" name="months" value="1" checked /> Monthly</label><label><input type="radio" name="months" value="12" /> Yearly</label></fieldset></template>
       <p class="submit"><button id="go" type="submit">Create account</button></p>
       <div class="trap">
@@ -127,6 +127,7 @@
   fetch("/api/session?action=me").then(function (r) { return r.json(); })
     .then(function (b) {
       showSignedIn(Boolean(b && b.signedIn));
+      if (b && b.signedIn) { var acct = document.getElementById("acct"); acct.textContent = "Account"; acct.href = "../manage/"; }
       if (b && b.google) document.querySelector(".gwrap").hidden = false;
     })
     .catch(function () { /* stay on the form */ });

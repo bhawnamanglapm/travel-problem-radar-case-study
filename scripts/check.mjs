@@ -172,7 +172,7 @@ check(existsSync("api/razorpay-webhook.js"), "api/razorpay-webhook.js exists (su
 check(fns.length === 10 && fns.includes("admin.js"), `10 functions in api/ after T21 and the admin dashboard (${fns.length})`);
 for (const f of ["subscribe/index.html", "manage/index.html", "signin/index.html", "signup/index.html", "live/index.html", "pricing/index.html"]) {
   const t = existsSync(f) ? readFileSync(f, "utf8") : "";
-  check(t.includes('if (/\\.github\\.io$/.test(location.hostname)) location.replace("https://travel-problem-radar.vercel.app" + location.pathname'), `${f} sends a GitHub Pages visit to the Vercel copy (Pages has no /api/)`);
+  check(t.includes('if (/\\.github\\.io$/.test(location.hostname)) location.replace("https://radar.pehchanthetraveller.com" + location.pathname'), `${f} sends a GitHub Pages visit to the Vercel copy (Pages has no /api/)`);
 }
 // 4d. Policy pages (T15): drafts with marked gaps until the owner fills them; only then may the build ship them.
 const LEGAL = ["privacy", "terms", "refunds", "contact"];
@@ -185,7 +185,7 @@ for (const slug of LEGAL) {
   const f = `legal/${slug}/index.html`;
   const t = existsSync(f) ? readFileSync(f, "utf8") : "";
   check(t.length > 0 && !/<script[^>]*\ssrc=|<link[^>]*rel=["']?stylesheet|@import|url\(\s*["']?https?:/i.test(t), `${f} exists and is self-contained`);
-  check(t.includes('if (/\\.github\\.io$/.test(location.hostname)) location.replace("https://travel-problem-radar.vercel.app" + location.pathname'), `${f} sends a GitHub Pages visit to the Vercel copy`);
+  check(t.includes('if (/\\.github\\.io$/.test(location.hostname)) location.replace("https://radar.pehchanthetraveller.com" + location.pathname'), `${f} sends a GitHub Pages visit to the Vercel copy`);
   if (shipped) check(t.includes('href="mailto:pehchanthetraveller19@gmail.com"') && shippedLegal.every((s) => t.includes(`href="../${s}/"`)) && draftLegal.every((s) => !t.includes(`href="../${s}/"`)), `${f} has the contact address and links only the policy pages that are live`);
   else check(t.includes('href="mailto:pehchanthetraveller19@gmail.com"') && LEGAL.every((s) => t.includes(`href="../${s}/"`)), `${f} has the contact address and links all four policy pages`);
   if (shipped) check(!/OWNER INPUT NEEDED|id="draft-notice"|name="robots" content="noindex"/.test(t), `${f} is in the build, so it has no gaps, draft notice or noindex left`);
@@ -199,7 +199,7 @@ check(!/\b\d{10}\b|\+91/.test(legalText), "the policy pages hold no phone number
 const filled = fill("{{LEGAL_NAME}} {{LEGAL_ADDRESS}}", { LEGAL_NAME: "A & <b>", LEGAL_ADDRESS: "1\n2" });
 check(filled.out === "A &amp; &lt;b&gt; 1<br />2" && filled.missing.length === 0 && fill("{{LEGAL_PHONE}}", {}).missing[0] === "LEGAL_PHONE", "fill-legal escapes values, turns newlines into line breaks, and reports an unset variable");
 if (legalShipped) check(/node scripts\/fill-legal\.mjs public/.test(buildCmd), "the build fills the policy pages from Vercel variables (scripts/fill-legal.mjs)");
-if (shippedLegal.includes("privacy")) check([inPage, upPage].every((t) => t.includes('href="../legal/privacy/"')) && page.includes('href="https://travel-problem-radar.vercel.app/legal/privacy/"'), "the home, sign-in and sign-up pages link the privacy policy");
+if (shippedLegal.includes("privacy")) check([inPage, upPage].every((t) => t.includes('href="../legal/privacy/"')) && page.includes('href="https://radar.pehchanthetraveller.com/legal/privacy/"'), "the home, sign-in and sign-up pages link the privacy policy");
 if (legalShipped) check(/^scripts\/\*$/m.test(readFileSync(".vercelignore", "utf8")) && /^!scripts\/fill-legal\.mjs$/m.test(readFileSync(".vercelignore", "utf8")), ".vercelignore keeps scripts/fill-legal.mjs, which the build runs");
 
 // 4e. Plan facts (T23, T24): Pro's price, GST, refund rule and the rest live in plan.json and are filled in at
@@ -259,11 +259,11 @@ check(refundsPage.includes("<p>{{PRO_REFUND}}</p>") && refundsPage.includes("{{P
 // 4f. About page and site footer (T25). Every shipped page ends with one footer: Home, About, Pricing, Contact, Terms,
 // Privacy, Refunds, in that order, listing only the pages the build ships. Until /pricing/ and the contact page ship,
 // Plans (/subscribe/) and the email address stand in for them. A draft lists all six, as it will once everything ships.
-const SITE = "https://travel-problem-radar.vercel.app/";
+const SITE = "https://radar.pehchanthetraveller.com/";
 const MAIL = "mailto:pehchanthetraveller19@gmail.com";
 const aboutPage = existsSync("about/index.html") ? readFileSync("about/index.html", "utf8") : "";
 const aboutShipped = copied.includes("about");
-check(aboutPage.length > 0 && !/<script[^>]*\ssrc=|<link[^>]*rel=["']?stylesheet|@import|url\(\s*["']?https?:/i.test(aboutPage) && aboutPage.includes('if (/\\.github\\.io$/.test(location.hostname)) location.replace("https://travel-problem-radar.vercel.app"'), "about/index.html exists, is self-contained and sends a GitHub Pages visit to the Vercel copy");
+check(aboutPage.length > 0 && !/<script[^>]*\ssrc=|<link[^>]*rel=["']?stylesheet|@import|url\(\s*["']?https?:/i.test(aboutPage) && aboutPage.includes('if (/\\.github\\.io$/.test(location.hostname)) location.replace("https://radar.pehchanthetraveller.com"'), "about/index.html exists, is self-contained and sends a GitHub Pages visit to the Vercel copy");
 check(/Gathered by an AI model with web search\. Items are not verified/.test(aboutPage) && /aren&rsquo;t checked by a person/.test(aboutPage) && !/\{\{/.test(aboutPage), "about/index.html has the AI notice and no build-time slot (the owner's name and address are on the contact page)");
 if (aboutShipped) check(!/OWNER INPUT NEEDED/.test(aboutPage), "about/index.html is in the build, so it has no gaps left");
 const ships = (p) => p === "" || (p.startsWith("legal/") ? shippedLegal.includes(p.split("/")[1]) : copied.includes(p.replace("/", "")));
@@ -285,15 +285,22 @@ const drafts = [...draftLegal.map((s) => `legal/${s}/`), ...(aboutShipped ? [] :
 const draftLinks = shippedPages.flatMap((f) => [...fillPlan.fill(readFileSync(f, "utf8"), plan).out.matchAll(/href="([^"]+)"/g)].map((m) => `${f} → ${target(f, m[1])}`).filter((s) => drafts.some((d) => s.endsWith("→ " + d))));
 check(draftLinks.length === 0, `no shipped page links a page the build doesn't ship (drafts: ${drafts.join(", ")})${draftLinks.length ? " (" + draftLinks.join("; ") + ")" : ""}`);
 
-const subLinks = [...page.matchAll(/href="([^"]*subscribe[^"]*)"/g)].map((m) => m[1]);
-check(subLinks.length > 0 && subLinks.every((h) => h.startsWith("https://travel-problem-radar.vercel.app/subscribe/")), `index.html links to the subscribe page, only by the absolute Vercel URL (GitHub Pages has no /api/)${subLinks.length ? " (" + subLinks.join(", ") + ")" : " (no link)"}`);
-check(/<a href="\.\.\/subscribe\/">Plans<\/a>/.test(livePage), "live/index.html links to the subscribe page");
+// /subscribe/ redirects to /pricing/ (vercel.json), so pages link /pricing/ directly.
+const planLinks = [...page.matchAll(/href="([^"]*(?:subscribe|pricing)[^"]*)"/g)].map((m) => m[1]).filter((h) => !h.startsWith(SITE + "pricing/") || /subscribe/.test(h));
+check(page.includes(`href="${SITE}pricing/">Compare the plans in detail</a>`) && planLinks.length === 0, `index.html links the pricing page, only by the absolute Vercel URL (GitHub Pages has no /api/), and never /subscribe/${planLinks.length ? " (" + planLinks.join(", ") + ")" : ""}`);
+check(/<a href="\.\.\/pricing\/">Plans<\/a>/.test(livePage), "live/index.html links to the pricing page");
+const vercelCfg = JSON.parse(readFileSync("vercel.json", "utf8"));
+check(["/subscribe", "/subscribe/", "/subscribe/index.html"].every((s) => (vercelCfg.redirects || []).some((r) => r.source === s && r.destination === "/pricing/")), "vercel.json redirects /subscribe/ to /pricing/");
+// One address for the site, so the sign-in cookie and Google's return land on the same host. /api/ stays on the old
+// one: the Razorpay webhook, the sweep workflow and links in emails already sent still call it there.
+const hostMove = (vercelCfg.redirects || []).find((r) => (r.has || []).some((h) => h.type === "host" && h.value === "travel-problem-radar.vercel.app"));
+check(Boolean(hostMove) && hostMove.destination === SITE + "$1" && new RegExp("^" + hostMove.source + "$").test("/pricing/") && !new RegExp("^" + hostMove.source + "$").test("/api/razorpay"), `vercel.json sends travel-problem-radar.vercel.app pages, but not /api/, to ${SITE}`);
 // Customer pages: the back link says Home (the home page is no longer a case study), and the board has no demo or repo links.
 const backPages = ["live", "demo", "signup", "signin", "subscribe", "manage", "pricing", "about"];
 check(backPages.every((d) => readFileSync(`${d}/index.html`, "utf8").includes("&larr; Home</a>")) && !backPages.some((d) => readFileSync(`${d}/index.html`, "utf8").includes("Case study")), "every sub-page's back link says Home, not Case study");
 check(!/Sample demo|github\.com/.test(livePage), "live/index.html has no Sample demo or repo link");
 // Account pages are findable: the home page links sign-in (absolute, as above); the board shows Sign in or Account.
-check(/<a id="acct" class="btn sec small" href="https:\/\/travel-problem-radar\.vercel\.app\/signin\/" data-open="in">Sign in<\/a>/.test(page), "index.html links to the sign-in page by the absolute Vercel URL");
+check(page.includes(`<a id="acct" class="btn sec small" href="${SITE}signin/" data-open="in">Sign in</a>`), "index.html links to the sign-in page by the site's absolute URL");
 // Signed in, the home page mustn't keep offering "Create free account": the hero and plan buttons are relinked.
 check(["heroCta", "heroNote", "freeBtn"].every((id) => page.includes(`id="${id}"`)) && (page.match(/id="proBtn"/g) || []).length === 2 && page.includes('setSignedIn(b.plan === "pro");'),
   "index.html relinks the hero and plan buttons once signed in (Your account / Open the live board / Your plan / Request Pro)");
@@ -307,7 +314,7 @@ check(!/BHAWNA|Bhawna Mangla|More work|Product Manager|case study/i.test(page.re
   "index.html has no portfolio branding outside the Pages-only back link");
 check(/Gathered by an AI model with web search\. Items are not verified/.test(page) && /mailto:pehchanthetraveller19@gmail\.com/.test(page), "index.html has the AI notice and the contact address");
 check(/<a id="acct" href="\.\.\/signin\/">Sign in<\/a>/.test(livePage) && /fetch\("\/api\/session\?action=me"\)/.test(livePage) && /a\.href = "\.\.\/manage\/"/.test(livePage) && !/\.innerHTML\s*=/.test(livePage), "live/index.html links Sign in, and Account when signed in (no innerHTML)");
-check(/\| \*\*Get it by email\*\* \| https:\/\/travel-problem-radar\.vercel\.app\/subscribe\/[ .]/.test(readFileSync("README.md", "utf8")), "README.md's top table links to the subscribe page");
+check(readFileSync("README.md", "utf8").includes(`| **Get it by email** | ${SITE}pricing/.`), "README.md's top table links to the pricing page");
 
 // 5. The server copy of the prompt and categories must match the Claude artifact.
 const jsx = readFileSync("travel-problem-radar.jsx", "utf8");

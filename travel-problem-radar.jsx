@@ -635,7 +635,7 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
           <div className="tpr-chips">
             {["all", "High", "Medium", "Low"].map((s) => (
               <button key={s} className={"tpr-chip" + (fSev === s ? " on" : "")} onClick={() => setFSev(s)}>
-                {s === "all" ? "Any sev" : s}
+                {s === "all" ? "Any severity" : s}
               </button>
             ))}
           </div>

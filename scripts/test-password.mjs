@@ -114,6 +114,14 @@ const active = async (w, email, over = {}) => {
   check(w.logs.every((x) => !x.includes(GOOD) && !x.includes("@")), "no log line holds the password or an address");
 }
 
+// ---- payments on: a Pro request never paid for doesn't send every sign-in to the plan card
+{
+  const w = await world({ RAZORPAY_KEY_ID: "rzp_test_Fixture000001", RAZORPAY_KEY_SECRET: "ks", RAZORPAY_WEBHOOK_SECRET: "wh", RAZORPAY_PLANS: JSON.stringify({ 1: "plan_00000000000001" }), RAZORPAY_TOTAL_COUNT: "12" });
+  await active(w, "ticked@example.com", { pw: await hashPassword(GOOD, { randomBytes: seeded(9) }), proRequestedAt: iso(T0 - 47 * HOUR) });
+  const r = await w.login("ticked@example.com", GOOD);
+  check(r.code === 200 && r.json().next === "/live/" && cookieOf(r), "sign-in with payments on: an account that once ticked Pro and never paid goes to the board, not the plan card");
+}
+
 // ---- a password only comes on through its own link
 {
   const w = await world();

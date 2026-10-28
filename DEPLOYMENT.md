@@ -961,7 +961,7 @@ needs (`SESSION_SECRET` and subscriber email). Code: `api/_lib/password.js`, wit
   link without the key activates the account without it. Signing up with an address that already has an account
   never changes its password.
 - **Sign-in.** `/signin/` posts `{action: "password", email, password}` to `/api/session`, which sets the usual
-  cookie and replies with where to go (`/live/`, or `/manage/?pay=1` if Pro was ticked and isn't paid yet). With the
+  cookie and replies with where to go (always `/live/`: the plan card was offered when the account was confirmed). With the
   password left empty, the same form asks for a sign-in link instead. An account not confirmed yet is told to
   confirm first (only when the password is right).
 - **Limits.** Wrong passwords are counted per IP and hour (`radar:iphit:` files under their own hash, so they don't
@@ -995,10 +995,12 @@ the settings to look for rather than exact clicks:
 
 1. Create a project, then its OAuth consent screen (the console may call it "Google Auth Platform"): user type
    **External**, app name **Travel Problem Radar**, your support email, authorised domain
-   `travel-problem-radar.vercel.app` (or your own domain), and only the `openid` and `email` scopes.
+   `pehchanthetraveller.com` (the domain the site runs on), and only the `openid` and `email` scopes.
 2. Create an **OAuth client ID** of type **Web application**. Authorised redirect URI, exactly:
-   `https://travel-problem-radar.vercel.app/api/session` (it is `SITE_URL` plus `/api/session`; change it if you
-   move to your own domain).
+   `https://radar.pehchanthetraveller.com/api/session` (it is `SITE_URL` plus `/api/session`). Since 2026-10-28
+   the site's one address is radar.pehchanthetraveller.com: `SITE_URL` is set to it, and vercel.json redirects
+   pages on travel-problem-radar.vercel.app there. The sign-in cookies belong to one address, so a Google sign-in
+   must start and end on the same one. Keep the old vercel.app redirect URI until the switch is live.
 3. Add the two values in Vercel → Settings → Environment Variables, **Production** only: `GOOGLE_CLIENT_ID`, and
    `GOOGLE_CLIENT_SECRET` with **Sensitive** ticked. Don't paste the secret anywhere else. Redeploy.
 4. Publish the consent screen (**In production**). While it is in "Testing", only the test users listed there can

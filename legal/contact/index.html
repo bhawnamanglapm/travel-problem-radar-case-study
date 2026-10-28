@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <script>
   // GitHub Pages also serves this file but has no /api/: send the visit to the Vercel copy, which does.
-  if (/\.github\.io$/.test(location.hostname)) location.replace("https://travel-problem-radar.vercel.app" + location.pathname.replace(/^\/travel-problem-radar-case-study/, "") + location.search + location.hash);
+  if (/\.github\.io$/.test(location.hostname)) location.replace("https://radar.pehchanthetraveller.com" + location.pathname.replace(/^\/travel-problem-radar-case-study/, "") + location.search + location.hash);
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Contact · Travel Problem Radar</title>
@@ -30,7 +30,7 @@
 </head>
 <body>
 <main>
-  <p class="nav"><a href="../../">&larr; Home</a> &middot; <a href="../../signup/">Create account</a> &middot; <a href="../../signin/">Sign in</a></p>
+  <p class="nav"><a href="../../">&larr; Home</a> &middot; <a href="../../signup/">Create account</a> &middot; <a id="acct" href="../../signin/">Sign in</a></p>
   <h1>Contact</h1>
   <p class="small">Last updated: 23 October 2026</p>
 
@@ -44,5 +44,14 @@
     <nav class="site-foot" aria-label="Site"><a href="../../">Home</a> &middot; <a href="../../about/">About</a> &middot; <a href="../../pricing/">Pricing</a> &middot; <a href="../contact/">Contact</a> &middot; <a href="../privacy/">Privacy</a> &middot; <a href="../refunds/">Refunds</a></nav>
   </footer>
 </main>
+<script>
+  // Signed in on this browser: the Sign in link goes to the account page instead.
+  fetch("/api/session?action=me").then(function (r) { return r.ok ? r.json() : {}; }).then(function (b) {
+    if (!b || !b.signedIn) return;
+    var a = document.getElementById("acct");
+    a.textContent = "Account";
+    a.href = "../../manage/";
+  }).catch(function () {});
+</script>
 </body>
 </html>

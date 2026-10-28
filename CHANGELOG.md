@@ -3,6 +3,23 @@
 Built from the git history. Dates are commit dates. The project has no version numbers or releases, so entries are
 grouped by date.
 
+## 2026-10-28
+
+- Signing in no longer sends every account that once ticked Pro (and never paid) to the plan card. Only the sign-in
+  that completes a sign-up with Pro ticked (the confirm link, or Google for a new or pending account) goes to
+  `/manage/?pay=1`; every later sign-in, by Google or password, goes to `/live/`. After paying on `/manage/`, a
+  signed-in browser is taken to the live board.
+- `/subscribe/` now redirects to `/pricing/` (vercel.json), and the links that pointed at it (home page, board,
+  sign-up, terms) go to `/pricing/` directly. The subscribe page's file is kept but no longer reachable.
+- The site's one address is now https://radar.pehchanthetraveller.com. Pages on travel-problem-radar.vercel.app
+  redirect there (vercel.json), and the home page, README and every page's GitHub Pages redirect use it. `/api/`
+  isn't redirected, so the Razorpay webhook, the sweep workflow and links in emails already sent keep working.
+  Signing in on one address and opening the other made the board look signed out, and a Google sign-in started on
+  the custom domain came back to vercel.app without its cookie ("This Google sign-in didn't finish"). Needs
+  `SITE_URL` set to the new address and its `/api/session` added to Google's redirect URIs (DEPLOYMENT.md).
+- The privacy, contact and refunds pages show Account instead of Sign in when already signed in, like the rest.
+- test-plan accepts `paid` either way (payments were switched on on 2026-10-27); plan.json must still be valid.
+
 ## 2026-10-27
 
 - Delete my account deletes at once, paid Pro included: the account's Razorpay subscriptions (the plan and any

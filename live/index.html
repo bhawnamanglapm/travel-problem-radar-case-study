@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <script>
   // GitHub Pages also serves this file but has no /api/: send the visit to the Vercel copy, which does.
-  if (/\.github\.io$/.test(location.hostname)) location.replace("https://travel-problem-radar.vercel.app" + location.pathname.replace(/^\/travel-problem-radar-case-study/, "") + location.search + location.hash);
+  if (/\.github\.io$/.test(location.hostname)) location.replace("https://radar.pehchanthetraveller.com" + location.pathname.replace(/^\/travel-problem-radar-case-study/, "") + location.search + location.hash);
   // Without the trailing slash, radar-live.js resolves to /radar-live.js (a 404) and nothing renders.
   else if (!/(\/|\.html)$/.test(location.pathname)) location.replace(location.pathname + "/" + location.search + location.hash);
 </script>
@@ -33,7 +33,7 @@
     <span><b>LIVE</b> &middot; Gathered 1 to 5 times a day by an AI model with web search. Check each source link; items are not verified.</span>
     <span class="links">
       <a href="../">&larr; Home</a>
-      <a href="../subscribe/">Plans</a>
+      <a href="../pricing/">Plans</a>
       <a id="acct" href="../signin/">Sign in</a>
     </span>
   </div>
