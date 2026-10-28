@@ -15,7 +15,8 @@ const PAID = { ...SAMPLE, paid: true };
 
 // plan.json as committed
 const committed = JSON.parse(readFileSync(new URL("../plan.json", import.meta.url), "utf8"));
-check(planErrors(committed).length === 0 && committed.paid === false, "the committed plan.json is valid and paid is false");
+// paid is the owner's switch (on since 2026-10-27), so either value passes; the rest must be valid.
+check(planErrors(committed).length === 0 && typeof committed.paid === "boolean", `the committed plan.json is valid (paid is ${committed.paid})`);
 
 // planErrors
 check(planErrors(EMPTY).length === 0 && planErrors(SAMPLE).length === 0 && planErrors(PAID).length === 0, "empty, sample and paid sample plans are valid");

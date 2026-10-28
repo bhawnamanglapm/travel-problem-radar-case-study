@@ -17,6 +17,8 @@ grouped by date.
   Signing in on one address and opening the other made the board look signed out, and a Google sign-in started on
   the custom domain came back to vercel.app without its cookie ("This Google sign-in didn't finish"). Needs
   `SITE_URL` set to the new address and its `/api/session` added to Google's redirect URIs (DEPLOYMENT.md).
+- The privacy, contact and refunds pages show Account instead of Sign in when already signed in, like the rest.
+- test-plan accepts `paid` either way (payments were switched on on 2026-10-27); plan.json must still be valid.
 
 ## 2026-10-27
 
