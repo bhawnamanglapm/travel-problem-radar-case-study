@@ -1082,8 +1082,9 @@ export function makeSessionHandler({ env, storage, fetchFn = fetch, now, randomB
           if (out.record) rec = out.record;
         }
         res.setHeader("set-cookie", sessionCookie(signSession(rec, { secret, now: t })));
-        // Ticked Pro with payments on and not paid yet: the plan card, as after Google; otherwise the board.
-        return sendJson(res, 200, { ok: true, next: rec.proRequestedAt && paymentsReady(env) && effectivePlan(rec, t) !== "pro" ? "/manage/?pay=1" : "/live/" });
+        // Always the board: an account with a password is already confirmed, and the plan card was offered when it was
+        // (the confirm link). A Free account that still wants Pro finds it on the board's "Go to your account".
+        return sendJson(res, 200, { ok: true, next: "/live/" });
       } catch (e) {
         log("session password", "error: " + ((e && e.name) || "Error"));
         return sendJson(res, 500, { error: "could not process the request; try again later" });
@@ -1202,6 +1203,7 @@ const listClosed = async (env, storage) => {
 // Signs `record` in: an active account as it is; a pending one (or a new one, `isNew`) is made
 // active first, with the subscribed/confirmed events and, with the Pro box, the Pro request.
 async function googleSignIn({ res, record, isNew = false, pro, env, storage, fetchFn, t, randomBytes, log, secret, cookies, page }) {
+  let activated = false; // made active by this sign-in, so a Pro box ticked at sign-up still waits to be paid for
   if (record.status === "pending") {
     const at = new Date(t).toISOString();
     record = isNew
@@ -1222,6 +1224,7 @@ async function googleSignIn({ res, record, isNew = false, pro, env, storage, fet
       record = out.record;
       if (!out.changed) return signedIn();
     }
+    activated = true;
     if (isNew) await recordEvent(storage, "subscribed", { now: t, randomBytes, plan: "free" });
     await recordEvent(storage, "confirmed", { now: t, randomBytes, plan: "free" });
     if (record.proRequestedAt && effectivePlan(record, t) !== "pro") {
@@ -1238,8 +1241,9 @@ async function googleSignIn({ res, record, isNew = false, pro, env, storage, fet
     cookies.unshift(sessionCookie(signSession(record, { secret, now: t })));
     res.statusCode = 303;
     res.setHeader("set-cookie", cookies);
-    // Ticked Pro with payments on: straight to the plan card to pay; otherwise the board.
-    res.setHeader("location", record.proRequestedAt && paymentsReady(env) && effectivePlan(record, t) !== "pro" ? "/manage/?pay=1" : "/live/");
+    // Pro ticked at the sign-up this completes, with payments on: straight to the plan card to pay. Any later
+    // sign-in goes to the board, even if that Pro request was never paid for (the account page still offers Pro).
+    res.setHeader("location", activated && record.proRequestedAt && paymentsReady(env) && effectivePlan(record, t) !== "pro" ? "/manage/?pay=1" : "/live/");
     res.setHeader("cache-control", "no-store");
     return res.end();
   }

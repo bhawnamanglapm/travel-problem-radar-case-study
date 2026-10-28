@@ -3,6 +3,13 @@
 Built from the git history. Dates are commit dates. The project has no version numbers or releases, so entries are
 grouped by date.
 
+## 2026-10-28
+
+- Signing in no longer sends every account that once ticked Pro (and never paid) to the plan card. Only the sign-in
+  that completes a sign-up with Pro ticked (the confirm link, or Google for a new or pending account) goes to
+  `/manage/?pay=1`; every later sign-in, by Google or password, goes to `/live/`. After paying on `/manage/`, a
+  signed-in browser is taken to the live board.
+
 ## 2026-10-27
 
 - Delete my account deletes at once, paid Pro included: the account's Razorpay subscriptions (the plan and any

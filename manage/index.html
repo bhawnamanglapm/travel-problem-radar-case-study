@@ -506,12 +506,21 @@
       document.head.appendChild(s);
     });
   }
+  function toBoard() {
+    fetch("/api/session?action=me").then(function (r) { return r.ok ? r.json() : {}; }).then(function (b) {
+      if (!b || !b.signedIn) return;
+      say("Payment received. Pro is on: taking you to the live board…", false);
+      setTimeout(function () { location.href = "/live/"; }, 1500);
+    }).catch(function () {});
+  }
   function checkoutDone(resp) {
     say("Checking the payment…", false);
     call("POST", { id: id, t: t, action: "checkout-return", paymentId: resp.razorpay_payment_id, subscriptionId: resp.razorpay_subscription_id, signature: resp.razorpay_signature }).then(function (x) {
       if (x.status === 200) {
         cardMode = null; show(x.body);
         say(x.body.renewal ? "Renewal set up. It starts when this period ends." : x.body.effectivePlan === "pro" ? "Payment received. Pro is on: the live board is open now." : "", false);
+        // Pro just started: on to the board, when this browser is signed in (a page opened from an email link may not be).
+        if (!x.body.renewal && x.body.effectivePlan === "pro") toBoard();
       } // show() says the payment was received
       else if (x.status === 400) { say("The payment couldn’t be checked here. If you were charged, Pro starts when Razorpay confirms it; write to pehchanthetraveller19@gmail.com if it hasn’t within an hour.", true); }
       else fail(x);

@@ -961,7 +961,7 @@ needs (`SESSION_SECRET` and subscriber email). Code: `api/_lib/password.js`, wit
   link without the key activates the account without it. Signing up with an address that already has an account
   never changes its password.
 - **Sign-in.** `/signin/` posts `{action: "password", email, password}` to `/api/session`, which sets the usual
-  cookie and replies with where to go (`/live/`, or `/manage/?pay=1` if Pro was ticked and isn't paid yet). With the
+  cookie and replies with where to go (always `/live/`: the plan card was offered when the account was confirmed). With the
   password left empty, the same form asks for a sign-in link instead. An account not confirmed yet is told to
   confirm first (only when the password is right).
 - **Limits.** Wrong passwords are counted per IP and hour (`radar:iphit:` files under their own hash, so they don't

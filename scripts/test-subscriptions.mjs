@@ -2621,6 +2621,18 @@ const iso = (ms) => new Date(ms).toISOString();
     await w.start();
     await w.back();
     check((await w.create()).headers.location === "/live/", "google sign-up with payments on: Pro unticked still goes to the board");
+    w = await gw({ envOver: PAY });
+    await putSubscriber(w.st, { ...w.rec, proRequestedAt: iso(T0 - 47 * HOUR) });
+    await w.start();
+    r = await w.back();
+    check(r.code === 303 && r.headers.location === "/live/" && await signedInAs(w, r) === w.rec.id,
+      "google return with payments on: an existing account that once ticked Pro and never paid goes to the board, not the plan card");
+    w = await gw({ envOver: PAY, status: "pending" });
+    await putSubscriber(w.st, { ...w.rec, proRequestedAt: iso(T0 - 48 * HOUR) });
+    await w.start();
+    r = await w.back();
+    check(r.code === 303 && r.headers.location === "/manage/?pay=1" && (await w.now()).status === "active",
+      "google return with payments on: a pending sign-up with Pro ticked is confirmed and goes to the plan card to pay");
 
     // Create account refused: an error page, no login, nothing stored
     const refusedSignup = async (label, { setup = {}, prep, origin = "https://site.example", code = 400, page }) => {
