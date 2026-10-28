@@ -9,6 +9,8 @@ grouped by date.
   that completes a sign-up with Pro ticked (the confirm link, or Google for a new or pending account) goes to
   `/manage/?pay=1`; every later sign-in, by Google or password, goes to `/live/`. After paying on `/manage/`, a
   signed-in browser is taken to the live board.
+- `/subscribe/` now redirects to `/pricing/` (vercel.json), and the links that pointed at it (home page, board,
+  sign-up, terms) go to `/pricing/` directly. The subscribe page's file is kept but no longer reachable.
 
 ## 2026-10-27
 

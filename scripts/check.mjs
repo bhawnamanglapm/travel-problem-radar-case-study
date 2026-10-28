@@ -285,9 +285,12 @@ const drafts = [...draftLegal.map((s) => `legal/${s}/`), ...(aboutShipped ? [] :
 const draftLinks = shippedPages.flatMap((f) => [...fillPlan.fill(readFileSync(f, "utf8"), plan).out.matchAll(/href="([^"]+)"/g)].map((m) => `${f} → ${target(f, m[1])}`).filter((s) => drafts.some((d) => s.endsWith("→ " + d))));
 check(draftLinks.length === 0, `no shipped page links a page the build doesn't ship (drafts: ${drafts.join(", ")})${draftLinks.length ? " (" + draftLinks.join("; ") + ")" : ""}`);
 
-const subLinks = [...page.matchAll(/href="([^"]*subscribe[^"]*)"/g)].map((m) => m[1]);
-check(subLinks.length > 0 && subLinks.every((h) => h.startsWith("https://travel-problem-radar.vercel.app/subscribe/")), `index.html links to the subscribe page, only by the absolute Vercel URL (GitHub Pages has no /api/)${subLinks.length ? " (" + subLinks.join(", ") + ")" : " (no link)"}`);
-check(/<a href="\.\.\/subscribe\/">Plans<\/a>/.test(livePage), "live/index.html links to the subscribe page");
+// /subscribe/ redirects to /pricing/ (vercel.json), so pages link /pricing/ directly.
+const planLinks = [...page.matchAll(/href="([^"]*(?:subscribe|pricing)[^"]*)"/g)].map((m) => m[1]).filter((h) => !h.startsWith(SITE + "pricing/") || /subscribe/.test(h));
+check(page.includes(`href="${SITE}pricing/">Compare the plans in detail</a>`) && planLinks.length === 0, `index.html links the pricing page, only by the absolute Vercel URL (GitHub Pages has no /api/), and never /subscribe/${planLinks.length ? " (" + planLinks.join(", ") + ")" : ""}`);
+check(/<a href="\.\.\/pricing\/">Plans<\/a>/.test(livePage), "live/index.html links to the pricing page");
+const vercelCfg = JSON.parse(readFileSync("vercel.json", "utf8"));
+check(["/subscribe", "/subscribe/", "/subscribe/index.html"].every((s) => (vercelCfg.redirects || []).some((r) => r.source === s && r.destination === "/pricing/")), "vercel.json redirects /subscribe/ to /pricing/");
 // Customer pages: the back link says Home (the home page is no longer a case study), and the board has no demo or repo links.
 const backPages = ["live", "demo", "signup", "signin", "subscribe", "manage", "pricing", "about"];
 check(backPages.every((d) => readFileSync(`${d}/index.html`, "utf8").includes("&larr; Home</a>")) && !backPages.some((d) => readFileSync(`${d}/index.html`, "utf8").includes("Case study")), "every sub-page's back link says Home, not Case study");
