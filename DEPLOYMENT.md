@@ -995,10 +995,12 @@ the settings to look for rather than exact clicks:
 
 1. Create a project, then its OAuth consent screen (the console may call it "Google Auth Platform"): user type
    **External**, app name **Travel Problem Radar**, your support email, authorised domain
-   `travel-problem-radar.vercel.app` (or your own domain), and only the `openid` and `email` scopes.
+   `pehchanthetraveller.com` (the domain the site runs on), and only the `openid` and `email` scopes.
 2. Create an **OAuth client ID** of type **Web application**. Authorised redirect URI, exactly:
-   `https://travel-problem-radar.vercel.app/api/session` (it is `SITE_URL` plus `/api/session`; change it if you
-   move to your own domain).
+   `https://radar.pehchanthetraveller.com/api/session` (it is `SITE_URL` plus `/api/session`). Since 2026-10-28
+   the site's one address is radar.pehchanthetraveller.com: `SITE_URL` is set to it, and vercel.json redirects
+   pages on travel-problem-radar.vercel.app there. The sign-in cookies belong to one address, so a Google sign-in
+   must start and end on the same one. Keep the old vercel.app redirect URI until the switch is live.
 3. Add the two values in Vercel → Settings → Environment Variables, **Production** only: `GOOGLE_CLIENT_ID`, and
    `GOOGLE_CLIENT_SECRET` with **Sensitive** ticked. Don't paste the secret anywhere else. Redeploy.
 4. Publish the consent screen (**In production**). While it is in "Testing", only the test users listed there can

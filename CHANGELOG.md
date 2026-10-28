@@ -11,6 +11,12 @@ grouped by date.
   signed-in browser is taken to the live board.
 - `/subscribe/` now redirects to `/pricing/` (vercel.json), and the links that pointed at it (home page, board,
   sign-up, terms) go to `/pricing/` directly. The subscribe page's file is kept but no longer reachable.
+- The site's one address is now https://radar.pehchanthetraveller.com. Pages on travel-problem-radar.vercel.app
+  redirect there (vercel.json), and the home page, README and every page's GitHub Pages redirect use it. `/api/`
+  isn't redirected, so the Razorpay webhook, the sweep workflow and links in emails already sent keep working.
+  Signing in on one address and opening the other made the board look signed out, and a Google sign-in started on
+  the custom domain came back to vercel.app without its cookie ("This Google sign-in didn't finish"). Needs
+  `SITE_URL` set to the new address and its `/api/session` added to Google's redirect URIs (DEPLOYMENT.md).
 
 ## 2026-10-27
 

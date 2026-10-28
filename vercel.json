@@ -10,6 +10,12 @@
   "redirects": [
     { "source": "/subscribe", "destination": "/pricing/", "permanent": false },
     { "source": "/subscribe/", "destination": "/pricing/", "permanent": false },
-    { "source": "/subscribe/index.html", "destination": "/pricing/", "permanent": false }
+    { "source": "/subscribe/index.html", "destination": "/pricing/", "permanent": false },
+    {
+      "source": "/((?!api/).*)",
+      "has": [{ "type": "host", "value": "travel-problem-radar.vercel.app" }],
+      "destination": "https://radar.pehchanthetraveller.com/$1",
+      "permanent": false
+    }
   ]
 }
