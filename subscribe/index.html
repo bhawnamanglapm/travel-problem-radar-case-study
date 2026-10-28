@@ -34,7 +34,7 @@
 </head>
 <body>
 <main>
-  <p class="nav"><a href="../">&larr; Home</a> &middot; <a href="../live/">Live board (Pro)</a> &middot; <a href="../signin/">Sign in</a></p>
+  <p class="nav"><a href="../">&larr; Home</a> &middot; <a href="../live/">Live board (Pro)</a> &middot; <a id="acct" href="../signin/">Sign in</a></p>
   <h1>Get the Travel Problem Radar digest</h1>
   <p>An AI model with web search looks for travel-industry problems on a schedule. Get what it found by email, and with Pro, read the live board any time. The email comes with a free account: your address is the account, and a password is optional.</p>
 
@@ -50,5 +50,14 @@
   <p class="small">Gathered by an AI model with web search. Items are not verified; check each source link.</p>
   <footer><nav class="site-foot" aria-label="Site"><a href="../">Home</a> &middot; <a href="../about/">About</a> &middot; <a href="../pricing/">Pricing</a> &middot; <a href="../legal/contact/">Contact</a> &middot; <a href="../legal/privacy/">Privacy</a> &middot; <a href="../legal/refunds/">Refunds</a></nav></footer>
 </main>
+<script>
+  // Signed in on this browser: the Sign in link goes to the account page instead.
+  fetch("/api/session?action=me").then(function (r) { return r.ok ? r.json() : {}; }).then(function (b) {
+    if (!b || !b.signedIn) return;
+    var a = document.getElementById("acct");
+    a.textContent = "Account";
+    a.href = "../manage/";
+  }).catch(function () {});
+</script>
 </body>
 </html>

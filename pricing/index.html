@@ -51,7 +51,7 @@
 </head>
 <body>
 <main>
-  <p class="nav"><a href="../">&larr; Home</a> &middot; <a href="../live/">Live board (Pro)</a> &middot; <a href="../signin/">Sign in</a></p>
+  <p class="nav"><a href="../">&larr; Home</a> &middot; <a href="../live/">Live board (Pro)</a> &middot; <a id="acct" href="../signin/">Sign in</a></p>
   <h1>Pricing</h1>
   <p>An AI model with web search looks for travel-industry problems 1 to 5 times a day. Free gets a daily summary by email. Pro gets the live board and 1 to 5 emails a day, as many as they choose.</p>
   <!-- when:free-test -->
@@ -116,11 +116,15 @@
   <footer><nav class="site-foot" aria-label="Site"><a href="../">Home</a> &middot; <a href="../about/">About</a> &middot; <a href="../pricing/">Pricing</a> &middot; <a href="../legal/contact/">Contact</a> &middot; <a href="../legal/privacy/">Privacy</a> &middot; <a href="../legal/refunds/">Refunds</a></nav></footer>
 </main>
 <script>
-  // Signed in, Pro starts on the account page; signed out (or if this check fails), on the sign-up page with Pro ticked.
+  // Signed in, Pro starts on the account page and the Sign in link becomes Account; signed out (or if this check
+  // fails), Pro starts on the sign-up page with Pro ticked.
   fetch("/api/session?action=me").then(function (r) { return r.ok ? r.json() : {}; }).then(function (b) {
     if (!b || !b.signedIn) return;
     var a = document.getElementById("getpro");
     if (a) a.href = "../manage/";
+    var acct = document.getElementById("acct");
+    acct.textContent = "Account";
+    acct.href = "../manage/";
   }).catch(function () {});
 </script>
 </body>
