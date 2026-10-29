@@ -8,6 +8,7 @@ import { OAUTH_COOKIE, OAUTH_MINUTES, clearOAuthCookie, googleConfigured, google
 import { cancelSubscription, createSubscription, fetchSubscription, razorpayConfigured, verifyCheckout, verifyWebhook } from "./razorpay.js";
 import { DEFAULT_SWEEPS_PER_DAY, normaliseSweepsPerDay, sweepLimits, sweepsPerDayOf } from "./schedule.js";
 import { periodsOf, priceOf, priceTable, razorpayPlans } from "./plan.js";
+import { sweepKey } from "./radar.js";
 import { hashPassword, passwordProblem, storedHash, verifyPassword } from "./password.js";
 import { clearCookie, originOk, parseCookies, readSession, sessionCookie, sessionSecret, signSession } from "./session.js";
 import {
@@ -560,6 +561,17 @@ const lastPlanOf = (record) => {
   const c = rzpOf(record).choice;
   return c && typeof c === "object" ? { cats: c.cats || null, perDay: c.perDay, months: c.months } : null;
 };
+// Saved problems (T39), newest first, at most MAX_SAVED (owner decision O5): `{ id, sweepId, at, item }`, where `item`
+// is the server's copy of the problem's own fields, so it outlives the sweep trim.
+export const MAX_SAVED = 100;
+const SWEEP_ID_RE = /^\d{10,16}$/;
+const ITEM_FIELDS = ["id", "cat", "title", "summary", "source", "link", "region", "date", "severity", "opportunity"];
+const savedOf = (record) => (Array.isArray(record.saved) ? record.saved : []);
+const savedItem = (p, sweepAt) => ({
+  ...Object.fromEntries(ITEM_FIELDS.map((k) => [k, typeof p[k] === "string" ? p[k] : ""])),
+  sweepAt: typeof sweepAt === "string" ? sweepAt : null,
+});
+
 const accountView = (record, t, env) => ({
   status: record.status,
   plan: record.plan === "pro" ? "pro" : "free",
@@ -602,6 +614,8 @@ const accountView = (record, t, env) => ({
 // POST action "email-on" turns emails back on after an unsubscribe (not after a bounce or a
 // complaint), and "delete-account" deletes the record and signs this browser out (T17).
 // POST {action: "set-password", password} or {action: "remove-password"}, signed in only (2026-10-27).
+// Saved problems (T39), signed in only: GET ?action=saved lists them (Pro), POST {action: "save", sweepId, itemId}
+// copies one from its sweep (Pro; 409 saved_full at MAX_SAVED) and POST {action: "unsave", itemId} removes one.
 // With payments on (T20): "checkout" starts a Razorpay subscription and returns what Checkout
 // needs, "checkout-return" records Checkout's signed reply (only the webhook, T21, grants Pro),
 // and "cancel" stops a paid Pro renewing at the end of the period.
@@ -615,10 +629,12 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
     let sweepsPerDay;
     let months;
     let password;
+    let sweepId;
+    let itemId;
     try {
       params = await linkParams(req, { queryOnly: false });
       if (params.fields && typeof params.fields.action === "string") action = params.fields.action;
-      if (params.fields) ({ cats, sweepsPerDay, months, password } = params.fields);
+      if (params.fields) ({ cats, sweepsPerDay, months, password, sweepId, itemId } = params.fields);
     } catch (e) {
       if (e instanceof BodyTooLargeError) return sendJson(res, 413, { error: "request too large" });
       throw e;
@@ -637,11 +653,46 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
         record = session;
       }
       const view = (rec) => ({ ...accountView(rec, t, env), signedIn: Boolean(session) });
-      if (req.method === "GET") return sendJson(res, 200, view(record));
       // Every change below is made with updateSubscriber, on the record as stored at that moment,
       // so a webhook or another tab writing at the same time isn't undone. Deleted meanwhile: 404.
       const gone = () => sendJson(res, 404, { error: "this link isn't valid" });
       const save = (change) => updateSubscriber(storage, record.id, change);
+      // Saved problems (T39): signed in on this browser only, like passwords, so a forwarded email's link can't read
+      // or change the list. Pro only to read or add; a lapsed Pro keeps the list for when they renew, and can remove.
+      const query = req.query && typeof req.query === "object" ? req.query : Object.fromEntries(new URL(req.url || "/", "http://x").searchParams);
+      const getAction = req.method === "GET" && typeof query.action === "string" ? query.action : "";
+      if (getAction === "saved" || action === "save" || action === "unsave") {
+        if (!session || session.id !== record.id) return sendJson(res, 403, { error: "sign_in_first" });
+        if (req.method === "POST" && !originOk(req)) return sendJson(res, 403, { error: "wrong_origin" });
+        const pro = effectivePlan(record, t) === "pro";
+        if (getAction === "saved") return pro ? sendJson(res, 200, { saved: savedOf(record) }) : sendJson(res, 402, { error: "pro_only" });
+        const ids = (r) => savedOf(r).map((s) => s.id);
+        if (typeof itemId !== "string" || !itemId || itemId.length > 200) return sendJson(res, 400, { error: "bad_item" });
+        if (action === "unsave") {
+          const { record: updated } = await save((r) => (savedOf(r).some((s) => s.id === itemId) ? { ...r, saved: savedOf(r).filter((s) => s.id !== itemId) } : null));
+          return updated ? sendJson(res, 200, { ok: true, ids: ids(updated) }) : gone();
+        }
+        if (!pro) return sendJson(res, 402, { error: "pro_only" });
+        if (typeof sweepId !== "string" || !SWEEP_ID_RE.test(sweepId)) return sendJson(res, 400, { error: "bad_sweep" });
+        // The item comes from the saved sweep, never from the request, so nothing the browser sends is stored.
+        let sweep = null;
+        try { sweep = JSON.parse(await storage.get(sweepKey(sweepId))); } catch (e) { /* missing or unreadable */ }
+        const found = sweep && Array.isArray(sweep.problems) && sweep.problems.find((p) => p && p.id === itemId);
+        if (!found) return sendJson(res, 404, { error: "not_found" });
+        const entry = { id: itemId, sweepId, at: new Date(t).toISOString(), item: savedItem(found, sweep.at) };
+        let full = false;
+        const { record: updated } = await save((r) => {
+          const list = savedOf(r);
+          if (list.some((s) => s.id === itemId)) return null;
+          if (list.length >= MAX_SAVED) { full = true; return null; }
+          return effectivePlan(r, t) === "pro" ? { ...r, saved: [entry, ...list] } : null;
+        });
+        if (!updated) return gone();
+        if (full) return sendJson(res, 409, { error: "saved_full", max: MAX_SAVED });
+        const kept = savedOf(updated).find((s) => s.id === itemId);
+        return kept ? sendJson(res, 200, { ok: true, ids: ids(updated), entry: kept }) : sendJson(res, 402, { error: "pro_only" });
+      }
+      if (req.method === "GET") return sendJson(res, 200, view(record));
 
       if (action === "set-cats") {
         if (record.status !== "active") return sendJson(res, 409, { error: "not_confirmed" });

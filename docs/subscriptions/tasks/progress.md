@@ -51,12 +51,27 @@ working in a real inbox; that is T12's staged launch.
 | [T35](T35-sweep-slots-on-time.md) Sweep slots on time | built 2026-10-25 on `fixes`, merged to main (#91, #92) and live; a day of real runs still to check | | sweep tests pass | Added 2026-10-25. GitHub's runs started 2 h 15 m to 4 h 35 m late on 2026-10-24 and 25; all landed in the right slot, but only just |
 | [T36](T36-problem-detail-panel.md) Problem detail panel | built 2026-10-29 on `feat/t36-detail-panel`, merged to main (#100, `911d583`) and live; the live board shows history from the first production sweep after deploy | e399913, b23dd1a, d877ec6 | 1,296 pass | Added 2026-10-29, Phase 5. See T36 notes below |
 | [T37](T37-areas.md) Areas | built 2026-10-29 on `feat/t37-areas`, merged to main (#101, `8f1b220`) and live | 42a8a24, 2828648 | 1,300 pass | Added 2026-10-29, Phase 5. See T37 notes below |
-| [T38](T38-search-all-sweeps.md) Search all sweeps | built 2026-10-29 on `feat/t38-search-all-sweeps` | aff0218, 74b7bae, 5ef7ebd | 1,324 pass | Added 2026-10-29, Phase 5. See T38 notes below |
-| [T39](T39-saved-problems.md) Saved problems | todo | | | Added 2026-10-29, Phase 5 |
+| [T38](T38-search-all-sweeps.md) Search all sweeps | built 2026-10-29 on `feat/t38-search-all-sweeps`, merged to main (#102, `fd3aad6`) and live | aff0218, 74b7bae, 5ef7ebd | 1,324 pass | Added 2026-10-29, Phase 5. See T38 notes below |
+| [T39](T39-saved-problems.md) Saved problems | built 2026-10-29 on `feat/t39-saved-problems` | bc2c4cc, 9d7a9ac, 48957ef, 54fd29b | 1,358 pass | Added 2026-10-29, Phase 5. See T39 notes below |
 | [T40](T40-share-a-problem.md) Share one problem | todo | | | Added 2026-10-29, Phase 5 |
 | [T41](T41-email-areas.md) Areas in Pro email | todo | | | Added 2026-10-29, Phase 5 |
 
 ## Notes per task
+
+### T39
+- The Blob count, from the code: each sweep already uses 12 advanced operations (8 writes, 4 lists), so at 5
+  sweeps a day the month is about 1,920 of the Hobby plan's 2,000 before anyone signs up, signs in or saves. Each
+  save or unsave adds 1. Not checked against the dashboard (owner step: Observability → Blob). A follow-up could
+  run the three delivery tidies once a day, as the LLM-log tidy already does (about 370 fewer a month), and write
+  the subscriber count only when it changes.
+- Saved copies are taken by the server from the sweep file, never from the request; the tests send a forged
+  title and item and check they're ignored.
+- Changes from the task file: `itemId` in the body, no ids in `me`, a signed-in session required, and `402`
+  for Free. See the task file.
+- Checked by hand in headless Chrome against a local server running the real account handler on an in-memory
+  store (42 checks): mouse and keyboard, a double press, the panel and card in step, reload, All saved sweeps, a
+  trimmed sweep, the 409 note, 401, 500 and a paused 503 from the account API, the demo's own copy, and 375px in light and
+  dark. Not in CI. Not checked: a real Pro session in production.
 
 ### T38
 - Built the task file's fallback, a search file, after the Blob check: the first design costs up to 61 uncached

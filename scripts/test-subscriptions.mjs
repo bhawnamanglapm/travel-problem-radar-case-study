@@ -4152,4 +4152,166 @@ const iso = (ms) => new Date(ms).toISOString();
   check(replies.every((b) => !b.includes("@") && !b.includes(keep.token)), "renew: no reply holds an address or a token");
 }
 
+// ---- T39: saved problems. POST /api/account save and unsave, GET ?action=saved
+{
+  const { makeAccountHandler, MAX_SAVED } = await import("../api/_lib/subscription-handlers.js");
+  const { signSession } = await import("../api/_lib/session.js");
+  const { sweepKey } = await import("../api/_lib/radar.js");
+  const SECRET = "test-session-secret-0123456789abcdef";
+  const DAY = 24 * 3600 * 1000;
+  const ENV = { SUBSCRIPTIONS_ENABLED: "1", RESEND_API_KEY: "re_k", EMAIL_FROM: "Radar <hello@pehchanthetraveller.com>", SITE_URL: "https://site.example", SESSION_SECRET: SECRET };
+  const SWEEP = "1793000000000";
+  const SWEEP_AT = iso(T0 - DAY);
+  const problem = (id, over = {}) => ({
+    id, cat: "gov_policy", title: "Visa queue " + id, summary: "Long waits at the consulate", source: "news.example", link: "https://news.example/" + id,
+    region: "India", date: "2026-10-20", severity: "high", opportunity: "Booking help", isNew: true, seen: 3, prev: { severity: "low" }, firstEarlier: "2026-10-01", ...over,
+  });
+  const world = async (over = {}) => {
+    const st = memStorage();
+    st.m.set(sweepKey(SWEEP), JSON.stringify({ at: SWEEP_AT, problems: [problem("p1"), problem("p2"), problem("p3")] }));
+    const rec = { ...newPending("saver@example.com", { now: T0 - 2 * DAY, randomBytes: seeded(71) }), token: "tok-saver", status: "active", confirmedAt: iso(T0 - DAY), plan: "pro", proSource: "owner", ...over };
+    await putSubscriber(st, rec);
+    const writes = [];
+    const set = st.set;
+    st.set = async (k, v) => { if (k.startsWith("radar:sub:")) writes.push(k); return set(k, v); };
+    const logs = [];
+    const acct = makeAccountHandler({ env: ENV, storage: st, fetchFn: async () => ({ ok: true, status: 200, headers: { get: () => null }, json: async () => ({ id: "m" }) }), now: () => T0, randomBytes: seeded(4), log: (...a) => logs.push(a.join(" ")) });
+    const cookie = `tpr_session=${signSession(rec, { secret: SECRET, now: T0 })}`;
+    // Signed in by cookie unless `link` (the emailed id and token) or `cookie: null`.
+    const call = async ({ method = "POST", body = {}, query = {}, link = false, cookie: c = cookie, origin = "https://site.example" } = {}) => {
+      const headers = { host: "site.example", "content-type": "application/json" };
+      if (c) headers.cookie = c;
+      if (origin) headers.origin = origin;
+      const res = mockRes();
+      const ids = link ? { id: rec.id, t: rec.token } : {};
+      await acct({ method, headers, query: method === "GET" ? { ...ids, ...query } : {}, body: method === "POST" ? { ...ids, ...body } : undefined }, res);
+      return res;
+    };
+    const saveIt = (itemId, more = {}) => call({ body: { action: "save", sweepId: SWEEP, itemId, ...more } });
+    return { st, rec, call, saveIt, writes, logs, cookie, get: () => getSubscriber(st, rec.id) };
+  };
+  const listOf = async (w) => ((await w.get()).saved || []).map((s) => s.id);
+
+  // Save
+  let w = await world();
+  let r = await w.saveIt("p1", { item: { title: "forged" }, title: "forged", summary: "forged" });
+  let rec = await w.get();
+  check(r.code === 200 && r.json().ok === true && JSON.stringify(r.json().ids) === '["p1"]' && rec.saved.length === 1, "save: a Pro saves p1 and it is stored");
+  const e = rec.saved[0];
+  check(e.id === "p1" && e.sweepId === SWEEP && e.at === iso(T0) && e.item.title === "Visa queue p1" && e.item.summary === "Long waits at the consulate" && e.item.sweepAt === SWEEP_AT,
+    "save: the entry is the server's copy from the sweep, with the sweep's time; a forged item or title in the body is ignored");
+  check(!("isNew" in e.item) && !("seen" in e.item) && !("prev" in e.item) && !("firstEarlier" in e.item) && JSON.stringify(r.json().entry) === JSON.stringify(e),
+    "save: the copy leaves out isNew, seen, prev and firstEarlier, and the reply carries the stored entry");
+  const before = w.writes.length;
+  r = await w.saveIt("p1");
+  check(r.code === 200 && JSON.stringify(r.json().ids) === '["p1"]' && (await w.get()).saved.length === 1 && w.writes.length === before, "save: saving p1 again gives one entry and no second write");
+  r = await w.saveIt("p2");
+  check(r.code === 200 && JSON.stringify(await listOf(w)) === '["p2","p1"]', "save: newest first");
+  r = await w.call({ method: "GET" });
+  check(r.code === 200 && !("saved" in r.json()) && !r.body.includes("Visa queue"), "account GET: the account view doesn't carry the list");
+  r = await w.call({ method: "GET", query: { action: "saved" } });
+  check(r.code === 200 && JSON.stringify(r.json().saved.map((s) => s.id)) === '["p2","p1"]' && r.json().saved[1].item.title === "Visa queue p1", "GET ?action=saved: a Pro gets the list, newest first");
+  check(!w.logs.some((l) => /Visa queue|p1|p2/.test(l)), "save: nothing about the list is logged");
+
+  // Unsave
+  r = await w.call({ body: { action: "unsave", itemId: "p1" } });
+  check(r.code === 200 && JSON.stringify(r.json().ids) === '["p2"]' && JSON.stringify(await listOf(w)) === '["p2"]', "unsave: removes p1");
+  const before2 = w.writes.length;
+  r = await w.call({ body: { action: "unsave", itemId: "p1" } });
+  check(r.code === 200 && JSON.stringify(r.json().ids) === '["p2"]' && w.writes.length === before2, "unsave: a second unsave is fine and writes nothing");
+
+  // A trimmed sweep: the saved copy outlives its sweep file
+  w.st.m.delete(sweepKey(SWEEP));
+  r = await w.call({ method: "GET", query: { action: "saved" } });
+  check(r.code === 200 && r.json().saved.length === 1 && r.json().saved[0].item.title === "Visa queue p2", "GET ?action=saved: an entry still comes back after its sweep file is deleted");
+
+  // The cap
+  const filler = Array.from({ length: MAX_SAVED }, (_, i) => ({ id: "old" + i, sweepId: SWEEP, at: iso(T0 - DAY), item: { title: "Old " + i } }));
+  w = await world({ saved: filler });
+  r = await w.saveIt("p1");
+  check(MAX_SAVED === 100 && r.code === 409 && r.json().error === "saved_full" && r.json().max === 100 && (await w.get()).saved.length === 100 && !(await listOf(w)).includes("p1"),
+    "save: with 100 saved, the next save is 409 saved_full and nothing changes");
+  r = await w.call({ body: { action: "unsave", itemId: "old5" } });
+  r = await w.saveIt("p1");
+  check(r.code === 200 && (await w.get()).saved.length === 100 && (await listOf(w))[0] === "p1", "save: after an unsave there is room again");
+
+  // Plans
+  w = await world({ plan: "free", proSource: undefined });
+  r = await w.saveIt("p1");
+  check(r.code === 402 && r.json().error === "pro_only" && !(await w.get()).saved, "save: Free gets 402 pro_only, nothing stored");
+  r = await w.call({ method: "GET", query: { action: "saved" } });
+  check(r.code === 402 && r.json().error === "pro_only", "GET ?action=saved: Free gets 402");
+  const kept = [{ id: "p3", sweepId: SWEEP, at: iso(T0 - DAY), item: { title: "Kept" } }];
+  w = await world({ proUntil: iso(T0 - 1000), saved: kept });
+  r = await w.call({ method: "GET", query: { action: "saved" } });
+  check(r.code === 402 && (await w.get()).saved.length === 1, "GET ?action=saved: a lapsed Pro gets 402, and the list stays stored");
+  r = await w.saveIt("p1");
+  check(r.code === 402 && JSON.stringify(await listOf(w)) === '["p3"]', "save: a lapsed Pro gets 402");
+  await putSubscriber(w.st, { ...(await w.get()), proUntil: iso(T0 + 30 * DAY) });
+  r = await w.call({ method: "GET", query: { action: "saved" } });
+  check(r.code === 200 && r.json().saved.length === 1 && r.json().saved[0].item.title === "Kept", "GET ?action=saved: the list comes back after renewing");
+  w = await world({ proUntil: iso(T0 - 1000), saved: kept });
+  r = await w.call({ body: { action: "unsave", itemId: "p3" } });
+  check(r.code === 200 && (await w.get()).saved.length === 0, "unsave: a lapsed Pro can still remove one");
+
+  // Bad requests
+  w = await world();
+  r = await w.call({ body: { action: "save", sweepId: "1793000000001", itemId: "p1" } });
+  check(r.code === 404 && r.json().error === "not_found", "save: a sweep that isn't stored is 404");
+  r = await w.saveIt("nope");
+  check(r.code === 404 && r.json().error === "not_found", "save: an id that isn't in the sweep is 404");
+  w.st.m.set(sweepKey("1793000000002"), "{not json");
+  r = await w.call({ body: { action: "save", sweepId: "1793000000002", itemId: "p1" } });
+  check(r.code === 404, "save: an unreadable sweep file is 404");
+  const badSweeps = ["../x", "12", "radar:history", "17930000000000000", ""];
+  let allBad = true;
+  for (const sweepId of [...badSweeps, 1793000000000, null]) {
+    r = await w.call({ body: { action: "save", sweepId, itemId: "p1" } });
+    allBad = allBad && r.code === 400 && r.json().error === "bad_sweep";
+  }
+  check(allBad, "save: a bad sweepId (a path, too short or long, a number, missing) is 400 bad_sweep");
+  let allBadItem = true;
+  for (const itemId of ["", "x".repeat(201), 5, null, undefined]) {
+    r = await w.call({ body: { action: "save", sweepId: SWEEP, itemId } });
+    allBadItem = allBadItem && r.code === 400 && r.json().error === "bad_item";
+    r = await w.call({ body: { action: "unsave", itemId } });
+    allBadItem = allBadItem && r.code === 400 && r.json().error === "bad_item";
+  }
+  check(allBadItem && !(await w.get()).saved, "save and unsave: a missing, empty, too long or non-string itemId is 400 bad_item");
+
+  // Who may
+  w = await world();
+  r = await w.saveIt("p1").then(() => w.call({ body: { action: "save", sweepId: SWEEP, itemId: "p2" }, cookie: null }));
+  check(r.code === 401 && JSON.stringify(await listOf(w)) === '["p1"]', "save: signed out is 401");
+  r = await w.call({ method: "GET", query: { action: "saved" }, cookie: null });
+  check(r.code === 401, "GET ?action=saved: signed out is 401");
+  r = await w.call({ body: { action: "save", sweepId: SWEEP, itemId: "p2" }, link: true, cookie: null });
+  check(r.code === 403 && r.json().error === "sign_in_first" && JSON.stringify(await listOf(w)) === '["p1"]', "save: an emailed link without a session is 403 sign_in_first");
+  r = await w.call({ body: { action: "unsave", itemId: "p1" }, link: true, cookie: null });
+  check(r.code === 403 && JSON.stringify(await listOf(w)) === '["p1"]', "unsave: an emailed link without a session is 403");
+  r = await w.call({ method: "GET", query: { action: "saved" }, link: true, cookie: null });
+  check(r.code === 403 && !r.body.includes("Visa queue"), "GET ?action=saved: an emailed link without a session is 403");
+  const other = { ...newPending("other@example.com", { now: T0 - 2 * DAY, randomBytes: seeded(72) }), status: "active", confirmedAt: iso(T0 - DAY), plan: "pro", proSource: "owner" };
+  await putSubscriber(w.st, other);
+  const otherCookie = `tpr_session=${signSession(other, { secret: SECRET, now: T0 })}`;
+  r = await w.call({ method: "GET", query: { action: "saved" }, link: true, cookie: otherCookie });
+  check(r.code === 403 && !r.body.includes("Visa queue"), "GET ?action=saved: one account's link with another's session is 403");
+  r = await w.call({ body: { action: "save", sweepId: SWEEP, itemId: "p2" }, origin: "https://evil.example" });
+  check(r.code === 403 && r.json().error === "wrong_origin" && JSON.stringify(await listOf(w)) === '["p1"]', "save: from another origin is 403");
+  r = await w.call({ body: { action: "unsave", itemId: "p1" }, origin: "https://evil.example" });
+  check(r.code === 403 && JSON.stringify(await listOf(w)) === '["p1"]', "unsave: from another origin is 403");
+
+  // Two saves at once
+  w = await world();
+  const [a, b] = await Promise.all([w.saveIt("p1"), w.saveIt("p2")]);
+  const both = await listOf(w);
+  check(a.code === 200 && b.code === 200 && both.length === 2 && both.includes("p1") && both.includes("p2"), "save: two saves at once are both kept");
+
+  // Delete my account takes the list with it
+  w = await world();
+  await w.saveIt("p1");
+  r = await w.call({ body: { action: "delete-account" } });
+  check(r.code === 200 && !(await w.get()) && ![...w.st.m.values()].some((v) => typeof v === "string" && v.includes("\"saved\"")), "delete-account: the saved list goes with the record");
+}
+
 finish("subscription tests");
