@@ -49,14 +49,25 @@ working in a real inbox; that is T12's staged launch.
 | [T33](T33-pro-plan-builder.md) One Pro plan, priced and paid together | built on `fixes`, merged to main (#91, #92, 2026-10-25/26) and live since go-live; simplified 2026-10-26 to one price paid monthly or yearly (₹1 each while testing), categories and emails a day chosen freely; one ₹1 Razorpay plan per period (`RAZORPAY_PLANS`); still to do: the `/pricing/` calculator, the test-mode run on an up-to-date `staging` | | all tests pass | Added 2026-10-25 |
 | [T34](T34-renew-pro.md) Renewing Pro | built 2026-10-25 on `fixes`, merged to main (#91, #92) and live: Keep renewing (a new subscription from `proUntil`), Renew Pro with the last plan, a warning email 7 days before a plan that won't renew ends; the `start_at` path still to verify in test mode | | all tests pass | Added 2026-10-25 |
 | [T35](T35-sweep-slots-on-time.md) Sweep slots on time | built 2026-10-25 on `fixes`, merged to main (#91, #92) and live; a day of real runs still to check | | sweep tests pass | Added 2026-10-25. GitHub's runs started 2 h 15 m to 4 h 35 m late on 2026-10-24 and 25; all landed in the right slot, but only just |
-| [T36](T36-problem-detail-panel.md) Problem detail panel | built 2026-10-29 on `feat/t36-detail-panel`; the live board shows history from the first production sweep after deploy | e399913, b23dd1a, d877ec6 | 1,296 pass | Added 2026-10-29, Phase 5. See T36 notes below |
-| [T37](T37-areas.md) Areas | todo | | | Added 2026-10-29, Phase 5 |
+| [T36](T36-problem-detail-panel.md) Problem detail panel | built 2026-10-29 on `feat/t36-detail-panel`, merged to main (#100, `911d583`) and live; the live board shows history from the first production sweep after deploy | e399913, b23dd1a, d877ec6 | 1,296 pass | Added 2026-10-29, Phase 5. See T36 notes below |
+| [T37](T37-areas.md) Areas | built 2026-10-29 on `feat/t37-areas` | 42a8a24, 2828648 | 1,300 pass | Added 2026-10-29, Phase 5. See T37 notes below |
 | [T38](T38-search-all-sweeps.md) Search all sweeps | todo | | | Added 2026-10-29, Phase 5 |
 | [T39](T39-saved-problems.md) Saved problems | todo | | | Added 2026-10-29, Phase 5 |
 | [T40](T40-share-a-problem.md) Share one problem | todo | | | Added 2026-10-29, Phase 5 |
 | [T41](T41-email-areas.md) Areas in Pro email | todo | | | Added 2026-10-29, Phase 5 |
 
 ## Notes per task
+
+### T37
+- The areas block (`AREAS`, the name table, `areaOf`) is the same text in `api/_lib/radar.js` and
+  `travel-problem-radar.jsx`; check.mjs §5 compares the text between its marker comments.
+- The area is worked out when needed and never stored, so the prompt and `/api/data` are unchanged.
+- Production regions, read-only with a scratchpad script: 9 sweeps (all there are), 151 items, 42 distinct regions,
+  none in Other. The bracket rule came from this run: "Niger, Burkina Faso, Mali (US citizens affected)" was Global
+  until text in brackets counted only when the rest names nothing.
+- Checked by hand in headless Chrome on a locally served `/demo/` (18 checks): tiles and chips agree and add up to
+  the cards, area with category and search, clearing each filter, a tile clicked twice, Space and Enter,
+  `aria-pressed` on every chip, and 375px in light and dark. Not in CI.
 
 ### T36
 - The design changed from the task file's first draft once the code was read. The cards already show everything

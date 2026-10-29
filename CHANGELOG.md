@@ -5,6 +5,11 @@ grouped by date.
 
 ## 2026-10-29
 
+- The board can be filtered by part of the world: an "All areas" chip row with a count on each area, and area
+  tiles above the categories when a sweep spans two or more areas. Each problem's region, as the AI wrote it, is
+  placed in Global, Asia, Europe, North America, Latin America, Middle East & Africa, Oceania or Other; a region
+  that names two or more areas counts as Global. The cards still show the AI's own region text. Every filter chip
+  now says whether it is pressed (`aria-pressed`) (T37).
 - Each problem on the board has a Details button that opens a panel (a side panel on desktop, a bottom sheet on a
   phone) with the problem in full and its history: when it was first seen, how many sweeps it has been in, and the
   earlier sweeps, each with Open while it is still kept. Cards in more than one sweep say "Seen in N sweeps". A

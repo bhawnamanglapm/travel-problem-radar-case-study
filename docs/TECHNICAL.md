@@ -48,6 +48,11 @@ Subscriber -> links in each email -> /manage/ (/api/account: plan, Request Pro o
   count, latest sweep ids) and saves each item with `firstAt`, `seen` and `prev`, so the board's Details panel shows
   "First seen … · in N sweeps" from the sweep it already loaded. `trackItems` is the same text in the server and the
   component, and `npm run check` fails if they differ. A failed read or write of the index never fails the sweep.
+- **Areas (T37).** The board filters by a fixed list of areas (Global, Asia, Europe, North America, Latin America,
+  Middle East & Africa, Oceania, Other). `areaOf` places the AI's free-text `region` in one from a name table;
+  text that names two or more areas counts as Global, and text it can't place as Other. The area is worked out
+  when needed, never stored, so `/api/data` is unchanged. The block is the same text in the server and the
+  component, and `npm run check` fails if they differ.
 - The API key is held as a Vercel secret, never in the page or the code.
 - Items are AI-gathered and not verified; the page tells visitors to check each source link.
 
