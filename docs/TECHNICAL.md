@@ -71,6 +71,12 @@ Subscriber -> links in each email -> /manage/ (/api/account: plan, Request Pro o
   unsave. The board's fourth tab, Saved, shows the copies; the demo keeps its own in browser storage. Each save
   or unsave is one Blob write, an advanced operation, and the sweeps already use most of the Hobby plan's 2,000 a
   month (see the T39 task file).
+- **Share one problem (T40).** Share in the panel links to `/p/<sweepId>/<itemId>`, which `vercel.json` rewrites to
+  `/api/data?page=item`, so there's no new function. The ids are checked before anything is read; then one sweep
+  read finds the item (`404` if it's gone). The page is written on the server with `sendPage`: the teaser fields
+  for everyone, the summary, opportunity and source for a signed-in Pro. The Open Graph and Twitter tags carry only
+  the teaser fields, with `og.png` as the image, so a link preview is the same for everyone. `noindex` and
+  `no-store`. On a phone Share opens the share sheet; elsewhere it copies the link.
 - The API key is held as a Vercel secret, never in the page or the code.
 - Items are AI-gathered and not verified; the page tells visitors to check each source link.
 
@@ -116,7 +122,8 @@ Email has been sent through a real Resend account since 21 Oct 2026, from the ve
 | `api/_lib/subscriber-delivery.js` | After a saved sweep: Pro and Free sends, the 24-hour roll-up, resuming a cut-off send |
 | `api/_lib/plan.js` | Pro's price from `plan.json` (T33): one plan, a `monthly` and a `yearly` price; the periods on sale; and `RAZORPAY_PLANS` (one ₹1 Razorpay plan per period; a subscription's quantity is the price). Used by `/api/account`, `fill-plan` and `check-plan` |
 | `api/_lib/razorpay.js` | Razorpay for paid Pro (T19): create, cancel and fetch a subscription, and the webhook and Checkout signature checks. Used by `/api/account`'s checkout, checkout-return and cancel (T20) |
-| `vercel.json` | Daily backstop cron (01:30 UTC), 300 s limit, build that publishes `index.html`, `demo/`, `live/`, `subscribe/`, `manage/` |
+| `vercel.json` | Daily backstop cron (01:30 UTC), 300 s limit, build that publishes `index.html`, `demo/`, `live/`, `subscribe/`, `manage/`; the `/p/<sweep>/<item>` rewrite to `/api/data` (T40) |
+| `og.png`, `scripts/og-card.html` | The link-preview image (1200×630) and the page it was rendered from (T40) |
 | `travel-problem-radar.jsx` | The dashboard component (live in Claude's app, demo on the web) |
 | `sampleData.json` | 8 saved items, two per category, each with a source link |
 | `scripts/check.mjs` | Offline checks: sample data, page links, bundles, the subscribe and manage pages, prompt drift, secrets (Razorpay key secrets too), Hobby's 12-function limit |

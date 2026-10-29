@@ -4314,4 +4314,101 @@ const iso = (ms) => new Date(ms).toISOString();
   check(r.code === 200 && !(await w.get()) && ![...w.st.m.values()].some((v) => typeof v === "string" && v.includes("\"saved\"")), "delete-account: the saved list goes with the record");
 }
 
+// ---- T40: one problem's share page, /p/<sweepId>/<itemId> through /api/data?page=item
+{
+  const { signSession } = await import("../api/_lib/session.js");
+  const SECRET = "test-session-secret-0123456789abcdef";
+  const DAY = 24 * 3600 * 1000;
+  const SWEEP = "1800000000000";
+  const p = {
+    id: "traveler_pain:visa-queues-x", cat: "traveler_pain", title: "Visa queues <\"&> at Gate 4", summary: "SUMMARY-MARK long waits",
+    source: "Example News", link: "https://news.example/LINK-MARK", region: "Europe", date: "2026-10-28", severity: "High", opportunity: "OPP-MARK a queue app",
+  };
+  const sweeps = memStorage();
+  sweeps.m.set("radar:sweep:" + SWEEP, JSON.stringify({ at: "2026-10-28T01:30:00.000Z", problems: [p] }));
+  const reads = [];
+  const counted = { get: async (k) => { reads.push(k); return sweeps.get(k); } };
+  const accounts = memStorage();
+  const mk = async (email, over) => {
+    const r = { ...newPending(email, { now: T0 - 2 * DAY, randomBytes: seeded(email.length) }), status: "active", confirmedAt: iso(T0 - DAY), ...over };
+    await putSubscriber(accounts, r);
+    return r;
+  };
+  const free = await mk("free@example.com", {});
+  const pro = await mk("pro@example.com", { plan: "pro", proSource: "owner" });
+  const cookie = (r) => `tpr_session=${signSession(r, { secret: SECRET, now: T0 })}`;
+  const baseEnv = { SESSION_SECRET: SECRET, SITE_URL: "https://radar.example" };
+  const logs = [];
+  const page = async ({ sweep = SWEEP, item = p.id, c, method = "GET", env = baseEnv, storage = counted } = {}) => {
+    reads.length = 0;
+    const origLog = console.log, origErr = console.error;
+    console.log = (...a) => logs.push(a.join(" "));
+    console.error = (...a) => logs.push(a.join(" "));
+    try {
+      const res = mockRes();
+      const url = `/api/data?page=item&sweep=${encodeURIComponent(sweep)}&item=${encodeURIComponent(item)}`;
+      await makeDataHandler({ storage, accounts, env, now: () => T0 })({ method, url, headers: c ? { cookie: c } : {} }, res);
+      return res;
+    } finally { console.log = origLog; console.error = origErr; }
+  };
+  const FULL = ["SUMMARY-MARK", "OPP-MARK", "LINK-MARK"];
+  const TEASER = ["Visa queues &lt;&quot;&amp;&gt; at Gate 4", "Traveler pain", "Example News", "Europe", "2026-10-28", "High"];
+  const head = (r) => r.body.slice(0, r.body.indexOf("</head>"));
+
+  const anon = await page();
+  check(anon.code === 200 && TEASER.every((s) => anon.body.includes(s)) && FULL.every((s) => !anon.body.includes(s)),
+    "item page: signed out shows the headline, category, source, region, date and severity, and not the summary, opportunity or source link");
+  check(anon.body.includes('href="/signin/"') && anon.body.includes('href="/pricing/"') && anon.body.includes("The full problem is part of Pro") && !anon.body.includes("Open on the board"),
+    "item page: signed out gets Sign in and the pricing link, not Open on the board");
+  check(reads.length === 1 && reads[0] === "radar:sweep:" + SWEEP, "item page: one sweep read, and no session read without a cookie");
+  const fr = await page({ c: cookie(free) });
+  check(fr.code === 200 && FULL.every((s) => !fr.body.includes(s)) && fr.body.includes("The full problem is part of Pro"), "item page: a signed-in Free sees the teaser only");
+  const pr = await page({ c: cookie(pro) });
+  check(pr.code === 200 && FULL.every((s) => pr.body.includes(s)) && pr.body.includes('rel="noopener noreferrer"') && !pr.body.includes("The full problem is part of Pro"),
+    "item page: a signed-in Pro sees the summary, the opportunity and the source link");
+  check(pr.body.includes(`href="/live/?all=1#p=${encodeURIComponent(p.id)}"`), "item page: Pro gets Open on the board, on All saved sweeps");
+  check(head(pr) === head(anon) && head(fr) === head(anon) && FULL.every((s) => !head(pr).includes(s)), "item page: the head tags are the same for every visitor and hold teaser fields only");
+
+  const h = head(anon);
+  const tag = (attr, k, v) => h.includes(`<meta ${attr}="${k}" content="${v}">`);
+  check(tag("property", "og:title", "Visa queues &lt;&quot;&amp;&gt; at Gate 4") && tag("property", "og:description", "Traveler pain · Europe · 2026-10-28")
+    && tag("property", "og:url", `https://radar.example/p/${SWEEP}/${encodeURIComponent(p.id)}`) && tag("property", "og:image", "https://radar.example/og.png")
+    && tag("property", "og:type", "article") && tag("property", "og:image:width", "1200") && tag("property", "og:image:height", "630"),
+    "item page: the Open Graph tags carry the headline, category · region · date, the page URL and the site image, escaped");
+  check(tag("name", "twitter:card", "summary_large_image") && tag("name", "twitter:title", "Visa queues &lt;&quot;&amp;&gt; at Gate 4") && tag("name", "twitter:description", "Traveler pain · Europe · 2026-10-28"),
+    "item page: the Twitter tags match");
+  check(h.includes('<meta name="robots" content="noindex">') && anon.headers["x-robots-tag"] === "noindex" && anon.headers["cache-control"] === "no-store",
+    "item page: noindex in the header and the head, and never cached");
+  const noSource = (r) => r.body.replace(/href="https:\/\/news\.example[^"]*"/g, "");
+  check([anon, pr].every((r) => !/(src|href)="(https?:)?\/\//.test(noSource(r)) && !/<script|<link |<img|@import|url\(/.test(r.body)),
+    "item page: nothing is loaded from another site (the source is a link only)");
+  const noSite = await page({ env: { SESSION_SECRET: SECRET } });
+  check(noSite.code === 200 && !head(noSite).includes("og:url") && !head(noSite).includes("og:image") && head(noSite).includes('content="summary"'),
+    "item page: with no site URL, no relative og:url or og:image is sent");
+
+  for (const [sweep, item, label] of [["18000", p.id, "a short sweep id"], ["abc", p.id, "a non-numeric sweep id"], [SWEEP, "no-colon", "an item id without a category"],
+    [SWEEP, "Traveler_pain:x", "an item id with capitals"], [SWEEP, "traveler_pain:" + "a".repeat(61), "an item id too long"], [SWEEP, "../radar:history", "a path in the item id"]]) {
+    const r = await page({ sweep, item });
+    check(r.code === 400 && reads.length === 0, `item page: ${label} is 400 and reads nothing`);
+  }
+  let r = await page({ sweep: "1700000000000" });
+  check(r.code === 404 && r.body.includes("This problem is no longer on the board") && reads.length === 1, "item page: a sweep no longer kept is 404, after one read");
+  r = await page({ item: "traveler_pain:not-in-this-sweep" });
+  check(r.code === 404 && reads.length === 1, "item page: an item not in its sweep is 404, after one read");
+  r = await page({ method: "POST" });
+  check(r.code === 405, "item page: a POST is 405");
+  r = await page({ storage: { get: async () => { throw new Error("down"); } } });
+  check(r.code === 502, "item page: a storage failure is 502");
+
+  check([anon, fr, pr, noSite].every((x) => !x.body.includes("@")) && logs.length === 0, "item page: no address in any page, and nothing is logged");
+
+  // BOARD_PAYWALL on: the JSON feed is still locked, and the share page still serves the teaser
+  const on = { ...baseEnv, BOARD_PAYWALL: "1" };
+  r = await page({ env: on });
+  check(r.code === 200 && TEASER.every((s) => r.body.includes(s)) && FULL.every((s) => !r.body.includes(s)), "item page: with the board locked, signed out still gets the teaser");
+  const feed = mockRes();
+  await makeDataHandler({ storage: sweeps, accounts, env: on, now: () => T0 })({ method: "GET", url: "/api/data?key=radar:sweep:" + SWEEP, headers: {} }, feed);
+  check(feed.code === 401, "item page: with the board locked, the JSON feed is still 401 signed out");
+}
+
 finish("subscription tests");

@@ -1,12 +1,13 @@
 // HTTP handlers, built from injected dependencies so the offline tests can call
 // them directly. api/sweep.js and api/data.js wire in the real ones.
-import { runDailySweep, scanCategory } from "./radar.js";
+import { CATS, runDailySweep, scanCategory, sweepKey } from "./radar.js";
 import { buildDigest, buildFailureNotice, postToSlack } from "./slack.js";
 import { buildDigestEmail, buildFailureEmail, sendEmail } from "./email.js";
 import { randomBytes as cryptoRandomBytes } from "node:crypto";
-import { bearerOk, sendJson } from "./http.js";
+import { bearerOk, esc, sendJson, sendPage } from "./http.js";
 import { deliverToSubscribers } from "./subscriber-delivery.js";
 import { readSession } from "./session.js";
+import { siteUrl } from "./subscription-handlers.js";
 import { countEvents, effectivePlan, recordEvent, utcDay } from "./subscribers.js";
 import { SLOTS_BY_FREQ, dueSlot, siteSweepsPerDay } from "./schedule.js";
 
@@ -110,6 +111,59 @@ export function makeSweepHandler({ env, storage, fetchFn, now, randomBytes = cry
 // Read-only, and only for the kinds of key the dashboard asks for: the index, a sweep, the search file (T38).
 const ALLOWED_KEY = /^radar:(history|search|sweep:\d{10,16})$/;
 
+// One problem's share page, /p/<sweepId>/<itemId> (T40), rewritten to /api/data?page=item by vercel.json so
+// it needs no function of its own. Everyone sees the free teaser email's fields; a signed-in Pro also sees
+// the summary, the opportunity and the source. The head tags (the preview card) hold teaser fields only.
+const SWEEP_ID = /^\d{10,16}$/;
+const ITEM_ID = /^[a-z0-9_-]{1,40}:[a-z0-9-]{0,60}$/; // cat.key + ":" + slug(title), as radar.js makes them
+const GONE = { title: "This problem is no longer on the board", body: `<p>The board keeps the last 60 sweeps, and this one is older. <a href="/live/">Open the live board</a></p>` };
+
+async function itemPage(req, res, u, { storage, accounts, env, now }) {
+  const sweepId = u.searchParams.get("sweep") || "", itemId = u.searchParams.get("item") || "";
+  if (!SWEEP_ID.test(sweepId) || !ITEM_ID.test(itemId)) return sendPage(res, 400, { title: "This link isn't valid", body: `<p>Check it was copied in full. <a href="/live/">Open the live board</a></p>` });
+  let sweep = null;
+  try { sweep = await storage.get(sweepKey(sweepId)); } catch (e) { return sendPage(res, 502, { title: "The board couldn't be read", body: `<p>Please try again in a minute.</p>` }); }
+  try { sweep = sweep == null ? null : JSON.parse(sweep); } catch (e) { sweep = null; }
+  const p = sweep && Array.isArray(sweep.problems) && sweep.problems.find((x) => x && x.id === itemId);
+  if (!p) return sendPage(res, 404, GONE);
+  const t = now();
+  const record = await readSession(req, { env, storage: accounts, now: t });
+  const pro = Boolean(record) && effectivePlan(record, t) === "pro";
+  const cat = (CATS.find((c) => c.key === p.cat) || {}).label || "";
+  const date = p.date || String(sweep.at || "").slice(0, 10);
+  const line = [cat, p.region, date].filter(Boolean).join(" · ");
+  const site = siteUrl(env);
+  const path = `/p/${sweepId}/${encodeURIComponent(itemId)}`;
+  const meta = [
+    { property: "og:type", content: "article" },
+    { property: "og:site_name", content: "Travel Problem Radar" },
+    { property: "og:title", content: p.title },
+    { property: "og:description", content: line },
+    ...(site ? [
+      { property: "og:url", content: site + path },
+      { property: "og:image", content: site + "/og.png" },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
+      { property: "og:image:alt", content: "Travel Problem Radar" },
+    ] : []),
+    { name: "twitter:card", content: site ? "summary_large_image" : "summary" },
+    { name: "twitter:title", content: p.title },
+    { name: "twitter:description", content: line },
+  ];
+  const facts = [["Category", cat], ["Severity", p.severity], ["Source", p.source], ["Region", p.region], ["Date", date]]
+    .filter(([, v]) => v).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("");
+  const full = pro
+    ? [
+        p.summary ? `<p>${esc(p.summary)}</p>` : "",
+        p.opportunity ? `<p><strong>Opportunity:</strong> ${esc(p.opportunity)}</p>` : "",
+        p.link ? `<p><a href="${esc(p.link)}" rel="noopener noreferrer">Read the source</a></p>` : "",
+        `<p><a href="/live/?all=1#p=${esc(encodeURIComponent(itemId))}">Open on the board</a></p>`,
+      ].join("")
+    : `<p>The full problem is part of Pro: the summary, the opportunity and the source. <a href="/signin/">Sign in</a> · <a href="/pricing/">See Pro</a></p>`;
+  const about = `<p><small>From <a href="/">Travel Problem Radar</a>: travel-industry problems found by an AI model with web search, 1 to 5 times a day.</small></p>`;
+  return sendPage(res, 200, { title: p.title, meta, body: `<dl class="item">${facts}</dl>${full}${about}` });
+}
+
 // With BOARD_PAYWALL=1 (T17) only a signed-in Pro reads the board: no login is 401, Free or a
 // lapsed Pro 402, and no reply may sit in a shared cache. The login is checked against `accounts`,
 // a store that reads fresh, so a revoked or deleted record stops working at once; `storage` (the
@@ -119,7 +173,9 @@ export function makeDataHandler({ storage, accounts = storage, env = {}, now = D
     const paywall = env.BOARD_PAYWALL === "1";
     const reply = (code, body) => sendJson(res, code, body, paywall ? { "cache-control": "private, no-store" } : {});
     if (req.method !== "GET") return reply(405, { error: "read-only" });
-    const key = new URL(req.url, "http://x").searchParams.get("key") || "";
+    const u = new URL(req.url, "http://x");
+    if (u.searchParams.get("page") === "item") return itemPage(req, res, u, { storage, accounts, env, now });
+    const key = u.searchParams.get("key") || "";
     if (!ALLOWED_KEY.test(key)) return reply(400, { error: "key not allowed" });
     if (paywall) {
       const t = now();

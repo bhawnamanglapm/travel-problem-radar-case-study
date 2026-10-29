@@ -52,11 +52,24 @@ working in a real inbox; that is T12's staged launch.
 | [T36](T36-problem-detail-panel.md) Problem detail panel | built 2026-10-29 on `feat/t36-detail-panel`, merged to main (#100, `911d583`) and live; the live board shows history from the first production sweep after deploy | e399913, b23dd1a, d877ec6 | 1,296 pass | Added 2026-10-29, Phase 5. See T36 notes below |
 | [T37](T37-areas.md) Areas | built 2026-10-29 on `feat/t37-areas`, merged to main (#101, `8f1b220`) and live | 42a8a24, 2828648 | 1,300 pass | Added 2026-10-29, Phase 5. See T37 notes below |
 | [T38](T38-search-all-sweeps.md) Search all sweeps | built 2026-10-29 on `feat/t38-search-all-sweeps`, merged to main (#102, `fd3aad6`) and live | aff0218, 74b7bae, 5ef7ebd | 1,324 pass | Added 2026-10-29, Phase 5. See T38 notes below |
-| [T39](T39-saved-problems.md) Saved problems | built 2026-10-29 on `feat/t39-saved-problems` | bc2c4cc, 9d7a9ac, 48957ef, 54fd29b | 1,358 pass | Added 2026-10-29, Phase 5. See T39 notes below |
-| [T40](T40-share-a-problem.md) Share one problem | todo | | | Added 2026-10-29, Phase 5 |
+| [T39](T39-saved-problems.md) Saved problems | built 2026-10-29 on `feat/t39-saved-problems`, merged to main (#103, `76a2d17`) and live | bc2c4cc, 9d7a9ac, 48957ef, 54fd29b | 1,358 pass | Added 2026-10-29, Phase 5. See T39 notes below |
+| [T40](T40-share-a-problem.md) Share one problem | built 2026-10-30 on `feat/t40-share-a-problem` | 11c660d, dac9282, 8a009d4 | 1,383 pass | Added 2026-10-29, Phase 5. See T40 notes below |
 | [T41](T41-email-areas.md) Areas in Pro email | todo | | | Added 2026-10-29, Phase 5 |
 
 ## Notes per task
+
+### T40
+- No new function: `/p/<sweep>/<item>` is a `vercel.json` rewrite to `/api/data?page=item`, so `api/` stays at 10
+  of 12.
+- `og.png` is new; the site had no preview image. Its source is `scripts/og-card.html`.
+- A view costs one simple Blob read (two with a session cookie) and no advanced operations.
+- Checked by hand in headless Chrome against a local server running the real data and account handlers on an
+  in-memory store (28 checks): Share's place in the panel, mouse and keyboard, a refused copy, the phone share
+  sheet and cancelling it, the sweep id on All saved sweeps and the Saved tab, no Share in the demo, the page
+  signed out, Free and Pro, the head tags, nothing loaded from another site, Open on the board end to end, the
+  400 and 404 pages, and 375px in light and dark. Not in CI.
+- Not checked: the WhatsApp and LinkedIn previews (owner step: paste a link in each), and a real Pro session in
+  production.
 
 ### T39
 - The Blob count, from the code: each sweep already uses 12 advanced operations (8 writes, 4 lists), so at 5
