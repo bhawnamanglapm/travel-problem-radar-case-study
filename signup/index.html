@@ -10,44 +10,74 @@
 <meta name="referrer" content="no-referrer" />
 <title>Create your Travel Problem Radar account</title>
 <meta name="description" content="Create a Travel Problem Radar account with Google, or your email address and an optional password. Confirm the link we email you and you're signed in." />
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#1d4e45" />
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0c1816" />
+<style>/* Brand tokens, copied from brand.css by scripts/sync-brand.mjs: edit brand.css, then run npm run sync:brand. */
+:root {
+  color-scheme: light dark;
+  --bg: #f6f9f8; --bg2: #eef4f2; --surface: #ffffff; --surface2: #f6f9f8;
+  --line: #d6e1df; --line2: #b9cac7;
+  --text: #0f2924; --text-2: #2f4a45; --muted: #516763; --faint: #5f736f;
+  --primary: #1d4e45; --primary-hover: #163d36; --on-primary: #f6f9f8; --link: #1d4e45;
+  --accent: #f5a524; --on-accent: #0f2924; --accent-text: #a15c07;
+  --high: #b91c1c; --medium: #a15c07; --error: #b91c1c;
+  --cat-traveler: #b4441c; --cat-gov: #1d4e45; --cat-web: #2563eb; --cat-industry: #6d28d9;
+  --display: 'Inter Tight', system-ui, -apple-system, sans-serif;
+  --body: 'Inter Tight', system-ui, -apple-system, sans-serif;
+  --wordmark: 'Italiana', Georgia, serif;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0c1816; --bg2: #10201d; --surface: #142421; --surface2: #1b2f2b;
+    --line: #293d39; --line2: #3a524d;
+    --text: #ecf3f2; --text-2: #c9d6d4; --muted: #a4b7b4; --faint: #8fa39f;
+    --primary: #1e5248; --primary-hover: #25665a; --on-primary: #ecf3f2; --link: #5fbfa9;
+    --accent: #f5a524; --on-accent: #0f2924; --accent-text: #f5a524;
+    --high: #f87171; --medium: #f5a524; --error: #f87171;
+    --cat-traveler: #f08a5d; --cat-gov: #5fbfa9; --cat-web: #7aa7ff; --cat-industry: #b79cff;
+  }
+}
+</style><!-- end brand tokens -->
 <style>
   * { box-sizing: border-box; }
-  html, body { margin: 0; background: #0B0B0D; color: #F4F4F7; }
-  body { font: 16px/1.55 -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 0 16px; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body { font: 16px/1.55 var(--body); padding: 0 16px; }
   main { max-width: 640px; margin: 0 auto; padding: 40px 0 56px; }
   h1 { font-size: 26px; line-height: 1.25; margin: 0 0 12px; }
-  p { margin: 0 0 14px; color: #C9C9D2; }
-  a { color: #C6FF3D; }
-  .nav { font: 12px/1.5 ui-monospace, 'JetBrains Mono', monospace; color: #93939F; margin: 0 0 28px; }
-  .nav a { color: #F4F4F7; }
-  .card { border: 1px solid #2A2A34; background: #131318; border-radius: 8px; padding: 16px 18px; margin: 20px 0 24px; }
-  ol.steps { margin: 0 0 20px; padding-left: 22px; color: #C9C9D2; }
+  p { margin: 0 0 14px; color: var(--text-2); }
+  a { color: var(--link); }
+  .nav { font: 12px/1.5 var(--mono); color: var(--muted); margin: 0 0 28px; }
+  .nav a { color: var(--text); }
+  .card { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 16px 18px; margin: 20px 0 24px; }
+  ol.steps { margin: 0 0 20px; padding-left: 22px; color: var(--text-2); }
   ol.steps li { margin: 0 0 6px; }
   form { margin: 20px 0 8px; }
   label.field { display: block; font-weight: 600; margin: 0 0 6px; }
   .row { display: flex; flex-wrap: wrap; gap: 10px; }
-  input[type=email], input[type=password] { flex: 1 1 240px; min-width: 0; font: inherit; color: #F4F4F7; background: #131318;
-    border: 1px solid #3A3A46; border-radius: 6px; padding: 10px 12px; }
-  input[type=email]:focus, input[type=password]:focus { outline: 2px solid #C6FF3D; outline-offset: 1px; }
+  input[type=email], input[type=password] { flex: 1 1 240px; min-width: 0; font: inherit; color: var(--text); background: var(--surface);
+    border: 1px solid var(--line2); border-radius: 6px; padding: 10px 12px; }
+  input[type=email]:focus, input[type=password]:focus { outline: 2px solid var(--link); outline-offset: 1px; }
   form .row { margin: 0 0 14px; }
   form .row + .small { margin: -8px 0 14px; }
-  .opt { font-weight: 400; color: #93939F; }
+  .opt { font-weight: 400; color: var(--muted); }
   .submit { margin: 16px 0 0; }
-  button { font: inherit; font-weight: 600; background: #C6FF3D; color: #0B0B0D; border: 0; border-radius: 6px;
+  button { font: inherit; font-weight: 600; background: var(--primary); color: var(--on-primary); border: 0; border-radius: 6px;
     padding: 10px 20px; cursor: pointer; }
-  button:hover { background: #d8ff6f; }
+  button:hover { background: var(--primary-hover); }
   button[disabled] { opacity: .6; cursor: default; }
-  button.plain { background: transparent; color: #C6FF3D; border: 1px solid #3A3A46; }
+  button.plain { background: transparent; color: var(--link); border: 1px solid var(--line2); }
   /* The trap field: off-screen rather than display:none, which some bots skip. */
   .trap { position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden; }
-  #status, #outStatus { min-height: 1.6em; margin: 12px 0 0; color: #F4F4F7; }
-  #status.err, #outStatus.err { color: #FF8A80; }
-  .small { font-size: 13px; color: #93939F; }
-  label.check { display: flex; gap: 8px; align-items: flex-start; margin: 12px 0 0; font-size: 14px; color: #C9C9D2; cursor: pointer; }
-  label.check input { margin: 4px 0 0; accent-color: #C6FF3D; }
-  fieldset.period { border: 0; margin: 8px 0 0 24px; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; color: #C9C9D2; }
+  #status, #outStatus { min-height: 1.6em; margin: 12px 0 0; color: var(--text); }
+  #status.err, #outStatus.err { color: var(--error); }
+  .small { font-size: 13px; color: var(--muted); }
+  label.check { display: flex; gap: 8px; align-items: flex-start; margin: 12px 0 0; font-size: 14px; color: var(--text-2); cursor: pointer; }
+  label.check input { margin: 4px 0 0; accent-color: var(--link); }
+  fieldset.period { border: 0; margin: 8px 0 0 24px; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; color: var(--text-2); }
   fieldset.period legend { float: left; padding: 0; margin-right: 4px; }
-  fieldset.period input { accent-color: #C6FF3D; margin-right: 6px; }
+  fieldset.period input { accent-color: var(--link); margin-right: 6px; }
   .gbtn { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 48px;
     font-weight: 600; background: #fff; color: #1f1f1f; border: 1px solid #747775; border-radius: 6px; padding: 10px 20px; text-decoration: none; }
   .gbtn:hover { background: #f2f2f2; }
@@ -55,11 +85,11 @@
   .gwrap { margin: 0 0 20px; }
   .gwrap .or { margin-top: 4px; }
   .gwrap .small { margin: 8px 0 0; }
-  .or { display: flex; align-items: center; gap: 12px; font-size: 13px; color: #93939F; margin: 18px 0 16px; }
-  .or::before, .or::after { content: ""; flex: 1; border-top: 1px solid #2A2A34; }
+  .or { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--muted); margin: 18px 0 16px; }
+  .or::before, .or::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
   [hidden] { display: none !important; }
-  footer { margin-top: 36px; padding-top: 16px; border-top: 1px solid #2A2A34; }
-  .site-foot { font-size: 13px; color: #93939F; }
+  footer { margin-top: 36px; padding-top: 16px; border-top: 1px solid var(--line); }
+  .site-foot { font-size: 13px; color: var(--muted); }
   .site-foot a { display: inline-block; min-height: 24px; line-height: 24px; }
 </style>
 </head>

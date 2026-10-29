@@ -88,15 +88,20 @@ export async function readFields(req, { limit = 8192 } = {}) {
   return parseForm(await readBody(req, { limit }), req.headers && req.headers["content-type"]);
 }
 
-const PAGE_CSS = `html,body{margin:0;background:#0B0B0D;color:#F4F4F7}
-body{font:16px/1.55 -apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;padding:0 16px}
+// The brand colors from brand.css, inline so the page needs no other file. No web font: these
+// pages are reached by links that carry tokens, so they load nothing from another site. Dark mode
+// is light-dark(), not a media query: the tests require that no page holds an "@" (no address). Each
+// light-dark() follows a plain light value, which a browser without light-dark() keeps.
+const PAGE_CSS = `:root{color-scheme:light dark}
+html,body{margin:0;background:#f6f9f8;background:light-dark(#f6f9f8,#0c1816);color:#0f2924;color:light-dark(#0f2924,#ecf3f2)}
+body{font:16px/1.55 'Inter Tight',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;padding:0 16px}
 main{max-width:520px;margin:0 auto;padding:48px 0}
 h1{font-size:22px;margin:0 0 12px}
-p{margin:0 0 14px;color:#C9C9D2}
-a{color:#C6FF3D}
-button{font:inherit;font-weight:600;background:#C6FF3D;color:#0B0B0D;border:0;border-radius:6px;padding:10px 18px;cursor:pointer}
-button:hover{background:#d8ff6f}
-small{color:#93939F}`;
+p{margin:0 0 14px;color:#2f4a45;color:light-dark(#2f4a45,#c9d6d4)}
+a{color:#1d4e45;color:light-dark(#1d4e45,#5fbfa9)}
+button{font:inherit;font-weight:600;background:#1d4e45;background:light-dark(#1d4e45,#1e5248);color:#f6f9f8;color:light-dark(#f6f9f8,#ecf3f2);border:0;border-radius:6px;padding:10px 18px;cursor:pointer}
+button:hover{background:#163d36;background:light-dark(#163d36,#25665a)}
+small{color:#516763;color:light-dark(#516763,#a4b7b4)}`;
 
 // A minimal HTML page. `title` is escaped here. `body` is HTML the caller built, so every value
 // that came from a request must already have gone through esc(). The page is never cached or
