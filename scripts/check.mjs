@@ -331,6 +331,11 @@ const trackText = (t) => (t.match(/\nfunction trackItems\([\s\S]*?\n\}\n/) || t.
 check(!!trackText(jsx) && trackText(jsx) === trackText(srv), "trackItems is the same text in the artifact and the server");
 check([bundle, liveBundle].every((b) => b.includes("radar:items") && b.includes("showModal") && b.includes("#p=")),
   "both bundles are built with the detail panel (the item index, the <dialog>, the #p= link)");
+// T37: the area list, its name table and areaOf are one block of text, the same in both files.
+const areaText = (t) => (t.match(/\n\/\/ Areas \(T37\):[\s\S]*?\n\/\/ End of areas\.\n/) || [""])[0];
+check(!!areaText(jsx) && areaText(jsx) === areaText(srv) && /function areaOf\(/.test(areaText(jsx)), "the area list and areaOf are the same text in the artifact and the server");
+check([bundle, liveBundle].every((b) => b.includes("Middle East & Africa") && b.includes("All areas") && b.includes("aria-pressed")),
+  "both bundles are built with the area filter (the area list, the chips, aria-pressed)");
 
 // 6. No secrets in the repository: it is public. Keys and webhooks (Anthropic, Resend, Slack,
 // Blob) live only in Vercel's environment variables; this catches the common formats if one is

@@ -15,6 +15,52 @@ export const CATS = [
     desc: "strikes, bankruptcies, capacity cuts, overtourism, pricing shocks, and major operational disruptions" },
 ];
 
+// Areas (T37): a fixed list the board filters by, and areaOf() to place the AI's free-text region in one.
+// The same text is in travel-problem-radar.jsx and api/_lib/radar.js; scripts/check.mjs fails if they differ.
+const AREAS = ["Global", "Asia", "Europe", "North America", "Latin America", "Middle East & Africa", "Oceania", "Other"];
+const AREA_NAMES = {
+  Global: "global|globally|worldwide|world|international|multinational|multiple|various|online|multiple countries|multiple regions|several countries|many countries",
+  Asia: "asia|south asia|southeast asia|south east asia|east asia|central asia|asia pacific|apac|asean|afghanistan|armenia|azerbaijan|bangladesh|bhutan|brunei|cambodia|china|mainland china|hong kong|macau|macao|india|indonesia|japan|kazakhstan|kyrgyzstan|laos|malaysia|maldives|mongolia|myanmar|burma|nepal|north korea|south korea|korea|pakistan|philippines|singapore|sri lanka|taiwan|tajikistan|thailand|timor leste|east timor|turkmenistan|uzbekistan|vietnam|viet nam|bali|tokyo|kyoto|osaka|seoul|beijing|shanghai|bangkok|phuket|delhi|new delhi|mumbai|goa|kathmandu|manila|jakarta|kuala lumpur|hanoi|ho chi minh city",
+  Europe: "europe|eu|european union|schengen|schengen area|western europe|eastern europe|southern europe|northern europe|central europe|scandinavia|nordics|nordic countries|balkans|mediterranean|albania|andorra|austria|belarus|belgium|bosnia|herzegovina|bulgaria|croatia|cyprus|czech republic|czechia|denmark|estonia|finland|france|germany|greece|hungary|iceland|ireland|italy|kosovo|latvia|liechtenstein|lithuania|luxembourg|malta|moldova|monaco|montenegro|netherlands|holland|north macedonia|macedonia|norway|poland|portugal|romania|russia|san marino|serbia|slovakia|slovenia|spain|sweden|switzerland|turkey|turkiye|ukraine|united kingdom|uk|great britain|britain|england|scotland|wales|northern ireland|vatican|vatican city|london|paris|rome|venice|florence|milan|barcelona|madrid|lisbon|amsterdam|berlin|munich|vienna|prague|budapest|athens|santorini|istanbul|dublin|edinburgh|copenhagen|stockholm|oslo|reykjavik|zurich|geneva|brussels|mallorca|majorca|ibiza|canary islands|tenerife",
+  "North America": "north america|america|united states|united states of america|us|usa|canada|greenland|bermuda|alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming|washington dc|nyc|los angeles|san francisco|las vegas|chicago|boston|miami|orlando|seattle|honolulu|ontario|quebec|british columbia|alberta|toronto|vancouver|montreal",
+  "Latin America": "latin america|latam|south america|central america|caribbean|west indies|mexico|guatemala|belize|honduras|el salvador|nicaragua|costa rica|panama|cuba|jamaica|haiti|dominican republic|puerto rico|bahamas|barbados|trinidad|tobago|aruba|curacao|st lucia|saint lucia|colombia|venezuela|ecuador|galapagos|peru|bolivia|brazil|paraguay|uruguay|argentina|chile|guyana|suriname|patagonia|cancun|tulum|mexico city|rio de janeiro|sao paulo|buenos aires|cusco|machu picchu",
+  "Middle East & Africa": "middle east|mena|gcc|gulf states|persian gulf|gulf region|africa|north africa|sub saharan africa|east africa|west africa|southern africa|central africa|bahrain|iran|iraq|israel|jordan|kuwait|lebanon|oman|palestine|gaza|west bank|qatar|saudi arabia|saudi|syria|uae|united arab emirates|yemen|dubai|abu dhabi|doha|riyadh|jeddah|tel aviv|jerusalem|egypt|cairo|morocco|marrakech|algeria|tunisia|libya|sudan|south sudan|ethiopia|kenya|nairobi|tanzania|zanzibar|uganda|rwanda|nigeria|lagos|ghana|senegal|south africa|cape town|johannesburg|namibia|botswana|zimbabwe|zambia|mozambique|madagascar|mauritius|seychelles|cameroon|ivory coast|cote divoire|angola|congo|drc|mali|niger|chad|somalia|eritrea|djibouti|benin|togo|burkina faso|guinea|sierra leone|liberia|gambia|gabon|malawi|lesotho|eswatini|cape verde|cabo verde",
+  Oceania: "oceania|australasia|pacific islands|south pacific|australia|new zealand|fiji|papua new guinea|papua|samoa|tonga|vanuatu|solomon islands|tahiti|french polynesia|guam|sydney|melbourne|brisbane|perth|queensland|new south wales|tasmania|auckland",
+};
+let areaTable = null;
+function areaOf(region) {
+  if (!areaTable) {
+    areaTable = new Map();
+    for (const [area, names] of Object.entries(AREA_NAMES)) for (const n of names.split("|")) areaTable.set(n, area);
+  }
+  const text = String(region || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[.'\u2019]/g, "");
+  if (!/[a-z0-9]/.test(text)) return "Global";
+  const scan = (t) => {
+    const found = new Set();
+    for (const raw of t.split(/[,;\/&+()]|\band\b|\bor\b/)) {
+      const part = raw.replace(/[^a-z0-9]+/g, " ").trim().replace(/^the /, "");
+      if (!part) continue;
+      if (areaTable.has(part)) { found.add(areaTable.get(part)); continue; }
+      // Words inside the text, longest name first: "southern spain", "new south wales", "rural japan".
+      const w = part.split(" ");
+      for (let i = 0; i < w.length; i++) {
+        for (let n = 3; n >= 1; n--) {
+          const a = i + n <= w.length && areaTable.get(w.slice(i, i + n).join(" "));
+          if (a) { found.add(a); i += n - 1; break; }
+        }
+      }
+    }
+    return found;
+  };
+  // Text in brackets qualifies the rest ("Mali (US citizens affected)"), so it counts only when the rest names nothing.
+  let found = scan(text.replace(/\([^)]*\)/g, " "));
+  if (!found.size) found = scan(text);
+  // Text that names two or more areas ("US and Europe") spans them, so it counts as Global.
+  return found.size === 1 ? [...found][0] : found.size ? "Global" : "Other";
+}
+// End of areas.
+export { AREAS, areaOf };
+
 export const KEY_SEEN = "radar:seenIds";
 export const KEY_INDEX = "radar:history";
 // Each item's history (T36), kept with the seen ids. Not readable through /api/data: the board gets the

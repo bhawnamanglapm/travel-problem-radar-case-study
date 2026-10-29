@@ -1,8 +1,9 @@
 // Offline tests for the daily sweep and the data feed. The Anthropic API and Blob
 // storage are stubbed, so this needs no network and no API key.
 //   node scripts/test-sweep.mjs
+import { readFileSync } from "node:fs";
 import { makeDataHandler, makeSweepHandler } from "../api/_lib/handlers.js";
-import { CATS, KEY_ITEMS, KEY_LLMLOG_PREFIX, extractProblems, llmLogKey, runDailySweep, scanCategory, sweepKey, trackItems, trimSeen } from "../api/_lib/radar.js";
+import { AREAS, CATS, KEY_ITEMS, KEY_LLMLOG_PREFIX, areaOf, extractProblems, llmLogKey, runDailySweep, scanCategory, sweepKey, trackItems, trimSeen } from "../api/_lib/radar.js";
 import { SLOTS_BY_FREQ, dueSlot, normaliseSweepsPerDay, previousSlotAt, siteSweepsPerDay, slotOf, sweepLimits, sweepsPerDayOf } from "../api/_lib/schedule.js";
 import { check, finish, memStorage, mockRes } from "./test-helpers.mjs";
 
@@ -345,6 +346,31 @@ const sweepOpts = (storage, byCat, now) => ({
   t += 5 * 3600 * 1000;
   const s6 = await runDailySweep(sweepOpts(noWrite, { traveler_pain: [item(1)], gov_policy: [], web_app: [], industry: [] }, () => t));
   check(s6.status === "saved", "a failed item-index write doesn't fail the sweep");
+}
+
+// ---- T37: areaOf places the AI's free-text region in one of the fixed areas
+{
+  const cases = {
+    "Japan": "Asia", "Thailand": "Asia", "Southeast Asia": "Asia", "rural Japan": "Asia", "Asia-Pacific": "Asia",
+    "Spain": "Europe", "Europe": "Europe", "United Kingdom": "Europe", "UK": "Europe", "the UK": "Europe", "EU": "Europe",
+    "Spain and Portugal": "Europe", "UK / France / Italy": "Europe", "Southern Spain": "Europe",
+    "United States": "North America", "US": "North America", "U.S.": "North America", "USA (Chicago)": "North America",
+    "Canada/United States": "North America", "New York City": "North America", "New Mexico": "North America",
+    "Mexico": "Latin America", "Mexico (Tulum)": "Latin America", "São Paulo": "Latin America", "the Caribbean": "Latin America",
+    "Saudi Arabia": "Middle East & Africa", "UAE": "Middle East & Africa", "Dubai, United Arab Emirates": "Middle East & Africa",
+    "Tanzania, Kenya": "Middle East & Africa", "Côte d’Ivoire": "Middle East & Africa",
+    "Niger, Burkina Faso, Mali (US citizens affected)": "Middle East & Africa",
+    "Australia": "Oceania", "New South Wales, Australia": "Oceania", "Papua New Guinea": "Oceania",
+    "Global": "Global", "global": "Global", "Worldwide": "Global", "": "Global", "  ": "Global",
+    "US and Europe": "Global", "India/Europe": "Global", "Spain / Global": "Global", "Global (mostly US)": "Global",
+    "Narnia": "Other", "Antarctica": "Other", "???": "Global",
+  };
+  const wrong = Object.entries(cases).filter(([r, a]) => areaOf(r) !== a).map(([r, a]) => `${JSON.stringify(r)} gave ${areaOf(r)}, not ${a}`);
+  check(wrong.length === 0, "areaOf: countries, continents, short forms, mixed text, brackets, empty, Global and nonsense" + (wrong.length ? " (" + wrong.join("; ") + ")" : ""));
+  check(areaOf(null) === "Global" && areaOf(undefined) === "Global" && areaOf(42) === "Other", "areaOf: a missing region is Global, and a non-string doesn't throw");
+  check(AREAS.length === 8 && AREAS[0] === "Global" && AREAS[7] === "Other", "AREAS: the 8 areas, Global first and Other last");
+  const sample = JSON.parse(readFileSync(new URL("../sampleData.json", import.meta.url), "utf8"));
+  check(sample.every((p) => AREAS.includes(areaOf(p.region)) && areaOf(p.region) !== "Other"), "areaOf: every region in sampleData.json lands in a named area");
 }
 
 // ---- parser
