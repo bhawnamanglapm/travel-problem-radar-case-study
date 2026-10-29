@@ -67,6 +67,14 @@ h1 em{font-style:normal;color:var(--link);}
 .lede{font-size:clamp(17px,2.4vw,20px);color:var(--muted);max-width:640px;margin:0 0 28px;}
 .ctas{display:flex;flex-wrap:wrap;gap:12px;}
 .note{font-size:14px;color:var(--faint);margin:16px 0 0;}
+/* hero search (T38): a plain form to the live board, searching every saved sweep */
+.hsearch{max-width:640px;margin:28px 0 0;}
+.hsearch .field{font-weight:600;}
+.hsearch .row{display:flex;gap:10px;}
+.hsearch input[type=search]{flex:1;min-width:0;min-height:48px;padding:0 14px;border-radius:10px;border:1px solid var(--line2);background:var(--surface);color:var(--text);font:16px var(--body);}
+.hsearch input[type=search]::placeholder{color:var(--faint);}
+.hsearch .fine{font-size:13px;color:var(--faint);margin:8px 0 0;}
+@media (max-width:479px){.hsearch .row{flex-direction:column;}.hsearch .btn{width:100%;}}
 .note a{color:var(--muted);}
 .cats{display:grid;grid-template-columns:1fr;gap:10px;margin-top:40px;}
 @media (min-width:640px){.cats{grid-template-columns:repeat(2,1fr);}}
@@ -193,6 +201,15 @@ dialog::backdrop{background:rgba(0,0,0,.65);}
         <a class="btn sec" href="demo/">Try the sample demo</a>
       </div>
       <p id="heroNote" class="note">Free. Your email address is your account; a password is optional.</p>
+      <form class="hsearch" action="live/" method="get" role="search">
+        <label class="field" for="hq">Search every saved sweep</label>
+        <div class="row">
+          <input id="hq" type="search" name="q" placeholder="e.g. visa, strike, refund" maxlength="200" required />
+          <input type="hidden" name="all" value="1" />
+          <button class="btn sec" type="submit">Search</button>
+        </div>
+        <p class="fine">Opens the live board, which is for Pro members.</p>
+      </form>
       <div class="cats" aria-label="The four categories">
         <div class="cat"><b>Traveler pain</b><span>Booking, airlines, hotels, refunds, loyalty and service failures</span></div>
         <div class="cat"><b>Gov &amp; policy</b><span>Visa rules, entry requirements, travel bans and tourist taxes</span></div>

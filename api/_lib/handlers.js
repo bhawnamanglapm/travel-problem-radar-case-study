@@ -107,8 +107,8 @@ export function makeSweepHandler({ env, storage, fetchFn, now, randomBytes = cry
   };
 }
 
-// Read-only, and only for the two kinds of key the dashboard asks for.
-const ALLOWED_KEY = /^radar:(history|sweep:\d{10,16})$/;
+// Read-only, and only for the kinds of key the dashboard asks for: the index, a sweep, the search file (T38).
+const ALLOWED_KEY = /^radar:(history|search|sweep:\d{10,16})$/;
 
 // With BOARD_PAYWALL=1 (T17) only a signed-in Pro reads the board: no login is 401, Free or a
 // lapsed Pro 402, and no reply may sit in a shared cache. The login is checked against `accounts`,

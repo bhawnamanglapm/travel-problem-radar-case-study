@@ -3,7 +3,7 @@
 //   node scripts/test-sweep.mjs
 import { readFileSync } from "node:fs";
 import { makeDataHandler, makeSweepHandler } from "../api/_lib/handlers.js";
-import { AREAS, CATS, KEY_ITEMS, KEY_LLMLOG_PREFIX, areaOf, extractProblems, llmLogKey, runDailySweep, scanCategory, sweepKey, trackItems, trimSeen } from "../api/_lib/radar.js";
+import { AREAS, CATS, KEY_ITEMS, KEY_LLMLOG_PREFIX, KEY_SEARCH, areaOf, extractProblems, llmLogKey, mergeSearch, runDailySweep, scanCategory, sweepKey, trackItems, trimSeen } from "../api/_lib/radar.js";
 import { SLOTS_BY_FREQ, dueSlot, normaliseSweepsPerDay, previousSlotAt, siteSweepsPerDay, slotOf, sweepLimits, sweepsPerDayOf } from "../api/_lib/schedule.js";
 import { check, finish, memStorage, mockRes } from "./test-helpers.mjs";
 
@@ -371,6 +371,88 @@ const sweepOpts = (storage, byCat, now) => ({
   check(AREAS.length === 8 && AREAS[0] === "Global" && AREAS[7] === "Other", "AREAS: the 8 areas, Global first and Other last");
   const sample = JSON.parse(readFileSync(new URL("../sampleData.json", import.meta.url), "utf8"));
   check(sample.every((p) => AREAS.includes(areaOf(p.region)) && areaOf(p.region) !== "Other"), "areaOf: every region in sampleData.json lands in a named area");
+}
+
+// ---- T38: the search file (radar:search), the latest copy of every item in the kept sweeps
+{
+  const a1 = { id: "c:a", title: "A old" }, a2 = { id: "c:a", title: "A new" }, b = { id: "c:b", title: "B" };
+  let s = mergeSearch(null, [a1, b], "100", "t100", ["100"]);
+  s = mergeSearch(s, [a2], "200", "t200", ["100", "200"]);
+  const a = s.items.filter((x) => x.id === "c:a");
+  check(a.length === 1 && a[0].title === "A new" && a[0].sweep === "200" && a[0].sweepAt === "t200",
+    "mergeSearch: an item in several sweeps appears once, the latest copy with its sweep");
+  check(s.items.find((x) => x.id === "c:b").sweep === "100" && JSON.stringify(s.sweeps) === '["100","200"]',
+    "mergeSearch: an item only in an older sweep stays, with that sweep's id");
+  check(s.items.at(-1).id === "c:a", "mergeSearch: the latest copy goes last, so the file stays in sweep order");
+  const later = mergeSearch(s, [], "300", "t300", ["200", "300"]);
+  check(!later.items.some((x) => x.id === "c:b") && JSON.stringify(later.sweeps) === '["200","300"]',
+    "mergeSearch: items and sweeps no longer kept leave");
+  for (const bad of [null, "x", { items: [] }, { sweeps: [], items: "x" }, []]) {
+    const r = mergeSearch(bad, [b], "400", "t400", ["400"]);
+    if (r.items.length !== 1 || r.sweeps.length !== 1) check(false, "mergeSearch: a bad previous file starts fresh (" + JSON.stringify(bad) + ")");
+  }
+  check(true, "mergeSearch: a bad or missing previous file starts fresh");
+}
+{
+  const st = memStorage();
+  let t = 1_800_000_000_000;
+  const run = (items, storage = st) => { t += 5 * 3600 * 1000; return runDailySweep(sweepOpts(storage, { traveler_pain: items, gov_policy: [], web_app: [], industry: [] }, () => t)); };
+  const s1 = await run([item(1), item(2)]);
+  const s2 = await run([item(1)]);
+  const file = JSON.parse(st.m.get(KEY_SEARCH));
+  const p1 = file.items.filter((x) => x.title === "Problem 1");
+  check(JSON.stringify(file.sweeps) === JSON.stringify([s1.id, s2.id]) && file.items.length === 2 && p1.length === 1 && p1[0].sweep === s2.id && p1[0].seen === 2,
+    "the sweep writes radar:search: each item once, the latest copy with its history");
+  check(file.items.find((x) => x.title === "Problem 2").sweep === s1.id, "radar:search keeps an item that is only in an older sweep");
+
+  // A store with sweeps but no search file: built once from the saved sweeps.
+  st.m.delete(KEY_SEARCH);
+  const reads = [];
+  const counting = { ...st, get: async (k) => { reads.push(k); return st.get(k); } };
+  const s3 = await run([item(3)], counting);
+  const built = JSON.parse(st.m.get(KEY_SEARCH));
+  check(JSON.stringify(built.sweeps) === JSON.stringify([s1.id, s2.id, s3.id]) && built.items.length === 3,
+    "a missing search file is built from the saved sweeps");
+  check(reads.filter((k) => k === sweepKey(s1.id) || k === sweepKey(s2.id)).length >= 2, "building it reads each kept sweep");
+  reads.length = 0;
+  await run([item(3)], counting);
+  check(reads.filter((k) => k.startsWith("radar:sweep:")).length === 0, "once the file exists, a sweep reads no old sweeps for it");
+
+  // A search file that can't be read or written: the sweep still saves.
+  const noRead = { ...st, get: async (k) => { if (k === KEY_SEARCH) throw new Error("down"); return st.get(k); } };
+  check((await run([item(1)], noRead)).status === "saved", "an unreadable search file doesn't fail the sweep");
+  const noWrite = { ...st, set: async (k, v) => { if (k === KEY_SEARCH) throw new Error("down"); return st.set(k, v); } };
+  const s6 = await run([item(4)], noWrite);
+  check(s6.status === "saved" && !JSON.parse(st.m.get(KEY_SEARCH)).sweeps.includes(s6.id), "a failed search-file write doesn't fail the sweep; that sweep is missing from it");
+  const s7 = await run([item(5)]);
+  const after = JSON.parse(st.m.get(KEY_SEARCH));
+  check(after.sweeps.includes(s7.id) && after.items.some((x) => x.title === "Problem 5"), "the next sweep goes on writing the file");
+}
+
+// ---- T38: the board's URL helpers, run from their marked block in the jsx with the server's CATS and AREAS
+{
+  const jsx = readFileSync(new URL("../travel-problem-radar.jsx", import.meta.url), "utf8");
+  const block = (jsx.match(/\n\/\/ Board URL \(T38\):[\s\S]*?\n\/\/ End of board URL\.\n/) || [""])[0];
+  check(/function readBoardUrl\(/.test(block) && /function boardQuery\(/.test(block), "the board URL block is in the jsx");
+  const { readBoardUrl, boardQuery } = new Function("CATS", "AREAS", block + "\nreturn { readBoardUrl, boardQuery };")(CATS, AREAS);
+  const none = { q: "", cat: "all", area: "all", all: false };
+  check(JSON.stringify(readBoardUrl("")) === JSON.stringify(none) && JSON.stringify(readBoardUrl(undefined)) === JSON.stringify(none),
+    "board URL: no query is the defaults");
+  const r = readBoardUrl("?q=%20visa%20delays%20&cat=gov_policy&area=Middle%20East%20%26%20Africa&all=1");
+  check(r.q === "visa delays" && r.cat === "gov_policy" && r.area === "Middle East & Africa" && r.all === true,
+    "board URL: q (trimmed), cat, area and all=1 are read");
+  const bad = readBoardUrl("?cat=nope&area=Mars&all=yes&q=" + "x".repeat(300));
+  check(bad.cat === "all" && bad.area === "all" && bad.all === false && bad.q.length === 200,
+    "board URL: an unknown cat or area, all other than 1, and an over-long q are ignored or cut");
+  check(boardQuery(none, "") === "" && boardQuery({ ...none, q: "   " }, "") === "", "board URL: the defaults and a blank search leave no query");
+  const q = boardQuery({ q: "visa", cat: "gov_policy", area: "Europe", all: true }, "?utm=x&q=old&cat=industry");
+  const u = new URLSearchParams(q.slice(1));
+  check(q.startsWith("?") && u.get("utm") === "x" && u.get("q") === "visa" && u.get("cat") === "gov_policy" && u.get("area") === "Europe" && u.get("all") === "1",
+    "board URL: the filters replace the old ones and other parameters stay");
+  check(boardQuery({ ...none, cat: "industry" }, "?q=old&all=1") === "?cat=industry", "board URL: a filter set back to its default leaves the URL");
+  const back = readBoardUrl(boardQuery({ q: "strike & delays", cat: "industry", area: "Latin America", all: true }, ""));
+  check(back.q === "strike & delays" && back.cat === "industry" && back.area === "Latin America" && back.all, "board URL: what boardQuery writes, readBoardUrl reads back");
+  check(!/location|history|window/.test(block), "board URL: the helpers only read and return strings; the hash is never touched");
 }
 
 // ---- parser
@@ -743,6 +825,8 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   check((await call("/api/data?key=radar:seenIds")).code === 400, "seenIds is not exposed");
   check((await call("/api/data?key=radar:lastScheduled")).code === 400, "lastScheduled is not exposed");
   check((await call("/api/data?key=radar:items")).code === 400, "the item index is not exposed (T36)");
+  st.m.set("radar:search", "{\"sweeps\":[],\"items\":[]}");
+  check((await call("/api/data?key=radar:search")).code === 200, "the search file is served (T38)");
   check((await call("/api/data?key=" + llmLogKey("1800000000000"))).code === 400, "LLM logs are not exposed");
   check((await call("/api/data?key=../../etc/passwd")).code === 400, "path-like keys are rejected");
   check((await call("/api/data")).code === 400, "missing key is rejected");

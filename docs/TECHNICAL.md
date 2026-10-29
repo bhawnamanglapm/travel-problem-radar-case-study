@@ -53,6 +53,16 @@ Subscriber -> links in each email -> /manage/ (/api/account: plan, Request Pro o
   text that names two or more areas counts as Global, and text it can't place as Other. The area is worked out
   when needed, never stored, so `/api/data` is unchanged. The block is the same text in the server and the
   component, and `npm run check` fails if they differ.
+- **Search all sweeps (T38).** Beside the board's search box, "This sweep" or "All saved sweeps". All reads one
+  search file (`radar:search`) that the sweep keeps: the latest copy of each item in the kept sweeps, with its
+  sweep's id and time. `mergeSearch` is the same text in the server and the component, and `npm run check` fails
+  if they differ. One file instead of up to 60 sweep reads keeps a search at two Blob reads (the session and the
+  file), within the Hobby plan's 10,000 simple operations a month. Kept sweeps the file lacks are counted on the
+  board. A failed read or write never fails the sweep.
+- **Filters in the URL (T38).** The board reads `?q=`, `?cat=`, `?area=` and `?all=1` on load and writes them with
+  `history.replaceState` on every change; unknown values are dropped and the hash (`#report`, `#p=`) is kept. On a
+  locked screen the search is kept in `sessionStorage` for 30 minutes, so `/live/` puts it back after sign-in. The
+  home page's search box is a plain GET form to `live/?q=…&all=1`.
 - The API key is held as a Vercel secret, never in the page or the code.
 - Items are AI-gathered and not verified; the page tells visitors to check each source link.
 

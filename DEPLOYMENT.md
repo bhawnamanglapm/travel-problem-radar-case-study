@@ -601,6 +601,7 @@ mapping doesn't know is stored under `radar/other/`.
 |---|---|---|---|
 | `radar:history` | `radar/history/index.json` | Index of saved sweeps (id, time, counts), last 60 | Yes |
 | `radar:sweep:<id>` | `radar/sweeps/sweep-YYYY-MM-DD-HH-MM-<id>.json` | One sweep's items; since T36 each with its history (`firstAt`, `seen`, `prev`, `firstEarlier`) | Yes |
+| `radar:search` | `radar/history/search.json` | The board's "All saved sweeps" search (T38): `{ sweeps, items }`, the sweep ids it holds and the latest copy of each item in the kept sweeps, with `sweep` and `sweepAt` added. One read and one write per sweep; built once from the saved sweeps when missing. About 105 KB (26 KB gzipped) for 9 sweeps | Yes (Pro only, like the sweeps) |
 | `radar:seenIds` | `radar/history/seen-ids.json` | Up to 800 item IDs already seen, used for the New flag | No |
 | `radar:items` | `radar/history/items.json` | Each item's history (T36): first sweep, number of sweeps, up to 6 latest sweep ids, and `e: 1` when it was seen before the index existed. Trimmed to the ids in `radar:seenIds`. Built once from the saved sweeps when missing. The sweep copies it onto each saved item as `firstAt`, `seen`, `prev` and `firstEarlier` | No |
 | `radar:lastScheduled` | `radar/state/last-scheduled.json` | When the last scheduled sweep started, saved or not, and its slot (`{ at, slotAt }`; before T35 just the time); the one-sweep-per-slot rule reads it | No |
@@ -613,7 +614,7 @@ mapping doesn't know is stored under `radar/other/`.
 | `radar:rzpsub:<subscription id>` | `radar/razorpay/subscriptions/sub-….json` | `{ id }`: the subscriber record a Razorpay subscription belongs to, written at checkout (T20) so the webhook finds the record without listing | No |
 | `radar:rzp-event:<YYYYMMDD>-<HHMM>-<event id>` | `radar/razorpay/events/razorpay-event-YYYY-MM-DD-HH-MM-<event id>.json` | One Razorpay event already applied (`{ at }`), so a redelivery changes nothing. `<YYYYMMDD>` is the event's day. Deleted by the sweep after 30 days | No |
 
-`/api/data` allows only `radar:history` and `radar:sweep:<id>`; the tests check that every subscriber key is refused.
+`/api/data` allows only `radar:history`, `radar:search` (T38) and `radar:sweep:<id>`; the tests check that every subscriber key is refused.
 
 ### Caching
 

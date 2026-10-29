@@ -38,14 +38,59 @@ URL except `#report`. The home page has no way in to the board's content beyond 
   and the store's usage before building. If they are too tight, the sweep writes one compact search file
   (`radar:search`, ids, titles, summaries, sweep ids) and the board reads that instead: one read per search.
 
+## The Blob check (2026-10-29)
+
+- The [Vercel Blob pricing page](https://vercel.com/docs/vercel-blob/usage-and-pricing) (updated 2026-09-23) gives
+  the Hobby plan 10,000 simple operations a month (reads that miss the cache) and 2,000 advanced operations (writes
+  and lists), with simple reads limited to 20 a second. Going over doesn't cost money: it locks Blob for 30 days, and
+  Blob also holds the accounts and sessions.
+- With the paywall on, every `/api/data` call also reads the session uncached. The first design above would cost
+  about 61 session reads plus up to 60 sweep reads per search, so about 80 searches a month would use the allowance.
+- The store's actual usage couldn't be read from the CLI on this plan; it is in the dashboard under
+  Observability → Blob (owner step).
+- So the search file was built: 1 extra read and 1 extra write per sweep (at most about 155 of each a month at 5
+  sweeps a day), and 2 reads per all-sweeps search.
+
+## What was built
+
+- **The search file `radar:search`** (`radar/history/search.json`): `{ sweeps, items }`, the ids of the sweeps it
+  holds and the latest copy of each item in the kept sweeps (the last 60), with `sweep` and `sweepAt` added.
+  Items are stored whole, so a result is a normal card and opens the T36 Details panel.
+  - `mergeSearch(prev, problems, sweepId, at, keepSweepIds)` drops entries from sweeps no longer kept and puts the
+    new sweep's items in, replacing older copies. It is the same text in `api/_lib/radar.js` and the jsx, between
+    `// Search file (T38):` and `// End of search file.`; check.mjs §5 fails if they differ.
+  - `runDailySweep` reads, merges and writes it after the sweep and index are saved. When it's missing it is built
+    once from the kept sweeps. A failed read or write never fails the sweep.
+  - `/api/data` allows the key behind the same paywall and cache rules as the sweeps.
+- **The board.**
+  - "This sweep" and "All saved sweeps" chips beside the search box, with `aria-pressed`. All loads the file once per
+    page view ("Loading saved sweeps…"), keeps only items whose sweep is in History, and says "N problems from M
+    saved sweeps", plus "K saved sweeps couldn't be included" for kept sweeps the file lacks. A missing or unreadable
+    file says so and stays on This sweep.
+  - In All, the category, area, severity and search filters work on the pooled items, each card shows "Sweep of
+    <date>" in place of New, and the stats tiles give way to the one line. Opening a sweep from History goes back to
+    This sweep.
+  - The demo keeps the same file in browser storage, so All works on `/demo/` too.
+- **Filters in the URL.** `readBoardUrl` and `boardQuery` read and write `?q=` (at most 200 characters), `?cat=` (a
+  category key), `?area=` (one of `AREAS`) and `?all=1`. Defaults and unknown values are left out, other
+  parameters and the hash are kept, and changes are written with `history.replaceState`.
+- **Kept through sign-in.** The locked screens keep the URL and save the filters in `sessionStorage` for 30 minutes;
+  `/live/` with no filters in its URL puts them back and clears the copy. The URL is never passed to sign-in, so it
+  can't send anyone to another site.
+- **Home page.** A labelled GET form in the hero to `live/`, with `q` and a hidden `all=1`. It works without
+  JavaScript and reads no sweep data.
+- **Production size** (read-only, 2026-10-29): 9 indexed sweeps, 8 readable, 146 distinct items from 151 copies,
+  about 105 KB (26 KB gzipped). The oldest indexed sweep has no file in Blob (it predates T38), so the board will
+  count it as not included until it rolls off.
+
 ## Acceptance criteria
 
-- [ ] "All saved sweeps" finds a problem that is only in an older sweep, and shows its sweep date
-- [ ] A problem in several sweeps appears once
-- [ ] `/live/?q=visa&cat=gov_policy` opens with both filters set; changing a filter updates the URL
-- [ ] The home search sends signed-out visitors to the locked-board screen with `?q=` kept, and no sweep data is
+- [x] "All saved sweeps" finds a problem that is only in an older sweep, and shows its sweep date
+- [x] A problem in several sweeps appears once
+- [x] `/live/?q=visa&cat=gov_policy` opens with both filters set; changing a filter updates the URL
+- [x] The home search sends signed-out visitors to the locked-board screen with `?q=` kept, and no sweep data is
   fetched or shown on the home page
-- [ ] Docs: TECHNICAL.md, CHANGELOG.md; the Blob check's result is noted in the PR
+- [x] Docs: TECHNICAL.md, CHANGELOG.md; the Blob check's result is noted in the PR
 
 ## Tests
 

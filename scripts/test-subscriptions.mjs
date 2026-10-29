@@ -72,11 +72,11 @@ const iso = (ms) => new Date(ms).toISOString();
   // Each kind of key has its own folder under radar/.
   const where = [];
   const fakePut = { put: async (p) => { where.push(p); } };
-  const keys = ["radar:history", "radar:seenIds", "radar:items", "radar:lastScheduled", "radar:subscriberCount", "radar:sweep:1792948701207",
+  const keys = ["radar:history", "radar:seenIds", "radar:items", "radar:search", "radar:lastScheduled", "radar:subscriberCount", "radar:sweep:1792948701207",
     "radar:llmlog:1792948701207", "radar:sub:abc", "radar:event:20261021-080910123-confirmed-112233", "radar:deliveries:20261021",
     "radar:iphit:2026102112-0123456789abcdef-aabbcc", "radar:rzpsub:sub_ABC", "radar:rzp-event:20261021-evt_X", "radar:mystery"];
   for (const k of keys) await blobStorage(fakePut).set(k, "{}");
-  const want = ["radar/history/index.json", "radar/history/seen-ids.json", "radar/history/items.json", "radar/state/last-scheduled.json", "radar/state/subscriber-count.json",
+  const want = ["radar/history/index.json", "radar/history/seen-ids.json", "radar/history/items.json", "radar/history/search.json", "radar/state/last-scheduled.json", "radar/state/subscriber-count.json",
     "radar/sweeps/sweep-2026-10-25-17-18-1792948701207.json", "radar/logs/llm-log-2026-10-25-17-18-1792948701207.json", "radar/subscribers/abc.json",
     "radar/events/event-2026-10-21-08-09-10-123-confirmed-112233.json", "radar/deliveries/deliveries-2026-10-21.json",
     "radar/ip-hits/ip-hit-2026-10-21-12-0123456789abcdef-aabbcc.json", "radar/razorpay/subscriptions/sub-ABC.json",
@@ -2799,6 +2799,9 @@ const iso = (ms) => new Date(ms).toISOString();
     const sweep = await call(on, { c: cookie(pro), key: "radar:sweep:1800000000000" });
     check(r.code === 200 && r.json().value === "[1]" && r.headers["cache-control"] === "private, no-store" && sweep.code === 200, "board switch on: a Pro reads the history and a sweep, private and uncached");
     check((await call(on, { c: cookie(pro), key: "radar:sweep:1700000000000" })).code === 404, "board switch on: an unknown sweep is still 404 for a Pro");
+    await sweeps.set("radar:search", "{\"sweeps\":[],\"items\":[]}");
+    check((await call(on, { key: "radar:search" })).code === 401 && (await call(on, { c: cookie(free), key: "radar:search" })).code === 402
+      && (await call(on, { c: cookie(pro), key: "radar:search" })).code === 200, "board switch on: the search file is for Pro only, like the sweeps (T38)");
     for (const [c, label] of [
       [cookie(pro, { secret: "another-secret-of-enough-length-000" }), "signed with another secret"],
       [cookie(pro, { at: T0 - 13 * 3600 * 1000 }), "expired"],

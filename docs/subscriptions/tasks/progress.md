@@ -50,13 +50,30 @@ working in a real inbox; that is T12's staged launch.
 | [T34](T34-renew-pro.md) Renewing Pro | built 2026-10-25 on `fixes`, merged to main (#91, #92) and live: Keep renewing (a new subscription from `proUntil`), Renew Pro with the last plan, a warning email 7 days before a plan that won't renew ends; the `start_at` path still to verify in test mode | | all tests pass | Added 2026-10-25 |
 | [T35](T35-sweep-slots-on-time.md) Sweep slots on time | built 2026-10-25 on `fixes`, merged to main (#91, #92) and live; a day of real runs still to check | | sweep tests pass | Added 2026-10-25. GitHub's runs started 2 h 15 m to 4 h 35 m late on 2026-10-24 and 25; all landed in the right slot, but only just |
 | [T36](T36-problem-detail-panel.md) Problem detail panel | built 2026-10-29 on `feat/t36-detail-panel`, merged to main (#100, `911d583`) and live; the live board shows history from the first production sweep after deploy | e399913, b23dd1a, d877ec6 | 1,296 pass | Added 2026-10-29, Phase 5. See T36 notes below |
-| [T37](T37-areas.md) Areas | built 2026-10-29 on `feat/t37-areas` | 42a8a24, 2828648 | 1,300 pass | Added 2026-10-29, Phase 5. See T37 notes below |
-| [T38](T38-search-all-sweeps.md) Search all sweeps | todo | | | Added 2026-10-29, Phase 5 |
+| [T37](T37-areas.md) Areas | built 2026-10-29 on `feat/t37-areas`, merged to main (#101, `8f1b220`) and live | 42a8a24, 2828648 | 1,300 pass | Added 2026-10-29, Phase 5. See T37 notes below |
+| [T38](T38-search-all-sweeps.md) Search all sweeps | built 2026-10-29 on `feat/t38-search-all-sweeps` | aff0218, 74b7bae, 5ef7ebd | 1,324 pass | Added 2026-10-29, Phase 5. See T38 notes below |
 | [T39](T39-saved-problems.md) Saved problems | todo | | | Added 2026-10-29, Phase 5 |
 | [T40](T40-share-a-problem.md) Share one problem | todo | | | Added 2026-10-29, Phase 5 |
 | [T41](T41-email-areas.md) Areas in Pro email | todo | | | Added 2026-10-29, Phase 5 |
 
 ## Notes per task
+
+### T38
+- Built the task file's fallback, a search file, after the Blob check: the first design costs up to 61 uncached
+  reads per search plus the session read, so about 80 searches would use the Hobby plan's 10,000 simple operations
+  a month, and going over locks Blob (and so the site) for 30 days. The store's own usage isn't readable from the
+  CLI on this plan (owner step: the dashboard, Observability → Blob).
+- `mergeSearch` is the same text in `api/_lib/radar.js` and `travel-problem-radar.jsx`; check.mjs §5 compares them.
+  `readBoardUrl` and `boardQuery` are in a marked block that test-sweep.mjs runs offline.
+- `?all=1` was added to the task file's `?q=`, `?cat=` and `?area=`, so the home search and shared links can open
+  on All saved sweeps. Severity stays out of the URL.
+- Production, read-only with a scratchpad script: 9 sweeps in the index, 8 readable, 151 item copies, 146 distinct
+  items (5 duplicates dropped), about 105 KB (26 KB gzipped). The oldest indexed sweep (2026-10-25 19:03 UTC) has no
+  file in Blob, which predates T38; the board will say "1 saved sweep couldn't be included" until it rolls off.
+- Checked by hand in headless Chrome against a local server with a stand-in `/api/data` (about 45 checks): the demo
+  replayed twice, Pro fixtures, the URL both ways, the home search signed out and on Free, the kept search after
+  "sign-in", a kept copy over 30 minutes old, and 375px in light and dark. Not in CI. Not checked: a real Pro
+  session in production.
 
 ### T37
 - The areas block (`AREAS`, the name table, `areaOf`) is the same text in `api/_lib/radar.js` and
