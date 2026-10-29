@@ -162,8 +162,8 @@ That's 5 times the measured average. None of the 5 measured runs came close.
   the sweep count. Manual runs send Pro nothing.
 - Each Free member gets one email a day.
 - Sign-up confirmations are capped at 10 a day and sign-in codes at 50 a day by default
-  (`api/_lib/subscription-handlers.js`). In production `MAX_CONFIRMS_PER_DAY` is set, so the confirmation cap there
-  may not be 10; its value wasn't read. `MAX_SIGNINS_PER_DAY` isn't set, so sign-ins use the default 50.
+  (`api/_lib/subscription-handlers.js`). In production `MAX_CONFIRMS_PER_DAY` is 50 (read 2026-10-29: it was 500,
+  lowered to 50 while on Resend's free 100 a day). `MAX_SIGNINS_PER_DAY` isn't set, so sign-ins use the default 50.
 - All of these come from the same Resend account.
 
 **Estimate.** The counts below are the sends the code would attempt, not delivered emails. A Pro member whose
@@ -546,8 +546,8 @@ Not answered here. Ask a chartered accountant in India:
 - [ ] A monthly spend limit and an alert set in the Anthropic Console. DEPLOYMENT.md suggests about $50 a month. That
       covers 6 sweeps a day ($38.31), but a month of high-cost sweeps ($163) would hit it and stop the sweeps.
 - [ ] Production is deployed from a build that includes PR #60, so the manual-sweep cap is live.
-- [ ] The owner reads the values of `MAX_SUBSCRIBERS` and `MAX_CONFIRMS_PER_DAY` in the Vercel dashboard. Only their
-      names were checked here.
+- [x] The owner reads the values of `MAX_SUBSCRIBERS` and `MAX_CONFIRMS_PER_DAY` in the Vercel dashboard. Read
+      2026-10-29: 5000, and 50 (lowered from 500).
 - [ ] A live Razorpay plan at the chosen price in `RAZORPAY_PLAN_ID` on Production, the same as `/pricing/`. The ₹99
       test plan is not used.
 - [ ] The Razorpay webhook is Enabled for the live account, with `RAZORPAY_WEBHOOK_SECRET` set on Production.
