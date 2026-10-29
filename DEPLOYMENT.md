@@ -273,6 +273,7 @@ curl -s -o /dev/null -w '%{http_code}\n' $BASE/live/       # 200  live page
 curl -s -o /dev/null -w '%{http_code}\n' $BASE/live/radar-live.js   # 200  live bundle
 curl -s "$BASE/api/data?key=radar:history"                 # {"error":"not found"} before the first sweep
 curl -s "$BASE/api/data?key=radar:seenIds"                 # {"error":"key not allowed"}  (400)
+curl -s "$BASE/api/data?key=radar:items"                   # {"error":"key not allowed"}  (400)
 curl -s $BASE/api/sweep                                    # {"error":"unauthorized"}     (401)
 ```
 
@@ -599,8 +600,9 @@ mapping doesn't know is stored under `radar/other/`.
 | Logical key | Blob path | Contents | Readable through `/api/data` |
 |---|---|---|---|
 | `radar:history` | `radar/history/index.json` | Index of saved sweeps (id, time, counts), last 60 | Yes |
-| `radar:sweep:<id>` | `radar/sweeps/sweep-YYYY-MM-DD-HH-MM-<id>.json` | One sweep's items | Yes |
+| `radar:sweep:<id>` | `radar/sweeps/sweep-YYYY-MM-DD-HH-MM-<id>.json` | One sweep's items; since T36 each with its history (`firstAt`, `seen`, `prev`, `firstEarlier`) | Yes |
 | `radar:seenIds` | `radar/history/seen-ids.json` | Up to 800 item IDs already seen, used for the New flag | No |
+| `radar:items` | `radar/history/items.json` | Each item's history (T36): first sweep, number of sweeps, up to 6 latest sweep ids, and `e: 1` when it was seen before the index existed. Trimmed to the ids in `radar:seenIds`. Built once from the saved sweeps when missing. The sweep copies it onto each saved item as `firstAt`, `seen`, `prev` and `firstEarlier` | No |
 | `radar:lastScheduled` | `radar/state/last-scheduled.json` | When the last scheduled sweep started, saved or not, and its slot (`{ at, slotAt }`; before T35 just the time); the one-sweep-per-slot rule reads it | No |
 | `radar:llmlog:<id>` | `radar/logs/llm-log-YYYY-MM-DD-HH-MM-<id>.json` | One sweep's LLM log: each Claude call's request (prompt, model, limits, tools; never the headers or key) and response (thinking, search queries, answer, stop reason, usage), and a summary of input and output tokens, searches, and the pages search found, **as links only** (page contents are encrypted and left out). Written for every sweep that ran: saved, empty, or not saved. `<id>` is the sweep's id. Deleted after 30 days by the day's first sweep. Read with `scripts/llm-logs.mjs` | No |
 | `radar:sub:<id>` | `radar/subscribers/<id>.json` | One subscriber: address, status, plan, token, dates, and chosen categories (`cats`, Pro only). Since T16 also `signin` (the SHA-256 of an unused sign-in code, its expiry and when it was sent; `null` once used) and, optionally, `sessionVer` (raising it by hand signs that subscriber out on every browser). Since T17, a Pro record whose emails stopped has `emailOff`: `unsubscribed`, `bounced` or `complained`. Since 2026-10-27, optionally `pw` (a scrypt hash of the password; see [Passwords](#passwords)), `pendingPw` (a sign-up's password waiting for its confirmation link, with the SHA-256 of the link's key) and `pwFails` (wrong passwords this hour). `<id>` is the SHA-256 of the canonical address (Gmail without dots or `+tags`, and `+tags` dropped for the big providers; see [email-signup.md](docs/subscriptions/email-signup.md#flow)). Records made before 2026-10-22 keep the SHA-256 of the lowercased address | No |

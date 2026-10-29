@@ -5,6 +5,11 @@ grouped by date.
 
 ## 2026-10-29
 
+- Each problem on the board has a Details button that opens a panel (a side panel on desktop, a bottom sheet on a
+  phone) with the problem in full and its history: when it was first seen, how many sweeps it has been in, and the
+  earlier sweeps, each with Open while it is still kept. Cards in more than one sweep say "Seen in N sweeps". A
+  `#p=<id>` link opens one problem's panel. The sweep keeps a private index of each item's sightings
+  (`radar:items`) and saves the history on the items, so the board makes no extra request (T36).
 - The site takes the Pehchan brand from pehchanthetraveller.com: deep teal and amber, in light or dark to match the
   visitor's system (it was dark only). The colors live in `brand.css`. The home page, demo and live board link it,
   with Inter Tight for text and Italiana for the board's title. The self-contained pages hold the same colors
