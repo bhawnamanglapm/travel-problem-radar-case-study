@@ -341,6 +341,12 @@ const searchText = (t) => (t.match(/\n\/\/ Search file \(T38\):[\s\S]*?\n\/\/ En
 check(!!searchText(jsx) && searchText(jsx) === searchText(srv) && /function mergeSearch\(/.test(searchText(jsx)), "mergeSearch is the same text in the artifact and the server");
 check([bundle, liveBundle].every((b) => b.includes("radar:search") && b.includes("All saved sweeps") && b.includes("This sweep") && b.includes("tpr-board-search")),
   "both bundles are built with the all-sweeps search (the search file, the scope chips, the kept search)");
+const home = readFileSync("index.html", "utf8");
+const homeForm = (home.match(/<form[^>]*\baction="live\/"[^>]*>[\s\S]*?<\/form>/) || [""])[0];
+check(/method="get"/i.test(homeForm) && /<input[^>]*type="search"[^>]*name="q"|<input[^>]*name="q"[^>]*type="search"/.test(homeForm)
+  && /name="all" value="1"/.test(homeForm) && /<label[^>]*for="/.test(homeForm),
+  "index.html's hero has a labelled search form that goes to live/?q=…&all=1");
+check(!/radar:search/.test(home), "index.html never reads the search file: its search box only opens the board");
 
 // 6. No secrets in the repository: it is public. Keys and webhooks (Anthropic, Resend, Slack,
 // Blob) live only in Vercel's environment variables; this catches the common formats if one is
