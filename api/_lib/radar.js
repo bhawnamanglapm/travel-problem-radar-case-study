@@ -61,11 +61,29 @@ function areaOf(region) {
 // End of areas.
 export { AREAS, areaOf };
 
+// Search file (T38): the latest copy of every item in the kept sweeps, so "All saved sweeps" is one read.
+// `prev` is the file so far ({ sweeps, items }); each item carries the sweep it came from (sweep, sweepAt).
+// The same text is in travel-problem-radar.jsx and api/_lib/radar.js; scripts/check.mjs fails if they differ.
+function mergeSearch(prev, problems, sweepId, at, keepSweepIds) {
+  const keep = new Set(keepSweepIds);
+  const ok = prev && Array.isArray(prev.sweeps) && Array.isArray(prev.items);
+  const byId = new Map();
+  for (const it of ok ? prev.items : []) if (it && it.id && keep.has(it.sweep)) byId.set(it.id, it);
+  // The latest copy wins and goes last, so the file stays in sweep order.
+  for (const p of problems) { byId.delete(p.id); byId.set(p.id, { ...p, sweep: sweepId, sweepAt: at }); }
+  const sweeps = [...new Set([...(ok ? prev.sweeps : []), sweepId])].filter((id) => keep.has(id));
+  return { sweeps, items: [...byId.values()] };
+}
+// End of search file.
+export { mergeSearch };
+
 export const KEY_SEEN = "radar:seenIds";
 export const KEY_INDEX = "radar:history";
 // Each item's history (T36), kept with the seen ids. Not readable through /api/data: the board gets the
 // history from the fields trackItems writes on each saved item.
 export const KEY_ITEMS = "radar:items";
+// Every item in the kept sweeps, latest copy each (T38). Readable through /api/data, for "All saved sweeps".
+export const KEY_SEARCH = "radar:search";
 // When the last scheduled sweep started, saved or not. Not readable through /api/data.
 export const KEY_LAST_SCHEDULED = "radar:lastScheduled";
 export const sweepKey = (id) => "radar:sweep:" + id;
@@ -117,6 +135,17 @@ async function buildItemIndex(storage, hist) {
     index = trackItems(index, sw.problems, e.id, [...Object.keys(index), ...ids]).index;
   }
   return index;
+}
+
+// The search file from the saved sweeps, oldest first: once, when the store has sweeps but no search file (T38).
+// At most MAX_SWEEPS reads; a sweep that can't be read is skipped, and is missing from `sweeps`.
+async function buildSearch(storage, entries, keepIds) {
+  let search = null;
+  for (const e of entries) {
+    const sw = await readJSON(storage, sweepKey(e.id));
+    if (sw && Array.isArray(sw.problems)) search = mergeSearch(search, sw.problems, e.id, e.at, keepIds);
+  }
+  return search;
 }
 
 const slug = (s = "") =>
@@ -409,6 +438,14 @@ export async function runDailySweep({ storage, scan, now = () => Date.now(), man
   }
   // The item index doesn't fail a saved sweep: the next sweep counts from the last index it could write.
   if (itemIndex) { try { await storage.set(KEY_ITEMS, JSON.stringify(itemIndex)); } catch (e) {} }
+  // The search file (T38) doesn't either: one read and one write, and a missing file is built once from the kept
+  // sweeps. One that can't be read or written is left for the next sweep, and the board counts what it lacks.
+  try {
+    const keepIds = hist.map((e) => e.id);
+    const raw = await storage.get(KEY_SEARCH);
+    const prev = raw == null ? await buildSearch(storage, hist.slice(0, -1), keepIds) : JSON.parse(raw);
+    await storage.set(KEY_SEARCH, JSON.stringify(mergeSearch(prev, problems, id, at, keepIds)));
+  } catch (e) {}
   for (const d of drop) { try { await storage.del(sweepKey(d.id)); } catch (e) {} }
   const llmLog = await writeLog("saved");
 
