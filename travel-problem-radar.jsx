@@ -97,6 +97,19 @@ const CSS = `
 .tpr-chip:hover { border-color:var(--line2); color:var(--text); }
 .tpr-chip.on { background:var(--primary); color:var(--on-primary); border-color:var(--primary); }
 .tpr-chip .c { width:7px; height:7px; border-radius:50%; display:inline-block; margin-right:6px; vertical-align:middle; }
+.tpr-chip .k { font-weight:600; margin-left:3px; }
+.tpr-area-chips { flex-basis:100%; }
+
+/* ---- area overview: one tile per area in the sweep (T37) ---- */
+.tpr-areas { display:grid; grid-template-columns:repeat(auto-fill,minmax(128px,1fr)); gap:8px; margin-bottom:16px; }
+.tpr-area { display:flex; flex-direction:column; align-items:flex-start; gap:4px; text-align:left; cursor:pointer;
+  background:var(--surface); border:1px solid var(--line); color:var(--text); border-radius:12px; padding:10px 13px;
+  font:inherit; transition:.15s; }
+.tpr-area:hover { border-color:var(--line2); }
+.tpr-area .n { font-family:var(--display); font-size:22px; font-weight:600; line-height:1; }
+.tpr-area .l { font-family:var(--mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); }
+.tpr-area.on { background:var(--primary); border-color:var(--primary); color:var(--on-primary); }
+.tpr-area.on .l { color:var(--on-primary); }
 .tpr-search { margin-left:auto; background:var(--surface); border:1px solid var(--line); color:var(--text);
   font-family:var(--body); font-size:13px; padding:9px 13px; border-radius:9px; min-width:180px; }
 .tpr-search::placeholder { color:var(--faint); }
@@ -258,6 +271,51 @@ const CATS = [
     desc: "strikes, bankruptcies, capacity cuts, overtourism, pricing shocks, and major operational disruptions" },
 ];
 const SEV_RANK = { High: 3, Medium: 2, Low: 1 };
+
+// Areas (T37): a fixed list the board filters by, and areaOf() to place the AI's free-text region in one.
+// The same text is in travel-problem-radar.jsx and api/_lib/radar.js; scripts/check.mjs fails if they differ.
+const AREAS = ["Global", "Asia", "Europe", "North America", "Latin America", "Middle East & Africa", "Oceania", "Other"];
+const AREA_NAMES = {
+  Global: "global|globally|worldwide|world|international|multinational|multiple|various|online|multiple countries|multiple regions|several countries|many countries",
+  Asia: "asia|south asia|southeast asia|south east asia|east asia|central asia|asia pacific|apac|asean|afghanistan|armenia|azerbaijan|bangladesh|bhutan|brunei|cambodia|china|mainland china|hong kong|macau|macao|india|indonesia|japan|kazakhstan|kyrgyzstan|laos|malaysia|maldives|mongolia|myanmar|burma|nepal|north korea|south korea|korea|pakistan|philippines|singapore|sri lanka|taiwan|tajikistan|thailand|timor leste|east timor|turkmenistan|uzbekistan|vietnam|viet nam|bali|tokyo|kyoto|osaka|seoul|beijing|shanghai|bangkok|phuket|delhi|new delhi|mumbai|goa|kathmandu|manila|jakarta|kuala lumpur|hanoi|ho chi minh city",
+  Europe: "europe|eu|european union|schengen|schengen area|western europe|eastern europe|southern europe|northern europe|central europe|scandinavia|nordics|nordic countries|balkans|mediterranean|albania|andorra|austria|belarus|belgium|bosnia|herzegovina|bulgaria|croatia|cyprus|czech republic|czechia|denmark|estonia|finland|france|germany|greece|hungary|iceland|ireland|italy|kosovo|latvia|liechtenstein|lithuania|luxembourg|malta|moldova|monaco|montenegro|netherlands|holland|north macedonia|macedonia|norway|poland|portugal|romania|russia|san marino|serbia|slovakia|slovenia|spain|sweden|switzerland|turkey|turkiye|ukraine|united kingdom|uk|great britain|britain|england|scotland|wales|northern ireland|vatican|vatican city|london|paris|rome|venice|florence|milan|barcelona|madrid|lisbon|amsterdam|berlin|munich|vienna|prague|budapest|athens|santorini|istanbul|dublin|edinburgh|copenhagen|stockholm|oslo|reykjavik|zurich|geneva|brussels|mallorca|majorca|ibiza|canary islands|tenerife",
+  "North America": "north america|america|united states|united states of america|us|usa|canada|greenland|bermuda|alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming|washington dc|nyc|los angeles|san francisco|las vegas|chicago|boston|miami|orlando|seattle|honolulu|ontario|quebec|british columbia|alberta|toronto|vancouver|montreal",
+  "Latin America": "latin america|latam|south america|central america|caribbean|west indies|mexico|guatemala|belize|honduras|el salvador|nicaragua|costa rica|panama|cuba|jamaica|haiti|dominican republic|puerto rico|bahamas|barbados|trinidad|tobago|aruba|curacao|st lucia|saint lucia|colombia|venezuela|ecuador|galapagos|peru|bolivia|brazil|paraguay|uruguay|argentina|chile|guyana|suriname|patagonia|cancun|tulum|mexico city|rio de janeiro|sao paulo|buenos aires|cusco|machu picchu",
+  "Middle East & Africa": "middle east|mena|gcc|gulf states|persian gulf|gulf region|africa|north africa|sub saharan africa|east africa|west africa|southern africa|central africa|bahrain|iran|iraq|israel|jordan|kuwait|lebanon|oman|palestine|gaza|west bank|qatar|saudi arabia|saudi|syria|uae|united arab emirates|yemen|dubai|abu dhabi|doha|riyadh|jeddah|tel aviv|jerusalem|egypt|cairo|morocco|marrakech|algeria|tunisia|libya|sudan|south sudan|ethiopia|kenya|nairobi|tanzania|zanzibar|uganda|rwanda|nigeria|lagos|ghana|senegal|south africa|cape town|johannesburg|namibia|botswana|zimbabwe|zambia|mozambique|madagascar|mauritius|seychelles|cameroon|ivory coast|cote divoire|angola|congo|drc|mali|niger|chad|somalia|eritrea|djibouti|benin|togo|burkina faso|guinea|sierra leone|liberia|gambia|gabon|malawi|lesotho|eswatini|cape verde|cabo verde",
+  Oceania: "oceania|australasia|pacific islands|south pacific|australia|new zealand|fiji|papua new guinea|papua|samoa|tonga|vanuatu|solomon islands|tahiti|french polynesia|guam|sydney|melbourne|brisbane|perth|queensland|new south wales|tasmania|auckland",
+};
+let areaTable = null;
+function areaOf(region) {
+  if (!areaTable) {
+    areaTable = new Map();
+    for (const [area, names] of Object.entries(AREA_NAMES)) for (const n of names.split("|")) areaTable.set(n, area);
+  }
+  const text = String(region || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[.'\u2019]/g, "");
+  if (!/[a-z0-9]/.test(text)) return "Global";
+  const scan = (t) => {
+    const found = new Set();
+    for (const raw of t.split(/[,;\/&+()]|\band\b|\bor\b/)) {
+      const part = raw.replace(/[^a-z0-9]+/g, " ").trim().replace(/^the /, "");
+      if (!part) continue;
+      if (areaTable.has(part)) { found.add(areaTable.get(part)); continue; }
+      // Words inside the text, longest name first: "southern spain", "new south wales", "rural japan".
+      const w = part.split(" ");
+      for (let i = 0; i < w.length; i++) {
+        for (let n = 3; n >= 1; n--) {
+          const a = i + n <= w.length && areaTable.get(w.slice(i, i + n).join(" "));
+          if (a) { found.add(a); i += n - 1; break; }
+        }
+      }
+    }
+    return found;
+  };
+  // Text in brackets qualifies the rest ("Mali (US citizens affected)"), so it counts only when the rest names nothing.
+  let found = scan(text.replace(/\([^)]*\)/g, " "));
+  if (!found.size) found = scan(text);
+  // Text that names two or more areas ("US and Europe") spans them, so it counts as Global.
+  return found.size === 1 ? [...found][0] : found.size ? "Global" : "Other";
+}
+// End of areas.
 
 const slug = (s = "") =>
   s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
@@ -451,6 +509,7 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
   const [view, setView] = useState("board"); // board | report | history
   const [fCat, setFCat] = useState("all");
   const [fSev, setFSev] = useState("all");
+  const [fArea, setFArea] = useState("all"); // one of AREAS (T37)
   const [query, setQuery] = useState("");
   const [collapsed, setCollapsed] = useState(() => new Set()); // category keys whose group is folded
   const [copied, setCopied] = useState(false);
@@ -630,7 +689,7 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
       const e = history.find((h) => h.id === id);
       setSweptAt(e ? e.at : full.at);
       setView("board");
-      setFCat("all"); setFSev("all"); setQuery("");
+      setFCat("all"); setFSev("all"); setFArea("all"); setQuery("");
     }
   }
 
@@ -638,7 +697,8 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
   const newCount = problems.filter((p) => p.isNew).length;
   const highCount = problems.filter((p) => p.severity === "High").length;
 
-  const shown = problems.filter((p) => {
+  // Every filter but the area, so each area's count is the cards that picking it would show (T37).
+  const others = problems.filter((p) => {
     if (fCat !== "all" && p.cat !== fCat) return false;
     if (fSev !== "all" && p.severity !== fSev) return false;
     if (query) {
@@ -647,6 +707,12 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
     }
     return true;
   });
+  const shown = fArea === "all" ? others : others.filter((p) => areaOf(p.region) === fArea);
+  const areaCount = (list) => list.reduce((m, p) => m.set(areaOf(p.region), (m.get(areaOf(p.region)) || 0) + 1), new Map());
+  const areaN = areaCount(others);
+  const areaList = AREAS.filter((a) => areaN.get(a) || a === fArea);
+  const showAreaTiles = areaCount(problems).size >= 2;
+  const pickArea = (a) => setFArea((cur) => (cur === a ? "all" : a));
   // shown is already sorted (new first, then severity), so each group keeps that order
   const groups = CATS.map((c) => ({ c, items: shown.filter((p) => p.cat === c.key) })).filter((g) => g.items.length);
   const setGroupOpen = (key, open) => setCollapsed((s) => {
@@ -749,19 +815,38 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
         </div>
       )}
 
+      {status === "done" && view === "board" && showAreaTiles && (
+        <div className="tpr-areas" role="group" aria-label="Areas">
+          {areaList.map((a) => (
+            <button key={a} className={"tpr-area" + (fArea === a ? " on" : "")} aria-pressed={fArea === a} onClick={() => pickArea(a)}>
+              <span className="n">{areaN.get(a) || 0}</span>
+              <span className="l">{a}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {status === "done" && view === "board" && (
         <div className="tpr-filters">
-          <div className="tpr-chips">
-            <button className={"tpr-chip" + (fCat === "all" ? " on" : "")} onClick={() => setFCat("all")}>All</button>
+          <div className="tpr-chips" role="group" aria-label="Category">
+            <button className={"tpr-chip" + (fCat === "all" ? " on" : "")} aria-pressed={fCat === "all"} onClick={() => setFCat("all")}>All</button>
             {CATS.map((c) => (
-              <button key={c.key} className={"tpr-chip" + (fCat === c.key ? " on" : "")} onClick={() => { setFCat(c.key); setGroupOpen(c.key, true); }}>
+              <button key={c.key} className={"tpr-chip" + (fCat === c.key ? " on" : "")} aria-pressed={fCat === c.key} onClick={() => { setFCat(c.key); setGroupOpen(c.key, true); }}>
                 <span className="c" style={{ background: c.color }} />{c.label}
               </button>
             ))}
           </div>
-          <div className="tpr-chips">
+          <div className="tpr-chips tpr-area-chips" role="group" aria-label="Area">
+            <button className={"tpr-chip" + (fArea === "all" ? " on" : "")} aria-pressed={fArea === "all"} onClick={() => setFArea("all")}>All areas</button>
+            {areaList.map((a) => (
+              <button key={a} className={"tpr-chip" + (fArea === a ? " on" : "")} aria-pressed={fArea === a} onClick={() => pickArea(a)}>
+                {a} <span className="k">{areaN.get(a) || 0}</span>
+              </button>
+            ))}
+          </div>
+          <div className="tpr-chips" role="group" aria-label="Severity">
             {["all", "High", "Medium", "Low"].map((s) => (
-              <button key={s} className={"tpr-chip" + (fSev === s ? " on" : "")} onClick={() => setFSev(s)}>
+              <button key={s} className={"tpr-chip" + (fSev === s ? " on" : "")} aria-pressed={fSev === s} onClick={() => setFSev(s)}>
                 {s === "all" ? "Any severity" : s}
               </button>
             ))}
