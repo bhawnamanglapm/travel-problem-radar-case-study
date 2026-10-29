@@ -101,14 +101,19 @@ p{margin:0 0 14px;color:#2f4a45;color:light-dark(#2f4a45,#c9d6d4)}
 a{color:#1d4e45;color:light-dark(#1d4e45,#5fbfa9)}
 button{font:inherit;font-weight:600;background:#1d4e45;background:light-dark(#1d4e45,#1e5248);color:#f6f9f8;color:light-dark(#f6f9f8,#ecf3f2);border:0;border-radius:6px;padding:10px 18px;cursor:pointer}
 button:hover{background:#163d36;background:light-dark(#163d36,#25665a)}
-small{color:#516763;color:light-dark(#516763,#a4b7b4)}`;
+small{color:#516763;color:light-dark(#516763,#a4b7b4)}
+dl.item{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:0 0 18px;padding:14px 16px;border:1px solid #d5e0de;border:1px solid light-dark(#d5e0de,#24403b);border-radius:8px;overflow-wrap:anywhere}
+dl.item dt{color:#516763;color:light-dark(#516763,#a4b7b4);font-size:14px}
+dl.item dd{margin:0}`;
 
 // A minimal HTML page. `title` is escaped here. `body` is HTML the caller built, so every value
 // that came from a request must already have gone through esc(). The page is never cached or
 // indexed, and sends no Referer to other sites, because the links that lead here carry tokens. Not
 // "no-referrer": with it, a form posted from the page (the sign-in button) carries Origin: null, and
 // originOk refuses that. "same-origin" sends the real Origin to this site and nothing to others.
-export function sendPage(res, code, { title, body }) {
+// `meta` adds head tags, as [{ property | name, content }] (the Open Graph and Twitter tags of a
+// shared problem, T40); each value is escaped here.
+export function sendPage(res, code, { title, body, meta = [] }) {
   res.statusCode = code;
   res.setHeader("content-type", "text/html; charset=utf-8");
   res.setHeader("cache-control", "no-store");
@@ -120,7 +125,7 @@ export function sendPage(res, code, { title, body }) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>${esc(title)}</title>
+${meta.map((m) => `<meta ${m.property ? `property="${esc(m.property)}"` : `name="${esc(m.name)}"`} content="${esc(m.content)}">\n`).join("")}<title>${esc(title)}</title>
 <style>${PAGE_CSS}</style>
 </head>
 <body>

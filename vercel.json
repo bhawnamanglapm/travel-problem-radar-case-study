@@ -17,5 +17,8 @@
       "destination": "https://radar.pehchanthetraveller.com/$1",
       "permanent": false
     }
+  ],
+  "rewrites": [
+    { "source": "/p/:sweep/:item", "destination": "/api/data?page=item&sweep=:sweep&item=:item" }
   ]
 }
