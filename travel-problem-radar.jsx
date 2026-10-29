@@ -752,8 +752,10 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
     }
     try {
       const r = await accountCall();
+      // Subscriptions paused (SUBSCRIPTIONS_ENABLED off, as on Preview) is "off" too: nobody can save then.
+      const paused = r.status === 503 && r.body && r.body.error === "subscriptions are paused";
       if (r.status === 200 && r.body && Array.isArray(r.body.saved)) setSaved({ state: "done", items: r.body.saved });
-      else setSaved({ state: [401, 402, 403].includes(r.status) ? "off" : "error", items: [] });
+      else setSaved({ state: [401, 402, 403].includes(r.status) || paused ? "off" : "error", items: [] });
     } catch (e) { setSaved({ state: "error", items: [] }); }
   }
 
