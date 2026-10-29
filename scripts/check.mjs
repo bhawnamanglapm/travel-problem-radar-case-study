@@ -350,6 +350,7 @@ check(!/radar:search/.test(home), "index.html never reads the search file: its s
 // T39: both bundles have the star and the Saved tab; the live one asks the account API, the demo keeps its own copy.
 check([bundle, liveBundle].every((b) => b.includes("tpr-save") && b.includes("aria-pressed") && b.includes("Nothing saved yet") && b.includes("/api/account?action=saved")),
   "both bundles are built with saved problems (the star, the Saved tab, the account API)");
+check(/<li>if you save problems on the board \(Pro\): a copy of each one, at most 100/.test(privacyPage), "legal/privacy says saved problems are stored (at most 100)");
 
 // 6. No secrets in the repository: it is public. Keys and webhooks (Anthropic, Resend, Slack,
 // Blob) live only in Vercel's environment variables; this catches the common formats if one is
