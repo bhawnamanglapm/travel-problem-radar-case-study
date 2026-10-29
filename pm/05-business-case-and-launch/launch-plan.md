@@ -59,7 +59,7 @@
 
 | ID | Item | Who | Status | Blocks | Links |
 |---|---|---|---|---|---|
-| LR-20 | A written manual step for refunds and chargebacks: refund in Razorpay, then revoke Pro with the admin script, telling a first payment from a renewal | Owner, with the dev | Open | The first live payment (P0) | R-07, [refund rule](../../docs/decisions.md) 2026-10-23 |
+| LR-20 | A written manual step for refunds and chargebacks: refund in Razorpay, then revoke Pro with the admin script, telling a first payment from a renewal | Owner, with the dev | Done 2026-10-29: [refunds-and-chargebacks.md](../../docs/subscriptions/refunds-and-chargebacks.md), with `revoke-pro --paid` to end a refunded Pro at once. Its Razorpay menu names are still to verify | The first live payment (P0) | R-07, [refund rule](../../docs/decisions.md) 2026-10-23 |
 | LR-21 | A weekly check: Razorpay's active subscriptions against Pro records | Owner | Planned for the first month (P1) | — | R-06 |
 | LR-22 | Docs after go-live: DEPLOYMENT.md, pricing.md, decisions.md, CHANGELOG.md | Dev | To do | T27's acceptance | [T27](../../docs/subscriptions/tasks/T27-razorpay-test-run-and-go-live.md#acceptance-criteria) |
 
