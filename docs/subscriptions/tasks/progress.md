@@ -52,7 +52,7 @@ working in a real inbox; that is T12's staged launch.
 | [T36](T36-problem-detail-panel.md) Problem detail panel | built 2026-10-29 on `feat/t36-detail-panel`, merged to main (#100, `911d583`) and live; the live board shows history from the first production sweep after deploy | e399913, b23dd1a, d877ec6 | 1,296 pass | Added 2026-10-29, Phase 5. See T36 notes below |
 | [T37](T37-areas.md) Areas | built 2026-10-29 on `feat/t37-areas`, merged to main (#101, `8f1b220`) and live | 42a8a24, 2828648 | 1,300 pass | Added 2026-10-29, Phase 5. See T37 notes below |
 | [T38](T38-search-all-sweeps.md) Search all sweeps | built 2026-10-29 on `feat/t38-search-all-sweeps`, merged to main (#102, `fd3aad6`) and live | aff0218, 74b7bae, 5ef7ebd | 1,324 pass | Added 2026-10-29, Phase 5. See T38 notes below |
-| [T39](T39-saved-problems.md) Saved problems | built 2026-10-29 on `feat/t39-saved-problems` | bc2c4cc, 9d7a9ac, 48957ef | 1,358 pass | Added 2026-10-29, Phase 5. See T39 notes below |
+| [T39](T39-saved-problems.md) Saved problems | built 2026-10-29 on `feat/t39-saved-problems` | bc2c4cc, 9d7a9ac, 48957ef, 54fd29b | 1,358 pass | Added 2026-10-29, Phase 5. See T39 notes below |
 | [T40](T40-share-a-problem.md) Share one problem | todo | | | Added 2026-10-29, Phase 5 |
 | [T41](T41-email-areas.md) Areas in Pro email | todo | | | Added 2026-10-29, Phase 5 |
 
@@ -69,8 +69,8 @@ working in a real inbox; that is T12's staged launch.
 - Changes from the task file: `itemId` in the body, no ids in `me`, a signed-in session required, and `402`
   for Free. See the task file.
 - Checked by hand in headless Chrome against a local server running the real account handler on an in-memory
-  store (41 checks): mouse and keyboard, a double press, the panel and card in step, reload, All saved sweeps, a
-  trimmed sweep, the 409 note, 401 and 500 from the account API, the demo's own copy, and 375px in light and
+  store (42 checks): mouse and keyboard, a double press, the panel and card in step, reload, All saved sweeps, a
+  trimmed sweep, the 409 note, 401, 500 and a paused 503 from the account API, the demo's own copy, and 375px in light and
   dark. Not in CI. Not checked: a real Pro session in production.
 
 ### T38

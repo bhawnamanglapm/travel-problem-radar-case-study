@@ -65,7 +65,8 @@ and after 60 sweeps the sweep holding it is deleted (`MAX_SWEEPS` in `api/_lib/r
     with room for 100"; with nothing saved, it says how to save one. After an unsave there, focus moves to that
     line.
   - `/live/` calls `GET ?action=saved` once after the board loads. A 401, 402 or 403 hides the stars and the tab.
-    Any other failure hides the stars and keeps the tab, which says the list couldn't be loaded.
+    Paused subscriptions (`503`, as on Preview) count the same. Any other failure hides the stars and keeps the
+    tab, which says the list couldn’t be loaded.
   - The demo keeps its own copy in browser storage under `radar:saved`, with no account calls.
 - **Privacy page.** "What we store" lists saved problems: what's kept, at most 100, until removed or the account
   is deleted, and kept through a lapse for renewal. check.mjs checks the line and both bundles.
