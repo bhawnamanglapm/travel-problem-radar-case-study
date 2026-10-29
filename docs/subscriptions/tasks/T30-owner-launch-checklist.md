@@ -30,7 +30,7 @@ is finished.
 | 5 | Move to Vercel Pro (Hobby is non-commercial, **verify** the current terms). Unblocks T22 | RM-05, LR-05 | todo |
 | 6 | Resend Pro. Costing's P0 list has it before the first payment; at 2 a day the free plan's 100 a day lasts longer, so the owner may choose to wait, and records that choice in decisions.md | LR-15, RM-08 | todo |
 | 7 | Read the values of `MAX_SUBSCRIBERS` and `MAX_CONFIRMS_PER_DAY` in Vercel | LR-19 | todo |
-| 8 | A written manual step for refunds and chargebacks | LR-20 | todo |
+| 8 | A written manual step for refunds and chargebacks | LR-20 | **Done** 2026-10-29: [refunds-and-chargebacks.md](../refunds-and-chargebacks.md); `revoke-pro --paid` ends a refunded Pro at once. Razorpay's menu names are still to verify |
 | 9 | The GST case confirmed by a CA; advice on India's DPDP Act for stored addresses | LR-13; pricing.md checklist | todo |
 | 10 | Score 20 or more live items with the README rubric, **if** the owner keeps the rule not to charge first | LR-03, RM-13 | todo |
 | 11 | Production checks: emailed sign-in, a Pro email after choosing categories, Gmail's one-click unsubscribe | LR-04 | todo |
