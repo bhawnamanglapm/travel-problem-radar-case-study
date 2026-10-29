@@ -9,19 +9,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Travel Problem Radar — Demo</title>
 <meta name="description" content="Demo of Travel Problem Radar. Replays a saved sample of 8 travel-industry problems; no live search." />
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#1d4e45" />
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0c1816" />
+<link rel="stylesheet" href="../brand.css" />
 <style>
-  html, body { margin: 0; background: #0B0B0D; }
+  html, body { margin: 0; background: var(--bg); }
   .demo-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px;
-    padding: 10px clamp(14px, 4vw, 40px); border-bottom: 1px solid #2A2A34;
-    font: 12px/1.5 'JetBrains Mono', ui-monospace, monospace; color: #93939F; }
-  .demo-strip b { color: #C6FF3D; font-weight: 500; letter-spacing: .08em; }
-  .demo-strip a { color: #F4F4F7; }
-  .demo-strip a:hover { color: #C6FF3D; }
+    padding: 10px clamp(14px, 4vw, 40px); border-bottom: 1px solid var(--line);
+    font: 12px/1.5 'JetBrains Mono', ui-monospace, monospace; color: var(--muted); }
+  .demo-strip b { color: var(--link); font-weight: 500; letter-spacing: .08em; }
+  .demo-strip a { color: var(--text); }
+  .demo-strip a:hover { color: var(--link); }
   .demo-strip .links { margin-left: auto; display: flex; gap: 16px; }
-  noscript { display: block; padding: 40px; color: #F4F4F7; font-family: system-ui, sans-serif; }
-  .board-foot { padding: 16px clamp(14px, 4vw, 40px) 32px; border-top: 1px solid #2A2A34; font: 12px/1.5 'JetBrains Mono', ui-monospace, monospace; color: #93939F; }
-  .board-foot a { color: #F4F4F7; }
-  .board-foot a:hover { color: #C6FF3D; }
+  noscript { display: block; padding: 40px; color: var(--text); font-family: system-ui, sans-serif; }
+  .board-foot { padding: 16px clamp(14px, 4vw, 40px) 32px; border-top: 1px solid var(--line); font: 12px/1.5 'JetBrains Mono', ui-monospace, monospace; color: var(--muted); }
+  .board-foot a { color: var(--text); }
+  .board-foot a:hover { color: var(--link); }
   .site-foot a { display: inline-block; min-height: 24px; line-height: 24px; }
 </style>
 </head>
