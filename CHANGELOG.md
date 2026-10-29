@@ -5,6 +5,11 @@ grouped by date.
 
 ## 2026-10-29
 
+- Pro members can save problems: a "☆ Save" star on each card and in the detail panel, and a fourth tab, Saved,
+  with the saved problems newest first, each with its sweep date, Details and Unsave. At most 100. The server
+  keeps its own copy of each on the account, so a saved problem stays after its sweep is gone. A Pro whose plan
+  ends keeps the list for when they renew, and can still remove items. Delete my account removes it. The demo
+  keeps its saved problems in the browser. The privacy page lists the new stored data (T39).
 - The board's search can look in every saved sweep: "This sweep" and "All saved sweeps" chips beside the search
   box. All shows each problem once (its latest copy) with "Sweep of <date>" on the card, and says how many saved
   sweeps it couldn't include. The sweep keeps one search file (`radar:search`) for it, so a search costs one read.

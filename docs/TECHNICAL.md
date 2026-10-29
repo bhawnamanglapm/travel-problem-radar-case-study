@@ -63,6 +63,14 @@ Subscriber -> links in each email -> /manage/ (/api/account: plan, Request Pro o
   `history.replaceState` on every change; unknown values are dropped and the hash (`#report`, `#p=`) is kept. On a
   locked screen the search is kept in `sessionStorage` for 30 minutes, so `/live/` puts it back after sign-in. The
   home page's search box is a plain GET form to `live/?q=…&all=1`.
+- **Saved problems (T39).** A Pro member's star on a card or in the panel calls `/api/account` (`save` with the
+  sweep id and item id, `unsave`, `GET ?action=saved`). The server copies the item from the sweep file itself, so
+  nothing the browser sends ends up in the copy, and keeps at most 100 on the account record (`saved`), newest
+  first. Changes go through `updateSubscriber`'s conditional write, so two tabs can't undo each other. The copy
+  has no history fields, so it outlives the sweep trim. Free gets `402`; a lapsed Pro keeps the list and can only
+  unsave. The board's fourth tab, Saved, shows the copies; the demo keeps its own in browser storage. Each save
+  or unsave is one Blob write, an advanced operation, and the sweeps already use most of the Hobby plan's 2,000 a
+  month (see the T39 task file).
 - The API key is held as a Vercel secret, never in the page or the code.
 - Items are AI-gathered and not verified; the page tells visitors to check each source link.
 
