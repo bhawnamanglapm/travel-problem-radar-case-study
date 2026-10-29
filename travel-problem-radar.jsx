@@ -254,6 +254,17 @@ const CSS = `
 .tpr-dlg-hist li { display:flex; align-items:center; gap:10px; font-family:var(--mono); font-size:12px; color:var(--text);
   background:var(--bg2); border:1px solid var(--line); border-radius:9px; padding:7px 10px; }
 .tpr-dlg-gone { margin-left:auto; font-size:10.5px; color:var(--muted); }
+/* ---- saved problems (T39) ---- */
+.tpr-save { margin-left:auto; background:none; border:1px solid var(--line2); color:var(--text-2); font-family:var(--body);
+  font-size:12px; font-weight:500; padding:5px 10px; border-radius:8px; cursor:pointer; white-space:nowrap; flex:none; }
+.tpr-save:hover { border-color:var(--link); color:var(--link); }
+.tpr-save.on { color:var(--accent-text); border-color:color-mix(in srgb, var(--accent) 55%, var(--line2)); }
+.tpr-save[aria-disabled="true"] { opacity:.55; cursor:progress; }
+.tpr-save:focus-visible { outline:2px solid var(--link); outline-offset:2px; }
+.tpr-dlg-top .tpr-save + .tpr-dlg-x { margin-left:0; }
+.tpr-save-note { margin:0; font-size:12.5px; color:var(--accent-text); line-height:1.45; }
+.tpr-saved .tpr-scope-line:focus { outline:none; }
+.tpr-saved .tpr-card { box-shadow:inset 3px 0 0 var(--cat); padding-left:19px; }
 @media (max-width:640px){
   .tpr-dlg { top:auto; bottom:0; margin:0; width:100%; height:auto; max-height:88vh; border-left:0; border-top:1px solid var(--line2);
     border-radius:16px 16px 0 0; }
@@ -261,6 +272,7 @@ const CSS = `
 
 @media (max-width:560px){
   .tpr-actions { width:100%; }
+  .tpr-tab { padding:7px 10px; }
   .tpr-swept { text-align:left; }
   .tpr-search { margin-left:0; width:100%; }
   .tpr-search-row { margin-left:0; width:100%; }
@@ -461,6 +473,7 @@ const KEY_INDEX = "radar:history";
 const KEY_LEGACY = "radar:lastSweep";
 const KEY_ITEMS = "radar:items"; // each item's history (T36); the live board never reads it
 const KEY_SEARCH = "radar:search"; // every item in the kept sweeps, for "All saved sweeps" (T38)
+const KEY_SAVED = "radar:saved"; // the demo's saved problems (T39); the live board keeps them on the account
 const sweepKey = (id) => "radar:sweep:" + id;
 
 // Each item's history (T36). `index` maps an id to { f: first sweep id, n: sweeps it was in, s: its latest
@@ -556,6 +569,30 @@ async function buildSearchFile(hist, keepIds) {
 }
 
 // "Sweep of 27 Oct": where an item in All saved sweeps comes from.
+// Saved problems (T39): at most MAX_SAVED, newest first, each { id, sweepId, at, item }. The live board asks the
+// account API, signed in (the server copies the item from its sweep); the demo keeps the same shape in this browser.
+const MAX_SAVED = 100;
+const SAVED_FIELDS = ["id", "cat", "title", "summary", "source", "link", "region", "date", "severity", "opportunity"];
+const savedCopy = (p, sweepAt) => ({
+  ...Object.fromEntries(SAVED_FIELDS.map((k) => [k, typeof p[k] === "string" ? p[k] : ""])),
+  sweepAt: typeof sweepAt === "string" ? sweepAt : null,
+});
+async function accountCall(body) {
+  const r = await fetch(body ? "/api/account" : "/api/account?action=saved", body
+    ? { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }
+    : { credentials: "same-origin" });
+  let json = null;
+  try { json = await r.json(); } catch (e) {}
+  return { status: r.status, body: json };
+}
+const SAVE_NOTES = {
+  full: `You’ve saved ${MAX_SAVED}, the most there’s room for. Unsave one to save another.`,
+  pro: "Saving problems is part of Pro.",
+  gone: "This sweep is no longer kept, so the problem can’t be saved from it.",
+  save: "Couldn’t save it. Try again.",
+  unsave: "Couldn’t remove it. Try again.",
+};
+
 const sweepDay = (at) => new Date(at).toLocaleDateString([], { day: "numeric", month: "short" });
 
 function groupByDay(entries) {
@@ -613,6 +650,12 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
   const [copied, setCopied] = useState(false);
   const seenRef = useRef(new Set());
   const [detail, setDetail] = useState(null); // the problem open in the detail panel (T36)
+  // Saved problems (T39): { state: loading | done | off | error, items }. "off" (signed out, or not Pro) hides the
+  // stars and the tab; "error" hides the stars and the tab says so.
+  const [saved, setSaved] = useState(null);
+  const [saving, setSaving] = useState(() => new Set()); // ids waiting for the server
+  const [saveNote, setSaveNote] = useState(null); // { id, text } under that problem's star
+  const savedTopRef = useRef(null);
   const dlgRef = useRef(null);
 
   // The panel is a native <dialog>: showModal gives Esc to close, focus inside, the page behind inert,
@@ -694,6 +737,76 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
     setHash("#p=" + encodeURIComponent(p.id));
   }
   const closeDetail = () => { if (dlgRef.current && dlgRef.current.open) dlgRef.current.close(); };
+
+  // The saved list loads once, when the board first shows (the live board only when it isn't locked).
+  useEffect(() => {
+    if (status === "done" && !saved) loadSaved();
+  }, [status, saved]);
+
+  async function loadSaved() {
+    setSaved({ state: "loading", items: [] });
+    if (!live) {
+      const list = await loadJSON(KEY_SAVED);
+      setSaved({ state: "done", items: Array.isArray(list) ? list.filter((s) => s && s.id && s.item) : [] });
+      return;
+    }
+    try {
+      const r = await accountCall();
+      if (r.status === 200 && r.body && Array.isArray(r.body.saved)) setSaved({ state: "done", items: r.body.saved });
+      else setSaved({ state: [401, 402, 403].includes(r.status) ? "off" : "error", items: [] });
+    } catch (e) { setSaved({ state: "error", items: [] }); }
+  }
+
+  const canSave = Boolean(saved && saved.state === "done");
+  const savedIds = new Set(canSave ? saved.items.map((s) => s.id) : []);
+
+  async function toggleSave(p, sweepId, sweepAt) {
+    if (saving.has(p.id) || !canSave) return;
+    const on = savedIds.has(p.id);
+    const fromSaved = view === "saved";
+    setSaveNote(null);
+    setSaving((s) => new Set(s).add(p.id));
+    let note = null;
+    try {
+      if (live) {
+        const r = await accountCall(on ? { action: "unsave", itemId: p.id } : { action: "save", sweepId: String(sweepId), itemId: p.id });
+        const err = r.body && r.body.error;
+        if (r.status === 200 && r.body && (on || r.body.entry)) {
+          setSaved((cur) => {
+            const rest = cur.items.filter((s) => s.id !== p.id);
+            return { ...cur, items: on ? rest : [r.body.entry, ...rest] };
+          });
+        } else if (on) note = SAVE_NOTES.unsave;
+        else note = r.status === 409 ? SAVE_NOTES.full : r.status === 402 ? SAVE_NOTES.pro : err === "not_found" ? SAVE_NOTES.gone : SAVE_NOTES.save;
+      } else {
+        // The demo copies the same fields the server keeps.
+        const list = saved.items;
+        let next = null;
+        if (on) next = list.filter((s) => s.id !== p.id);
+        else if (list.length >= MAX_SAVED) note = SAVE_NOTES.full;
+        else next = [{ id: p.id, sweepId: String(sweepId), at: new Date().toISOString(), item: savedCopy(p, sweepAt) }, ...list];
+        if (next) { await saveJSON(KEY_SAVED, next); setSaved({ state: "done", items: next }); }
+      }
+    } catch (e) { note = on ? SAVE_NOTES.unsave : SAVE_NOTES.save; }
+    setSaving((s) => { const n = new Set(s); n.delete(p.id); return n; });
+    if (note) setSaveNote({ id: p.id, text: note });
+    // Unsaving from the Saved tab removes the card, so focus goes to the line above the list.
+    else if (on && fromSaved && !(dlgRef.current && dlgRef.current.open) && savedTopRef.current) savedTopRef.current.focus();
+  }
+
+  // The star: on the cards, in the Saved tab and in the panel. aria-disabled, not disabled, so focus stays on it.
+  const star = (p, sweepId, sweepAt) => {
+    if (!canSave) return null;
+    const on = savedIds.has(p.id);
+    const wait = saving.has(p.id);
+    return (
+      <button className={"tpr-save" + (on ? " on" : "")} type="button" aria-pressed={on} aria-disabled={wait || undefined}
+        onClick={() => toggleSave(p, sweepId, sweepAt)}>
+        <span aria-hidden="true">{on ? "★" : "☆"}</span> {on ? "Saved" : "Save"}<span className="tpr-sr">: {p.title}</span>
+      </button>
+    );
+  };
+  const starNote = (p) => saveNote && saveNote.id === p.id && <p className="tpr-save-note" role="status">{saveNote.text}</p>;
 
   const latestId = history.length ? history[history.length - 1].id : null;
   const isLatest = selId === latestId;
@@ -926,8 +1039,34 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
     } catch (e) {}
   }
 
-  const showStats = status === "done" && view !== "history" && !(all && view === "board");
-  const showBanner = status === "done" && !isLatest && view !== "history" && !(all && view === "board");
+  const showStats = status === "done" && view !== "history" && view !== "saved" && !(all && view === "board");
+  const showBanner = status === "done" && !isLatest && view !== "history" && view !== "saved" && !(all && view === "board");
+
+  // A card's body, on the board and in the Saved tab.
+  const cardBody = (p) => (
+    <>
+      <h3>{p.title}</h3>
+      {p.summary && <p className="tpr-summary">{p.summary}</p>}
+      <div className="tpr-meta">
+        {p.link
+          ? <a className="tpr-tag tpr-src" href={p.link} target="_blank" rel="noopener noreferrer">{p.source} ↗</a>
+          : <span className="tpr-tag">{p.source}</span>}
+        <span className="tpr-tag">{p.region}</span>
+        {p.date && <span className="tpr-tag">{p.date}</span>}
+        <span className={"tpr-tag tpr-sev " + p.severity}>{p.severity}</span>
+        {p.seen > 1 && <span className="tpr-tag tpr-seen">Seen in {p.seen}{p.firstEarlier ? "+" : ""} sweeps</span>}
+      </div>
+      {p.opportunity && (
+        <div className="tpr-opp">
+          <span className="lab">Opportunity</span>
+          <p>{p.opportunity}</p>
+        </div>
+      )}
+      <button className="tpr-more" type="button" onClick={() => openDetail(p)}>
+        Details<span className="tpr-sr">: {p.title}</span>
+      </button>
+    </>
+  );
 
   return (
     <div className="tpr">
@@ -947,6 +1086,9 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
               <button className={"tpr-tab" + (view === "board" ? " on" : "")} onClick={() => setView("board")}>Board</button>
               <button className={"tpr-tab" + (view === "report" ? " on" : "")} onClick={() => setView("report")}>Report</button>
               <button className={"tpr-tab" + (view === "history" ? " on" : "")} onClick={() => setView("history")}>History</button>
+              {saved && saved.state !== "off" && (
+                <button className={"tpr-tab" + (view === "saved" ? " on" : "")} onClick={() => setView("saved")}>Saved</button>
+              )}
             </div>
           )}
           {sweptAt && <div className="tpr-swept">{demo ? "Last replayed" : live ? "Updated 1 to 5 times a day · last sweep" : "Last swept"}<br /><b>{new Date(sweptAt).toLocaleString()}</b></div>}
@@ -1071,35 +1213,14 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
                 <div className="tpr-board" id={id} hidden={!open}>
                   {items.map((p) => (
                     <div className="tpr-card" key={p.id}>
-                      {all ? (
+                      {(all || p.isNew || canSave) && (
                         <div className="tpr-card-top">
-                          <span className="tpr-from">Sweep of {sweepDay(p.sweepAt)}</span>
-                        </div>
-                      ) : p.isNew && (
-                        <div className="tpr-card-top">
-                          <span className="tpr-new">New</span>
+                          {all ? <span className="tpr-from">Sweep of {sweepDay(p.sweepAt)}</span> : p.isNew && <span className="tpr-new">New</span>}
+                          {star(p, all ? p.sweep : selId, all ? p.sweepAt : sweptAt)}
                         </div>
                       )}
-                      <h3>{p.title}</h3>
-                      {p.summary && <p className="tpr-summary">{p.summary}</p>}
-                      <div className="tpr-meta">
-                        {p.link
-                          ? <a className="tpr-tag tpr-src" href={p.link} target="_blank" rel="noopener noreferrer">{p.source} ↗</a>
-                          : <span className="tpr-tag">{p.source}</span>}
-                        <span className="tpr-tag">{p.region}</span>
-                        {p.date && <span className="tpr-tag">{p.date}</span>}
-                        <span className={"tpr-tag tpr-sev " + p.severity}>{p.severity}</span>
-                        {p.seen > 1 && <span className="tpr-tag tpr-seen">Seen in {p.seen}{p.firstEarlier ? "+" : ""} sweeps</span>}
-                      </div>
-                      {p.opportunity && (
-                        <div className="tpr-opp">
-                          <span className="lab">Opportunity</span>
-                          <p>{p.opportunity}</p>
-                        </div>
-                      )}
-                      <button className="tpr-more" type="button" onClick={() => openDetail(p)}>
-                        Details<span className="tpr-sr">: {p.title}</span>
-                      </button>
+                      {starNote(p)}
+                      {cardBody(p)}
                     </div>
                   ))}
                 </div>
@@ -1120,6 +1241,35 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
             <button className="tpr-copy" onClick={copyReport}>{copied ? "Copied ✓" : "Copy report"}</button>
           </div>
           <pre>{buildReport()}</pre>
+        </div>
+      )}
+
+      {/* saved problems (T39): copies kept on the account, so they outlive their sweeps */}
+      {status === "done" && view === "saved" && (
+        <div className="tpr-saved">
+          <div className="tpr-scope-line" role="status" tabIndex={-1} ref={savedTopRef}>
+            {!saved || saved.state === "loading" ? "Loading your saved problems…"
+              : saved.state !== "done" ? <span className="warn">Your saved problems couldn’t be loaded. Reload the page to try again.</span>
+              : saved.items.length ? <><b>{saved.items.length}</b> saved, newest first, with room for {MAX_SAVED}. Each is the copy kept when you saved it.</>
+              : "Nothing saved yet. Press ☆ Save on a problem to keep it here, even after its sweep is no longer kept."}
+          </div>
+          {canSave && saved.items.length > 0 && (
+            <div className="tpr-board">
+              {saved.items.map((s) => {
+                const p = { ...s.item, id: s.id, savedAt: s.at, savedSweep: s.sweepId };
+                return (
+                  <div className="tpr-card" key={s.id} style={{ "--cat": (CATS.find((c) => c.key === p.cat) || CATS[0]).color }}>
+                    <div className="tpr-card-top">
+                      {p.sweepAt && <span className="tpr-from">Sweep of {sweepDay(p.sweepAt)}</span>}
+                      {star(p, s.sweepId, p.sweepAt)}
+                    </div>
+                    {starNote(p)}
+                    {cardBody(p)}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -1248,8 +1398,10 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
             <div className="tpr-dlg-top">
               {detail.sweepAt ? <span className="tpr-from">Sweep of {sweepDay(detail.sweepAt)}</span> : detail.isNew && <span className="tpr-new">New</span>}
               <span className="tpr-dlg-cat">{(CATS.find((c) => c.key === detail.cat) || { label: "" }).label}</span>
+              {star(detail, detail.savedSweep || detail.sweep || selId, detail.sweepAt || sweptAt)}
               <button className="tpr-dlg-x" type="button" onClick={closeDetail} aria-label="Close">×</button>
             </div>
+            {starNote(detail)}
             <h2 id="tpr-dlg-h">{detail.title}</h2>
             {detail.summary && <p className="tpr-summary">{detail.summary}</p>}
             <div className="tpr-meta">
@@ -1266,7 +1418,12 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
                 <p>{detail.opportunity}</p>
               </div>
             )}
-            {detail.seen ? (
+            {detail.savedAt ? (
+              <p className="tpr-dlg-none">
+                Saved <b>{new Date(detail.savedAt).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" })}</b>.
+                This is the copy kept when you saved it, so it stays after its sweep is gone.
+              </p>
+            ) : detail.seen ? (
               <div className="tpr-dlg-hist">
                 <h3>History</h3>
                 <p>
