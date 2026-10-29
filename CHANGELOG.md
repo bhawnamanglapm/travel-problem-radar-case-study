@@ -5,6 +5,12 @@ grouped by date.
 
 ## 2026-10-29
 
+- The board's search can look in every saved sweep: "This sweep" and "All saved sweeps" chips beside the search
+  box. All shows each problem once (its latest copy) with "Sweep of <date>" on the card, and says how many saved
+  sweeps it couldn't include. The sweep keeps one search file (`radar:search`) for it, so a search costs one read.
+  The search and the category and area filters are in the URL (`?q=`, `?cat=`, `?area=`, `?all=1`), so a filtered
+  view can be bookmarked or shared, and a search survives signing in. The home page has a search box that opens
+  the live board on All saved sweeps (T38).
 - The board can be filtered by part of the world: an "All areas" chip row with a count on each area, and area
   tiles above the categories when a sweep spans two or more areas. Each problem's region, as the AI wrote it, is
   placed in Global, Asia, Europe, North America, Latin America, Middle East & Africa, Oceania or Other; a region
