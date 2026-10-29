@@ -1200,11 +1200,41 @@ const iso = (ms) => new Date(ms).toISOString();
   a = await rec(st, 1);
   check(r.code === 0 && a.plan === "free" && a.proUntil === null && a.proSource === null && eventsOf(st, "prorevoked").length === 1, "revoke-pro --yes: Free, no source, no end date, a prorevoked event");
   r = await run(st, ["revoke-pro", "p2@example.com", "--yes"]);
-  check(r.code === 1 && /Razorpay/.test(r.err) && (await rec(st, 2)).plan === "pro", "revoke-pro on a Razorpay record: refused, record unchanged");
+  check(r.code === 1 && /Razorpay/.test(r.err) && /--paid/.test(r.err) && (await rec(st, 2)).plan === "pro", "revoke-pro on a Razorpay record: refused, record unchanged, points to --paid");
   r = await run(st, ["revoke-pro", "p3@example.com", "--yes"]);
   check(r.code === 1 && /already/.test(r.err), "revoke-pro on a Free record: nothing to do");
   r = await run(st, ["revoke-pro", "nobody@example.com", "--yes"]);
   check(r.code === 1 && /not found/.test(r.err), "revoke-pro on an unknown address: not found");
+
+  // revoke-pro --paid (2026-10-29): after a refund, the Razorpay subscriptions are cancelled at once, then Free
+  {
+    ({ st, mk } = await world());
+    const rzp = (n, over) => ({ subscriptionId: "sub_REVOKE000000" + n, status: "active", currentEnd: iso(T0 + 9 * DAY), cancelAtPeriodEnd: false, lastEventAt: null, ...over });
+    const paid = { plan: "pro", proSource: "razorpay", proUntil: iso(T0 + 9 * DAY) };
+    await mk(1, { ...paid, rzp: rzp(1) });
+    await mk(2, { ...paid, rzp: rzp(2) });
+    await mk(3, { plan: "pro", proSource: "owner", proUntil: iso(T0 + 9 * DAY) });
+    adminRzp.length = 0;
+    r = await run(st, ["revoke-pro", "p1@example.com", "--paid"]);
+    check(r.code === 1 && /cancel Razorpay subscription sub_REVOKE0000001 at once/.test(r.err) && (await rec(st, 1)).plan === "pro" && adminRzp.length === 0 && eventsOf(st, "prorevoked").length === 0,
+      "revoke-pro --paid without --yes: names the subscription it would cancel; nothing called or changed");
+    r = await run(st, ["revoke-pro", "p1@example.com", "--paid", "--yes"]);
+    a = await rec(st, 1);
+    check(r.code === 0 && adminRzp.length === 1 && adminRzp[0].url.endsWith("/subscriptions/sub_REVOKE0000001/cancel") && adminRzp[0].body === '{"cancel_at_cycle_end":false}'
+      && a.plan === "free" && a.proSource === null && a.proUntil === null && eventsOf(st, "prorevoked").length === 1,
+      "revoke-pro --paid --yes: the subscription is cancelled at once, then Free with a prorevoked event");
+    const { applyRzpEvent } = await import("../api/_lib/subscription-handlers.js");
+    const after = applyRzpEvent(a, "cancelled", { status: "cancelled", current_end: Math.floor((T0 + 9 * DAY) / 1000) }, iso(T0 + 1000), T0 + 1000);
+    check(after.plan === "free" && after.proSource === null && after.proUntil === null, "revoke-pro --paid: Razorpay's later cancelled event doesn't bring Pro back");
+    rzpReply = () => ({ ok: false, status: 500, json: async () => ({}) });
+    r = await run(st, ["revoke-pro", "p2@example.com", "--paid", "--yes"]);
+    rzpReply = null;
+    check(r.code === 1 && /Razorpay didn't cancel sub_REVOKE0000002/.test(r.err) && (await rec(st, 2)).plan === "pro" && eventsOf(st, "prorevoked").length === 1 && !/admin-secret/.test(r.all),
+      "revoke-pro --paid: Razorpay unreachable: refused, record unchanged, no key printed");
+    adminRzp.length = 0;
+    r = await run(st, ["revoke-pro", "p3@example.com", "--paid", "--yes"]);
+    check(r.code === 0 && adminRzp.length === 0 && (await rec(st, 3)).plan === "free", "revoke-pro --paid on an owner-granted Pro: no Razorpay call, Free as without --paid");
+  }
 
   // delete removes the record and nothing else
   ({ st, mk } = await world());

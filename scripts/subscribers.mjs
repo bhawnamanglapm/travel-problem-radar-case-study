@@ -6,7 +6,7 @@
 //   node --env-file=.env.local scripts/subscribers.mjs list [--plan pro|free|pending|requested]
 //   node --env-file=.env.local scripts/subscribers.mjs show <email>
 //   node --env-file=.env.local scripts/subscribers.mjs grant-pro <email> [--until 2027-01-31] [--yes]
-//   node --env-file=.env.local scripts/subscribers.mjs revoke-pro <email> [--yes]
+//   node --env-file=.env.local scripts/subscribers.mjs revoke-pro <email> [--paid] [--yes]
 //   node --env-file=.env.local scripts/subscribers.mjs delete <email> [--yes]
 //   node --env-file=.env.local scripts/subscribers.mjs prune-events --older-than 400 [--yes]
 //   node --env-file=.env.local scripts/subscribers.mjs recount [--yes]
@@ -27,13 +27,13 @@ const EVENT_RE = /^(\d{8})-\d{9}-([a-z]+)-[0-9a-f]{6}$/; // suffix after "radar:
 
 export class UsageError extends Error {}
 
-const FLAGS = { "--yes": false, "--days": true, "--plan": true, "--until": true, "--older-than": true };
+const FLAGS = { "--yes": false, "--paid": false, "--days": true, "--plan": true, "--until": true, "--older-than": true };
 const COMMANDS = {
   stats: { args: 0, flags: ["--days"] },
   list: { args: 0, flags: ["--plan"] },
   show: { args: 1, flags: [] },
   "grant-pro": { args: 1, flags: ["--until", "--yes"] },
-  "revoke-pro": { args: 1, flags: ["--yes"] },
+  "revoke-pro": { args: 1, flags: ["--paid", "--yes"] },
   delete: { args: 1, flags: ["--yes"] },
   "prune-events": { args: 0, flags: ["--older-than", "--yes"] },
   recount: { args: 0, flags: ["--yes"] },
@@ -156,14 +156,23 @@ export async function grantPro(storage, email, { until = null, apply, now, rando
   return { code: 0, message: `done: ${summary}`, changed: true };
 }
 
-export async function revokePro(storage, email, { apply, now, randomBytes: rb = randomBytes }) {
+// A paid Razorpay Pro needs --paid (after a refund, docs/subscriptions/refunds-and-chargebacks.md): its Razorpay
+// subscriptions are cancelled at once first, as delete does, so no later charge can bring Pro back.
+export async function revokePro(storage, email, { apply, paid = false, now, randomBytes: rb = randomBytes, env = {}, fetchFn = fetch }) {
   const r = await findSubscriber(storage, email);
   if (!r) return { code: 1, message: "not found: no subscriber with that address", changed: false };
-  if (r.proSource === "razorpay") return { code: 1, message: "refused: this is a paid Razorpay Pro; cancel it in Razorpay (Phase 2), not here", changed: false };
+  const isPaid = r.proSource === "razorpay";
+  if (isPaid && !paid) return { code: 1, message: "refused: this is a paid Razorpay Pro; add --paid to cancel it in Razorpay and end Pro now (after a refund)", changed: false };
   if (r.plan !== "pro") return { code: 1, message: "nothing to do: the subscriber is already on the Free plan", changed: false };
-  const summary = `plan pro -> free, proSource ${r.proSource || "none"} -> none, proUntil ${r.proUntil || "none"} -> none`;
+  const rzp = r.rzp && typeof r.rzp === "object" ? r.rzp : {};
+  const subs = isPaid ? [rzp.subscriptionId, rzp.next && rzp.next.subscriptionId].filter((x) => typeof x === "string" && x) : [];
+  const summary = `${subs.length ? `cancel Razorpay subscription ${subs.join(" and ")} at once, ` : ""}plan pro -> free, proSource ${r.proSource || "none"} -> none, proUntil ${r.proUntil || "none"} -> none`;
   if (!apply) return { code: 1, message: `would change: ${summary}. Nothing changed; add --yes to apply.`, changed: false };
-  const { changed } = await updateSubscriber(storage, r.id, (cur) => (cur.plan === "pro" && cur.proSource !== "razorpay"
+  if (isPaid) {
+    const stopped = await stopRazorpay(r, { env, fetchFn });
+    if (stopped) return { code: 1, message: `refused: Razorpay didn't cancel ${subs.join(" or ")} (${stopped}); nothing changed. Check the keys in the shell, or cancel it in Razorpay's dashboard, then revoke again`, changed: false };
+  }
+  const { changed } = await updateSubscriber(storage, r.id, (cur) => (cur.plan === "pro" && (cur.proSource !== "razorpay" || isPaid)
     ? { ...cur, plan: "free", proSource: null, proUntil: null } : null));
   if (!changed) return { code: 1, message: "refused: the record changed meanwhile (deleted, Free, or paid Pro now); run it again", changed: false };
   await recordEvent(storage, "prorevoked", { now, randomBytes: rb, plan: "pro" });
@@ -247,7 +256,7 @@ export async function main(argv, { storage, now = Date.now(), rb = randomBytes, 
       return 0;
     }
     const res = cmd === "grant-pro" ? await grantPro(storage, email, { until: flags.until || null, apply, now, randomBytes: rb })
-      : cmd === "revoke-pro" ? await revokePro(storage, email, { apply, now, randomBytes: rb })
+      : cmd === "revoke-pro" ? await revokePro(storage, email, { apply, paid: flags.paid === true, now, randomBytes: rb, env, fetchFn })
         : await removeSubscriber(storage, email, { apply, env, fetchFn });
     (res.code === 0 ? out : err)(res.message);
     return res.code;

@@ -1424,7 +1424,7 @@ node --env-file=.env.local scripts/subscribers.mjs stats [--days 30]
 node --env-file=.env.local scripts/subscribers.mjs list [--plan pro|free|pending|requested]
 node --env-file=.env.local scripts/subscribers.mjs show <email>
 node --env-file=.env.local scripts/subscribers.mjs grant-pro <email> [--until 2027-01-31] [--yes]
-node --env-file=.env.local scripts/subscribers.mjs revoke-pro <email> [--yes]
+node --env-file=.env.local scripts/subscribers.mjs revoke-pro <email> [--paid] [--yes]
 node --env-file=.env.local scripts/subscribers.mjs delete <email> [--yes]
 node --env-file=.env.local scripts/subscribers.mjs prune-events --older-than 400 [--yes]
 node --env-file=.env.local scripts/subscribers.mjs recount [--yes]
@@ -1436,7 +1436,7 @@ node --env-file=.env.local scripts/subscribers.mjs recount [--yes]
 | `list` | Address, status, plan, `proUntil`, confirmed date, the date they asked for Pro, and `emailOff` (why a Pro's emails are off, or `-`). `--plan requested` lists the active Free subscribers who asked for Pro (the waiting list). A Pro record past its end date shows as `pro (lapsed)`: the sweep treats it as Free |
 | `show` | One record without its token |
 | `grant-pro` | Only for an active (confirmed) subscriber. Pro with `proSource: owner`, and the Pro request is cleared (the `prorequested` event keeps the history). `--until 2027-01-31` makes Pro run through the end of that UTC day; leave it out for no end date. A past date is accepted and acts as Free. Refuses a paid Razorpay record |
-| `revoke-pro` | Back to Free, clearing the end date. Refuses a Razorpay record |
+| `revoke-pro` | Back to Free, clearing the end date. Refuses a Razorpay record unless `--paid` is given (since 2026-10-29, for a refund: [refunds-and-chargebacks.md](docs/subscriptions/refunds-and-chargebacks.md)). With `--paid` it first cancels the record's Razorpay subscriptions at once, as `delete` does, with the keys from the shell; refused, with nothing changed, if Razorpay won't cancel one that could still charge |
 | `delete` | Deletes the record, the `radar:rzpsub:` index files pointing at it, and its id in the `radar:deliveries:` files (since 2026-10-27; before, the id stayed there until the sweep deleted the file after 7 days). This is the answer to a deletion request. Event records hold no address or id. Cancels the account's Razorpay subscriptions at once first, with `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` from the shell (`--env-file`); refused, with nothing deleted, if Razorpay won't cancel one that could still charge |
 | `prune-events` | Deletes event records older than N days |
 | `recount` | Counts pending and active records and writes `radar:subscriberCount`, as the sweep does. For a store that has never swept (sign-up treats a missing count as full), or after deleting records. Unlike the sweep it doesn't expire old pending sign-ups, so it may count a few more |
