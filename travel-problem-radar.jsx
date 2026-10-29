@@ -262,6 +262,13 @@ const CSS = `
 .tpr-save[aria-disabled="true"] { opacity:.55; cursor:progress; }
 .tpr-save:focus-visible { outline:2px solid var(--link); outline-offset:2px; }
 .tpr-dlg-top .tpr-save + .tpr-dlg-x { margin-left:0; }
+/* ---- share one problem (T40) ---- */
+.tpr-share { margin-left:auto; background:none; border:1px solid var(--line2); color:var(--text-2); font-family:var(--body);
+  font-size:12px; font-weight:500; padding:5px 10px; border-radius:8px; cursor:pointer; white-space:nowrap; flex:none; }
+.tpr-share:hover { border-color:var(--link); color:var(--link); }
+.tpr-share:focus-visible { outline:2px solid var(--link); outline-offset:2px; }
+.tpr-dlg-top .tpr-share + .tpr-save, .tpr-dlg-top .tpr-share + .tpr-dlg-x { margin-left:0; }
+.tpr-share-url { font-family:var(--mono); font-size:12px; color:var(--text); overflow-wrap:anywhere; user-select:all; }
 .tpr-save-note { margin:0; font-size:12.5px; color:var(--accent-text); line-height:1.45; }
 .tpr-saved .tpr-scope-line:focus { outline:none; }
 .tpr-saved .tpr-card { box-shadow:inset 3px 0 0 var(--cat); padding-left:19px; }
@@ -655,6 +662,8 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
   const [saved, setSaved] = useState(null);
   const [saving, setSaving] = useState(() => new Set()); // ids waiting for the server
   const [saveNote, setSaveNote] = useState(null); // { id, text } under that problem's star
+  const [shareNote, setShareNote] = useState(null); // { id, text, url } under the panel's Share button (T40)
+  const shareTimer = useRef(null);
   const savedTopRef = useRef(null);
   const dlgRef = useRef(null);
 
@@ -809,6 +818,32 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
     );
   };
   const starNote = (p) => saveNote && saveNote.id === p.id && <p className="tpr-save-note" role="status">{saveNote.text}</p>;
+
+  // Share (T40): the link is the server's page for that problem, /p/<sweepId>/<itemId>, which shows a preview
+  // card where it's pasted. Phones get the share sheet; elsewhere the link is copied. The demo has no such page.
+  async function shareItem(p, sweepId) {
+    const url = window.location.origin + "/p/" + sweepId + "/" + encodeURIComponent(p.id);
+    clearTimeout(shareTimer.current);
+    setShareNote(null);
+    const phone = typeof navigator.share === "function" && window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+    if (phone) {
+      try { await navigator.share({ title: p.title, url }); return; }
+      catch (e) { if (e && e.name === "AbortError") return; }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareNote({ id: p.id, text: "Link copied" });
+      shareTimer.current = setTimeout(() => setShareNote(null), 4000);
+    } catch (e) { setShareNote({ id: p.id, text: "Copy this link:", url }); }
+  }
+  const shareBtn = (p, sweepId) => live && /^\d{10,16}$/.test(String(sweepId || "")) && (
+    <button className="tpr-share" type="button" onClick={() => shareItem(p, sweepId)}>
+      Share<span className="tpr-sr">: {p.title}</span>
+    </button>
+  );
+  const shareNoteFor = (p) => shareNote && shareNote.id === p.id && (
+    <p className="tpr-save-note" role="status">{shareNote.text}{shareNote.url && <> <span className="tpr-share-url">{shareNote.url}</span></>}</p>
+  );
 
   const latestId = history.length ? history[history.length - 1].id : null;
   const isLatest = selId === latestId;
@@ -1400,10 +1435,12 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
             <div className="tpr-dlg-top">
               {detail.sweepAt ? <span className="tpr-from">Sweep of {sweepDay(detail.sweepAt)}</span> : detail.isNew && <span className="tpr-new">New</span>}
               <span className="tpr-dlg-cat">{(CATS.find((c) => c.key === detail.cat) || { label: "" }).label}</span>
+              {shareBtn(detail, detail.savedSweep || detail.sweep || selId)}
               {star(detail, detail.savedSweep || detail.sweep || selId, detail.sweepAt || sweptAt)}
               <button className="tpr-dlg-x" type="button" onClick={closeDetail} aria-label="Close">×</button>
             </div>
             {starNote(detail)}
+            {shareNoteFor(detail)}
             <h2 id="tpr-dlg-h">{detail.title}</h2>
             {detail.summary && <p className="tpr-summary">{detail.summary}</p>}
             <div className="tpr-meta">

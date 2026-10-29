@@ -351,6 +351,13 @@ check(!/radar:search/.test(home), "index.html never reads the search file: its s
 check([bundle, liveBundle].every((b) => b.includes("tpr-save") && b.includes("aria-pressed") && b.includes("Nothing saved yet") && b.includes("/api/account?action=saved")),
   "both bundles are built with saved problems (the star, the Saved tab, the account API)");
 check(/<li>if you save problems on the board \(Pro\): a copy of each one, at most 100/.test(privacyPage), "legal/privacy says saved problems are stored (at most 100)");
+// T40: Share links to /p/<sweepId>/<itemId>, which vercel.json sends through /api/data, so no function is added.
+check([bundle, liveBundle].every((b) => b.includes("tpr-share") && b.includes('"/p/"') && b.includes("Link copied")), "both bundles are built with the Share button");
+const vercelConf = JSON.parse(readFileSync("vercel.json", "utf8"));
+check((vercelConf.rewrites || []).some((r) => r.source === "/p/:sweep/:item" && r.destination === "/api/data?page=item&sweep=:sweep&item=:item"),
+  "vercel.json rewrites /p/:sweep/:item to /api/data?page=item");
+check(existsSync("og.png") && /\bog\.png\b/.test(JSON.parse(readFileSync("package.json", "utf8")).scripts["build:site"]) && /property="og:image" content="https:\/\/radar\.pehchanthetraveller\.com\/og\.png"/.test(home),
+  "og.png exists, build:site copies it, and index.html names it as og:image");
 
 // 6. No secrets in the repository: it is public. Keys and webhooks (Anthropic, Resend, Slack,
 // Blob) live only in Vercel's environment variables; this catches the common formats if one is
