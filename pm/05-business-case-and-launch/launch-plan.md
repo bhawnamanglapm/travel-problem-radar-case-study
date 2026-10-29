@@ -53,7 +53,7 @@
 |---|---|---|---|---|---|
 | LR-17 | An Anthropic monthly spend limit and alert. DEPLOYMENT.md suggests about $50 a month | Owner | **Not verified** | The first live payment (P0) | RM-08, R-02 |
 | LR-18 | Production built from code that includes PR #60, the cap of 3 manual sweeps a day | — | Done: merged as `ff71352`; the Production redeploys on 2026-10-23 were built from code that includes it | — | [costing.md](../../docs/subscriptions/costing.md#stress-tests) |
-| LR-19 | The values of `MAX_SUBSCRIBERS` and `MAX_CONFIRMS_PER_DAY` read in Vercel; only their names were checked | Owner | Open | The first live payment (P0) | [costing.md](../../docs/subscriptions/costing.md#pre-launch-checklist) |
+| LR-19 | The values of `MAX_SUBSCRIBERS` and `MAX_CONFIRMS_PER_DAY` read in Vercel; only their names were checked | Owner | Done 2026-10-29: `MAX_SUBSCRIBERS` 5000; `MAX_CONFIRMS_PER_DAY` lowered from 500 to 50 (Production and staging), redeployed | The first live payment (P0) | [costing.md](../../docs/subscriptions/costing.md#pre-launch-checklist) |
 
 ### Operations
 
