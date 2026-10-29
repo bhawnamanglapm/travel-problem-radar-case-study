@@ -49,6 +49,12 @@ working in a real inbox; that is T12's staged launch.
 | [T33](T33-pro-plan-builder.md) One Pro plan, priced and paid together | built on `fixes`, merged to main (#91, #92, 2026-10-25/26) and live since go-live; simplified 2026-10-26 to one price paid monthly or yearly (₹1 each while testing), categories and emails a day chosen freely; one ₹1 Razorpay plan per period (`RAZORPAY_PLANS`); still to do: the `/pricing/` calculator, the test-mode run on an up-to-date `staging` | | all tests pass | Added 2026-10-25 |
 | [T34](T34-renew-pro.md) Renewing Pro | built 2026-10-25 on `fixes`, merged to main (#91, #92) and live: Keep renewing (a new subscription from `proUntil`), Renew Pro with the last plan, a warning email 7 days before a plan that won't renew ends; the `start_at` path still to verify in test mode | | all tests pass | Added 2026-10-25 |
 | [T35](T35-sweep-slots-on-time.md) Sweep slots on time | built 2026-10-25 on `fixes`, merged to main (#91, #92) and live; a day of real runs still to check | | sweep tests pass | Added 2026-10-25. GitHub's runs started 2 h 15 m to 4 h 35 m late on 2026-10-24 and 25; all landed in the right slot, but only just |
+| [T36](T36-problem-detail-panel.md) Problem detail panel | todo | | | Added 2026-10-29, Phase 5 |
+| [T37](T37-areas.md) Areas | todo | | | Added 2026-10-29, Phase 5 |
+| [T38](T38-search-all-sweeps.md) Search all sweeps | todo | | | Added 2026-10-29, Phase 5 |
+| [T39](T39-saved-problems.md) Saved problems | todo | | | Added 2026-10-29, Phase 5 |
+| [T40](T40-share-a-problem.md) Share one problem | todo | | | Added 2026-10-29, Phase 5 |
+| [T41](T41-email-areas.md) Areas in Pro email | todo | | | Added 2026-10-29, Phase 5 |
 
 ## Notes per task
 
