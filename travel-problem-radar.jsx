@@ -207,6 +207,36 @@ const CSS = `
 .tpr-note { font-family:var(--mono); font-size:10.5px; color:var(--faint); letter-spacing:.03em;
   margin-top:24px; text-align:center; }
 
+/* ---- detail panel (T36): a side panel, a bottom sheet on phones ---- */
+.tpr-seen { color:var(--text-2); }
+.tpr-more { align-self:flex-start; margin-top:auto; background:none; border:1px solid var(--line2); color:var(--text);
+  font-family:var(--body); font-size:12.5px; font-weight:500; padding:6px 12px; border-radius:8px; cursor:pointer; }
+.tpr-more:hover, .tpr-dlg-x:hover { border-color:var(--link); color:var(--link); }
+.tpr-more:focus-visible, .tpr-dlg-x:focus-visible, .tpr-dlg .tpr-hview:focus-visible { outline:2px solid var(--link); outline-offset:2px; }
+.tpr-dlg { border:0; border-left:1px solid var(--line2); padding:0; margin:0 0 0 auto; width:min(440px,100%); max-width:100%;
+  height:100%; max-height:100%; background:var(--surface); color:var(--text); font-family:var(--body); overflow:auto; }
+.tpr-dlg::backdrop { background:rgba(0,0,0,.65); }
+.tpr-dlg-in { min-height:100%; padding:18px 20px 26px; display:flex; flex-direction:column; gap:12px; }
+.tpr-dlg-top { display:flex; align-items:center; gap:10px; }
+.tpr-dlg-cat { font-family:var(--mono); font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted);
+  display:inline-flex; align-items:center; gap:6px; }
+.tpr-dlg-cat::before { content:''; width:8px; height:8px; border-radius:50%; background:var(--cat); }
+.tpr-dlg-x { margin-left:auto; background:none; border:1px solid var(--line); color:var(--text); font-size:20px; line-height:1;
+  width:34px; height:34px; border-radius:8px; cursor:pointer; flex:none; }
+.tpr-dlg h2 { margin:0; font-family:var(--display); font-size:19px; font-weight:600; line-height:1.28; letter-spacing:-.01em; }
+.tpr-dlg-hist { border-top:1px solid var(--line); padding-top:12px; margin-top:4px; }
+.tpr-dlg-hist h3 { margin:0 0 6px; font-family:var(--mono); font-size:10px; font-weight:500; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--muted); }
+.tpr-dlg-hist p, .tpr-dlg-none { margin:0; font-size:13px; color:var(--text-2); line-height:1.5; }
+.tpr-dlg-hist ul { list-style:none; margin:10px 0 0; padding:0; display:flex; flex-direction:column; gap:6px; }
+.tpr-dlg-hist li { display:flex; align-items:center; gap:10px; font-family:var(--mono); font-size:12px; color:var(--text);
+  background:var(--bg2); border:1px solid var(--line); border-radius:9px; padding:7px 10px; }
+.tpr-dlg-gone { margin-left:auto; font-size:10.5px; color:var(--muted); }
+@media (max-width:640px){
+  .tpr-dlg { top:auto; bottom:0; margin:0; width:100%; height:auto; max-height:88vh; border-left:0; border-top:1px solid var(--line2);
+    border-radius:16px 16px 0 0; }
+}
+
 @media (max-width:560px){
   .tpr-actions { width:100%; }
   .tpr-swept { text-align:left; }
@@ -305,7 +335,38 @@ async function replayCategory(sample, cat, i) {
 const KEY_SEEN = "radar:seenIds";
 const KEY_INDEX = "radar:history";
 const KEY_LEGACY = "radar:lastSweep";
+const KEY_ITEMS = "radar:items"; // each item's history (T36); the live board never reads it
 const sweepKey = (id) => "radar:sweep:" + id;
+
+// Each item's history (T36). `index` maps an id to { f: first sweep id, n: sweeps it was in, s: its latest
+// sweep ids, e: 1 when it was seen before the index knew it, so f and n are lower bounds }. Returns the index
+// for the ids in keepIds, and the items with firstAt, seen, prev (up to 5 earlier sweep ids) and firstEarlier.
+// The same text is in api/_lib/radar.js; scripts/check.mjs fails if the two differ.
+function trackItems(index, items, sweepId, keepIds) {
+  const next = {};
+  const out = items.map((it) => {
+    const was = index[it.id];
+    const ok = was && Number.isFinite(was.n) && Array.isArray(was.s);
+    const e = ok
+      ? { f: was.f, n: was.n + 1, s: [...was.s, sweepId].slice(-6), ...(was.e ? { e: 1 } : {}) }
+      : { f: sweepId, n: 1, s: [sweepId], ...(it.isNew === false ? { e: 1 } : {}) };
+    next[it.id] = e;
+    const extra = e.e ? { firstEarlier: true } : {};
+    return { ...it, firstAt: new Date(Number(e.f)).toISOString(), seen: e.n, prev: e.s.slice(0, -1), ...extra };
+  });
+  for (const id of keepIds) if (!next[id] && index[id]) next[id] = index[id];
+  return { index: next, items: out };
+}
+
+// #p=<id> opens that problem's detail panel (T36).
+function hashItemId() {
+  const m = window.location.hash.match(/^#p=(.+)$/);
+  if (!m) return null;
+  try { return decodeURIComponent(m[1]); } catch (e) { return null; }
+}
+function setHash(h) {
+  try { window.history.replaceState(null, "", h || window.location.pathname + window.location.search); } catch (e) {}
+}
 
 // Claude's artifact runtime provides window.storage; a normal web page does not,
 // so fall back to this browser's localStorage (same keys, under a demo prefix).
@@ -347,6 +408,18 @@ async function saveJSON(key, val) {
   try { await store.set(key, JSON.stringify(val)); } catch (e) {}
 }
 
+// The item index from this browser's saved sweeps, oldest first: once, when there are sweeps but no index yet.
+async function buildItemIndex(hist) {
+  let index = {};
+  for (const e of hist) {
+    const sw = await loadJSON(sweepKey(e.id));
+    if (!sw || !Array.isArray(sw.problems)) continue;
+    const ids = sw.problems.map((p) => p.id);
+    index = trackItems(index, sw.problems, e.id, [...Object.keys(index), ...ids]).index;
+  }
+  return index;
+}
+
 function groupByDay(entries) {
   const map = new Map();
   entries.forEach((e) => {
@@ -382,6 +455,33 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
   const [collapsed, setCollapsed] = useState(() => new Set()); // category keys whose group is folded
   const [copied, setCopied] = useState(false);
   const seenRef = useRef(new Set());
+  const [detail, setDetail] = useState(null); // the problem open in the detail panel (T36)
+  const dlgRef = useRef(null);
+
+  // The panel is a native <dialog>: showModal gives Esc to close, focus inside, the page behind inert,
+  // and focus back on the Details button afterwards.
+  useEffect(() => {
+    const d = dlgRef.current;
+    if (detail && d && !d.open) d.showModal();
+  }, [detail]);
+  useEffect(() => {
+    const d = dlgRef.current;
+    if (!d) return;
+    const onClose = () => { setDetail(null); if (hashItemId()) setHash(""); };
+    d.addEventListener("close", onClose);
+    return () => d.removeEventListener("close", onClose);
+  }, []);
+  // A #p= link followed while the board is already open (firstLoad handles a fresh load).
+  useEffect(() => {
+    const onHash = () => { const want = hashItemId(); const it = want && problems.find((p) => p.id === want); if (it) setDetail(it); };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, [problems]);
+  function openDetail(p) {
+    setDetail(p);
+    setHash("#p=" + encodeURIComponent(p.id));
+  }
+  const closeDetail = () => { if (dlgRef.current && dlgRef.current.open) dlgRef.current.close(); };
 
   const latestId = history.length ? history[history.length - 1].id : null;
   const isLatest = selId === latestId;
@@ -433,6 +533,9 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
         setSweptAt(latest.at);
         setStatus("done");
         if (wantReport) setView("report");
+        const want = hashItemId();
+        const it = want && full.problems.find((p) => p.id === want);
+        if (it) setDetail(it);
         return;
       }
     }
@@ -492,20 +595,27 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
     const drop = hist.slice(0, Math.max(0, hist.length - 60));
     hist = hist.slice(drop.length);
 
+    // This sweep's ids go last, so an item that keeps coming back is never trimmed and shown as new again.
+    const kept = [...[...seenBefore].filter((x) => !idset.has(x)), ...idset].slice(-800);
+
+    // Each item's history (T36), kept for the same ids as the seen list.
+    const idx0 = await loadJSON(KEY_ITEMS);
+    const { index: itemIndex, items: saved } = trackItems(
+      idx0 && typeof idx0 === "object" && !Array.isArray(idx0) ? idx0 : await buildItemIndex(history), merged, id, kept);
+
     // The new sweep and the index first: old files go only once nothing points at them.
-    await saveJSON(sweepKey(id), { at, problems: merged });
+    await saveJSON(sweepKey(id), { at, problems: saved });
     await saveJSON(KEY_INDEX, hist);
+    await saveJSON(KEY_ITEMS, itemIndex);
     for (const d of drop) { try { await store.delete(sweepKey(d.id)); } catch (e) {} }
 
     setHistory(hist);
-    setProblems(merged);
+    setProblems(saved);
     setSelId(id);
     setSweptAt(at);
     setStatus("done");
     setView(nextView);
 
-    // This sweep's ids go last, so an item that keeps coming back is never trimmed and shown as new again.
-    const kept = [...[...seenBefore].filter((x) => !idset.has(x)), ...idset].slice(-800);
     seenRef.current = new Set(kept);
     await saveJSON(KEY_SEEN, kept);
   }
@@ -705,6 +815,7 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
                         <span className="tpr-tag">{p.region}</span>
                         {p.date && <span className="tpr-tag">{p.date}</span>}
                         <span className={"tpr-tag tpr-sev " + p.severity}>{p.severity}</span>
+                        {p.seen > 1 && <span className="tpr-tag tpr-seen">Seen in {p.seen}{p.firstEarlier ? "+" : ""} sweeps</span>}
                       </div>
                       {p.opportunity && (
                         <div className="tpr-opp">
@@ -712,6 +823,9 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
                           <p>{p.opportunity}</p>
                         </div>
                       )}
+                      <button className="tpr-more" type="button" onClick={() => openDetail(p)}>
+                        Details<span className="tpr-sr">: {p.title}</span>
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -851,6 +965,60 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
             : "Every run is archived by date — open History to revisit past sweeps. Items unseen in any prior sweep are flagged New."}
         </div>
       )}
+
+      {/* detail panel (T36); a click on the backdrop closes it */}
+      <dialog className="tpr-dlg" ref={dlgRef} aria-labelledby="tpr-dlg-h"
+        onClick={(e) => { if (e.target === e.currentTarget) closeDetail(); }}>
+        {detail && (
+          <div className="tpr-dlg-in" style={{ "--cat": (CATS.find((c) => c.key === detail.cat) || CATS[0]).color }}>
+            <div className="tpr-dlg-top">
+              {detail.isNew && <span className="tpr-new">New</span>}
+              <span className="tpr-dlg-cat">{(CATS.find((c) => c.key === detail.cat) || { label: "" }).label}</span>
+              <button className="tpr-dlg-x" type="button" onClick={closeDetail} aria-label="Close">×</button>
+            </div>
+            <h2 id="tpr-dlg-h">{detail.title}</h2>
+            {detail.summary && <p className="tpr-summary">{detail.summary}</p>}
+            <div className="tpr-meta">
+              {detail.link
+                ? <a className="tpr-tag tpr-src" href={detail.link} target="_blank" rel="noopener noreferrer">{detail.source} ↗</a>
+                : <span className="tpr-tag">{detail.source}</span>}
+              <span className="tpr-tag">{detail.region}</span>
+              {detail.date && <span className="tpr-tag">{detail.date}</span>}
+              <span className={"tpr-tag tpr-sev " + detail.severity}>{detail.severity}</span>
+            </div>
+            {detail.opportunity && (
+              <div className="tpr-opp">
+                <span className="lab">Opportunity</span>
+                <p>{detail.opportunity}</p>
+              </div>
+            )}
+            {detail.seen ? (
+              <div className="tpr-dlg-hist">
+                <h3>History</h3>
+                <p>
+                  First seen <b>{new Date(detail.firstAt).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" })}</b>
+                  {detail.firstEarlier ? " or earlier" : ""} · in {detail.seen}{detail.firstEarlier ? " or more" : ""}
+                  {detail.seen === 1 && !detail.firstEarlier ? " sweep" : " sweeps"}
+                </p>
+                {Array.isArray(detail.prev) && detail.prev.length > 0 && (
+                  <ul aria-label="Earlier sweeps with this problem">
+                    {[...detail.prev].reverse().map((pid) => (
+                      <li key={pid}>
+                        <span>{new Date(Number(pid)).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+                        {history.some((h) => h.id === pid)
+                          ? <button className="tpr-hview" type="button" onClick={() => { closeDetail(); openSweep(pid); }}>Open</button>
+                          : <span className="tpr-dlg-gone">No longer kept</span>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ) : (
+              <p className="tpr-dlg-none">This sweep was saved before the board kept each problem’s history.</p>
+            )}
+          </div>
+        )}
+      </dialog>
     </div>
   );
 }

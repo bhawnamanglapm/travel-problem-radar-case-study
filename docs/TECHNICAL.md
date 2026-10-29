@@ -44,6 +44,10 @@ Subscriber -> links in each email -> /manage/ (/api/account: plan, Request Pro o
   schedule can't change itself, so it keeps firing and an unneeded slot answers `skipped`. Each Pro email rolls up
   every sweep since that member's previous slot. Details: [DEPLOYMENT.md](../DEPLOYMENT.md#sweeps-a-day-t32).
 - If every category fails, nothing is saved and the run shows as failed. If some fail, the rest are saved.
+- **Item history (T36).** The sweep keeps a private index of every item it has seen (`radar:items`: first sweep,
+  count, latest sweep ids) and saves each item with `firstAt`, `seen` and `prev`, so the board's Details panel shows
+  "First seen … · in N sweeps" from the sweep it already loaded. `trackItems` is the same text in the server and the
+  component, and `npm run check` fails if they differ. A failed read or write of the index never fails the sweep.
 - The API key is held as a Vercel secret, never in the page or the code.
 - Items are AI-gathered and not verified; the page tells visitors to check each source link.
 

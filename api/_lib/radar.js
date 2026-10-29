@@ -17,6 +17,9 @@ export const CATS = [
 
 export const KEY_SEEN = "radar:seenIds";
 export const KEY_INDEX = "radar:history";
+// Each item's history (T36), kept with the seen ids. Not readable through /api/data: the board gets the
+// history from the fields trackItems writes on each saved item.
+export const KEY_ITEMS = "radar:items";
 // When the last scheduled sweep started, saved or not. Not readable through /api/data.
 export const KEY_LAST_SCHEDULED = "radar:lastScheduled";
 export const sweepKey = (id) => "radar:sweep:" + id;
@@ -35,6 +38,39 @@ const MAX_SEEN = 800;
 // trimmed and shown as new again. The oldest unseen-since ids go first.
 export function trimSeen(seenBefore, idset, max = MAX_SEEN) {
   return [...[...seenBefore].filter((id) => !idset.has(id)), ...idset].slice(-max);
+}
+
+// Each item's history (T36). `index` maps an id to { f: first sweep id, n: sweeps it was in, s: its latest
+// sweep ids, e: 1 when it was seen before the index knew it, so f and n are lower bounds }. Returns the index
+// for the ids in keepIds, and the items with firstAt, seen, prev (up to 5 earlier sweep ids) and firstEarlier.
+// The same text is in travel-problem-radar.jsx; scripts/check.mjs fails if the two differ.
+export function trackItems(index, items, sweepId, keepIds) {
+  const next = {};
+  const out = items.map((it) => {
+    const was = index[it.id];
+    const ok = was && Number.isFinite(was.n) && Array.isArray(was.s);
+    const e = ok
+      ? { f: was.f, n: was.n + 1, s: [...was.s, sweepId].slice(-6), ...(was.e ? { e: 1 } : {}) }
+      : { f: sweepId, n: 1, s: [sweepId], ...(it.isNew === false ? { e: 1 } : {}) };
+    next[it.id] = e;
+    const extra = e.e ? { firstEarlier: true } : {};
+    return { ...it, firstAt: new Date(Number(e.f)).toISOString(), seen: e.n, prev: e.s.slice(0, -1), ...extra };
+  });
+  for (const id of keepIds) if (!next[id] && index[id]) next[id] = index[id];
+  return { index: next, items: out };
+}
+
+// The index from the saved sweeps, oldest first: once, when the store has sweeps but no index yet (T36).
+// At most MAX_SWEEPS reads; a sweep that can't be read is skipped.
+async function buildItemIndex(storage, hist) {
+  let index = {};
+  for (const e of hist) {
+    const sw = await readJSON(storage, sweepKey(e.id));
+    if (!sw || !Array.isArray(sw.problems)) continue;
+    const ids = sw.problems.map((p) => p.id);
+    index = trackItems(index, sw.problems, e.id, [...Object.keys(index), ...ids]).index;
+  }
+  return index;
 }
 
 const slug = (s = "") =>
@@ -290,6 +326,19 @@ export async function runDailySweep({ storage, scan, now = () => Date.now(), man
 
   merged.sort((a, b) => (b.isNew - a.isNew) || (SEV_RANK[b.severity] - SEV_RANK[a.severity]));
 
+  // Item history (T36). A missing index is built once from the saved sweeps; one that can't be read is
+  // skipped, and this sweep's items are saved without history rather than the sweep failing.
+  const keepIds = trimSeen(seenBefore, idset);
+  let problems = merged;
+  let itemIndex = null;
+  try {
+    const raw = await storage.get(KEY_ITEMS);
+    const idx0 = raw == null ? await buildItemIndex(storage, hist) : JSON.parse(raw);
+    if (idx0 && typeof idx0 === "object" && !Array.isArray(idx0)) {
+      ({ index: itemIndex, items: problems } = trackItems(idx0, merged, id, keepIds));
+    }
+  } catch (e) { itemIndex = null; problems = merged; }
+
   const entry = {
     id, at, total: merged.length,
     newCount: merged.filter((p) => p.isNew).length,
@@ -304,16 +353,18 @@ export async function runDailySweep({ storage, scan, now = () => Date.now(), man
 
   // The new sweep and the index first: old files go only once nothing points at them.
   try {
-    await storage.set(sweepKey(id), JSON.stringify({ at, ...slotFields, problems: merged }));
+    await storage.set(sweepKey(id), JSON.stringify({ at, ...slotFields, problems }));
     await storage.set(KEY_INDEX, JSON.stringify(hist));
-    await storage.set(KEY_SEEN, JSON.stringify(trimSeen(seenBefore, idset)));
+    await storage.set(KEY_SEEN, JSON.stringify(keepIds));
   } catch (e) {
     // The calls were billed, so the log is kept even when the sweep can't be.
     await writeLog("save failed: " + String((e && e.message) || e));
     throw e;
   }
+  // The item index doesn't fail a saved sweep: the next sweep counts from the last index it could write.
+  if (itemIndex) { try { await storage.set(KEY_ITEMS, JSON.stringify(itemIndex)); } catch (e) {} }
   for (const d of drop) { try { await storage.del(sweepKey(d.id)); } catch (e) {} }
   const llmLog = await writeLog("saved");
 
-  return { status: "saved", id, at, ...slotFields, total: entry.total, newCount: entry.newCount, perCat, usage, llmLog, problems: merged };
+  return { status: "saved", id, at, ...slotFields, total: entry.total, newCount: entry.newCount, perCat, usage, llmLog, problems };
 }

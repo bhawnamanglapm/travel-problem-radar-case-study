@@ -11,6 +11,7 @@ import { BlobPreconditionFailedError, del, get, list, put } from "@vercel/blob";
 const FILES = {
   "radar:history": "history/index",
   "radar:seenIds": "history/seen-ids",
+  "radar:items": "history/items",
   "radar:lastScheduled": "state/last-scheduled",
   "radar:subscriberCount": "state/subscriber-count",
 };

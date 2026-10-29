@@ -2,7 +2,7 @@
 // storage are stubbed, so this needs no network and no API key.
 //   node scripts/test-sweep.mjs
 import { makeDataHandler, makeSweepHandler } from "../api/_lib/handlers.js";
-import { CATS, KEY_LLMLOG_PREFIX, extractProblems, llmLogKey, runDailySweep, scanCategory, sweepKey, trimSeen } from "../api/_lib/radar.js";
+import { CATS, KEY_ITEMS, KEY_LLMLOG_PREFIX, extractProblems, llmLogKey, runDailySweep, scanCategory, sweepKey, trackItems, trimSeen } from "../api/_lib/radar.js";
 import { SLOTS_BY_FREQ, dueSlot, normaliseSweepsPerDay, previousSlotAt, siteSweepsPerDay, slotOf, sweepLimits, sweepsPerDayOf } from "../api/_lib/schedule.js";
 import { check, finish, memStorage, mockRes } from "./test-helpers.mjs";
 
@@ -293,6 +293,58 @@ const sweepOpts = (storage, byCat, now) => ({
   const kept = trimSeen(new Set(ids), new Set(["c:0", "c:new"]), 5);
   check(kept.length === 5 && kept.includes("c:0") && kept.includes("c:new") && kept[kept.length - 1] === "c:new" && !kept.includes("c:5"),
     "trimSeen: an old id seen again moves to the end and survives the trim");
+}
+
+// ---- T36: each item's history (radar:items, and firstAt / seen / prev on saved items)
+{
+  const a = { id: "c:a", isNew: true }, b = { id: "c:b", isNew: false };
+  const r1 = trackItems({}, [a, b], "1800000000000", ["c:a", "c:b"]);
+  check(r1.items[0].seen === 1 && r1.items[0].prev.length === 0 && r1.items[0].firstAt === new Date(1800000000000).toISOString() && !r1.items[0].firstEarlier,
+    "trackItems: a new item is seen once, first seen in this sweep");
+  check(r1.items[1].firstEarlier === true && r1.index["c:b"].e === 1, "trackItems: an item seen before the index knew it is marked firstEarlier");
+  let idx = r1.index;
+  for (let i = 1; i <= 7; i++) idx = trackItems(idx, [a], String(1800000000000 + i), ["c:a", "c:b"]).index;
+  const r2 = trackItems(idx, [a], "1800000000008", ["c:a"]);
+  check(r2.items[0].seen === 9 && r2.items[0].prev.length === 5 && r2.items[0].prev[4] === "1800000000007" && r2.index["c:a"].f === "1800000000000",
+    "trackItems: the count goes up, the first sweep stays, prev keeps the 5 latest earlier sweeps");
+  check(!("c:b" in r2.index), "trackItems: ids outside keepIds are dropped");
+  check(trackItems({ "c:a": { f: "x" } }, [a], "1800000000009", ["c:a"]).items[0].seen === 1, "trackItems: a malformed entry starts over");
+}
+{
+  const st = memStorage();
+  let t = 1_800_000_000_000;
+  const run = (items) => { t += 5 * 3600 * 1000; return runDailySweep(sweepOpts(st, { traveler_pain: items, gov_policy: [], web_app: [], industry: [] }, () => t)); };
+  const s1 = await run([item(1), item(2)]);
+  await run([item(1)]);
+  const s3 = await run([item(1), item(2)]);
+  const saved = JSON.parse(st.m.get(sweepKey(s3.id))).problems;
+  const p1 = saved.find((p) => p.title === "Problem 1"), p2 = saved.find((p) => p.title === "Problem 2");
+  check(p1.seen === 3 && p1.firstAt === s1.at && p1.prev.length === 2 && p2.seen === 2 && p2.prev[0] === s1.id,
+    "the saved sweep carries each item's firstAt, seen and prev; an item missing from one sweep keeps its count");
+  check(s3.problems.find((p) => p.title === "Problem 1").seen === 3, "the sweep's reply has the same fields");
+  const idx = JSON.parse(st.m.get(KEY_ITEMS));
+  const seen = JSON.parse(st.m.get("radar:seenIds"));
+  check(Object.keys(idx).every((k) => seen.includes(k)), "the item index holds no id the seen list has dropped");
+
+  // A store with sweeps but no index: built once from the saved sweeps.
+  st.m.delete(KEY_ITEMS);
+  const s4 = await run([item(1), item(3)]);
+  const p = JSON.parse(st.m.get(sweepKey(s4.id))).problems;
+  check(p.find((x) => x.title === "Problem 1").seen === 4 && p.find((x) => x.title === "Problem 1").firstAt === s1.at && p.find((x) => x.title === "Problem 3").seen === 1,
+    "a missing index is rebuilt from the saved sweeps");
+
+  // An index that can't be read: the sweep still saves, its items without history.
+  const failing = { ...st, get: async (k) => { if (k === KEY_ITEMS) throw new Error("down"); return st.get(k); } };
+  t += 5 * 3600 * 1000;
+  const s5 = await runDailySweep(sweepOpts(failing, { traveler_pain: [item(1)], gov_policy: [], web_app: [], industry: [] }, () => t));
+  const p5 = JSON.parse(st.m.get(sweepKey(s5.id))).problems[0];
+  check(s5.status === "saved" && !("seen" in p5), "an unreadable item index doesn't fail the sweep; its items are saved without history");
+
+  // A failed index write doesn't fail the sweep either.
+  const noWrite = { ...st, set: async (k, v) => { if (k === KEY_ITEMS) throw new Error("down"); return st.set(k, v); } };
+  t += 5 * 3600 * 1000;
+  const s6 = await runDailySweep(sweepOpts(noWrite, { traveler_pain: [item(1)], gov_policy: [], web_app: [], industry: [] }, () => t));
+  check(s6.status === "saved", "a failed item-index write doesn't fail the sweep");
 }
 
 // ---- parser
@@ -664,6 +716,7 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   check((await call("/api/data?key=radar:sweep:1800000000000")).code === 200, "a sweep is served");
   check((await call("/api/data?key=radar:seenIds")).code === 400, "seenIds is not exposed");
   check((await call("/api/data?key=radar:lastScheduled")).code === 400, "lastScheduled is not exposed");
+  check((await call("/api/data?key=radar:items")).code === 400, "the item index is not exposed (T36)");
   check((await call("/api/data?key=" + llmLogKey("1800000000000"))).code === 400, "LLM logs are not exposed");
   check((await call("/api/data?key=../../etc/passwd")).code === 400, "path-like keys are rejected");
   check((await call("/api/data")).code === 400, "missing key is rejected");
