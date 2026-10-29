@@ -3,6 +3,19 @@
 Built from the git history. Dates are commit dates. The project has no version numbers or releases, so entries are
 grouped by date.
 
+## 2026-10-29
+
+- The site takes the Pehchan brand from pehchanthetraveller.com: deep teal and amber, in light or dark to match the
+  visitor's system (it was dark only). The colors live in `brand.css`. The home page, demo and live board link it,
+  with Inter Tight for text and Italiana for the board's title. The self-contained pages hold the same colors
+  inline (`npm run sync:brand` copies them after an edit to `brand.css`) and use system fonts, so they still load
+  nothing from another site. The pages the server writes (confirm, unsubscribe) use the same colors.
+- The board groups its problems under one card per category, with the category's name, what it covers, and its
+  counts ("2 problems · 1 new · 1 high"). Each category can be hidden and shown again, and picking a category chip
+  opens its card. The cards inside drop their own category label and carry a stripe in the category's color.
+- `npm run check` checks that the pages link or hold `brand.css`, that the old neon colors are gone, and that every
+  text color passes 4.5:1 contrast in both modes.
+
 ## 2026-10-28
 
 - Signing in no longer sends every account that once ticked Pro (and never paid) to the plan card. Only the sign-in
