@@ -26,8 +26,8 @@ in Razorpay and Vercel, in an order where nothing charges a real card before the
 |---|---|---|
 | Vercel Pro | Commercial use isn't allowed on Hobby (**verify** Vercel's current fair-use terms) and T22 needs it | todo |
 | Owner inputs 1 to 9 answered (T23) | Price, GST, refund rule, etc. | Price, GST, trial, refund rule, methods and contact answered (2026-10-23); international cards, the liability clause and a yearly plan still open |
-| Razorpay live activation submitted with the site's URLs | Razorpay reviews the website, including the policy pages (**verify** the current list) | todo |
-| Domain decision | Optional. A custom domain may help with the Chrome warning ([progress.md](progress.md)) and looks more trustworthy at checkout | todo |
+| Razorpay live activation submitted with the site's URLs | Razorpay reviews the website, including the policy pages (**verify** the current list) | **Done**: live mode since 2026-10-28 |
+| Domain decision | Optional. A custom domain may help with the Chrome warning ([progress.md](progress.md)) and looks more trustworthy at checkout | **Done** 2026-10-28: radar.pehchanthetraveller.com is the site's one address (`d69ada5`) |
 
 ## Test-mode run (Preview, test keys)
 
