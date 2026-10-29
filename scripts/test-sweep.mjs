@@ -429,6 +429,32 @@ const sweepOpts = (storage, byCat, now) => ({
   check(after.sweeps.includes(s7.id) && after.items.some((x) => x.title === "Problem 5"), "the next sweep goes on writing the file");
 }
 
+// ---- T38: the board's URL helpers, run from their marked block in the jsx with the server's CATS and AREAS
+{
+  const jsx = readFileSync(new URL("../travel-problem-radar.jsx", import.meta.url), "utf8");
+  const block = (jsx.match(/\n\/\/ Board URL \(T38\):[\s\S]*?\n\/\/ End of board URL\.\n/) || [""])[0];
+  check(/function readBoardUrl\(/.test(block) && /function boardQuery\(/.test(block), "the board URL block is in the jsx");
+  const { readBoardUrl, boardQuery } = new Function("CATS", "AREAS", block + "\nreturn { readBoardUrl, boardQuery };")(CATS, AREAS);
+  const none = { q: "", cat: "all", area: "all", all: false };
+  check(JSON.stringify(readBoardUrl("")) === JSON.stringify(none) && JSON.stringify(readBoardUrl(undefined)) === JSON.stringify(none),
+    "board URL: no query is the defaults");
+  const r = readBoardUrl("?q=%20visa%20delays%20&cat=gov_policy&area=Middle%20East%20%26%20Africa&all=1");
+  check(r.q === "visa delays" && r.cat === "gov_policy" && r.area === "Middle East & Africa" && r.all === true,
+    "board URL: q (trimmed), cat, area and all=1 are read");
+  const bad = readBoardUrl("?cat=nope&area=Mars&all=yes&q=" + "x".repeat(300));
+  check(bad.cat === "all" && bad.area === "all" && bad.all === false && bad.q.length === 200,
+    "board URL: an unknown cat or area, all other than 1, and an over-long q are ignored or cut");
+  check(boardQuery(none, "") === "" && boardQuery({ ...none, q: "   " }, "") === "", "board URL: the defaults and a blank search leave no query");
+  const q = boardQuery({ q: "visa", cat: "gov_policy", area: "Europe", all: true }, "?utm=x&q=old&cat=industry");
+  const u = new URLSearchParams(q.slice(1));
+  check(q.startsWith("?") && u.get("utm") === "x" && u.get("q") === "visa" && u.get("cat") === "gov_policy" && u.get("area") === "Europe" && u.get("all") === "1",
+    "board URL: the filters replace the old ones and other parameters stay");
+  check(boardQuery({ ...none, cat: "industry" }, "?q=old&all=1") === "?cat=industry", "board URL: a filter set back to its default leaves the URL");
+  const back = readBoardUrl(boardQuery({ q: "strike & delays", cat: "industry", area: "Latin America", all: true }, ""));
+  check(back.q === "strike & delays" && back.cat === "industry" && back.area === "Latin America" && back.all, "board URL: what boardQuery writes, readBoardUrl reads back");
+  check(!/location|history|window/.test(block), "board URL: the helpers only read and return strings; the hash is never touched");
+}
+
 // ---- parser
 check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"a\"}]\n```" }] })[0].title === "a", "parser strips code fences");
 {

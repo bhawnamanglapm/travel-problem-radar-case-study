@@ -113,6 +113,15 @@ const CSS = `
 .tpr-search { margin-left:auto; background:var(--surface); border:1px solid var(--line); color:var(--text);
   font-family:var(--body); font-size:13px; padding:9px 13px; border-radius:9px; min-width:180px; }
 .tpr-search::placeholder { color:var(--faint); }
+/* ---- search scope: this sweep or all saved sweeps (T38) ---- */
+.tpr-search-row { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-left:auto; }
+.tpr-search-row .tpr-search { margin-left:0; }
+.tpr-scope-line { font-size:13.5px; color:var(--text-2); background:var(--surface); border:1px solid var(--line);
+  border-radius:10px; padding:10px 15px; margin-bottom:16px; }
+.tpr-scope-line b { font-weight:600; color:var(--text); }
+.tpr-scope-line .warn { color:var(--accent-text); }
+.tpr-from { font-family:var(--mono); font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-2);
+  border:1px solid var(--line2); padding:2px 7px 1px; border-radius:5px; }
 .tpr-search:focus { outline:none; border-color:var(--link); box-shadow:0 0 0 2px color-mix(in srgb, var(--link) 30%, transparent); }
 
 /* ---- board: one parent card per category, holding its problem cards ---- */
@@ -254,6 +263,7 @@ const CSS = `
   .tpr-actions { width:100%; }
   .tpr-swept { text-align:left; }
   .tpr-search { margin-left:0; width:100%; }
+  .tpr-search-row { margin-left:0; width:100%; }
 }
 @media (prefers-reduced-motion:reduce){
   .tpr *, .tpr *::before, .tpr *::after { animation:none !important; }
@@ -316,6 +326,62 @@ function areaOf(region) {
   return found.size === 1 ? [...found][0] : found.size ? "Global" : "Other";
 }
 // End of areas.
+
+// Search file (T38): the latest copy of every item in the kept sweeps, so "All saved sweeps" is one read.
+// `prev` is the file so far ({ sweeps, items }); each item carries the sweep it came from (sweep, sweepAt).
+// The same text is in travel-problem-radar.jsx and api/_lib/radar.js; scripts/check.mjs fails if they differ.
+function mergeSearch(prev, problems, sweepId, at, keepSweepIds) {
+  const keep = new Set(keepSweepIds);
+  const ok = prev && Array.isArray(prev.sweeps) && Array.isArray(prev.items);
+  const byId = new Map();
+  for (const it of ok ? prev.items : []) if (it && it.id && keep.has(it.sweep)) byId.set(it.id, it);
+  // The latest copy wins and goes last, so the file stays in sweep order.
+  for (const p of problems) { byId.delete(p.id); byId.set(p.id, { ...p, sweep: sweepId, sweepAt: at }); }
+  const sweeps = [...new Set([...(ok ? prev.sweeps : []), sweepId])].filter((id) => keep.has(id));
+  return { sweeps, items: [...byId.values()] };
+}
+// End of search file.
+
+// Board URL (T38): the filters a link carries. ?q= the search, ?cat= a category key, ?area= one of AREAS, ?all=1
+// all saved sweeps. Unknown values are ignored; boardQuery leaves out the defaults and keeps any other parameter.
+// scripts/test-sweep.mjs runs this block on its own.
+function readBoardUrl(search) {
+  const u = new URLSearchParams(search || "");
+  const cat = u.get("cat"), area = u.get("area");
+  return {
+    q: (u.get("q") || "").trim().slice(0, 200),
+    cat: CATS.some((c) => c.key === cat) ? cat : "all",
+    area: AREAS.includes(area) ? area : "all",
+    all: u.get("all") === "1",
+  };
+}
+function boardQuery(f, search) {
+  const u = new URLSearchParams(search || "");
+  for (const k of ["q", "cat", "area", "all"]) u.delete(k);
+  const q = String(f.q || "").trim();
+  if (q) u.set("q", q);
+  if (f.cat && f.cat !== "all") u.set("cat", f.cat);
+  if (f.area && f.area !== "all") u.set("area", f.area);
+  if (f.all) u.set("all", "1");
+  const s = u.toString();
+  return s ? "?" + s : "";
+}
+// End of board URL.
+
+// A locked visitor's search (T38) is kept in this tab for 30 minutes, so it is back on /live/ after signing in
+// or paying, without passing the URL through sign-in. Only the filters are kept, and reading the copy clears it.
+const KEPT_SEARCH = "tpr-board-search";
+function keepSearch(search) {
+  const s = boardQuery(readBoardUrl(search), "");
+  try { if (s) window.sessionStorage.setItem(KEPT_SEARCH, JSON.stringify({ s, t: Date.now() })); } catch (e) {}
+}
+function keptSearch() {
+  try {
+    const v = JSON.parse(window.sessionStorage.getItem(KEPT_SEARCH) || "null");
+    window.sessionStorage.removeItem(KEPT_SEARCH);
+    return v && typeof v.s === "string" && Date.now() - v.t < 30 * 60 * 1000 ? v.s : "";
+  } catch (e) { return ""; }
+}
 
 const slug = (s = "") =>
   s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
@@ -394,6 +460,7 @@ const KEY_SEEN = "radar:seenIds";
 const KEY_INDEX = "radar:history";
 const KEY_LEGACY = "radar:lastSweep";
 const KEY_ITEMS = "radar:items"; // each item's history (T36); the live board never reads it
+const KEY_SEARCH = "radar:search"; // every item in the kept sweeps, for "All saved sweeps" (T38)
 const sweepKey = (id) => "radar:sweep:" + id;
 
 // Each item's history (T36). `index` maps an id to { f: first sweep id, n: sweeps it was in, s: its latest
@@ -478,6 +545,19 @@ async function buildItemIndex(hist) {
   return index;
 }
 
+// The search file from this browser's saved sweeps, oldest first: once, when there are sweeps but no file yet (T38).
+async function buildSearchFile(hist, keepIds) {
+  let search = null;
+  for (const e of hist) {
+    const sw = await loadJSON(sweepKey(e.id));
+    if (sw && Array.isArray(sw.problems)) search = mergeSearch(search, sw.problems, e.id, e.at, keepIds);
+  }
+  return search;
+}
+
+// "Sweep of 27 Oct": where an item in All saved sweeps comes from.
+const sweepDay = (at) => new Date(at).toLocaleDateString([], { day: "numeric", month: "short" });
+
 function groupByDay(entries) {
   const map = new Map();
   entries.forEach((e) => {
@@ -495,10 +575,25 @@ const proPriceLine = () => {
   return m ? m.getAttribute("content") || "" : "";
 };
 
+// The filters the board opens with (T38): the URL's or, on /live/ with none in the URL, the search kept while locked.
+// Read once per page view; /live/ clears the kept copy either way.
+let startFilters = null;
+function boardStart(live) {
+  if (!startFilters) {
+    let s = "";
+    try { s = window.location.search; } catch (e) {}
+    const kept = live ? keptSearch() : "";
+    if (kept && !boardQuery(readBoardUrl(s), "")) s = kept;
+    startFilters = readBoardUrl(s);
+  }
+  return startFilters;
+}
+
 export default function TravelProblemRadar({ sample, remote } = {}) {
   const demo = Array.isArray(sample);
   const live = typeof remote === "string"; // read-only view of the daily server sweep
   REMOTE = live ? remote : null;
+  const start = boardStart(live);
   const [problems, setProblems] = useState([]);
   const [history, setHistory] = useState([]); // [{id, at, total, newCount, highCount}] oldest -> newest
   const [selId, setSelId] = useState(null);
@@ -507,10 +602,13 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
   const [locked, setLocked] = useState(null); // 401 | 402 when the live board is for Pro only
   const [progress, setProgress] = useState({});
   const [view, setView] = useState("board"); // board | report | history
-  const [fCat, setFCat] = useState("all");
+  const [fCat, setFCat] = useState(start.cat);
   const [fSev, setFSev] = useState("all");
-  const [fArea, setFArea] = useState("all"); // one of AREAS (T37)
-  const [query, setQuery] = useState("");
+  const [fArea, setFArea] = useState(start.area); // one of AREAS (T37)
+  const [query, setQuery] = useState(start.q);
+  const [scope, setScope] = useState(start.all ? "all" : "sweep"); // this sweep | all saved sweeps (T38)
+  // The search file once loaded: { state: loading | done | missing | error, items, sweeps, missing }.
+  const [searchFile, setSearchFile] = useState(null);
   const [collapsed, setCollapsed] = useState(() => new Set()); // category keys whose group is folded
   const [copied, setCopied] = useState(false);
   const seenRef = useRef(new Set());
@@ -531,11 +629,66 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
     return () => d.removeEventListener("close", onClose);
   }, []);
   // A #p= link followed while the board is already open (firstLoad handles a fresh load).
+  const searchItems = searchFile && searchFile.state === "done" ? searchFile.items : [];
   useEffect(() => {
-    const onHash = () => { const want = hashItemId(); const it = want && problems.find((p) => p.id === want); if (it) setDetail(it); };
+    const onHash = () => {
+      const want = hashItemId();
+      const it = want && ((scope === "all" && searchItems.find((p) => p.id === want)) || problems.find((p) => p.id === want));
+      if (it) setDetail(it);
+    };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
-  }, [problems]);
+  }, [problems, searchFile, scope]);
+
+  // The filters go in the URL (T38), so a search can be shared or kept; the #report or #p= hash stays.
+  useEffect(() => {
+    try {
+      const s = boardQuery({ q: query, cat: fCat, area: fArea, all: scope === "all" }, window.location.search);
+      if (s !== window.location.search) window.history.replaceState(null, "", window.location.pathname + s + window.location.hash);
+    } catch (e) {}
+  }, [query, fCat, fArea, scope]);
+  // A locked board keeps the search for after signing in or paying.
+  useEffect(() => { if (live && locked) keepSearch(window.location.search); }, [locked]);
+
+  // All saved sweeps loads the search file once per page view (a replay in the demo starts it again).
+  useEffect(() => {
+    if (scope === "all" && status === "done" && !searchFile) loadSearch();
+  }, [scope, status, searchFile]);
+
+  async function loadSearch() {
+    setSearchFile({ state: "loading" });
+    let f;
+    try {
+      const r = await store.get(KEY_SEARCH);
+      f = r ? JSON.parse(r.value) : null;
+    } catch (e) {
+      if (e && e.locked) { setLocked(e.locked); setStatus("idle"); return; }
+      f = undefined;
+    }
+    // This browser's demo builds a missing file from its own saved sweeps; the server's is built by its next sweep.
+    if (f === null && !live && history.length) {
+      f = await buildSearchFile(history, history.map((e) => e.id));
+      if (f) await saveJSON(KEY_SEARCH, f);
+    }
+    if (!f || !Array.isArray(f.sweeps) || !Array.isArray(f.items)) {
+      setSearchFile({ state: f === null ? "missing" : "error" });
+      setScope("sweep");
+      return;
+    }
+    // Only the sweeps the board still keeps; a kept sweep the file lacks is counted, newest sweep first.
+    const kept = new Set(history.map((e) => e.id));
+    const items = f.items.filter((p) => p && p.id && kept.has(p.sweep)).sort((a, b) => Number(b.sweep) - Number(a.sweep));
+    const inFile = new Set(f.sweeps);
+    const missing = history.filter((e) => !inFile.has(e.id)).length;
+    setSearchFile({ state: "done", items, sweeps: history.length - missing, missing });
+    const want = hashItemId();
+    const it = want && !detail && items.find((p) => p.id === want);
+    if (it) setDetail(it);
+  }
+  function pickScope(s) {
+    if (s === "all" && searchFile && searchFile.state !== "done" && searchFile.state !== "loading") setSearchFile(null);
+    setScope(s);
+  }
   function openDetail(p) {
     setDetail(p);
     setHash("#p=" + encodeURIComponent(p.id));
@@ -666,7 +819,12 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
     await saveJSON(sweepKey(id), { at, problems: saved });
     await saveJSON(KEY_INDEX, hist);
     await saveJSON(KEY_ITEMS, itemIndex);
+    // The search file (T38), built once from this browser's sweeps if it is missing.
+    const keepIds = hist.map((e) => e.id);
+    const s0 = await loadJSON(KEY_SEARCH);
+    await saveJSON(KEY_SEARCH, mergeSearch(s0 && Array.isArray(s0.sweeps) ? s0 : await buildSearchFile(history, keepIds), saved, id, at, keepIds));
     for (const d of drop) { try { await store.delete(sweepKey(d.id)); } catch (e) {} }
+    setSearchFile(null);
 
     setHistory(hist);
     setProblems(saved);
@@ -689,7 +847,7 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
       const e = history.find((h) => h.id === id);
       setSweptAt(e ? e.at : full.at);
       setView("board");
-      setFCat("all"); setFSev("all"); setFArea("all"); setQuery("");
+      setFCat("all"); setFSev("all"); setFArea("all"); setQuery(""); setScope("sweep");
     }
   }
 
@@ -697,21 +855,23 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
   const newCount = problems.filter((p) => p.isNew).length;
   const highCount = problems.filter((p) => p.severity === "High").length;
 
+  // All saved sweeps (T38) pools the search file's items; every filter works on them the same way.
+  const all = scope === "all";
+  const allReady = all && searchFile && searchFile.state === "done";
+  const pool = all ? searchItems : problems;
   // Every filter but the area, so each area's count is the cards that picking it would show (T37).
-  const others = problems.filter((p) => {
+  const others = pool.filter((p) => {
     if (fCat !== "all" && p.cat !== fCat) return false;
     if (fSev !== "all" && p.severity !== fSev) return false;
-    if (query) {
-      const q = query.toLowerCase();
-      if (!(`${p.title} ${p.summary} ${p.opportunity}`.toLowerCase().includes(q))) return false;
-    }
+    const q = query.trim().toLowerCase();
+    if (q && !(`${p.title} ${p.summary} ${p.opportunity}`.toLowerCase().includes(q))) return false;
     return true;
   });
   const shown = fArea === "all" ? others : others.filter((p) => areaOf(p.region) === fArea);
   const areaCount = (list) => list.reduce((m, p) => m.set(areaOf(p.region), (m.get(areaOf(p.region)) || 0) + 1), new Map());
   const areaN = areaCount(others);
   const areaList = AREAS.filter((a) => areaN.get(a) || a === fArea);
-  const showAreaTiles = areaCount(problems).size >= 2;
+  const showAreaTiles = areaCount(pool).size >= 2;
   const pickArea = (a) => setFArea((cur) => (cur === a ? "all" : a));
   // shown is already sorted (new first, then severity), so each group keeps that order
   const groups = CATS.map((c) => ({ c, items: shown.filter((p) => p.cat === c.key) })).filter((g) => g.items.length);
@@ -766,8 +926,8 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
     } catch (e) {}
   }
 
-  const showStats = status === "done" && view !== "history";
-  const showBanner = status === "done" && !isLatest && view !== "history";
+  const showStats = status === "done" && view !== "history" && !(all && view === "board");
+  const showBanner = status === "done" && !isLatest && view !== "history" && !(all && view === "board");
 
   return (
     <div className="tpr">
@@ -815,6 +975,25 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
         </div>
       )}
 
+      {/* All saved sweeps (T38): one line in place of the sweep's stats */}
+      {status === "done" && view === "board" && all && (
+        <div className="tpr-scope-line" role="status">
+          {allReady ? (
+            <>
+              <b>{searchItems.length}</b> {searchItems.length === 1 ? "problem" : "problems"} from <b>{searchFile.sweeps}</b> saved {searchFile.sweeps === 1 ? "sweep" : "sweeps"}
+              {searchFile.missing > 0 && <span className="warn"> · {searchFile.missing} saved {searchFile.missing === 1 ? "sweep" : "sweeps"} couldn’t be included</span>}
+            </>
+          ) : "Loading saved sweeps…"}
+        </div>
+      )}
+      {status === "done" && view === "board" && !all && searchFile && (searchFile.state === "missing" || searchFile.state === "error") && (
+        <div className="tpr-scope-line" role="status">
+          <span className="warn">{searchFile.state === "missing"
+            ? "Saved sweeps can’t be searched yet: the next sweep builds the search. Showing this sweep."
+            : "Saved sweeps couldn’t be loaded. Showing this sweep."}</span>
+        </div>
+      )}
+
       {status === "done" && view === "board" && showAreaTiles && (
         <div className="tpr-areas" role="group" aria-label="Areas">
           {areaList.map((a) => (
@@ -851,8 +1030,14 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
               </button>
             ))}
           </div>
-          <input className="tpr-search" placeholder="Search problems & angles…"
-            value={query} onChange={(e) => setQuery(e.target.value)} />
+          <div className="tpr-search-row">
+            <div className="tpr-chips tpr-scope" role="group" aria-label="Search in">
+              <button className={"tpr-chip" + (!all ? " on" : "")} aria-pressed={!all} onClick={() => pickScope("sweep")}>This sweep</button>
+              <button className={"tpr-chip" + (all ? " on" : "")} aria-pressed={all} onClick={() => pickScope("all")}>All saved sweeps</button>
+            </div>
+            <input className="tpr-search" type="search" aria-label="Search problems and angles" placeholder="Search problems & angles…"
+              value={query} onChange={(e) => setQuery(e.target.value)} />
+          </div>
         </div>
       )}
 
@@ -874,7 +1059,7 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
                   </div>
                   <span className="tpr-group-count">
                     {items.length} {items.length === 1 ? "problem" : "problems"}
-                    {nNew > 0 && ` · ${nNew} new`}
+                    {nNew > 0 && !all && ` · ${nNew} new`}
                     {nHigh > 0 && ` · ${nHigh} high`}
                   </span>
                   <button className="tpr-group-toggle" aria-expanded={open} aria-controls={id}
@@ -886,7 +1071,11 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
                 <div className="tpr-board" id={id} hidden={!open}>
                   {items.map((p) => (
                     <div className="tpr-card" key={p.id}>
-                      {p.isNew && (
+                      {all ? (
+                        <div className="tpr-card-top">
+                          <span className="tpr-from">Sweep of {sweepDay(p.sweepAt)}</span>
+                        </div>
+                      ) : p.isNew && (
                         <div className="tpr-card-top">
                           <span className="tpr-new">New</span>
                         </div>
@@ -917,7 +1106,7 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
               </section>
             );
           })}
-          {shown.length === 0 && (
+          {shown.length === 0 && (!all || allReady) && (
             <div className="tpr-note">No problems match these filters.</div>
           )}
         </div>
@@ -1057,7 +1246,7 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
         {detail && (
           <div className="tpr-dlg-in" style={{ "--cat": (CATS.find((c) => c.key === detail.cat) || CATS[0]).color }}>
             <div className="tpr-dlg-top">
-              {detail.isNew && <span className="tpr-new">New</span>}
+              {detail.sweepAt ? <span className="tpr-from">Sweep of {sweepDay(detail.sweepAt)}</span> : detail.isNew && <span className="tpr-new">New</span>}
               <span className="tpr-dlg-cat">{(CATS.find((c) => c.key === detail.cat) || { label: "" }).label}</span>
               <button className="tpr-dlg-x" type="button" onClick={closeDetail} aria-label="Close">×</button>
             </div>
