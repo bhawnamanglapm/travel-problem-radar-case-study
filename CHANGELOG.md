@@ -3,6 +3,15 @@
 Built from the git history. Dates are commit dates. The project has no version numbers or releases, so entries are
 grouped by date.
 
+## 2026-10-30
+
+- One problem can be shared: Share in the problem's panel on the live board copies a link to it (on a phone, it
+  opens the share sheet). The link, `/p/<sweep>/<item>`, opens a page with the headline, category, severity,
+  source, region and date for everyone, and the summary, opportunity and source link for a signed-in Pro member,
+  with "Open on the board". Others see Sign in and See Pro. The page isn't indexed by search engines. A link shows
+  a preview card in apps that read Open Graph tags, with the headline and a new site image, `og.png`, which the
+  home page now uses too. An old link says the problem is no longer on the board (T40).
+
 ## 2026-10-29
 
 - Pro members can save problems: a "☆ Save" star on each card and in the detail panel, and a fourth tab, Saved,
