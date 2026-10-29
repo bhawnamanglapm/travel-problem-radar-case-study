@@ -102,15 +102,32 @@ const CSS = `
 .tpr-search::placeholder { color:var(--faint); }
 .tpr-search:focus { outline:none; border-color:var(--link); box-shadow:0 0 0 2px color-mix(in srgb, var(--link) 30%, transparent); }
 
-/* ---- board ---- */
-.tpr-board { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px; }
+/* ---- board: one parent card per category, holding its problem cards ---- */
+.tpr-groups { display:flex; flex-direction:column; gap:16px; }
+.tpr-group { background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:14px; }
+.tpr-group-head { display:flex; align-items:flex-start; gap:12px; flex-wrap:wrap; }
+.tpr-group-head .dot { width:10px; height:10px; border-radius:50%; background:var(--cat); margin-top:6px; flex:none; }
+.tpr-group-title { flex:1 1 220px; min-width:0; }
+.tpr-group-title h2 { margin:0; font-family:var(--display); font-size:17px; font-weight:600; letter-spacing:-.01em; color:var(--text); }
+.tpr-group-title p { margin:2px 0 0; font-size:12.5px; color:var(--muted); line-height:1.45; }
+.tpr-group-count { font-family:var(--mono); font-size:11px; color:var(--muted); margin-top:4px; white-space:nowrap; }
+.tpr-group-toggle { background:none; border:1px solid var(--line); color:var(--text); font-family:var(--body);
+  font-size:12.5px; font-weight:500; padding:6px 12px; border-radius:8px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+.tpr-group-toggle:hover { border-color:var(--link); color:var(--link); }
+.tpr-group-toggle:focus-visible { outline:2px solid var(--link); outline-offset:2px; }
+.tpr-group-toggle .chev { display:inline-block; transition:transform .15s ease; }
+.tpr-group-toggle[aria-expanded="false"] .chev { transform:rotate(-90deg); }
+.tpr-group .tpr-board { margin-top:14px; }
+.tpr-group .tpr-board[hidden] { display:none; }
+.tpr-group .tpr-card { background:var(--surface2); box-shadow:inset 3px 0 0 var(--cat); padding-left:19px; }
+.tpr-board { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr)); gap:14px; }
 .tpr-card { background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:16px 17px 15px;
   display:flex; flex-direction:column; gap:10px; position:relative; overflow:hidden;
   animation:tpr-rise .35s ease both; }
 @keyframes tpr-rise { from { opacity:0; transform:translateY(8px); } }
 .tpr-card:hover { border-color:var(--line2); }
 .tpr-card-top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
-.tpr-eyebrow { font-family:var(--mono); font-size:10px; letter-spacing:.12em; text-transform:uppercase; font-weight:500; }
+.tpr-sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
 .tpr-new { font-family:var(--mono); font-size:9px; letter-spacing:.14em; text-transform:uppercase;
   background:var(--accent); color:var(--on-accent); padding:3px 7px 2px; border-radius:5px; font-weight:600; }
 .tpr-card h3 { margin:0; font-size:15px; font-weight:600; line-height:1.28; letter-spacing:-.01em; }
@@ -210,7 +227,6 @@ const CATS = [
   { key: "industry", label: "Industry", color: "var(--cat-industry)",
     desc: "strikes, bankruptcies, capacity cuts, overtourism, pricing shocks, and major operational disruptions" },
 ];
-const CAT_MAP = Object.fromEntries(CATS.map((c) => [c.key, c]));
 const SEV_RANK = { High: 3, Medium: 2, Low: 1 };
 
 const slug = (s = "") =>
@@ -363,6 +379,7 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
   const [fCat, setFCat] = useState("all");
   const [fSev, setFSev] = useState("all");
   const [query, setQuery] = useState("");
+  const [collapsed, setCollapsed] = useState(() => new Set()); // category keys whose group is folded
   const [copied, setCopied] = useState(false);
   const seenRef = useRef(new Set());
 
@@ -520,6 +537,13 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
     }
     return true;
   });
+  // shown is already sorted (new first, then severity), so each group keeps that order
+  const groups = CATS.map((c) => ({ c, items: shown.filter((p) => p.cat === c.key) })).filter((g) => g.items.length);
+  const setGroupOpen = (key, open) => setCollapsed((s) => {
+    const n = new Set(s);
+    if (open) n.delete(key); else n.add(key);
+    return n;
+  });
 
   function buildReport() {
     const d = sweptAt ? new Date(sweptAt) : new Date();
@@ -620,7 +644,7 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
           <div className="tpr-chips">
             <button className={"tpr-chip" + (fCat === "all" ? " on" : "")} onClick={() => setFCat("all")}>All</button>
             {CATS.map((c) => (
-              <button key={c.key} className={"tpr-chip" + (fCat === c.key ? " on" : "")} onClick={() => setFCat(c.key)}>
+              <button key={c.key} className={"tpr-chip" + (fCat === c.key ? " on" : "")} onClick={() => { setFCat(c.key); setGroupOpen(c.key, true); }}>
                 <span className="c" style={{ background: c.color }} />{c.label}
               </button>
             ))}
@@ -639,36 +663,63 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
 
       {/* board */}
       {status === "done" && view === "board" && (
-        <div className="tpr-board">
-          {shown.map((p) => {
-            const c = CAT_MAP[p.cat];
+        <div className="tpr-groups">
+          {groups.map(({ c, items }) => {
+            const open = !collapsed.has(c.key);
+            const nNew = items.filter((p) => p.isNew).length;
+            const nHigh = items.filter((p) => p.severity === "High").length;
+            const id = "tpr-group-" + c.key;
             return (
-              <div className="tpr-card" key={p.id}>
-                <div className="tpr-card-top">
-                  <span className="tpr-eyebrow" style={{ color: c.color }}>{c.label}</span>
-                  {p.isNew && <span className="tpr-new">New</span>}
-                </div>
-                <h3>{p.title}</h3>
-                {p.summary && <p className="tpr-summary">{p.summary}</p>}
-                <div className="tpr-meta">
-                  {p.link
-                    ? <a className="tpr-tag tpr-src" href={p.link} target="_blank" rel="noopener noreferrer">{p.source} ↗</a>
-                    : <span className="tpr-tag">{p.source}</span>}
-                  <span className="tpr-tag">{p.region}</span>
-                  {p.date && <span className="tpr-tag">{p.date}</span>}
-                  <span className={"tpr-tag tpr-sev " + p.severity}>{p.severity}</span>
-                </div>
-                {p.opportunity && (
-                  <div className="tpr-opp">
-                    <span className="lab">Opportunity</span>
-                    <p>{p.opportunity}</p>
+              <section className="tpr-group" key={c.key} aria-labelledby={id + "-h"} style={{ "--cat": c.color }}>
+                <div className="tpr-group-head">
+                  <span className="dot" aria-hidden="true" />
+                  <div className="tpr-group-title">
+                    <h2 id={id + "-h"}>{c.label}</h2>
+                    <p>{c.desc[0].toUpperCase() + c.desc.slice(1)}</p>
                   </div>
-                )}
-              </div>
+                  <span className="tpr-group-count">
+                    {items.length} {items.length === 1 ? "problem" : "problems"}
+                    {nNew > 0 && ` · ${nNew} new`}
+                    {nHigh > 0 && ` · ${nHigh} high`}
+                  </span>
+                  <button className="tpr-group-toggle" aria-expanded={open} aria-controls={id}
+                    onClick={() => setGroupOpen(c.key, !open)}>
+                    <span className="chev" aria-hidden="true">▾</span>{open ? "Hide" : "Show"}
+                    <span className="tpr-sr"> {c.label}</span>
+                  </button>
+                </div>
+                <div className="tpr-board" id={id} hidden={!open}>
+                  {items.map((p) => (
+                    <div className="tpr-card" key={p.id}>
+                      {p.isNew && (
+                        <div className="tpr-card-top">
+                          <span className="tpr-new">New</span>
+                        </div>
+                      )}
+                      <h3>{p.title}</h3>
+                      {p.summary && <p className="tpr-summary">{p.summary}</p>}
+                      <div className="tpr-meta">
+                        {p.link
+                          ? <a className="tpr-tag tpr-src" href={p.link} target="_blank" rel="noopener noreferrer">{p.source} ↗</a>
+                          : <span className="tpr-tag">{p.source}</span>}
+                        <span className="tpr-tag">{p.region}</span>
+                        {p.date && <span className="tpr-tag">{p.date}</span>}
+                        <span className={"tpr-tag tpr-sev " + p.severity}>{p.severity}</span>
+                      </div>
+                      {p.opportunity && (
+                        <div className="tpr-opp">
+                          <span className="lab">Opportunity</span>
+                          <p>{p.opportunity}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
             );
           })}
           {shown.length === 0 && (
-            <div className="tpr-note" style={{ gridColumn: "1/-1" }}>No problems match these filters.</div>
+            <div className="tpr-note">No problems match these filters.</div>
           )}
         </div>
       )}
