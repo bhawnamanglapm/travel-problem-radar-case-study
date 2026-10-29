@@ -326,6 +326,11 @@ const srvPrompt = (srv.match(/return \(\s*([\s\S]*?)\s*\);\s*\}/) || [])[1];
 check(!!jsxPrompt && !!srvPrompt && squash(jsxPrompt) === squash(srvPrompt), "server prompt matches the artifact's prompt");
 const catText = (t) => [...t.matchAll(/label: "([^"]+)",\s*(?:color: "[^"]+",\s*)?desc:\s*"([^"]+)"/g)].map((m) => m[1] + "|" + m[2]).join("\n");
 check(catText(jsx).split("\n").length === 4 && catText(jsx) === catText(srv), "server categories match the artifact's categories");
+// T36: each item's history is worked out the same way on the server and in the browser.
+const trackText = (t) => (t.match(/\nfunction trackItems\([\s\S]*?\n\}\n/) || t.match(/\nexport function trackItems\([\s\S]*?\n\}\n/) || [""])[0].replace(/^\nexport /, "\n");
+check(!!trackText(jsx) && trackText(jsx) === trackText(srv), "trackItems is the same text in the artifact and the server");
+check([bundle, liveBundle].every((b) => b.includes("radar:items") && b.includes("showModal") && b.includes("#p=")),
+  "both bundles are built with the detail panel (the item index, the <dialog>, the #p= link)");
 
 // 6. No secrets in the repository: it is public. Keys and webhooks (Anthropic, Resend, Slack,
 // Blob) live only in Vercel's environment variables; this catches the common formats if one is
