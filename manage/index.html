@@ -10,50 +10,80 @@
 <meta name="robots" content="noindex" />
 <meta name="referrer" content="no-referrer" />
 <title>Manage your Travel Problem Radar digest</title>
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#1d4e45" />
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0c1816" />
+<style>/* Brand tokens, copied from brand.css by scripts/sync-brand.mjs: edit brand.css, then run npm run sync:brand. */
+:root {
+  color-scheme: light dark;
+  --bg: #f6f9f8; --bg2: #eef4f2; --surface: #ffffff; --surface2: #f6f9f8;
+  --line: #d6e1df; --line2: #b9cac7;
+  --text: #0f2924; --text-2: #2f4a45; --muted: #516763; --faint: #5f736f;
+  --primary: #1d4e45; --primary-hover: #163d36; --on-primary: #f6f9f8; --link: #1d4e45;
+  --accent: #f5a524; --on-accent: #0f2924; --accent-text: #a15c07;
+  --high: #b91c1c; --medium: #a15c07; --error: #b91c1c;
+  --cat-traveler: #b4441c; --cat-gov: #1d4e45; --cat-web: #2563eb; --cat-industry: #6d28d9;
+  --display: 'Inter Tight', system-ui, -apple-system, sans-serif;
+  --body: 'Inter Tight', system-ui, -apple-system, sans-serif;
+  --wordmark: 'Italiana', Georgia, serif;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0c1816; --bg2: #10201d; --surface: #142421; --surface2: #1b2f2b;
+    --line: #293d39; --line2: #3a524d;
+    --text: #ecf3f2; --text-2: #c9d6d4; --muted: #a4b7b4; --faint: #8fa39f;
+    --primary: #1e5248; --primary-hover: #25665a; --on-primary: #ecf3f2; --link: #5fbfa9;
+    --accent: #f5a524; --on-accent: #0f2924; --accent-text: #f5a524;
+    --high: #f87171; --medium: #f5a524; --error: #f87171;
+    --cat-traveler: #f08a5d; --cat-gov: #5fbfa9; --cat-web: #7aa7ff; --cat-industry: #b79cff;
+  }
+}
+</style><!-- end brand tokens -->
 <style>
   * { box-sizing: border-box; }
-  html, body { margin: 0; background: #0B0B0D; color: #F4F4F7; }
-  body { font: 16px/1.55 -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 0 16px; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body { font: 16px/1.55 var(--body); padding: 0 16px; }
   main { max-width: 640px; margin: 0 auto; padding: 40px 0 56px; }
   h1 { font-size: 26px; line-height: 1.25; margin: 0 0 12px; }
-  p { margin: 0 0 14px; color: #C9C9D2; }
-  a { color: #C6FF3D; }
-  .nav { font: 12px/1.5 ui-monospace, 'JetBrains Mono', monospace; color: #93939F; margin: 0 0 28px; }
-  .nav a { color: #F4F4F7; }
-  .card { border: 1px solid #2A2A34; background: #131318; border-radius: 8px; padding: 16px 18px; margin: 20px 0 24px; }
-  .plan { font-size: 20px; font-weight: 600; color: #F4F4F7; margin: 0 0 6px; }
-  .plan b { color: #C6FF3D; }
-  button { font: inherit; font-weight: 600; background: #C6FF3D; color: #0B0B0D; border: 0; border-radius: 6px;
+  p { margin: 0 0 14px; color: var(--text-2); }
+  a { color: var(--link); }
+  .nav { font: 12px/1.5 var(--mono); color: var(--muted); margin: 0 0 28px; }
+  .nav a { color: var(--text); }
+  .card { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 16px 18px; margin: 20px 0 24px; }
+  .plan { font-size: 20px; font-weight: 600; color: var(--text); margin: 0 0 6px; }
+  .plan b { color: var(--link); }
+  button { font: inherit; font-weight: 600; background: var(--primary); color: var(--on-primary); border: 0; border-radius: 6px;
     padding: 10px 20px; cursor: pointer; }
-  button:hover { background: #d8ff6f; }
+  button:hover { background: var(--primary-hover); }
   button[disabled] { opacity: .6; cursor: default; }
-  #status { min-height: 1.6em; margin: 12px 0 0; color: #F4F4F7; }
-  #status.err, #planStatus.err { color: #FF8A80; }
-  #planStatus, #delStatus { min-height: 1.6em; margin: 12px 0 0; color: #F4F4F7; }
-  #delStatus.err, #pwStatus.err { color: #FF8A80; }
-  #pwStatus { min-height: 1.6em; margin: 12px 0 0; color: #F4F4F7; }
+  #status { min-height: 1.6em; margin: 12px 0 0; color: var(--text); }
+  #status.err, #planStatus.err { color: var(--error); }
+  #planStatus, #delStatus { min-height: 1.6em; margin: 12px 0 0; color: var(--text); }
+  #delStatus.err, #pwStatus.err { color: var(--error); }
+  #pwStatus { min-height: 1.6em; margin: 12px 0 0; color: var(--text); }
   label.field { display: block; font-weight: 600; margin: 0 0 6px; }
   .row { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 12px; }
-  input[type=password] { flex: 1 1 220px; min-width: 0; font: inherit; color: #F4F4F7; background: #0B0B0D;
-    border: 1px solid #3A3A46; border-radius: 6px; padding: 10px 12px; }
-  input[type=password]:focus { outline: 2px solid #C6FF3D; outline-offset: 1px; }
+  input[type=password] { flex: 1 1 220px; min-width: 0; font: inherit; color: var(--text); background: var(--bg);
+    border: 1px solid var(--line2); border-radius: 6px; padding: 10px 12px; }
+  input[type=password]:focus { outline: 2px solid var(--link); outline-offset: 1px; }
   #delCancel { margin-left: 8px; }
-  h2 { font-size: 16px; margin: 0 0 8px; color: #F4F4F7; }
-  h3 { font-size: 14px; margin: 16px 0 6px; color: #C9C9D2; font-weight: 600; }
+  h2 { font-size: 16px; margin: 0 0 8px; color: var(--text); }
+  h3 { font-size: 14px; margin: 16px 0 6px; color: var(--text-2); font-weight: 600; }
   .cats.sub { margin-left: 26px; }
-  select { font: inherit; background: #0B0B0D; color: #F4F4F7; border: 1px solid #3A3A46; border-radius: 6px; padding: 6px 8px; margin: 0 0 14px 26px; }
-  .sum { color: #F4F4F7; font-weight: 600; }
+  select { font: inherit; background: var(--bg); color: var(--text); border: 1px solid var(--line2); border-radius: 6px; padding: 6px 8px; margin: 0 0 14px 26px; }
+  .sum { color: var(--text); font-weight: 600; }
   #planCard button { margin: 0 8px 8px 0; }
   #ask button, #buy button, #billing button { margin: 0 0 14px; }
   .cats { border: 0; margin: 0 0 14px; padding: 0; }
-  .cats label { display: block; margin: 0 0 6px; color: #F4F4F7; }
-  .cats input { margin-right: 8px; accent-color: #C6FF3D; }
-  .cats input[disabled] + span { color: #93939F; }
-  .small { font-size: 13px; color: #93939F; }
-  button.plain { background: transparent; color: #C6FF3D; border: 1px solid #3A3A46; }
+  .cats label { display: block; margin: 0 0 6px; color: var(--text); }
+  .cats input { margin-right: 8px; accent-color: var(--link); }
+  .cats input[disabled] + span { color: var(--muted); }
+  .small { font-size: 13px; color: var(--muted); }
+  button.plain { background: transparent; color: var(--link); border: 1px solid var(--line2); }
   [hidden] { display: none !important; }
-  footer { margin-top: 36px; padding-top: 16px; border-top: 1px solid #2A2A34; }
-  .site-foot { font-size: 13px; color: #93939F; }
+  footer { margin-top: 36px; padding-top: 16px; border-top: 1px solid var(--line); }
+  .site-foot { font-size: 13px; color: var(--muted); }
   .site-foot a { display: inline-block; min-height: 24px; line-height: 24px; }
 </style>
 </head>

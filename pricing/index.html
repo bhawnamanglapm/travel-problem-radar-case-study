@@ -9,43 +9,73 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Pricing · Travel Problem Radar</title>
 <meta name="description" content="Travel Problem Radar's two plans, Free and Pro: what each includes, what Pro costs, how it renews and how to cancel." />
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#1d4e45" />
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0c1816" />
+<style>/* Brand tokens, copied from brand.css by scripts/sync-brand.mjs: edit brand.css, then run npm run sync:brand. */
+:root {
+  color-scheme: light dark;
+  --bg: #f6f9f8; --bg2: #eef4f2; --surface: #ffffff; --surface2: #f6f9f8;
+  --line: #d6e1df; --line2: #b9cac7;
+  --text: #0f2924; --text-2: #2f4a45; --muted: #516763; --faint: #5f736f;
+  --primary: #1d4e45; --primary-hover: #163d36; --on-primary: #f6f9f8; --link: #1d4e45;
+  --accent: #f5a524; --on-accent: #0f2924; --accent-text: #a15c07;
+  --high: #b91c1c; --medium: #a15c07; --error: #b91c1c;
+  --cat-traveler: #b4441c; --cat-gov: #1d4e45; --cat-web: #2563eb; --cat-industry: #6d28d9;
+  --display: 'Inter Tight', system-ui, -apple-system, sans-serif;
+  --body: 'Inter Tight', system-ui, -apple-system, sans-serif;
+  --wordmark: 'Italiana', Georgia, serif;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0c1816; --bg2: #10201d; --surface: #142421; --surface2: #1b2f2b;
+    --line: #293d39; --line2: #3a524d;
+    --text: #ecf3f2; --text-2: #c9d6d4; --muted: #a4b7b4; --faint: #8fa39f;
+    --primary: #1e5248; --primary-hover: #25665a; --on-primary: #ecf3f2; --link: #5fbfa9;
+    --accent: #f5a524; --on-accent: #0f2924; --accent-text: #f5a524;
+    --high: #f87171; --medium: #f5a524; --error: #f87171;
+    --cat-traveler: #f08a5d; --cat-gov: #5fbfa9; --cat-web: #7aa7ff; --cat-industry: #b79cff;
+  }
+}
+</style><!-- end brand tokens -->
 <style>
   * { box-sizing: border-box; }
-  html, body { margin: 0; background: #0B0B0D; color: #F4F4F7; }
-  body { font: 16px/1.55 -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 0 16px; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body { font: 16px/1.55 var(--body); padding: 0 16px; }
   main { max-width: 720px; margin: 0 auto; padding: 40px 0 56px; }
   h1 { font-size: 26px; line-height: 1.25; margin: 0 0 12px; }
   h2 { font-size: 18px; margin: 32px 0 10px; }
-  p, li { color: #C9C9D2; }
+  p, li { color: var(--text-2); }
   p { margin: 0 0 14px; }
   ul { margin: 0 0 14px; padding-left: 20px; }
-  a { color: #C6FF3D; }
-  a:focus-visible { outline: 2px solid #C6FF3D; outline-offset: 2px; }
-  .nav { font: 12px/1.5 ui-monospace, 'JetBrains Mono', monospace; color: #93939F; margin: 0 0 28px; }
-  .nav a { color: #F4F4F7; display: inline-block; padding: 4px 0; }
+  a { color: var(--link); }
+  a:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+  .nav { font: 12px/1.5 var(--mono); color: var(--muted); margin: 0 0 28px; }
+  .nav a { color: var(--text); display: inline-block; padding: 4px 0; }
   .plans { width: 100%; border-collapse: collapse; margin: 20px 0 8px; font-size: 15px; }
-  .plans th, .plans td { text-align: left; vertical-align: top; padding: 12px 14px; border: 1px solid #2A2A34; }
-  .plans thead th { color: #C6FF3D; font-size: 17px; background: #131318; }
-  .plans tbody th { color: #F4F4F7; font-weight: 600; width: 8em; background: #131318; }
-  .plans td { color: #C9C9D2; }
-  .price { font-size: 20px; font-weight: 700; color: #F4F4F7; display: block; }
+  .plans th, .plans td { text-align: left; vertical-align: top; padding: 12px 14px; border: 1px solid var(--line); }
+  .plans thead th { color: var(--link); font-size: 17px; background: var(--surface); }
+  .plans tbody th { color: var(--text); font-weight: 600; width: 8em; background: var(--surface); }
+  .plans td { color: var(--text-2); }
+  .price { font-size: 20px; font-weight: 700; color: var(--text); display: block; }
   a.btn { display: inline-block; font-weight: 600; border-radius: 6px; padding: 10px 20px; text-decoration: none; min-height: 44px; }
-  a.btn.main { background: #C6FF3D; color: #0B0B0D; }
-  a.btn.main:hover { background: #d8ff6f; }
-  a.btn.sec { border: 1px solid #C6FF3D; color: #C6FF3D; }
-  .renews { font-size: 13px; color: #C9C9D2; margin: 8px 0 0; }
-  .small { font-size: 13px; color: #93939F; }
+  a.btn.main { background: var(--primary); color: var(--on-primary); }
+  a.btn.main:hover { background: var(--primary-hover); }
+  a.btn.sec { border: 1px solid var(--link); color: var(--link); }
+  .renews { font-size: 13px; color: var(--text-2); margin: 8px 0 0; }
+  .small { font-size: 13px; color: var(--muted); }
   /* Phones: each plan becomes a card, and each cell says which plan it belongs to. */
   @media (max-width: 560px) {
     .plans thead { display: none; }
     .plans, .plans tbody, .plans tr, .plans th, .plans td { display: block; width: 100%; }
-    .plans tr { margin: 0 0 12px; border: 1px solid #2A2A34; }
-    .plans th, .plans td { border: 0; border-top: 1px solid #2A2A34; }
+    .plans tr { margin: 0 0 12px; border: 1px solid var(--line); }
+    .plans th, .plans td { border: 0; border-top: 1px solid var(--line); }
     .plans tbody th { width: 100%; }
-    .plans td::before { content: attr(data-plan); display: block; font-weight: 600; color: #C6FF3D; }
+    .plans td::before { content: attr(data-plan); display: block; font-weight: 600; color: var(--link); }
   }
-  footer { margin-top: 36px; padding-top: 16px; border-top: 1px solid #2A2A34; }
-  .site-foot { font-size: 13px; color: #93939F; }
+  footer { margin-top: 36px; padding-top: 16px; border-top: 1px solid var(--line); }
+  .site-foot { font-size: 13px; color: var(--muted); }
   .site-foot a { display: inline-block; min-height: 24px; line-height: 24px; }
 </style>
 </head>

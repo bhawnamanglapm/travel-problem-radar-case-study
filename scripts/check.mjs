@@ -3,6 +3,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
+import { SELF_CONTAINED, brandBlock } from "./sync-brand.mjs";
 
 const failures = [];
 const check = (ok, label) => {
@@ -369,6 +370,38 @@ for (const f of mdFiles("pm")) {
 }
 check(pmLinks.length > 0 && pmBroken.length === 0,
   `pm/ relative links and #headings resolve (${pmLinks.length} links)${pmBroken.length ? ": " + pmBroken.join("; ") : ""}`);
+
+// 8. Brand colors (brand.css). The pages that may load another file link it; the self-contained ones hold its
+// tokens inline, exactly as scripts/sync-brand.mjs writes them; the old neon theme is gone; every text color
+// passes WCAG AA (4.5:1) on each surface it sits on, in light and in dark.
+const brandCss = readFileSync("brand.css", "utf8");
+for (const [f, href] of [["index.html", "brand.css"], ["demo/index.html", "../brand.css"], ["live/index.html", "../brand.css"]])
+  check(readFileSync(f, "utf8").includes(`<link rel="stylesheet" href="${href}" />`), `${f} links ${href}`);
+check(/\bcp -r [^&]*\bbrand\.css\b[^&]* public\//.test(siteBuild), "build:site copies brand.css into public/");
+const block = brandBlock(brandCss);
+const stale = SELF_CONTAINED.filter((f) => !readFileSync(f, "utf8").includes(block));
+check(!/@import|family=/.test(block) && stale.length === 0,
+  `the self-contained pages hold brand.css's tokens inline, with no import${stale.length ? " (stale: " + stale.join(", ") + "; run npm run sync:brand)" : ""}`);
+const themed = ["index.html", "demo/index.html", "live/index.html", ...SELF_CONTAINED, "travel-problem-radar.jsx", "api/_lib/http.js"];
+const neon = themed.filter((f) => /#(FF2E88|C6FF3D|0B0B0D)\b/i.test(readFileSync(f, "utf8")));
+check(neon.length === 0, `no page keeps the old neon colors${neon.length ? " (" + neon.join(", ") + ")" : ""}`);
+const tokens = (css) => Object.fromEntries([...css.matchAll(/(--[\w-]+):\s*(#[0-9a-f]{6})/gi)].map((m) => [m[1], m[2]]));
+const lightTokens = tokens(brandCss.slice(0, brandCss.indexOf("@media")));
+const modes = { light: lightTokens, dark: { ...lightTokens, ...tokens(brandCss.slice(brandCss.indexOf("@media"))) } };
+const luminance = (hex) => {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+const contrast = (a, b) => { const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+const onSurfaces = ["--text", "--text-2", "--muted", "--faint", "--link", "--accent-text", "--high", "--medium", "--error",
+  "--cat-traveler", "--cat-gov", "--cat-web", "--cat-industry"];
+const pairs = [...onSurfaces.flatMap((fg) => ["--bg", "--surface", "--surface2"].map((bg) => [fg, bg])),
+  ["--on-primary", "--primary"], ["--on-primary", "--primary-hover"], ["--on-accent", "--accent"]];
+for (const [mode, t] of Object.entries(modes)) {
+  const low = pairs.filter(([fg, bg]) => !t[fg] || !t[bg] || contrast(t[fg], t[bg]) < 4.5)
+    .map(([fg, bg]) => `${fg} on ${bg}` + (t[fg] && t[bg] ? ` ${contrast(t[fg], t[bg]).toFixed(2)}:1` : " (missing)"));
+  check(low.length === 0, `brand.css ${mode}: every text color passes 4.5:1 (${pairs.length} pairs)${low.length ? ": " + low.join("; ") : ""}`);
+}
 
 console.log(failures.length ? `\n${failures.length} failure(s)` : "\nAll checks passed.");
 process.exit(failures.length ? 1 : 0);

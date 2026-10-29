@@ -1,0 +1,31 @@
+/* Pehchan brand tokens, shared by every page. Values from pehchanthetraveller.com's own stylesheet (read
+   2026-10-29); the ones it has no value for are derived, and every text pair passes WCAG 4.5:1 (scripts/check.mjs).
+   Light by default, dark when the visitor's system asks for it, as on the brand site. */
+@import url('https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=Italiana&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  color-scheme: light dark;
+  --bg: #f6f9f8; --bg2: #eef4f2; --surface: #ffffff; --surface2: #f6f9f8;
+  --line: #d6e1df; --line2: #b9cac7;
+  --text: #0f2924; --text-2: #2f4a45; --muted: #516763; --faint: #5f736f;
+  --primary: #1d4e45; --primary-hover: #163d36; --on-primary: #f6f9f8; --link: #1d4e45;
+  --accent: #f5a524; --on-accent: #0f2924; --accent-text: #a15c07;
+  --high: #b91c1c; --medium: #a15c07; --error: #b91c1c;
+  --cat-traveler: #b4441c; --cat-gov: #1d4e45; --cat-web: #2563eb; --cat-industry: #6d28d9;
+  --display: 'Inter Tight', system-ui, -apple-system, sans-serif;
+  --body: 'Inter Tight', system-ui, -apple-system, sans-serif;
+  --wordmark: 'Italiana', Georgia, serif;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0c1816; --bg2: #10201d; --surface: #142421; --surface2: #1b2f2b;
+    --line: #293d39; --line2: #3a524d;
+    --text: #ecf3f2; --text-2: #c9d6d4; --muted: #a4b7b4; --faint: #8fa39f;
+    --primary: #1e5248; --primary-hover: #25665a; --on-primary: #ecf3f2; --link: #5fbfa9;
+    --accent: #f5a524; --on-accent: #0f2924; --accent-text: #f5a524;
+    --high: #f87171; --medium: #f5a524; --error: #f87171;
+    --cat-traveler: #f08a5d; --cat-gov: #5fbfa9; --cat-web: #7aa7ff; --cat-industry: #b79cff;
+  }
+}
