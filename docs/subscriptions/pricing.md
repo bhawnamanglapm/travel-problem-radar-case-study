@@ -33,7 +33,7 @@ sign-up first, payments only if people actually sign up.
 | Email digest | No | Teaser once a day: counts and headlines, a link to sign in | Full digest 1 to 5 times a day, the member's choice (default 2, T32) |
 | Choose categories | No | No | Yes (built, T14) |
 | Sign in | — | By an emailed link, no password | By an emailed link, no password |
-| Price | Free | Free | ₹299 a month, no yearly plan at launch ([final Pro plan](#final-pro-plan-2026-10-24)) |
+| Price | Free | Free | ₹1 a month or ₹1 a year, live since go-live ([decision log](../decisions.md), 2026-10-29). Was ₹299 a month in the [final Pro plan](#final-pro-plan-2026-10-24) |
 
 A "Team" tier is out of scope until someone other than the owner asks for it.
 
@@ -54,6 +54,8 @@ IST), though GitHub can start scheduled runs late.
 >
 > **Simplified by the owner on 2026-10-26:** one Pro price whatever categories and emails a day are chosen, paid
 > monthly or yearly (₹1 each while testing). No 3 or 6 month plans.
+>
+> **Set by the owner on 2026-10-29:** ₹1 a month and ₹1 a year is the real price for now, not only a test price.
 
 > **Decided by the owner on 2026-10-24** ([decision log](../decisions.md)). It is phase 1 of the tier plan below.
 > Payments are still off (`plan.json` `paid: false`) until T27. The tasks that carry it out are
