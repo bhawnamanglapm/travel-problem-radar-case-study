@@ -33,7 +33,10 @@ out the [final Pro plan](../pricing.md#final-pro-plan-2026-10-24): the owner's l
 after launch. T32 (added 2026-10-24) lets each Pro member choose 1 to 5 emails a day and replaces T28's fixed 2 a
 day. T33 to T35 (added 2026-10-25, at the owner's request) make Pro one plan the member builds and pays for
 (categories and emails a day chosen freely, one price paid monthly or yearly, simplified 2026-10-26), add renewal, and keep the sweep slots right when GitHub runs
-late. T33 brings forward the tier decision T31 had left until after launch.
+late. T33 brings forward the tier decision T31 had left until after launch. Phase 5 (T36 to T41, added 2026-10-29)
+improves the board itself: a detail panel, areas, search across sweeps, saved problems, share links and areas in Pro
+email. Its ideas came from a comparison with Mindtrip (mindtrip.ai), read from public write-ups because its site
+didn't render in a headless browser. Each one is built only when the owner says go.
 
 ```mermaid
 flowchart TD
@@ -88,6 +91,14 @@ flowchart TD
   subgraph P4["Phase 4: after go-live"]
     T31["T31 Measure, then decide on tiers"]
   end
+  subgraph P5["Phase 5: board UX"]
+    T36["T36 Problem detail panel + item index"]
+    T37["T37 Areas: filter by part of the world"]
+    T38["T38 Search all sweeps, filters in the URL"]
+    T39["T39 Saved problems (Pro)"]
+    T40["T40 Share one problem"]
+    T41["T41 Areas in Pro email"]
+  end
   T00 --> T04
   T01 --> T02
   T02 --> T05 & T06 & T07 & T09
@@ -111,6 +122,8 @@ flowchart TD
   T30 --> T22
   T27 --> T31
   T29 -.-> T31
+  T36 --> T39 & T40
+  T37 --> T38 & T41
 ```
 
 **Pro before payments.** Phase 1 builds both plans. Until Phase 2, the owner grants Pro by hand with the admin
@@ -157,6 +170,12 @@ themselves. It is built only if the Phase 1 numbers pass the owner's gate ([pric
 | [T33](T33-pro-plan-builder.md) | One Pro plan: categories (one, several, all) and 1 to 5 emails a day, one price, paid monthly or yearly; test mode on an up-to-date `staging` first | Owner + Dev | L | Owner inputs P1 to P5, T14, T32 |
 | [T34](T34-renew-pro.md) | Renewing Pro: resume a cancelled plan, renew after it ends, warn before a plan that won't renew ends | Dev | M | T22, T33 |
 | [T35](T35-sweep-slots-on-time.md) | Sweep slots that survive GitHub's late runs: the due slot sent by the workflow, one sweep per slot | Dev | S | — |
+| [T36](T36-problem-detail-panel.md) | Problem detail panel: full fields, "first seen" and "in N sweeps" from a new `radar:items` index, `#p=<id>` deep link | Dev | M | — |
+| [T37](T37-areas.md) | Areas: a fixed area list, `areaOf(region)` in the jsx and the server, area chips and an overview strip on the board | Dev | M | — |
+| [T38](T38-search-all-sweeps.md) | Search all saved sweeps; `?q=`, `?cat=`, `?area=` in the URL; a search box on the home page | Dev | M | T37 (for `?area=`) |
+| [T39](T39-saved-problems.md) | Saved problems for Pro: a star on each card, a Saved tab, up to 100 on the account record | Dev | M | T36 |
+| [T40](T40-share-a-problem.md) | Share one problem: `/p/<sweep>/<item>` with a preview card; headline-level fields for non-Pro | Dev | M | T36 |
+| [T41](T41-email-areas.md) | Pro email: choose areas as well as categories | Dev | M | T37 |
 
 ## Decisions to settle before or during the build (OWNER INPUT NEEDED)
 
@@ -174,6 +193,12 @@ last column says what changes if the owner picks otherwise. Record each final ch
 | D7 | Cap on subscribers (`MAX_SUBSCRIBERS`) | No default: unset means sign-ups are closed. **Owner set `5000`** (above the free Resend quota; see T00) | The owner must set it from the quota formula in [pricing.md](../pricing.md) | T05 |
 | D8 | Domain and sender name | Domain `pehchanthetraveller.com` (verified in Resend, DMARC set). Sender `hello@pehchanthetraveller.com` | Required: the shared Resend sender cannot reach other people | T00 |
 | D9 | Confirm link: one click, or a page with a button? | A page with a **Confirm** button that posts | Mail security scanners open links in emails, which would confirm addresses nobody asked to subscribe | T06 |
+| O1 | Which areas? | Global, Asia, Europe, North America, Latin America, Middle East & Africa, Oceania, Other | Few enough for one row of chips; covers every region in the sample sweep | T37 |
+| O2 | Are Global items always in area-filtered emails? | Yes | A worldwide problem affects every area | T41 |
+| O3 | What does a non-Pro visitor see on a shared problem? | Headline, category, source name, region, date, severity | The same as the free teaser email already shows | T40 |
+| O4 | Can search engines index shared problem pages? | No (`noindex`) | Keeps Pro content and old headlines out of search results; easy to turn on later | T40 |
+| O5 | Most saved problems per account | 100 | Keeps the account record small | T39 |
+| O6 | Does choosing areas change Pro's price? | No | It narrows the email; it costs nothing extra to run | T41 |
 
 ## Where these tasks differ from the draft designs
 
