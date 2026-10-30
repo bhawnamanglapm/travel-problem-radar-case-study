@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CATS, KEY_INDEX, sweepKey } from "../api/_lib/radar.js";
 import { parseCsv } from "./compare-models.mjs";
-import { buildReview, dateRange, main, pickItems, readSweeps, recent, RUBRIC, score } from "./score-items.mjs";
+import { buildReview, dateRange, main, pickItems, readSweeps, recent, RECENT_DAYS, RUBRIC, score } from "./score-items.mjs";
 import { check, finish, memStorage } from "./test-helpers.mjs";
 
 const [A, B, C, D] = CATS.map((c) => c.key);
@@ -25,12 +25,15 @@ const item = (cat, n, over = {}) => ({
   check(d("") === null && d("Recent") === null && d("Octember 2026") === null && d("31 Feb 2026") === null && d("2026-13") === null && d("Q3 2026") === null,
     "score: a date that can't be read gives null");
   const found = "2026-10-29T16:58:29.556Z";
-  check(recent("Oct 2026", found) === "yes" && recent("29 Oct 2026", found) === "yes", "score: this month is recent");
-  check(recent("Aug 2026", found) === "no" && recent("Jul 2026", found) === "no", "score: a month wholly older than 30 days is not");
-  check(recent("Sep 2026", found) === "unknown", "score: a month across the 30-day line is unknown, not passed or failed");
+  check(RECENT_DAYS === 60, "score: recent is the 60-day window the site promises");
+  check(recent("Oct 2026", found) === "yes" && recent("29 Oct 2026", found) === "yes" && recent("Sep 2026", found) === "yes",
+    "score: this month and last are recent");
+  check(recent("Jul 2026", found) === "no" && recent("Jun 2026", found) === "no", "score: a month wholly older than 60 days is not");
+  check(recent("Aug 2026", found) === "unknown", "score: a month across the 60-day line is unknown, not passed or failed");
+  check(recent("2026-08-31", found) === "yes" && recent("2026-08-29", found) === "no", "score: a source's exact day settles it either side of the line");
   check(recent("Nov 2026", found) === "unknown" && recent("Recent", found) === "unknown" && recent("Oct 2026", "") === "unknown",
     "score: a date after it was found, an unreadable date or no found time is unknown");
-  check(recent("Sep 2026", "2026-10-01T00:00:00Z") === "yes" && recent("Sep 2026", "2026-10-31T00:00:00Z") === "no",
+  check(recent("Aug 2026", "2026-09-30T00:00:00Z") === "yes" && recent("Aug 2026", "2026-10-31T00:00:00Z") === "no",
     "score: the line is measured from when the item was found");
 }
 
@@ -65,8 +68,8 @@ const item = (cat, n, over = {}) => ({
 // ---- the review file and the score
 {
   const items = [
-    { ...item(A, 1, { title: '=HYPERLINK("x")', summary: 'a "quoted", line' }), found: "2026-10-29T00:00:00.000Z" },
-    { ...item(B, 1, { date: "Aug 2026" }), found: "2026-10-29T00:00:00.000Z" },
+    { ...item(A, 1, { title: '=HYPERLINK("x")', summary: 'a "quoted", line', date: "Jul 2026", sourceDate: "2026-10-20" }), found: "2026-10-29T00:00:00.000Z" },
+    { ...item(B, 1, { date: "Jul 2026" }), found: "2026-10-29T00:00:00.000Z" },
     { ...item(C, 1, { link: "" }), found: "2026-10-29T00:00:00.000Z" },
   ];
   const csv = buildReview(items, { [items[0].link]: "ok", [items[1].link]: "blocked" });
@@ -74,6 +77,8 @@ const item = (cat, n, over = {}) => ({
   check(head.slice(-RUBRIC.length).join() === RUBRIC.map((r) => r.col).join(), "score: the rubric columns, in the README's order");
   const col = (name) => rows.map((r) => r[head.indexOf(name)]);
   check(col("link_loads").join() === "ok,blocked,none" && col("recent").join() === "yes,no,yes", "score: the link and date columns are filled in");
+  check(col("source_date").join() === "2026-10-20,," && col("date")[0] === "Jul 2026",
+    "score: recent uses the source's date when the sweep dated it, over the model's own date, and the file shows both");
   check(col("supports_summary").every((v) => v === "") && col("user_and_build").every((v) => v === ""), "score: the judged columns are left empty");
   check(rows[0][head.indexOf("title")] === `'=HYPERLINK("x")` && rows[0][head.indexOf("summary")] === 'a "quoted", line', "score: quotes and commas survive; a formula is not run");
 
