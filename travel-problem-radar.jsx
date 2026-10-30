@@ -272,6 +272,34 @@ const CSS = `
 .tpr-save-note { margin:0; font-size:12.5px; color:var(--accent-text); line-height:1.45; }
 .tpr-saved .tpr-scope-line:focus { outline:none; }
 .tpr-saved .tpr-card { box-shadow:inset 3px 0 0 var(--cat); padding-left:19px; }
+/* ---- ask the board, and useful / not useful (T43) ---- */
+.tpr-ask { background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:14px 16px; margin-bottom:18px; }
+.tpr-ask-l { display:block; font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
+.tpr-ask-row { display:flex; flex-wrap:wrap; gap:8px; }
+.tpr-ask-row .tpr-search { margin-left:0; flex:1 1 260px; }
+.tpr-ask-cat { background:var(--surface); border:1px solid var(--line); color:var(--text); font-family:var(--body); font-size:13px;
+  padding:9px 10px; border-radius:9px; }
+.tpr-ask-cat:focus-visible { outline:2px solid var(--link); outline-offset:2px; }
+.tpr-ask-go { background:var(--primary); border:1px solid var(--primary); color:var(--on-primary); font-family:var(--body);
+  font-size:13px; font-weight:600; padding:9px 16px; border-radius:9px; cursor:pointer; }
+.tpr-ask-go[aria-disabled="true"] { opacity:.6; cursor:progress; }
+.tpr-ask-go:focus-visible { outline:2px solid var(--link); outline-offset:2px; }
+.tpr-ask-help { margin:8px 0 0; font-size:12.5px; color:var(--text-2); line-height:1.45; }
+.tpr-ask-note { margin:10px 0 0; font-size:13px; color:var(--accent-text); }
+.tpr-ask-answer { margin-top:12px; border-top:1px solid var(--line); padding-top:12px; }
+.tpr-ask-answer > p { margin:0 0 10px; font-size:14px; line-height:1.55; color:var(--text); white-space:pre-wrap; }
+.tpr-cite { font-family:var(--mono); font-size:11px; color:var(--link); }
+.tpr-ask-src { margin:0; padding-left:22px; font-size:13px; color:var(--text-2); display:grid; gap:6px; }
+.tpr-ask-src a { color:var(--link); }
+.tpr-ask-src .tpr-more { margin:0 0 0 6px; padding:2px 8px; font-size:11.5px; }
+.tpr-ask-warn { margin:10px 0 0; font-size:11.5px; color:var(--muted); }
+.tpr-vote { display:flex; gap:6px; flex-wrap:wrap; }
+.tpr-vote-b { background:none; border:1px solid var(--line2); color:var(--text-2); font-family:var(--body); font-size:12px;
+  padding:4px 9px; border-radius:8px; cursor:pointer; }
+.tpr-vote-b:hover { border-color:var(--link); color:var(--link); }
+.tpr-vote-b.on { color:var(--accent-text); border-color:color-mix(in srgb, var(--accent) 55%, var(--line2)); }
+.tpr-vote-b[aria-disabled="true"] { opacity:.55; cursor:progress; }
+.tpr-vote-b:focus-visible { outline:2px solid var(--link); outline-offset:2px; }
 @media (max-width:640px){
   .tpr-dlg { top:auto; bottom:0; margin:0; width:100%; height:auto; max-height:88vh; border-left:0; border-top:1px solid var(--line2);
     border-radius:16px 16px 0 0; }
@@ -606,6 +634,20 @@ const SAVE_NOTES = {
   unsave: "Couldn’t remove it. Try again.",
 };
 
+// Ask the board and votes (T43): live board only, for Pro, when the account API says asking is on.
+const ASK_NOTES = {
+  none: "Nothing on the board answers that. Try other words, or another category.",
+  unchecked: "Couldn’t answer from the board with sources. Try rephrasing.",
+  limit: "That’s all the questions for today. More tomorrow (UTC).",
+  pro: "Asking the board is part of Pro.",
+  off: "Asking the board is switched off for now.",
+  short: "Ask a question of at least 3 characters.",
+  error: "Couldn’t get an answer. Try again.",
+};
+const VOTE_NOTE = "Couldn’t record that. Try again.";
+// The answer as text, each [n] marked so it reads as a citation; never HTML.
+const citeText = (text) => String(text).split(/(\[\d+\])/).map((part, i) => (/^\[\d+\]$/.test(part) ? <span className="tpr-cite" key={i}>{part}</span> : part));
+
 const sweepDay = (at) => new Date(at).toLocaleDateString([], { day: "numeric", month: "short" });
 
 // The date web search gave an item's source page ("22 Oct", with the year when it isn't this year's or `withYear`),
@@ -685,6 +727,10 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
   const [saving, setSaving] = useState(() => new Set()); // ids waiting for the server
   const [saveNote, setSaveNote] = useState(null); // { id, text } under that problem's star
   const [shareNote, setShareNote] = useState(null); // { id, text, url } under the panel's Share button (T40)
+  const [askQ, setAskQ] = useState("");
+  const [askCat, setAskCat] = useState("");
+  const [ask, setAsk] = useState({ state: "idle", res: null, note: null }); // T43
+  const [voting, setVoting] = useState(() => new Set()); // ids whose vote is waiting for the server
   const shareTimer = useRef(null);
   const savedTopRef = useRef(null);
   const dlgRef = useRef(null);
@@ -785,13 +831,71 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
       const r = await accountCall();
       // Subscriptions paused (SUBSCRIPTIONS_ENABLED off, as on Preview) is "off" too: nobody can save then.
       const paused = r.status === 503 && r.body && r.body.error === "subscriptions are paused";
-      if (r.status === 200 && r.body && Array.isArray(r.body.saved)) setSaved({ state: "done", items: r.body.saved });
+      if (r.status === 200 && r.body && Array.isArray(r.body.saved)) {
+        setSaved({ state: "done", items: r.body.saved, votes: r.body.votes && typeof r.body.votes === "object" ? r.body.votes : {},
+          ask: r.body.ask === true, askLeft: typeof r.body.askLeft === "number" ? r.body.askLeft : null });
+      }
       else setSaved({ state: [401, 402, 403].includes(r.status) || paused ? "off" : "error", items: [] });
     } catch (e) { setSaved({ state: "error", items: [] }); }
   }
 
   const canSave = Boolean(saved && saved.state === "done");
   const savedIds = new Set(canSave ? saved.items.map((s) => s.id) : []);
+  // Votes and Ask (T43): only on the live board, where the saved list loading means a signed-in Pro.
+  const canVote = live && canSave;
+  const votes = canVote && saved.votes ? saved.votes : {};
+  const canAsk = canVote && saved.ask === true;
+
+  async function castVote(p, sweepId, v) {
+    if (voting.has(p.id) || !canVote) return;
+    const next = votes[p.id] === v ? 0 : v;
+    setSaveNote(null);
+    setVoting((x) => new Set(x).add(p.id));
+    let ok = false;
+    try {
+      const r = await accountCall({ action: "vote", sweepId: String(sweepId), itemId: p.id, vote: next });
+      if (r.status === 200 && r.body && r.body.votes) { ok = true; setSaved((cur) => ({ ...cur, votes: r.body.votes })); }
+    } catch (e) {}
+    setVoting((x) => { const n = new Set(x); n.delete(p.id); return n; });
+    if (!ok) setSaveNote({ id: p.id, text: VOTE_NOTE });
+  }
+  const voteRow = (p, sweepId) => {
+    if (!canVote) return null;
+    const mine = votes[p.id] || 0;
+    const wait = voting.has(p.id) || undefined;
+    return (
+      <div className="tpr-vote" role="group" aria-label={"Was this useful? " + p.title}>
+        <button className={"tpr-vote-b" + (mine === 1 ? " on" : "")} type="button" aria-pressed={mine === 1} aria-disabled={wait} onClick={() => castVote(p, sweepId, 1)}>
+          <span aria-hidden="true">👍</span> Useful
+        </button>
+        <button className={"tpr-vote-b" + (mine === -1 ? " on" : "")} type="button" aria-pressed={mine === -1} aria-disabled={wait} onClick={() => castVote(p, sweepId, -1)}>
+          <span aria-hidden="true">👎</span> Not useful
+        </button>
+      </div>
+    );
+  };
+
+  async function askBoard(e) {
+    e.preventDefault();
+    if (ask.state === "asking") return;
+    const q = askQ.replace(/\s+/g, " ").trim();
+    if (q.length < 3) { setAsk({ state: "done", res: null, note: ASK_NOTES.short }); return; }
+    setAsk({ state: "asking", res: null, note: null });
+    let next = { state: "done", res: null, note: ASK_NOTES.error };
+    try {
+      const r = await accountCall({ action: "ask", question: q, cat: askCat || null });
+      const b = r.body || {};
+      const left = r.status === 429 ? 0 : typeof b.left === "number" ? b.left : null;
+      if (left !== null) setSaved((cur) => ({ ...cur, askLeft: left }));
+      if (r.status === 200) {
+        next = { state: "done", res: b.status === "answered" || (b.status === "none" && b.answer) ? b : null,
+          note: b.status === "unchecked" ? ASK_NOTES.unchecked : b.status === "none" && !b.answer ? ASK_NOTES.none : null };
+      } else if (r.status === 429) next.note = ASK_NOTES.limit;
+      else if (r.status === 402) next.note = ASK_NOTES.pro;
+      else if (r.status === 503) next.note = ASK_NOTES.off;
+    } catch (err) {}
+    setAsk(next);
+  }
 
   async function toggleSave(p, sweepId, sweepAt) {
     if (saving.has(p.id) || !canSave) return;
@@ -1197,6 +1301,49 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
         </div>
       )}
 
+      {/* Ask the board (T43) */}
+      {status === "done" && view === "board" && canAsk && (
+        <form className="tpr-ask" onSubmit={askBoard}>
+          <label className="tpr-ask-l" htmlFor="tpr-ask-q">Ask the board</label>
+          <div className="tpr-ask-row">
+            <input id="tpr-ask-q" className="tpr-search" type="text" maxLength={300} autoComplete="off"
+              placeholder="e.g. What’s going wrong with rail refunds in India?" value={askQ} onChange={(e) => setAskQ(e.target.value)} />
+            <select className="tpr-ask-cat" aria-label="Category to ask about" value={askCat} onChange={(e) => setAskCat(e.target.value)}>
+              <option value="">All categories</option>
+              {CATS.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+            </select>
+            <button className="tpr-ask-go" type="submit" aria-disabled={ask.state === "asking" || undefined}>{ask.state === "asking" ? "Asking…" : "Ask"}</button>
+          </div>
+          <p className="tpr-ask-help">
+            Answered by AI only from problems the radar has saved, each claim citing one. Naming a place (India, Europe…) searches only there.
+            {typeof saved.askLeft === "number" && ` ${saved.askLeft} ${saved.askLeft === 1 ? "question" : "questions"} left today.`}
+          </p>
+          <div role="status" aria-live="polite">
+            {ask.note && <p className="tpr-ask-note">{ask.note}</p>}
+            {ask.res && ask.res.answer && (
+              <div className="tpr-ask-answer">
+                <p>{citeText(ask.res.answer)}</p>
+                {Array.isArray(ask.res.items) && ask.res.items.length > 0 && (
+                  <ol className="tpr-ask-src">
+                    {ask.res.items.map((it) => {
+                      const full = searchItems.find((p) => p.id === it.id) || problems.find((p) => p.id === it.id);
+                      return (
+                        <li key={it.id} value={it.n}>
+                          {it.title}{" "}
+                          {it.link ? <a href={it.link} target="_blank" rel="noopener noreferrer">{it.source || "Source"} ↗</a> : it.source}
+                          {full && <button className="tpr-more" type="button" onClick={() => openDetail(full)}>Details<span className="tpr-sr">: {it.title}</span></button>}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                )}
+                <p className="tpr-ask-warn">Written by AI from the items listed. Check the sources before you rely on it.</p>
+              </div>
+            )}
+          </div>
+        </form>
+      )}
+
       {status === "done" && view === "board" && showAreaTiles && (
         <div className="tpr-areas" role="group" aria-label="Areas">
           {areaList.map((a) => (
@@ -1282,6 +1429,7 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
                       )}
                       {starNote(p)}
                       {cardBody(p)}
+                      {voteRow(p, all ? p.sweep : selId)}
                     </div>
                   ))}
                 </div>

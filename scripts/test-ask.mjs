@@ -223,6 +223,7 @@ check(checkAnswer(null, 2).ok === false && checkAnswer({ answer: "" }, 2).ok ===
   r = await w.voteOn("gov_policy:visa", 1);
   r = await w.call({ method: "GET", query: { action: "saved" } });
   check(r.code === 200 && r.json().votes["gov_policy:visa"] === 1 && r.json().votes["traveler_pain:rail-refunds"] === -1, "vote: the saved GET returns the member's votes");
+  check(r.json().ask === true && r.json().askLeft === 20, "saved GET: says whether the member can ask, and how many questions are left");
   r = await w.voteOn("traveler_pain:rail-refunds", 0);
   check(r.code === 200 && !("traveler_pain:rail-refunds" in r.json().votes) && (await w.get()).votes.length === 1, "vote: 0 removes the vote");
   check((await w.voteOn("traveler_pain:made-up", 1)).code === 404 && (await w.voteOn("traveler_pain:rail-refunds", 1, { sweepId: "1700000000000" })).code === 404,

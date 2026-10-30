@@ -637,7 +637,7 @@ const accountView = (record, t, env) => ({
 // POST {action: "set-password", password} or {action: "remove-password"}, signed in only (2026-10-27).
 // Saved problems (T39), signed in only: GET ?action=saved lists them (Pro), POST {action: "save", sweepId, itemId}
 // copies one from its sweep (Pro; 409 saved_full at MAX_SAVED) and POST {action: "unsave", itemId} removes one.
-// The saved GET also returns the member's votes, { itemId: 1 | -1 }.
+// The saved GET also returns the member's votes, { itemId: 1 | -1 }, and whether they can ask (T43).
 // Ask the board and votes (T43), signed in only: POST {action: "ask", question, cat?} answers from the search file
 // (Pro, ASK_ENABLED; 429 ask_limit after ASK_PER_DAY); POST {action: "vote", sweepId, itemId, vote: 1 | -1 | 0}
 // marks an item useful or not (Pro; 0 removes the vote).
@@ -694,7 +694,7 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
         if (!session || session.id !== record.id) return sendJson(res, 403, { error: "sign_in_first" });
         if (req.method === "POST" && !originOk(req)) return sendJson(res, 403, { error: "wrong_origin" });
         const pro = effectivePlan(record, t) === "pro";
-        if (getAction === "saved") return pro ? sendJson(res, 200, { saved: savedOf(record), votes: voteMap(record) }) : sendJson(res, 402, { error: "pro_only" });
+        if (getAction === "saved") return pro ? sendJson(res, 200, { saved: savedOf(record), votes: voteMap(record), ask: askOn(env), askLeft: Math.max(0, askPerDay(env) - askedToday(record, utcDay(t))) }) : sendJson(res, 402, { error: "pro_only" });
         const ids = (r) => savedOf(r).map((s) => s.id);
         if (typeof itemId !== "string" || !itemId || itemId.length > 200) return sendJson(res, 400, { error: "bad_item" });
         if (action === "unsave") {
