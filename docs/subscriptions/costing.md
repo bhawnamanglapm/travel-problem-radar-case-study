@@ -528,7 +528,8 @@ Not answered here. Ask a chartered accountant in India:
 |---|---|---|---|
 | 1 | Sweeps a day | For 7 days, count the sweeps in the History tab on `/live/`. Look for one at about 01:30 UTC (07:00 IST). Or use the Anthropic Console usage page | Sets the AI cost: 4, 5 or 6 a day |
 | 2 | Real Anthropic spend | Console usage and cost for a full month, against 152 × $0.21 | Confirms the per-sweep figure, including Vercel-cron sweeps, which no log shows |
-| 3 | More sweep samples | Read `usage` from 20 or more run logs (see [How to re-measure](#how-to-re-measure)) | 5 runs is a small sample |
+| 3 | More sweep samples | `scripts/cost-per-run.mjs --days 30` prices every sweep in the LLM logs (see [How to re-measure](#how-to-re-measure)) | 5 runs is a small sample |
+| 3a | Cost per category | The same script's per-category lines: average a sweep and share of the total | Prices a plan with fewer categories (T29) |
 | 4 | Emails a day | The Resend dashboard, including sign-ins and confirmations. Compare with the estimated sends here | Shows when the plan steps up |
 | 5 | Vercel usage | The usage page after moving to Pro: invocations, CPU, Blob operations | Confirms the $20 credit covers it |
 | 6 | Razorpay fee | The settlement report for the first live charges | Confirms 3.42% |
@@ -635,11 +636,14 @@ Not answered here. Ask a chartered accountant in India:
 
 ## How to re-measure
 
-1. Open the `sweep` workflow in the repository's Actions tab, and pick a few successful scheduled runs.
-2. In each run's log, find `"usage":{"input":…,"output":…,"searches":…}` in the sweep's reply. Or run
-   `gh run view <run id> --log | grep -o '"usage":{[^}]*}'`.
-3. Cost per run = input × input price + output × output price + searches × search price, at the current
-   [Anthropic prices][anthropic].
+1. Run `node --env-file=.env.local scripts/cost-per-run.mjs --days 30` on your own machine. It reads the private
+   LLM logs (kept 30 days) and only reads. It prints each sweep's cost, the average (all sweeps and scheduled only),
+   the average and share for each category, what failed calls cost, and the average tokens and searches.
+   `--out DIR` also writes `DIR/sweeps.csv`.
+2. It prices each call's reported usage with the list prices in `scripts/compare-models.mjs`
+   (input × input price + output × output price + searches × search price). Check those against the current
+   [Anthropic prices][anthropic] first. A call it can't price (no usage, or a model with no price) is listed, not guessed.
+3. It is list price, not the invoice. Compare a month with the Anthropic Console (checklist row 2).
 4. Recheck the Vercel, Resend and Razorpay pages and the exchange rate. Then redo the fixed cost, the break-even and
    the stress tables.
 

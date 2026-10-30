@@ -11,6 +11,17 @@
 > Added 2026-10-24 with the [final Pro plan](../pricing.md#final-pro-plan-2026-10-24). Optional: nothing in the
 > launch waits for it.
 
+> **Done 2026-10-30, through the private LLM logs, not the sweep record.** Since this task was written, every sweep
+> saves an LLM log (`radar:llmlog:<id>`, kept 30 days) with each call's category, model and usage. The sweep record is
+> served to anyone by `/api/data`, so usage stays out of it. Instead:
+>
+> - each log's summary has `usageByCat` (a failed call that reported usage included, because it was billed)
+> - `scripts/cost-per-run.mjs` prices every call in the logs and prints each category's average cost and share.
+>   It reads each call's usage, so logs from before `usageByCat` count too.
+>
+> The criteria below are met in that form. The sweep record and `/api/data` are unchanged. See
+> [costing.md](../costing.md#how-to-re-measure).
+
 ## Why
 
 The sweep sums the token and search usage of its 4 calls into one total (`addUsage` in

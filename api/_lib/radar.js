@@ -406,9 +406,12 @@ export async function runDailySweep({ storage, scan, now = () => Date.now(), man
   const slotFields = slot ? { slot: slot.hour, slotAt: new Date(slot.at).toISOString() } : {};
   // First of the UTC day by the saved sweeps, read before this one joins them.
   const tidy = !hist.some((e) => String(e.at).slice(0, 10) === at.slice(0, 10));
+  // Usage per category, for the cost per run (T29). Private like the rest of the log; a failed call
+  // that reported usage is in it, because it was billed.
+  const usageByCat = Object.fromEntries(calls.filter((c) => c.usage).map((c) => [c.cat, c.usage]));
   const writeLog = (status) => saveLlmLog(storage, id, {
     id, at, status, ...(manual ? { manual: true } : {}), ...slotFields,
-    summary: { calls: calls.length, failed: calls.filter((c) => c.error).length, ...usage, links },
+    summary: { calls: calls.length, failed: calls.filter((c) => c.error).length, ...usage, links, usageByCat },
     calls,
   }, { t, tidy });
 
