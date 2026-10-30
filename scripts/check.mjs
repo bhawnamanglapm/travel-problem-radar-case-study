@@ -78,6 +78,10 @@ check(/\bcp -r [^&]*\badmin\b[^&]* public\//.test(siteBuild) && /fetch\("\/api\/
   "admin/index.html ships, is self-contained and reads /api/admin");
 check(/<meta name="robots" content="noindex"/.test(adminPage) && /<meta name="referrer" content="no-referrer"/.test(adminPage) && !/@[a-z0-9-]+\.[a-z]{2,}/i.test(adminPage),
   "admin/index.html is not indexed, sends no Referer and holds no email address");
+// T41 follow-up: the admin page names the same seven areas the manage page offers, in order.
+const adminAreas = JSON.parse((adminPage.match(/var AREA_NAMES = (\[[^\]]*\]);/) || [, "[]"])[1]);
+check(JSON.stringify(adminAreas) === JSON.stringify(["Asia", "Europe", "North America", "Latin America", "Middle East & Africa", "Oceania", "Other"]) && /<th scope="col">Areas<\/th>/.test(adminPage) && /"areas", "emails_per_day"/.test(adminPage),
+  "admin/index.html shows Pro areas (the seven T41 areas, in order) as a card, a column and a CSV field");
 
 // 4c. Manage page (Vercel): self-contained, talks to /api/account, never leaks its token link.
 const manPage = existsSync("manage/index.html") ? readFileSync("manage/index.html", "utf8") : "";

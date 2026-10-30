@@ -140,6 +140,11 @@
         <p class="small" id="catsNote"></p>
       </div>
       <div class="card">
+        <h2>Pro areas</h2>
+        <div id="areas"></div>
+        <p class="small" id="areasNote"></p>
+      </div>
+      <div class="card">
         <h2>Pro emails a day</h2>
         <div id="perDay"></div>
       </div>
@@ -175,7 +180,7 @@
       <div class="scroll">
         <table>
           <thead><tr>
-            <th scope="col">Address</th><th scope="col">Status</th><th scope="col">Plan</th><th scope="col">Type</th><th scope="col" class="num">Price</th><th scope="col">Categories</th>
+            <th scope="col">Address</th><th scope="col">Status</th><th scope="col">Plan</th><th scope="col">Type</th><th scope="col" class="num">Price</th><th scope="col">Categories</th><th scope="col">Areas</th>
             <th scope="col" class="num">Emails/day</th><th scope="col">Signed up</th><th scope="col">Confirmed</th><th scope="col">Pro until</th><th scope="col">Billing</th>
           </tr></thead>
           <tbody id="rows"></tbody>
@@ -212,6 +217,8 @@
   var $ = function (id) { return document.getElementById(id); };
   var loginForm = $("login"), dash = $("dash"), statusEl = $("status");
   var CAT_NAMES = { traveler_pain: "Traveler pain", gov_policy: "Gov & policy", web_app: "Website & app", industry: "Industry" };
+  // The areas a Pro member can choose (T41): T37's areas without Global, which always comes.
+  var AREA_NAMES = ["Asia", "Europe", "North America", "Latin America", "Middle East & Africa", "Oceania", "Other"];
   var data = null;
 
   function say(el, text, isErr) { el.textContent = text; el.className = "status" + (isErr ? " err" : ""); }
@@ -222,6 +229,10 @@
   function catWords(r) {
     if (r.plan !== "pro") return "All (Free)";
     return r.cats ? r.cats.map(function (k) { return CAT_NAMES[k] || k; }).join(", ") : "All";
+  }
+  function areaWords(r) {
+    if (r.plan !== "pro") return "All (Free)";
+    return r.areas ? r.areas.join(", ") : "All";
   }
   function typeWords(r) {
     if (r.plan !== "pro") return "";
@@ -311,6 +322,9 @@
     ].join("");
     $("cats").innerHTML = meters([["All four", s.allCats]].concat(Object.keys(CAT_NAMES).map(function (k) { return [CAT_NAMES[k], s.cats[k] || 0]; })));
     $("catsNote").textContent = "Pro members only; one member can pick several. Free gets all four.";
+    var sa = s.areas || {};
+    $("areas").innerHTML = meters([["All areas", s.allAreas || 0]].concat(AREA_NAMES.map(function (a) { return [a, sa[a] || 0]; })));
+    $("areasNote").textContent = "Pro members only; one member can pick several. Worldwide problems always come. Free gets every area.";
     var perDayKeys = Object.keys(s.perDay).sort();
     $("perDay").innerHTML = perDayKeys.length ? meters(perDayKeys.map(function (k) { return [k === "default" ? "Default (2)" : k + " a day", s.perDay[k]]; })) : '<p class="small">No Pro members yet.</p>';
     $("plans").innerHTML = meters([["Monthly", s.proByPeriod.monthly], ["Yearly", s.proByPeriod.yearly], ["Granted", s.proBySource.owner]]) +
@@ -345,17 +359,18 @@
     $("rows").innerHTML = rows.length ? rows.map(function (r) {
       return "<tr><td>" + esc(r.email) + "</td><td>" + statusPill(r) + "</td><td>" + planPill(r) + "</td><td>" + esc(typeWords(r)) +
         '</td><td class="num">' + esc(r.plan === "pro" ? rupees(r.price) : "") + '</td><td class="wrap">' + esc(r.status === "pending" ? "" : catWords(r)) +
+        '</td><td class="wrap">' + esc(r.status === "pending" ? "" : areaWords(r)) +
         '</td><td class="num">' + esc(r.plan === "pro" ? (r.sweepsPerDay || "2") : "") + "</td><td>" + esc(day(r.createdAt)) + "</td><td>" + esc(day(r.confirmedAt)) +
         "</td><td>" + esc(r.plan === "pro" ? day(r.proUntil) || "No end" : "") + "</td><td>" + esc(billingWords(r)) + "</td></tr>";
-    }).join("") : '<tr><td colspan="11" class="small">No subscribers match.</td></tr>';
+    }).join("") : '<tr><td colspan="12" class="small">No subscribers match.</td></tr>';
   }
 
   function csv() {
-    var head = ["email", "status", "plan", "type", "price", "categories", "emails_per_day", "signed_up", "confirmed", "pro_until", "billing", "asked_for_pro", "emails_off"];
+    var head = ["email", "status", "plan", "type", "price", "categories", "areas", "emails_per_day", "signed_up", "confirmed", "pro_until", "billing", "asked_for_pro", "emails_off"];
     var cell = function (v) { v = String(v == null ? "" : v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
     var lines = [head.join(",")].concat(filtered().map(function (r) {
       return [r.email, r.status, r.status === "pending" ? "" : r.plan, typeWords(r), r.plan === "pro" ? r.price : "", r.status === "pending" ? "" : catWords(r),
-        r.plan === "pro" ? (r.sweepsPerDay || 2) : "", r.createdAt, r.confirmedAt, r.plan === "pro" ? r.proUntil : "", billingWords(r), r.proRequestedAt, r.emailOff].map(cell).join(",");
+        r.status === "pending" ? "" : areaWords(r), r.plan === "pro" ? (r.sweepsPerDay || 2) : "", r.createdAt, r.confirmedAt, r.plan === "pro" ? r.proUntil : "", billingWords(r), r.proRequestedAt, r.emailOff].map(cell).join(",");
     }));
     var a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([lines.join("\n") + "\n"], { type: "text/csv" }));
