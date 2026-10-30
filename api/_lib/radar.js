@@ -225,6 +225,16 @@ export function pageAgeDays(age, at = Date.now()) {
   return Number.isFinite(t) && t <= at ? (at - t) / DAY : null;
 }
 
+// "Source 22 Oct" (with the year when it isn't this year's): the date search gave an item's source page, for
+// readers. Null when the sweep couldn't date it; the caller then shows the model's own `date`.
+export function sourceLabel(p, now = Date.now()) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test((p && p.sourceDate) || "")) return null;
+  const d = new Date(p.sourceDate + "T00:00:00Z");
+  if (isNaN(d)) return null;
+  const year = d.getUTCFullYear() !== new Date(Number.isFinite(now) ? now : Date.now()).getUTCFullYear() ? { year: "numeric" } : {};
+  return "Source " + d.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC", ...year });
+}
+
 // Items whose source is older than this are dropped: the prompt asks for roughly the last 60 days.
 export const SOURCE_MAX_DAYS = 60;
 // A link compared loosely: no protocol, fragment or trailing slash.

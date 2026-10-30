@@ -2,7 +2,7 @@
 // a saved sweep, or a short notice when nothing could be saved. Optional; it runs only when
 // RESEND_API_KEY and EMAIL_TO are set. Each message has an HTML and a plain-text part.
 import { esc } from "./http.js";
-import { CATS, ERR_MAX, failedCats, failedLine } from "./radar.js";
+import { CATS, ERR_MAX, failedCats, failedLine, sourceLabel } from "./radar.js";
 
 // Resend's shared sender, so no domain of our own is needed. Resend delivers mail from it only
 // to the address the Resend account was created with; EMAIL_FROM on a verified domain lifts that.
@@ -87,7 +87,7 @@ export function buildDigestEmail({ at, problems, perCat = {}, manual = false }, 
       return;
     }
     items.forEach((p) => {
-      const meta = [p.source, p.region, p.date].filter(Boolean).join(" · ");
+      const meta = [p.source, p.region, sourceLabel(p, Date.parse(at)) || p.date].filter(Boolean).join(" · ");
       text.push(`- [${p.severity}]${p.isNew ? " NEW" : ""} ${p.title}`);
       if (p.summary) text.push(`  ${p.summary}`);
       text.push(`  ${meta}`);

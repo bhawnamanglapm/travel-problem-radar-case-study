@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { buildDigestEmail } from "../api/_lib/email.js";
 import { makeDataHandler, makeSweepHandler } from "../api/_lib/handlers.js";
 import { buildDigest } from "../api/_lib/slack.js";
-import { AREAS, CATS, KEY_ITEMS, KEY_LLMLOG_PREFIX, KEY_SEARCH, LOG_QUOTE_MAX, LOG_TITLE_MAX, areaOf, extractProblems, llmLogKey, logContent, mergeSearch, pageAgeDays, runDailySweep, scanCategory, sweepKey, trackItems, trimSeen } from "../api/_lib/radar.js";
+import { AREAS, CATS, KEY_ITEMS, KEY_LLMLOG_PREFIX, KEY_SEARCH, LOG_QUOTE_MAX, LOG_TITLE_MAX, areaOf, extractProblems, llmLogKey, logContent, mergeSearch, pageAgeDays, runDailySweep, sourceLabel, scanCategory, sweepKey, trackItems, trimSeen } from "../api/_lib/radar.js";
 import { SLOTS_BY_FREQ, dueSlot, normaliseSweepsPerDay, previousSlotAt, siteSweepsPerDay, slotOf, sweepLimits, sweepsPerDayOf } from "../api/_lib/schedule.js";
 import { check, finish, memStorage, mockRes } from "./test-helpers.mjs";
 
@@ -897,6 +897,18 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
     "no failed category: no FAILED subject and no alert");
   const bare = buildDigestEmail({ at, problems, perCat: { industry: "failed" } });
   check(bare.text.includes("  Industry: no reason given"), "a failure with no reason still says so");
+}
+
+// ---- the source date readers see: "Source 22 Oct" when the sweep dated the source, the model's date when not
+{
+  const at = "2026-10-30T06:00:00.000Z", t = Date.parse(at);
+  check(sourceLabel({ sourceDate: "2026-10-22" }, t) === "Source 22 Oct" && sourceLabel({ sourceDate: "2025-12-28" }, t) === "Source 28 Dec 2025",
+    "sourceLabel: the day and month, and the year when it isn't this year's");
+  check([{}, { sourceDate: "" }, { sourceDate: "22 Oct" }, { sourceDate: "2026-13-45" }].every((p) => sourceLabel(p, t) === null), "sourceLabel: no date, or one it can't read, gives null");
+  const p = (n, over) => ({ id: "traveler_pain:" + n, cat: "traveler_pain", title: "T" + n, summary: "", source: "Skift", link: "", region: "Europe", date: "Oct 2026", severity: "Medium", opportunity: "", ...over });
+  const m = buildDigestEmail({ at, problems: [p(1, { sourceDate: "2026-10-22" }), p(2)], perCat: {} });
+  check(m.text.includes("  Skift · Europe · Source 22 Oct\n") && m.text.includes("  Skift · Europe · Oct 2026\n") && m.html.includes("Skift · Europe · Source 22 Oct"),
+    "email: an item's line shows the source date when known, the model's date when not");
 }
 
 // ---- T32: sweeps a day. Slots, the site's number, and the handler skipping unneeded slots

@@ -568,7 +568,7 @@ const lastPlanOf = (record) => {
 // is the server's copy of the problem's own fields, so it outlives the sweep trim.
 export const MAX_SAVED = 100;
 const SWEEP_ID_RE = /^\d{10,16}$/;
-const ITEM_FIELDS = ["id", "cat", "title", "summary", "source", "link", "region", "date", "severity", "opportunity"];
+const ITEM_FIELDS = ["id", "cat", "title", "summary", "source", "link", "region", "date", "sourceDate", "severity", "opportunity"];
 const savedOf = (record) => (Array.isArray(record.saved) ? record.saved : []);
 const savedItem = (p, sweepAt) => ({
   ...Object.fromEntries(ITEM_FIELDS.map((k) => [k, typeof p[k] === "string" ? p[k] : ""])),
