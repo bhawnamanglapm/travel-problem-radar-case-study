@@ -137,6 +137,14 @@ const promisePages = ["index.html", "pricing/index.html", "subscribe/index.html"
 check(/^([0-9]|[1-2][0-9]) 0 \* \* \*$/.test(backstop) && promisePages.every((f) => !readFileSync(f, "utf8").includes("05:47 IST") && readFileSync(f, "utf8").includes("05:30 to 06:30"))
   && /id="freqNote"[^>]*>[^<]*a few hours later/.test(manPage),
   `the Vercel backstop sweeps slot 00 before 00:30 UTC (${backstop}), the first email is promised for 05:30 to 06:30 IST, and /manage/ says later ones can be hours late (BUG-008)`);
+// BUG-010: every response carries the security headers. Framing is blocked; the full CSP only reports for now, so
+// a missed Razorpay source shows in the console instead of breaking checkout. Referrer-Policy skips /api/ and /p/,
+// whose pages set a stricter one themselves (links there carry tokens).
+const hdrs = (src) => Object.fromEntries(((vercelJson.headers || []).find((h) => h.source === src) || { headers: [] }).headers.map((h) => [h.key, h.value]));
+const allHdrs = hdrs("/(.*)"), pageHdrs = hdrs("/((?!api/|p/).*)");
+check(allHdrs["X-Content-Type-Options"] === "nosniff" && allHdrs["X-Frame-Options"] === "DENY" && /frame-ancestors 'none'/.test(allHdrs["Content-Security-Policy"] || "")
+  && /https:\/\/checkout\.razorpay\.com/.test(allHdrs["Content-Security-Policy-Report-Only"] || "") && pageHdrs["Referrer-Policy"] === "strict-origin-when-cross-origin",
+  "vercel.json sends nosniff, X-Frame-Options and frame-ancestors on every path, a report-only CSP that allows Razorpay Checkout, and Referrer-Policy on pages (BUG-010)");
 
 // 4c2. Sign-in page (T16): self-contained, posts to /api/session, and is copied into the deployment.
 const inPage = existsSync("signin/index.html") ? readFileSync("signin/index.html", "utf8") : "";

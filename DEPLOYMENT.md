@@ -489,6 +489,21 @@ Do not commit the `.vercel/` folder that `vercel link` creates. It is already in
       "permanent": false
     }
   ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Content-Security-Policy", "value": "frame-ancestors 'none'" },
+        { "key": "Content-Security-Policy-Report-Only", "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://checkout.razorpay.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.razorpay.com https://api.anthropic.com; frame-src https://*.razorpay.com; form-action 'self'; base-uri 'self'; object-src 'none'" }
+      ]
+    },
+    {
+      "source": "/((?!api/|p/).*)",
+      "headers": [{ "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }]
+    }
+  ],
   "rewrites": [
     { "source": "/p/:sweep/:item", "destination": "/api/data?page=item&sweep=:sweep&item=:item" }
   ]
@@ -503,6 +518,7 @@ Do not commit the `.vercel/` folder that `vercel link` creates. It is already in
 | `crons` | The daily backstop: calls `/api/sweep` at 00:05 UTC (05:35 IST), within the hour on Hobby; it sweeps slot 00 |
 | `functions["api/sweep.js"].maxDuration` | Lets the sweep run for up to 300 s, the Hobby maximum |
 | `redirects` | `/subscribe` goes to `/pricing/`, and every page on travel-problem-radar.vercel.app (but not `/api/`) goes to radar.pehchanthetraveller.com |
+| `headers` | Security headers (BUG-010). Every response gets `X-Content-Type-Options: nosniff`, and `X-Frame-Options: DENY` with `frame-ancestors 'none'`, so no other site can frame a page. The full `Content-Security-Policy` is **report-only** for now: it lists the real sources (this site, inline scripts, Razorpay Checkout, Google Fonts, the demo's Anthropic call) and only logs a violation in the browser console, so a source it misses can't break checkout. Enforce it in a later PR, once checkout and sign-in show no violations. Pages get `Referrer-Policy: strict-origin-when-cross-origin`; `/api/` and `/p/` are left out because their pages set a stricter one themselves (their links carry tokens). `npm run check` tests all of this |
 | `rewrites` | `/p/<sweepId>/<itemId>`, one shared problem (T40), is served by `/api/data?page=item&sweep=…&item=…`, so the page needs no function of its own. The address bar keeps `/p/…`. On the vercel.app address the redirect runs first, so a shared link always ends on the main domain, which link previews use |
 
 The functions are found automatically: every `.js` file in `api/` becomes a route, except files in folders that start
