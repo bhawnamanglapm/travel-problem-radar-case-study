@@ -11,6 +11,8 @@
 > Added 2026-10-30 at the owner's request: "I want that India specific things are also focused much". The owner
 > chose to cover both the findings and the audience, and to add India items to each category call rather than run a
 > separate India call.
+>
+> **Live 2026-10-30** (#132, `525ea4b`). Its effect is read on or after 2026-11-06 (RM-38).
 
 ## Why
 
@@ -66,7 +68,7 @@ market or an audience.
 
 Each call may now run 4 searches instead of 3. A search costs $0.01, and the pages it returns are billed as input
 tokens ([costing.md](../costing.md)); up to 8 more items a sweep also add output. That is up to 4 more searches a
-sweep plus their pages. The real change is **not measured**: a week after this is live, `llm-logs.mjs models`
+sweep plus their pages. The real change is **not measured**: a week after it went live (on or after 2026-11-06), `llm-logs.mjs models`
 gives the cost per sweep to compare with the $0.1121 baseline (10 Haiku sweeps, 26 to 30 Oct).
 
 ## Acceptance criteria

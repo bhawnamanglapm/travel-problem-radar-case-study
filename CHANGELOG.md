@@ -5,7 +5,7 @@ grouped by date.
 
 ## 2026-10-30
 
-- T42, India focus (branch `feat/india-focus`): each category call now also asks for up to 2 items about India,
+- T42, India focus (#132, merged and live): each category call now also asks for up to 2 items about India,
   only where real, recent ones exist, with region "India", and may run 4 searches instead of 3. India is its own
   area after Asia on the board, `/manage/` and `/admin/`; a Pro member's Asia choice saved before this reads as
   Asia and India (`readAreas`, `areasV: 2`), so no record is rewritten. `llm-logs.mjs areas` gives items by area

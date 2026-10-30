@@ -44,7 +44,7 @@ Source for the wording: [the home page](../../index.html).
 
 **Not to be said** until there is a source: how many members there are, how accurate the findings are, time saved,
 or that it beats any alternative. No sweep has been scored (R-01). Nor that it covers India well, until KPI-20 is
-read a week after T42 is live (RM-38).
+read on or after 2026-11-06, a week after T42 went live (RM-38).
 
 ## Channels
 
