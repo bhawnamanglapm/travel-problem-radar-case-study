@@ -5,6 +5,12 @@ grouped by date.
 
 ## 2026-10-30
 
+- Testing tasks, stage 8 of the PM case study. `pm/08-testing/` holds a test plan (scope, environments, who does
+  what, the status of each component, the order of work, release entry and exit criteria, bug severity) and 20
+  tasks, TS01 requirements validation to TS20 production validation. Each one says what's in place today, read from
+  the repo, the gaps, the steps, and when it's done. Findings while writing: requirement drift (TS01), no security
+  headers (TS15), a skip link on 1 of 14 pages (TS17). The owner's 7 bug notes are logged in TS19 without addresses.
+  `pm/README.md` and `pm/CASE_STUDY.md` list stage 8. Docs only; no tests were run against Preview or production.
 - Model test results: Haiku 5.5 stays. `compare-models.mjs` ran 3 rounds ($1.10). In the blind review Haiku kept
   28 of 55 items (51%) and Sonnet 15 of 52 (29%), with none invented. A sweep cost $0.1215 on Haiku and $0.2440 on
   Sonnet. Haiku failed two automatic checks: cost (50% of Sonnet's, the mark was 40%) and links (4 broken, Sonnet 1).

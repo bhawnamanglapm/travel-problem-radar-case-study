@@ -7,7 +7,7 @@
 > template.
 
 This folder presents the project as a product manager would: discovery, product definition, design, planning and
-governance, business case and launch, executive communication, and data. Each stage summarises the engineering
+governance, business case and launch, executive communication, data, and testing. Each stage summarises the engineering
 documents in [`docs/`](../docs/) and links to them, so every fact keeps one home.
 
 ## At a glance
@@ -53,8 +53,9 @@ Source: [TECHNICAL.md](../docs/TECHNICAL.md), [paid-website.md](../docs/subscrip
 | 5. Business case and launch | **Plans, not results:** cost-floor business case, go-to-market with gates, launch readiness with go/no-go and rollback, post-launch plan | [business-case.md](05-business-case-and-launch/business-case.md), [go-to-market.md](05-business-case-and-launch/go-to-market.md), [launch-plan.md](05-business-case-and-launch/launch-plan.md), [post-launch-plan.md](05-business-case-and-launch/post-launch-plan.md) |
 | 6. Executive communication | One-page review that ends in the owner's decisions | [executive-review.md](06-executive-communication/executive-review.md) |
 | 7. Data and metrics | The stored data, how each KPI is computed, what isn't measured | [data-and-metrics.md](07-data-and-metrics/data-and-metrics.md) |
+| 8. Testing | A test plan (environments, roles, status, order, entry and exit criteria, bug severity) and one task for each of 20 testing components, from requirements validation to production validation; the owner's 7 bug notes logged | [README.md](08-testing/README.md), TS01 to TS20 in [08-testing/](08-testing/) |
 
-The portfolio summary of all seven stages is [CASE_STUDY.md](CASE_STUDY.md).
+The portfolio summary of all eight stages is [CASE_STUDY.md](CASE_STUDY.md).
 
 ## Decisions worth discussing
 
@@ -100,7 +101,7 @@ These are stated plainly rather than filled in:
 
 ## How this section was built
 
-Written on 2026-10-23 (stages 1 to 4) and 2026-10-24 (stages 5 to 7) with Claude Code, from this repository's
+Written on 2026-10-23 (stages 1 to 4) and 2026-10-24 (stages 5 to 7), and stage 8 on 2026-10-30, with Claude Code, from this repository's
 documents, code, tests and git history. The web
 research in [alternatives.md](01-discovery/alternatives.md) names its sources and the date they were read. The
 layout follows the owner's earlier case study,
