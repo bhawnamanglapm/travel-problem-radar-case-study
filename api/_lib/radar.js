@@ -213,6 +213,54 @@ export function normalize(cat, p) {
   };
 }
 
+// A searched page's age in days before `at`, from search's `page_age`: text like "34 days ago", or a date with a
+// four-digit year. Null when there's none or it can't be read.
+const UNIT_DAYS = { hour: 1 / 24, day: 1, week: 7, month: 30, year: 365 };
+const DAY = 24 * 3600 * 1000;
+export function pageAgeDays(age, at = Date.now()) {
+  const s = String(age || "").trim();
+  const m = /^(\d+)\s+(hour|day|week|month|year)s?\s+ago$/i.exec(s);
+  if (m) return Number(m[1]) * UNIT_DAYS[m[2].toLowerCase()];
+  const t = /\b\d{4}\b/.test(s) ? Date.parse(s) : NaN;
+  return Number.isFinite(t) && t <= at ? (at - t) / DAY : null;
+}
+
+// Items whose source is older than this are dropped: the prompt asks for roughly the last 60 days.
+export const SOURCE_MAX_DAYS = 60;
+// A link compared loosely: no protocol, fragment or trailing slash.
+const linkKey = (u) => {
+  try { const x = new URL(u); return x.host + x.pathname.replace(/\/+$/, "") + x.search; } catch (e) { return null; }
+};
+
+// Dates each item's source from the age search gave its page (`sourceDate`, the UTC day of `at` less the age), and
+// drops items whose source is over SOURCE_MAX_DAYS old. An item whose link wasn't searched, or whose page has no
+// age, is kept undated: an unknown age is never taken as old. Returns the kept items, the dropped ones (for the
+// log) and each kept item's age in days (null when unknown).
+export function dateSources(items, blocks = [], at = Date.now()) {
+  const exact = new Map(), loose = new Map();
+  for (const b of blocks) {
+    if (b.type !== "web_search_tool_result" || !Array.isArray(b.content)) continue;
+    for (const r of b.content) {
+      if (!r || !r.url || !r.page_age) continue;
+      if (!exact.has(r.url)) exact.set(r.url, r.page_age);
+      const k = linkKey(r.url);
+      if (k && !loose.has(k)) loose.set(k, r.page_age);
+    }
+  }
+  const kept = [], dropped = [], sources = [];
+  for (const it of items) {
+    const age = it.link ? exact.get(it.link) ?? loose.get(linkKey(it.link)) : undefined;
+    const days = pageAgeDays(age, at);
+    if (days != null && days > SOURCE_MAX_DAYS) {
+      dropped.push({ title: it.title, link: it.link, age: siteText(age, 50) });
+      continue;
+    }
+    kept.push(days == null ? it : { ...it, sourceDate: new Date(at - days * DAY).toISOString().slice(0, 10) });
+    sources.push({ link: it.link, days: days == null ? null : Math.round(days * 10) / 10 });
+  }
+  return { items: kept, dropped, sources };
+}
+
 // A response's content blocks for the LLM log, without the encrypted parts (page contents, citation
 // indexes, thinking signatures): they can't be read and are most of the size. A searched page is kept
 // as its link, title and age; a citation as its link, title and the passage the model quoted.
@@ -314,9 +362,9 @@ export async function scanCategory(cat, { fetchFn = fetch, apiKey, model, maxSea
     response: { id: data.id, model: data.model, stop_reason: data.stop_reason, usage: data.usage, content: logContent(data.content) },
     usage: { ...usage, pages: links.length }, links,
   });
-  let items;
+  let parsed;
   try {
-    items = extractProblems(data).filter((p) => p && p.title).map((p) => normalize(cat, p));
+    parsed = extractProblems(data).filter((p) => p && p.title).map((p) => normalize(cat, p));
   } catch (e) {
     // No usable answer: say why the model stopped (max_tokens, refusal, pause_turn, ...) and
     // keep the usage, because a failed call is billed too.
@@ -325,7 +373,8 @@ export async function scanCategory(cat, { fetchFn = fetch, apiKey, model, maxSea
     err.call = { ...call(), error: err.message };
     throw err;
   }
-  return { items, usage, call: { ...call(), items: items.length } };
+  const { items, dropped, sources } = dateSources(parsed, data.content, clock());
+  return { items, usage, call: { ...call(), items: items.length, sources, ...(dropped.length ? { dropped } : {}) } };
 }
 
 async function readJSON(storage, key) {
@@ -399,7 +448,8 @@ export async function runDailySweep({ storage, scan, now = () => Date.now(), man
       if (r.reason && r.reason.usage) addUsage(r.reason.usage);
       return;
     }
-    perCat[key] = r.value.items.length + " items";
+    const dropped = ((r.value.call && r.value.call.dropped) || []).length;
+    perCat[key] = r.value.items.length + " items" + (dropped ? `, ${dropped} dropped (source over ${SOURCE_MAX_DAYS} days)` : "");
     calls.push(r.value.call || { cat: key });
     addUsage(r.value.usage);
     r.value.items.forEach((it) => {
