@@ -5,6 +5,8 @@ grouped by date.
 
 ## 2026-10-30
 
+- TS19 log: the owner closed BUG-001 and BUG-003 to BUG-011. The fixed ones are marked as not retested; BUG-002
+  stays open until its cause is found.
 - BUG-011 fixed: every page now starts with a skip link to its main content (it was the home page only). The style
   lives in `brand.css`; demo and live wrap their app in `<main>`. TS17 and a `check.mjs` rule updated.
 - BUG-009 fixed: an `overrides` entry lifts `zod` (pulled in by `@vercel/blob`) from 4.1.11 to 4.6.6, so `npm audit`
