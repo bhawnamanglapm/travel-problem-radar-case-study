@@ -5,6 +5,8 @@ grouped by date.
 
 ## 2026-10-30
 
+- BUG-011 fixed: every page now starts with a skip link to its main content (it was the home page only). The style
+  lives in `brand.css`; demo and live wrap their app in `<main>`. TS17 and a `check.mjs` rule updated.
 - BUG-009 fixed: an `overrides` entry lifts `zod` (pulled in by `@vercel/blob`) from 4.1.11 to 4.6.6, so `npm audit`
   shows 0 high. The dev-only `esbuild` moderate is accepted. DEPLOYMENT.md and a `check.mjs` rule updated.
 - BUG-010 fixed: `vercel.json` sends security headers (`nosniff`, no framing, `Referrer-Policy` on pages) and a

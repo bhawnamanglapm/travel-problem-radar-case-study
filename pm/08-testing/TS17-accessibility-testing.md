@@ -27,7 +27,7 @@ Read from the repo on `c848b94`:
 | Filter and save buttons | Built with `aria-pressed` | `check.mjs`, on both bundles |
 | Footer nav | `aria-label="Site"` on every page | `check.mjs` |
 | Page language | Every page has `<html lang=…>` | Counted: 14 of 14 pages |
-| Skip link | **Home page only** (1 of 14 pages) | Counted |
+| Skip link | Every page (14 of 14) since BUG-011, 2026-10-30; it was the home page only. `check.mjs` checks it | Counted |
 
 ## Gaps
 

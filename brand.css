@@ -29,3 +29,7 @@
     --cat-traveler: #f08a5d; --cat-gov: #5fbfa9; --cat-web: #7aa7ff; --cat-industry: #b79cff;
   }
 }
+
+/* The skip link every page starts with (BUG-011): hidden until it gets keyboard focus. */
+.skip{position:absolute;left:-9999px;top:8px;background:var(--primary);color:var(--on-primary);padding:8px 12px;border-radius:6px;font-weight:600;z-index:100;}
+.skip:focus{left:8px;}
