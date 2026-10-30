@@ -5,6 +5,15 @@ grouped by date.
 
 ## 2026-10-30
 
+- First test run. TS01 to TS20 ran offline and read-only against production; nothing was swept, emailed, paid
+  for or deployed, and staging wasn't used (about 121 commits behind). Each task's result is in
+  `pm/08-testing/results/`, with an index, counts and the release verdict: not ready to sign off (open proposed S1
+  and S2 bugs, the manual regression list not run, no UAT sign-off). Passing: `npm test` 1,582 and `npm run check`
+  244, the last 20 CI runs, API-1 to API-6, 9 of 10 smoke checks, 28 of 32 REQs, no keys in the git history. New
+  bugs, all proposed S3: sweeps start 155 to 418 minutes after their slot (BUG-008), `npm audit` high findings
+  (BUG-009), no security headers beyond HSTS (BUG-010), a skip link on 1 of 14 pages (BUG-011). Retests: BUG-005
+  fixed in code, BUG-007's redirect confirmed, BUG-003 answered by counts. The plan's status table now reads from
+  the results. Docs only.
 - Testing tasks, stage 8 of the PM case study. `pm/08-testing/` holds a test plan (scope, environments, who does
   what, the status of each component, the order of work, release entry and exit criteria, bug severity) and 20
   tasks, TS01 requirements validation to TS20 production validation. Each one says what's in place today, read from
