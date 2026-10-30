@@ -5,6 +5,11 @@ grouped by date.
 
 ## 2026-10-30
 
+- Pro members can choose areas for their email as well as categories: All areas, or any of Asia, Europe, North
+  America, Latin America, Middle East & Africa, Oceania and Other, on the account page. Worldwide problems always
+  come. The email says which areas it covers. A choice with nothing in a sweep sends nothing. Free is unchanged
+  (T41).
+
 - One problem can be shared: Share in the problem's panel on the live board copies a link to it (on a phone, it
   opens the share sheet). The link, `/p/<sweep>/<item>`, opens a page with the headline, category, severity,
   source, region and date for everyone, and the summary, opportunity and source link for a signed-in Pro member,

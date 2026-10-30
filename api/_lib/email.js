@@ -22,7 +22,7 @@ const TEASER_INVITE = "Sign in to see everything: summaries, sources and product
 // the sections and the "Failed this run" line to those categories; the caller filters `problems`.
 // `teaser` (the Free email while the board is locked, T18) keeps the counts and the headlines only,
 // with no detail and no source link, and links to `signInUrl` instead of the board.
-export function buildDigestEmail({ at, problems, perCat = {}, manual = false }, liveUrl = "", { heading, subjectLead, cats = null, teaser = false, signInUrl = "" } = {}) {
+export function buildDigestEmail({ at, problems, perCat = {}, manual = false }, liveUrl = "", { heading, subjectLead, cats = null, areas = null, teaser = false, signInUrl = "" } = {}) {
   if (teaser && !LINK_OK.test(signInUrl || "")) throw new Error("buildDigestEmail: bad sign-in link");
   const shown = cats ? CATS.filter((c) => cats.includes(c.key)) : CATS;
   const failed = shown.filter((c) => /^failed/.test(perCat[c.key] || "")).map((c) => c.label);
@@ -43,6 +43,12 @@ export function buildDigestEmail({ at, problems, perCat = {}, manual = false }, 
   ];
   if (cats) {
     const chosen = `Your categories: ${shown.map((c) => c.label).join(", ")}`;
+    text.push(chosen);
+    html.push(`<p style="margin:0 0 12px">${esc(chosen)}</p>`);
+  }
+  if (areas) {
+    // T41: worldwide problems always come (owner decision O2), so the line says so.
+    const chosen = `Your areas: ${areas.join(", ")}, plus worldwide problems`;
     text.push(chosen);
     html.push(`<p style="margin:0 0 12px">${esc(chosen)}</p>`);
   }
