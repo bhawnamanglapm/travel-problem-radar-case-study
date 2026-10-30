@@ -88,6 +88,12 @@ const manBoxes = [...manPage.matchAll(/<input type="checkbox" value="([a-z_]+)"/
 const manOptions = [...manPage.matchAll(/<option value="([a-z_]+)"/g)].map((m) => m[1]);
 check(JSON.stringify(manBoxes) === JSON.stringify(CATS) && JSON.stringify(manOptions) === JSON.stringify(CATS) && /name="catMode" value="all"/.test(manPage) && /name="catMode" value="one"/.test(manPage) && /name="catMode" value="some"/.test(manPage),
   "manage/index.html offers all four, just one (a list) or several (one checkbox per category, in order) (T14, T33)");
+// T41: an Areas choice under Categories, one checkbox per area of T37's list except Global, saved with set-plan.
+const manAreaBox = (manPage.match(/<fieldset class="cats sub" id="areas"[\s\S]*?<\/fieldset>/) || [""])[0];
+const manAreas = [...manAreaBox.matchAll(/<input type="checkbox" value="([^"]+)"/g)].map((m) => m[1].replace(/&amp;/g, "&"));
+check(JSON.stringify(manAreas) === JSON.stringify(["Asia", "Europe", "North America", "Latin America", "Middle East & Africa", "Oceania", "Other"])
+  && /name="areaMode" value="all"/.test(manPage) && /name="areaMode" value="some"/.test(manPage) && /action: "set-plan", cats: c\.cats, areas: c\.areas/.test(manPage),
+  "manage/index.html offers all areas or a choice (one checkbox per area except Global, in order), saved with set-plan (T41)");
 check(!/\.innerHTML\s*=/.test(manPage), "manage/index.html writes server data with textContent only, never innerHTML");
 check(manPage.length > 0 && !/<script[^>]*\ssrc=|<link[^>]*rel=["']?stylesheet|@import|url\(\s*["']?https?:/i.test(manPage), "manage/index.html is self-contained (no external script, stylesheet, import or font URL)");
 check(/\bcp -r [^&]*\bmanage\b[^&]* public\//.test(siteBuild), "build:site copies manage into public/");
