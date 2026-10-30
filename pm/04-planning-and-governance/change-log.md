@@ -1,6 +1,6 @@
 # Change log: decisions that were revised
 
-> **Stage 4 of 7.** Each row is a decision in [decisions.md](../../docs/decisions.md) that a later decision changed,
+> **Stage 4 of 8.** Updated 2026-10-30 with CR-15 to CR-22. Each row is a decision in [decisions.md](../../docs/decisions.md) that a later decision changed,
 > written as a change request. There was no change board: the owner decided, often in conversation while building, and
 > the decision log recorded it. Where the log says the reason isn't recorded, this page says so too. Dates are when
 > the change appears in the repository.
@@ -21,6 +21,14 @@
 | CR-12 | 2026-10-23 | T20 as written: checkout, return and cancel as three new functions | Actions on `/api/account` | Hobby allows 12 functions and the site had 8 | One endpoint does more, so its actions are tested together | [decisions.md](../../docs/decisions.md) 2026-10-23 |
 | CR-13 | 2026-10-23 | GST left blank until a CA advises | Not registered, so no GST is charged | The owner's answer | If the owner registers, `plan.json` and the price wording change | [decisions.md](../../docs/decisions.md) 2026-10-23 |
 | CR-14 | 2026-10-23 | Contact address `hello@pehchanthetraveller.com` | `pehchanthetraveller19@gmail.com` on every page, in `plan.json` and in `npm run check`; email is still sent from `hello@` | The owner asked for it | Option not taken: keep `hello@` as the contact | [decisions.md](../../docs/decisions.md) 2026-10-23 |
+| CR-15 | 2026-10-24 | The site moves to 2 sweeps a day before payments open (T28) | Each Pro member chooses 1 to 5 emails a day; the site sweeps as often as the most frequent member needs, once a day with no Pro members (T32) | Not recorded beyond the decision itself | Cost follows demand instead of a fixed 2 a day. Unneeded GitHub slots are skipped before any Anthropic call | [decisions.md](../../docs/decisions.md) 2026-10-24 |
+| CR-16 | 2026-10-25 | The final Pro plan: ₹299 a month, all 4 categories, monthly only | The member builds Pro: categories, 1 to 5 emails a day, and 1, 3, 6 or 12 months, each priced, with renewal | The owner's request | Brought forward the tier decision T31 had left until after launch; more Razorpay plans to manage | [decisions.md](../../docs/decisions.md) 2026-10-25 |
+| CR-17 | 2026-10-26 | Prices by categories, emails a day and term (CR-16) | One Pro price, monthly or yearly; 3 and 6 months dropped; ₹1 for both while testing | The owner's words: no extra charge for categories or emails a day, one Pro plan, monthly and yearly | Simpler pricing; the "monthly only at launch" line of 2026-10-24 is reversed | [decisions.md](../../docs/decisions.md) 2026-10-26; [CHANGELOG](../../CHANGELOG.md) 2026-10-26 |
+| CR-18 | 2026-10-29 | ₹1 as a test price | ₹1 a month and ₹1 a year is Pro's real price for now; the terms page goes live the same day with a plain liability clause | The owner's words, in the decision log | Revenue can't cover the running cost of about ₹6,797 a month (R-12). The ₹299 break-even analysis stays as analysis; the target price is **OWNER INPUT NEEDED** | [decisions.md](../../docs/decisions.md) 2026-10-29 |
+| CR-19 | 2026-10-25 | `claude-sonnet-5-5` is the sweep's default model | `claude-haiku-5-5`; `RADAR_MODEL` still overrides it | **Not recorded**: the commit message is "fix". The 2026-10-30 model test later kept Haiku | $0.1121 a sweep over 10 Haiku sweeps (26 to 30 Oct) against $0.21 on Sonnet. In the test Haiku kept more items in a blind review marked by ChatGPT, but failed the cost and link checks | `533ab15`; [CHANGELOG](../../CHANGELOG.md) 2026-10-25, 2026-10-30; [model test](../../docs/subscriptions/model-test-2026-10-30.md) |
+| CR-20 | 2026-10-27 | No passwords: an emailed link or Google (a PRD non-goal) | An optional password beside the link and Google | **Not recorded** in the decision log | Passwords are now stored (scrypt hashes) and rate-limited; one can be set only through its own confirmation link or a signed-in manage page | [CHANGELOG](../../CHANGELOG.md) 2026-10-27 |
+| CR-21 | 2026-10-28 | The site at `travel-problem-radar.vercel.app` | `radar.pehchanthetraveller.com`; the old address redirects, `/api/` excepted | Signing in on one address and opening the other looked signed out, and a Google sign-in from the custom domain came back without its cookie. Also the next step parked for I-04 | `SITE_URL` and Google's redirect URI had to change. Whether Chrome's warning is gone isn't recorded | [CHANGELOG](../../CHANGELOG.md) 2026-10-28 |
+| CR-22 | 2026-10-30 | Vercel's backstop sweep at 01:30 UTC | At 00:05 UTC, sweeping slot 00 | GitHub starts scheduled sweeps 3.5 to 5.5 hours late (BUG-008) | The first email of the day is promised for about 05:30 to 06:30 IST; `/manage/` says later emails often arrive a few hours late | [CHANGELOG](../../CHANGELOG.md) 2026-10-30 |
 
 ## What the pattern shows
 
@@ -29,3 +37,7 @@
 - **Three changes moved faster than the evidence:** CR-03 and CR-11 have no recorded reason, and CR-04 reversed a
   documented design. Each is noted as a trade-off in the decision log rather than hidden.
 - **Hobby's limits shaped the design more than once** (CR-02, CR-12, and R-09 in the [RAID log](raid-log.md)).
+- **The price changed four times in six days** (CR-16 to CR-18, after the 2026-10-24 final plan). Each step is in the
+  decision log with the owner's words; what Pro must earn to cover its cost is still open.
+- **Two changes have no recorded reason:** CR-19 (the model) and CR-20 (passwords). Both reversed something the
+  PRD or the design had stated.
