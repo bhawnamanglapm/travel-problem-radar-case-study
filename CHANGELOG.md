@@ -5,6 +5,12 @@ grouped by date.
 
 ## 2026-10-30
 
+- Paid Pro lifecycle (T22). A paid Pro due to renew stays Pro for 48 hours past its period end, so a late `charged`
+  event no longer drops it to Free. The sweep moves a paid Pro whose period has ended and whose Razorpay plan is
+  cancelled, completed, halted or expired to Free if its webhook was missed (`subscribers.proLapsed` in the reply),
+  and counts one Razorpay still calls active as `subscribers.rzpMismatch`. A test key on Production or a live key
+  on a Preview turns payments off, and the webhook, the admin page and the sweep reply (`razorpay: "key mismatch"`)
+  say so. `subscribers.mjs show <email> --check` shows Razorpay's view of a record.
 - T32 and T35 checks after deploy, from the 20 scheduled runs of 2026-10-26 to 29: every slot was swept or skipped as
   the site's number (2, and 3 for part of 26 and 27 Oct) says, slot 00 swept once a day (by the Vercel backstop), and
   runs were 228 to 418 minutes late, inside the 12-hour window. T35 is done; T32 waits only on the owner's test-Pro email

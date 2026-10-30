@@ -5,7 +5,7 @@ import { createHash, createHmac, randomBytes as cryptoRandomBytes, timingSafeEqu
 import { DEFAULT_FROM, buildAlreadySubscribedEmail, buildConfirmEmail, buildProRequestEmail, buildSignInEmail, sendEmail, sendOne } from "./email.js";
 import { BodyTooLargeError, allowMethods, esc, readFields, sendJson, sendPage } from "./http.js";
 import { OAUTH_COOKIE, OAUTH_MINUTES, clearOAuthCookie, googleConfigured, googleFinish, googleStart, readOAuthCookie, readSignupCookie, signupCookie } from "./google.js";
-import { cancelSubscription, createSubscription, fetchSubscription, razorpayConfigured, verifyCheckout, verifyWebhook } from "./razorpay.js";
+import { cancelSubscription, createSubscription, fetchSubscription, keyMismatch, razorpayConfigured, verifyCheckout, verifyWebhook } from "./razorpay.js";
 import { DEFAULT_SWEEPS_PER_DAY, normaliseSweepsPerDay, sweepLimits, sweepsPerDayOf } from "./schedule.js";
 import { periodsOf, priceOf, priceTable, razorpayPlans } from "./plan.js";
 import { sweepKey } from "./radar.js";
@@ -71,7 +71,7 @@ const positiveInt = (v) => {
 export { KEY_RZPSUB_PREFIX };
 export const CHECKOUT_REUSE_MINUTES = 60;
 const totalCount = (env) => positiveInt(env.RAZORPAY_TOTAL_COUNT);
-export const paymentsReady = (env) => razorpayConfigured(env) && totalCount(env) !== null;
+export const paymentsReady = (env) => razorpayConfigured(env) && totalCount(env) !== null && !keyMismatch(env);
 // Why payments are on or off, for the admin dashboard: what is missing or unreadable, by variable name only,
 // never a value. `on` is paymentsReady; `periods` are those with a usable plan.
 const PAY_VARS = ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET", "RAZORPAY_WEBHOOK_SECRET", "RAZORPAY_PLANS", "RAZORPAY_TOTAL_COUNT"];
@@ -80,6 +80,9 @@ export function paymentsCheck(env) {
   const problems = PAY_VARS.filter((n) => !v(n)).map((n) => `${n} is not set on this deployment`);
   const id = v("RAZORPAY_KEY_ID");
   if (id && !/^rzp_(test|live)_[A-Za-z0-9]+$/.test(id)) problems.push("RAZORPAY_KEY_ID doesn't look like rzp_test_… or rzp_live_…");
+  if (keyMismatch(env)) problems.push(env.VERCEL_ENV === "production"
+    ? "RAZORPAY_KEY_ID is a test key on Production: payments are off until live keys are set"
+    : "RAZORPAY_KEY_ID is a live key on a Preview: payments are off until test keys are set");
   if (v("RAZORPAY_PLANS")) {
     let raw;
     try { raw = JSON.parse(v("RAZORPAY_PLANS")); } catch (e) { raw = undefined; }
@@ -1519,6 +1522,10 @@ export function makeRazorpayWebhookHandler({ env, storage, now, randomBytes = cr
     if (!secret) {
       log("rzp-webhook", "not configured");
       return jsonResponse(503, { error: "not configured" });
+    }
+    if (keyMismatch(env)) {
+      log("rzp-webhook", "key mismatch");
+      return jsonResponse(503, { error: "key mismatch" });
     }
     const declared = Number(request.headers.get("content-length"));
     if (declared > WEBHOOK_MAX_BYTES) return jsonResponse(413, { error: "request too large" });

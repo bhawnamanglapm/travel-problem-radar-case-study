@@ -6,6 +6,7 @@ import { buildDigestEmail, buildFailureEmail, sendEmail } from "./email.js";
 import { randomBytes as cryptoRandomBytes } from "node:crypto";
 import { bearerOk, esc, sendJson, sendPage } from "./http.js";
 import { deliverToSubscribers } from "./subscriber-delivery.js";
+import { keyMismatch } from "./razorpay.js";
 import { readSession } from "./session.js";
 import { siteUrl } from "./subscription-handlers.js";
 import { countEvents, effectivePlan, recordEvent, utcDay } from "./subscribers.js";
@@ -104,6 +105,9 @@ export function makeSweepHandler({ env, storage, fetchFn, now, randomBytes = cry
       const failed = { at: new Date(now()).toISOString(), perCat: out.perCat };
       Object.assign(summary, await deliver(buildFailureNotice(failed), buildFailureEmail(failed)));
     }
+    // T22: a Razorpay key in the wrong environment turns payments off; said here so the Actions log shows it.
+    // It names the problem only, never the key.
+    if (keyMismatch(env)) summary.razorpay = "key mismatch";
     return sendJson(res, out.status === "saved" || out.status === "skipped" ? 200 : 502, { model, trigger, ...late, ...summary });
   };
 }

@@ -5,7 +5,7 @@ import { createHash, createHmac, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { blobStorage } from "../api/_lib/storage.js";
 import {
-  CONFIRM_RESEND_MINUTES, MAX_CONFIRMS_PER_ADDRESS, PENDING_TTL_DAYS, countEvents, deleteSubscriber, effectivePlan, getSubscriber, listSubscribers,
+  CONFIRM_RESEND_MINUTES, MAX_CONFIRMS_PER_ADDRESS, PENDING_TTL_DAYS, PRO_GRACE_HOURS, countEvents, deleteSubscriber, effectivePlan, getSubscriber, listSubscribers,
   newPending, newToken, normaliseAreas, normaliseCats, normaliseEmail, putSubscriber, recordEvent, subscriberId, tokenOk, utcDay,
 } from "../api/_lib/subscribers.js";
 import { BodyTooLargeError, allowMethods, bearerOk, esc, parseForm, readBody, readFields, sendJson, sendPage } from "../api/_lib/http.js";
@@ -16,7 +16,7 @@ import {
 } from "../api/_lib/subscription-handlers.js";
 import { deliverToSubscribers, proAreasKey, proCatsKey } from "../api/_lib/subscriber-delivery.js";
 import { makeDataHandler } from "../api/_lib/handlers.js";
-import { RAZORPAY_API, cancelSubscription, createSubscription, fetchSubscription, isTestKey, razorpayConfigured, verifyCheckout, verifyWebhook } from "../api/_lib/razorpay.js";
+import { RAZORPAY_API, cancelSubscription, createSubscription, fetchSubscription, isTestKey, keyMismatch, razorpayConfigured, verifyCheckout, verifyWebhook } from "../api/_lib/razorpay.js";
 import { check, finish, memStorage, mockRes } from "./test-helpers.mjs";
 
 // A repeatable random source: each call returns bytes that count up from a seed.
@@ -136,6 +136,17 @@ const iso = (ms) => new Date(ms).toISOString();
   check(effectivePlan(act({ status: "pending" }), T0) === "free" && effectivePlan(act({ plan: "free" }), T0) === "free"
     && effectivePlan(act({ plan: "gold" }), T0) === "free" && effectivePlan(act({ proUntil: "garbage" }), T0) === "free" && effectivePlan(null, T0) === "free",
     "effectivePlan: pending, free, unknown plan, unreadable date and no record are all free");
+  // T22: a paid Pro due to renew keeps PRO_GRACE_HOURS past its end; nothing else does.
+  const G = PRO_GRACE_HOURS * 3600_000;
+  const paid = (rzp = {}, extra = {}) => act({ proSource: "razorpay", proUntil: iso(T0), rzp: { status: "active", remaining: 3, ...rzp }, ...extra });
+  check(effectivePlan(paid(), T0 + G - 1000) === "pro" && effectivePlan(paid(), T0 + G + 1000) === "free", "effectivePlan: a paid Pro due to renew stays Pro for 48 h past its end, then is free");
+  check(effectivePlan(paid({ remaining: undefined }), T0 + G - 1000) === "pro", "effectivePlan: the grace applies when Razorpay hasn't said how many cycles are left");
+  check(effectivePlan(act({ proSource: "owner", proUntil: iso(T0) }), T0 + 1000) === "free", "effectivePlan: owner-granted Pro gets no grace");
+  for (const [rzp, why] of [[{ status: "cancelled" }, "a cancelled plan"], [{ cancelAtPeriodEnd: true }, "a plan set to end"], [{ remaining: 0 }, "the last cycle"],
+    [{ status: "authenticated" }, "Pro started on Checkout's signature"], [{ status: "halted" }, "a halted plan"]]) {
+    check(effectivePlan(paid(rzp), T0 + 1000) === "free", `effectivePlan: no grace for ${why}`);
+  }
+  check(effectivePlan(paid({}, { proUntil: "garbage" }), T0) === "free", "effectivePlan: an unreadable end date is free, grace or not");
 
   const p = newPending("  Reader@Example.com ", { now: T0, randomBytes: seeded() });
   check(p.v === 1 && p.email === "reader@example.com" && p.id === subscriberId("reader@example.com") && p.status === "pending" && p.plan === "free"
@@ -957,6 +968,54 @@ const iso = (ms) => new Date(ms).toISOString();
   out = await w.run(await w.addSweep("1792570150123", T0, [prob("a")]));
   check(out.pro.due === 0 && out.free.sent === 1 && /daily digest/.test(w.mails[0].text), "delivery: a Pro whose proUntil has passed is in the Free group");
 
+  // 13. T22 tidy step: paid Pro past its end (grace included) whose webhook was missed
+  {
+    w = world();
+    const paid = async (n, status, proUntil, extra = {}) => {
+      const rec = { ...(await w.addSub(n, { plan: "pro", proSource: "razorpay", proUntil: iso(proUntil) })),
+        rzp: { subscriptionId: "sub_T22tidy" + n, status, currentEnd: Math.floor(proUntil / 1000), cancelAtPeriodEnd: false, lastEventAt: iso(T0 - 40 * DAY), ...extra } };
+      await putSubscriber(w.st, rec);
+      return rec;
+    };
+    const ended = [await paid(1, "cancelled", T0 - 1000), await paid(2, "completed", T0 - DAY), await paid(3, "halted", T0 - HOUR), await paid(4, "expired", T0 - 1000)];
+    const overdue = await paid(5, "active", T0 - (PRO_GRACE_HOURS + 1) * HOUR);
+    const inGrace = await paid(6, "active", T0 - (PRO_GRACE_HOURS - 2) * HOUR); // still inside after the 1-hour tick below
+    const authed = await paid(7, "authenticated", T0 - DAY);
+    const notYet = await paid(8, "cancelled", T0 + 10 * DAY, { cancelAtPeriodEnd: true }); // past the 7-day end warning
+    const owner = await w.addSub(9, { plan: "pro", proSource: "owner", proUntil: iso(T0 - DAY) });
+    const before = {};
+    for (const r of [overdue, inGrace, authed, notYet, owner]) before[r.id] = JSON.stringify(await getSubscriber(w.st, r.id));
+    out = await w.run(await w.addSweep("1792570150123", T0, [prob("a")]));
+    let allFree = true;
+    for (const r of ended) {
+      const s = await getSubscriber(w.st, r.id);
+      allFree = allFree && s.plan === "free" && s.proSource === null && s.proUntil === null && JSON.stringify(s.rzp) === JSON.stringify(r.rzp) && s.status === "active";
+    }
+    const revoked = () => [...w.st.m.keys()].filter((k) => k.startsWith("radar:event:") && k.includes("-prorevoked-"));
+    check(allFree && out.proLapsed === 4 && revoked().length === 4,
+      "delivery tidy: paid Pro past its end with Razorpay cancelled, completed, halted or expired turns Free, keeps rzp, and records prorevoked");
+    let untouched = true;
+    for (const r of [overdue, inGrace, authed, notYet, owner]) untouched = untouched && JSON.stringify(await getSubscriber(w.st, r.id)) === before[r.id];
+    check(untouched && out.rzpMismatch === 1, "delivery tidy: an active subscription past the grace is counted as rzpMismatch and left; inside the grace, authenticated, not yet ended and owner Pro are untouched");
+    check(out.pro.due === 2 && count(w, "s6@example.com") === 1 && count(w, "s8@example.com") === 1 && /daily digest/.test(w.mails.find((m) => m.to[0] === "s5@example.com").text),
+      "delivery tidy: inside the grace and before the end still get Pro; the overdue one gets the Free digest");
+    w.tick(HOUR);
+    out = await w.run(await w.addSweep("1792573750123", T0 + HOUR, [prob("b")]));
+    check(out.proLapsed === 0 && revoked().length === 4 && out.rzpMismatch === 1, "delivery tidy: the next sweep finds nothing more to move, and counts the mismatch again");
+    // a webhook that lands between the list and the write wins
+    w = world();
+    const raced = await paid(1, "cancelled", T0 - 1000);
+    let raceDone = false;
+    w.st.beforeWrite = async (key) => {
+      if (raceDone || key !== "radar:sub:" + raced.id) return;
+      raceDone = true;
+      await w.st.set(key, JSON.stringify({ ...raced, proUntil: iso(T0 + 30 * DAY), rzp: { ...raced.rzp, status: "active" } }));
+    };
+    out = await w.run(await w.addSweep("1792570150123", T0, [prob("a")]));
+    const s = await getSubscriber(w.st, raced.id);
+    check(out.proLapsed === 0 && s.plan === "pro" && s.proUntil === iso(T0 + 30 * DAY) && revoked().length === 0, "delivery tidy: a record renewed between the list and the write is left Pro");
+  }
+
   // old delivery files
   w = world();
   await w.addSub(1);
@@ -1057,6 +1116,25 @@ const iso = (ms) => new Date(ms).toISOString();
   await w.addSub(1, "pro");
   res = await w.call();
   check(res.code === 200 && res.json().subscribers === "not configured" && w.kinds().join() === "owner", "sweep: switch off gives subscribers: \"not configured\" and sends only the owner's email");
+
+  // 3b. T22: a Razorpay key in the wrong environment is named in the reply, never shown
+  {
+    const TEST_ID = "rzp_" + "test_" + "Fixture000003";
+    const LIVE_ID = "rzp_" + "live_" + "Fixture000003";
+    let ok = true;
+    for (const env of [{ RAZORPAY_KEY_ID: TEST_ID, VERCEL_ENV: "production" }, { RAZORPAY_KEY_ID: LIVE_ID, VERCEL_ENV: "preview" }]) {
+      const m = world({ env });
+      res = await m.call();
+      ok = ok && res.code === 200 && res.json().status === "saved" && res.json().razorpay === "key mismatch" && !res.body.includes("Fixture0");
+    }
+    check(ok, "sweep: a test key on Production or a live key on a Preview adds razorpay: \"key mismatch\" to the reply, without the key");
+    let none = true;
+    for (const env of [{ RAZORPAY_KEY_ID: LIVE_ID, VERCEL_ENV: "production" }, { RAZORPAY_KEY_ID: TEST_ID, VERCEL_ENV: "preview" }, { RAZORPAY_KEY_ID: TEST_ID }, {}]) {
+      res = await world({ env }).call();
+      none = none && res.code === 200 && !("razorpay" in res.json());
+    }
+    check(none, "sweep: the right key, VERCEL_ENV unset or no key leaves razorpay out of the reply");
+  }
 
   // 4. the owner's Resend call is out of quota: owner reply shows it, the subscriber send stops without looping
   w = world({ resend: { owner: { status: 429, body: { name: "daily_quota_exceeded" } }, batch: { status: 429, body: { name: "daily_quota_exceeded" } } } });
@@ -1292,6 +1370,35 @@ const iso = (ms) => new Date(ms).toISOString();
   check(r.code === 0 && r.out.includes("p2@example.com") && r.out.includes('"plan": "pro"') && !r.out.includes("token") && !r.out.includes("secret-token"), "show: the record, without the token");
   r = await run(st, ["show", "nobody@example.com"]);
   check(r.code === 1, "show an unknown address: exit 1");
+
+  // show --check (T22): Razorpay's view of the plan and the renewal, read-only
+  {
+    const cw = await world();
+    await cw.mk(2, { plan: "pro", proSource: "owner", proUntil: iso(T0 + 3 * DAY) });
+    const END_S = Math.floor((T0 + 2 * DAY) / 1000);
+    await cw.mk(5, { plan: "pro", proSource: "razorpay", proUntil: iso(T0 - DAY),
+      rzp: { subscriptionId: "sub_CHECK0000001", status: "active", currentEnd: Math.floor((T0 - DAY) / 1000), cancelAtPeriodEnd: false, next: { subscriptionId: "sub_CHECK0000002", status: "authenticated" } } });
+    adminRzp.length = 0;
+    rzpReply = (url) => (url.endsWith("sub_CHECK0000001")
+      ? { ok: true, status: 200, json: async () => ({ id: "sub_CHECK0000001", status: "active", current_end: END_S, paid_count: 2, remaining_count: 10, customer_email: "payer@example.com" }) }
+      : { ok: false, status: 404, json: async () => ({}) });
+    r = await run(cw.st, ["show", "p5@example.com", "--check"]);
+    rzpReply = null;
+    check(r.code === 0 && adminRzp.length === 2 && adminRzp.every((c) => !c.method || c.method === "GET") && adminRzp[0].url.endsWith("/subscriptions/sub_CHECK0000001") && adminRzp[1].url.endsWith("/subscriptions/sub_CHECK0000002"),
+      "show --check: one GET for the plan and one for the renewal, and nothing else");
+    check(r.out.includes(`razorpay plan sub_CHECK0000001: status active (stored: active), currentEnd ${iso(END_S * 1000)}, paidCount 2, remainingCount 10`)
+      && r.out.includes("razorpay renewal sub_CHECK0000002: error 404 (stored: authenticated)"),
+      "show --check: prints Razorpay's status, period end and counts next to the stored status, or the error code");
+    check(!/payer@example\.com|admin-secret|secret-token/.test(r.all), "show --check: no customer detail, key or token printed");
+    adminRzp.length = 0;
+    r = await run(cw.st, ["show", "p2@example.com", "--check"]);
+    check(r.code === 0 && adminRzp.length === 0 && r.out.includes("razorpay: no subscription on this record"), "show --check on an owner-granted Pro: no Razorpay call");
+    r = await run(cw.st, ["show", "p5@example.com", "--check"], { env: {} });
+    check(r.code === 0 && r.out.includes("razorpay plan sub_CHECK0000001: error config"), "show --check with no keys in the shell: says error config");
+    adminRzp.length = 0;
+    r = await run(cw.st, ["show", "p5@example.com"]);
+    check(r.code === 0 && adminRzp.length === 0 && !r.out.includes("razorpay plan"), "show without --check: no Razorpay call");
+  }
   r = await run(st, ["list", "--plan", "pro"]);
   check(r.code === 0 && r.out.includes("p2@example.com") && !r.out.includes("p3@example.com") && !r.out.includes("p1@example.com") && !r.out.includes("secret-token"), "list --plan pro: only effective Pro, no token");
   r = await run(st, ["list", "--plan", "free"]);
@@ -3205,6 +3312,14 @@ const iso = (ms) => new Date(ms).toISOString();
   const ENV = { RAZORPAY_KEY_ID: KEY_ID, RAZORPAY_KEY_SECRET: KEY_SECRET, RAZORPAY_WEBHOOK_SECRET: WH_SECRET, RAZORPAY_PLANS: JSON.stringify({ 1: "plan_00000000000001", 3: "plan_00000000000003", 6: "plan_00000000000006", 12: "plan_00000000000012" }) };
   check(razorpayConfigured(ENV) && Object.keys(ENV).every((k) => !razorpayConfigured({ ...ENV, [k]: " " })), "razorpay: configured only with the keys, the webhook secret and RAZORPAY_PLANS");
   check(isTestKey(ENV) && !isTestKey({ RAZORPAY_KEY_ID: "rzp_" + "live_" + "Fixture000001" }) && !isTestKey({}), "razorpay: isTestKey tells test keys from live keys");
+  {
+    const LIVE = { RAZORPAY_KEY_ID: "rzp_" + "live_" + "Fixture000001" };
+    check(keyMismatch({ ...ENV, VERCEL_ENV: "production" }) && keyMismatch({ ...LIVE, VERCEL_ENV: "preview" }) && keyMismatch({ ...LIVE, VERCEL_ENV: "development" }),
+      "razorpay: keyMismatch on a test key on Production and a live key on a Preview or Development");
+    check(!keyMismatch({ ...LIVE, VERCEL_ENV: "production" }) && !keyMismatch({ ...ENV, VERCEL_ENV: "preview" }) && !keyMismatch(ENV) && !keyMismatch(LIVE)
+      && !keyMismatch({ ...ENV, VERCEL_ENV: " " }) && !keyMismatch({ VERCEL_ENV: "production" }),
+      "razorpay: no keyMismatch for a live key on Production, a test key on a Preview, VERCEL_ENV unset, or no key");
+  }
 
   const SID = "a".repeat(64);
   const SUB = { id: "sub_00000000000001", entity: "subscription", plan_id: "plan_00000000000001", status: "created", short_url: "https://rzp.io/rzp/abc", notes: { sid: SID }, customer_email: "payer@example.com", current_start: null, current_end: 1792600000, charge_at: 1792600000, ended_at: null, paid_count: 0, remaining_count: 12, total_count: 12 };
@@ -3365,6 +3480,18 @@ const iso = (ms) => new Date(ms).toISOString();
     const f2 = await w2.add("count@example.com");
     r = await w2.act(f2, "checkout");
     check(r.code === 503 && r.json().error === "payments_off" && w2.rzpCalls.length === 0, "checkout: a RAZORPAY_TOTAL_COUNT of 0 keeps payments off");
+    // T22: a key in the wrong environment keeps payments off; the right one leaves them on
+    const LIVE_ID = "rzp_" + "live_" + "Fixture000002";
+    check(!paymentsReady({ ...RZP, VERCEL_ENV: "production" }) && !paymentsReady({ ...RZP, RAZORPAY_KEY_ID: LIVE_ID, VERCEL_ENV: "preview" })
+      && paymentsReady({ ...RZP, RAZORPAY_KEY_ID: LIVE_ID, VERCEL_ENV: "production" }) && paymentsReady({ ...RZP, VERCEL_ENV: "preview" }) && paymentsReady({ ...RZP, RAZORPAY_KEY_ID: LIVE_ID }),
+      "payments: off with a test key on Production or a live key on a Preview; on with the right key or VERCEL_ENV unset");
+    for (const [label, over] of [["a test key on Production", { VERCEL_ENV: "production" }], ["a live key on a Preview", { RAZORPAY_KEY_ID: LIVE_ID, VERCEL_ENV: "preview" }]]) {
+      const w3 = await world(over);
+      const f3 = await w3.add("mix" + label.length + "@example.com");
+      let ok = (await w3.get(f3)).json().payments === false;
+      for (const a of ["checkout", "checkout-return", "cancel"]) { r = await w3.act(f3, a); ok = ok && r.code === 503 && r.json().error === "payments_off"; }
+      check(ok && w3.rzpCalls.length === 0, `checkout, checkout-return and cancel: ${label} gives 503 payments_off with no Razorpay call`);
+    }
   }
 
   // checkout
@@ -3807,7 +3934,23 @@ const iso = (ms) => new Date(ms).toISOString();
     const off = world({ RAZORPAY_WEBHOOK_SECRET: " " });
     r = await off.send(ev("activated", rec));
     check(r.code === 503 && off.st.m.size === 0, "rzp webhook: no RAZORPAY_WEBHOOK_SECRET is 503");
-    done(w); done(off);
+    // T22: a key in the wrong environment: 503 before the body is read, so Razorpay retries once it is fixed
+    const LIVE_ID = "rzp_" + "live_" + "Fixture000021";
+    let mixOk = true;
+    for (const over of [{ RAZORPAY_KEY_ID: "rzp_" + "test_" + "Fixture000021", VERCEL_ENV: "production" }, { RAZORPAY_KEY_ID: LIVE_ID, VERCEL_ENV: "preview" }]) {
+      const mix = world(over);
+      const mrec = await mix.add("mix@example.com");
+      const snap = JSON.stringify([...mix.st.m]);
+      r = await mix.send(ev("activated", mrec));
+      mixOk = mixOk && r.code === 503 && r.json().error === "key mismatch" && mix.logs.includes("rzp-webhook key mismatch") && JSON.stringify([...mix.st.m]) === snap;
+      done(mix);
+    }
+    check(mixOk, "rzp webhook: a test key on Production or a live key on a Preview is 503 key mismatch, logged, and writes nothing");
+    const right = world({ RAZORPAY_KEY_ID: LIVE_ID, VERCEL_ENV: "production" });
+    const rrec = await right.add("right@example.com");
+    r = await right.send(ev("activated", rrec));
+    check(r.code === 200 && (await right.stored(rrec)).plan === "pro", "rzp webhook: a live key on Production works as before");
+    done(w); done(off); done(right);
   }
 
   // the event table
@@ -3862,7 +4005,7 @@ const iso = (ms) => new Date(ms).toISOString();
     w.tick((END - S + 60) * 1000);
     r = await w.send(ev("completed", late, { at: END + 30 }));
     s = await w.stored(late);
-    check(s.plan === "free" && s.proUntil === null && w.evs("prorevoked").length === 0, "completed with current_end past: Free now; no prorevoked, as the plan had already lapsed");
+    check(s.plan === "free" && s.proUntil === null && w.evs("prorevoked").length === 1, "completed with current_end past: Free now, and prorevoked, as the renewal grace held Pro until this event (T22)");
     done(w);
   }
 

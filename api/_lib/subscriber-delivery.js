@@ -14,6 +14,11 @@ const KEEP_DELIVERY_DAYS = 7;
 const MAX_ROLLUP_SWEEPS = 12; // 24 h holds at most 5 scheduled sweeps; this leaves room for manual runs
 const SEV_RANK = { High: 3, Medium: 2, Low: 1 };
 export const END_WARNING_DAYS = 7;
+// Razorpay states after which a paid plan won't be charged again (T22). A missed webhook can leave such a record on
+// plan "pro" past its end; the tidy step in step 2 moves it to Free.
+const RZP_LAPSED = new Set(["cancelled", "completed", "halted", "expired"]);
+const paidPastEnd = (r, t) => r.status === "active" && r.proSource === "razorpay" && r.plan === "pro" && effectivePlan(r, t) !== "pro";
+const rzpStatusOf = (r) => (r.rzp && typeof r.rzp === "object" ? r.rzp.status : null);
 
 // A Pro plan that ends within END_WARNING_DAYS and won't renew (T34): a paid plan cancelled with no renewal set up,
 // a paid plan in its last billing cycle, or an owner-granted Pro with an end date. Not yet warned for this end.
@@ -89,7 +94,7 @@ export async function deliverToSubscribers({ env, storage, fetchFn, now, randomB
     if (env.SUBSCRIPTIONS_ENABLED !== "1" || !env.RESEND_API_KEY || !senderOk(env.EMAIL_FROM) || !site) return "not configured";
 
     const t = now();
-    const result = { pro: null, free: null, pending: 0, expired: 0, unreadable: 0, emailOff: 0, stopped: null };
+    const result = { pro: null, free: null, pending: 0, expired: 0, unreadable: 0, emailOff: 0, proLapsed: 0, rzpMismatch: 0, stopped: null };
     const creds = { apiKey: env.RESEND_API_KEY, from: env.EMAIL_FROM };
     const shouldStop = () => deadlineAt != null && now() >= deadlineAt;
 
@@ -105,7 +110,23 @@ export async function deliverToSubscribers({ env, storage, fetchFn, now, randomB
       } else if (r.status === "pending") {
         result.pending++;
         live.push(r);
+      } else if (r.status === "active" && paidPastEnd(r, t) && RZP_LAPSED.has(rzpStatusOf(r))) {
+        // T22: a paid plan that has ended (grace included) but is still stored as Pro: the webhook that would have
+        // moved it was missed. The stored record is checked again, so a webhook landing now wins. rzp is kept.
+        let rec = r;
+        try {
+          const u = await updateSubscriber(storage, r.id, (cur) => (paidPastEnd(cur, t) && RZP_LAPSED.has(rzpStatusOf(cur)) ? { ...cur, plan: "free", proSource: null, proUntil: null } : null));
+          if (u.changed) {
+            rec = u.record;
+            result.proLapsed++;
+            await recordEvent(storage, "prorevoked", { now: t, randomBytes, plan: "free" });
+          }
+        } catch (e) { result.proLapsedSaveFailed = true; }
+        live.push(rec);
       } else if (r.status === "active") {
+        // Ended but Razorpay's last word was "active": a renewal charge that hasn't arrived. Counted for the owner
+        // to check with `subscribers.mjs show <email> --check`; delivery already treats it as Free.
+        if (paidPastEnd(r, t) && rzpStatusOf(r) === "active") result.rzpMismatch++;
         live.push(r);
       }
     }

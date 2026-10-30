@@ -23,6 +23,14 @@ export const razorpayConfigured = (env) =>
 // Test-mode key ids begin rzp_test_, live ones rzp_live_.
 export const isTestKey = (env) => val(env, "RAZORPAY_KEY_ID").startsWith("rzp_test_");
 
+// T22: Production takes live keys only, and Preview and Development test keys only. Outside Vercel (VERCEL_ENV
+// unset: tests and the owner's scripts) there is no rule, and with no key there is nothing to mix up.
+export function keyMismatch(env) {
+  const where = val(env, "VERCEL_ENV");
+  if (!where || !val(env, "RAZORPAY_KEY_ID")) return false;
+  return where === "production" ? isTestKey(env) : !isTestKey(env);
+}
+
 // A lowercase hex HMAC-SHA256 sent by Razorpay, compared in constant time with the one we work out.
 function hexMacOk(message, signature, secret) {
   if (!secret || typeof signature !== "string" || !HEX_SHA256.test(signature)) return false;

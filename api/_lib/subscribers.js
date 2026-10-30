@@ -190,12 +190,20 @@ export async function listSubscribers(storage, { concurrency = 8 } = {}) {
   return { records, skipped };
 }
 
-// "pro" only for a confirmed Pro record whose end date, if it has one, is still ahead.
-// Anything unexpected (pending, unknown plan, unreadable date) is "free".
+// A paid Pro whose subscription is due to renew stays Pro this long past its end date (T22, decided 2026-10-30),
+// because Razorpay's `charged` event for the next period can arrive after the period ends.
+export const PRO_GRACE_HOURS = 48;
+const renewsNext = (record) => {
+  const rzp = record.rzp && typeof record.rzp === "object" ? record.rzp : {};
+  return record.proSource === "razorpay" && rzp.status === "active" && rzp.cancelAtPeriodEnd !== true && rzp.remaining !== 0;
+};
+
+// "pro" only for a confirmed Pro record whose end date, if it has one, is still ahead (plus the grace for a
+// paid plan due to renew). Anything unexpected (pending, unknown plan, unreadable date) is "free".
 export function effectivePlan(record, now) {
   if (!record || record.status !== "active" || record.plan !== "pro") return "free";
   if (record.proUntil == null) return "pro";
-  const until = Date.parse(record.proUntil);
+  const until = Date.parse(record.proUntil) + (renewsNext(record) ? PRO_GRACE_HOURS * 3600_000 : 0);
   return Number.isFinite(until) && until > now ? "pro" : "free";
 }
 
