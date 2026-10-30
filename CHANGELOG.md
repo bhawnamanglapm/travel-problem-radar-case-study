@@ -5,6 +5,14 @@ grouped by date.
 
 ## 2026-10-30
 
+- Measuring the output. The LLM log marks each item's source `searched: true` or `false`: whether web search
+  returned its link, or the model gave it from memory. `llm-logs.mjs models` counts them and `summary` lists them;
+  older logs are matched from their pages. On the 10 logs from 26 to 30 Oct, 1 of 190 items had a link search never
+  returned. `score-items.mjs` judges `recent` on the source's own date when the sweep dated it, against the 60-day
+  window the site promises (was 30 days), and `review.csv` gains a `source_date` column. `compare-models.mjs`
+  estimates cost from Haiku's measured usage ($1.48 expected for 3 rounds, was $0.79). Its cost pass mark is now at
+  most 40% of the baseline's cost in the same test, replacing a fixed $0.08 a sweep that Haiku's measured $0.112
+  already exceeded. `haiku-test.md` now starts from Haiku being live. No test has been run.
 - Admin link in the footer. Every page's site footer ends with Admin, linking `/admin/`, which still asks for the
   owner's user and password. `check.mjs` expects it in every footer.
 - Source freshness. Each sweep matches an item's link to the page web search returned and saves `sourceDate`, the
