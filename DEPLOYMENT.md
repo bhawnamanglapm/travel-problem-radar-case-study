@@ -1412,13 +1412,19 @@ below. It is read-only and not deployed.
 node --env-file=.env.local scripts/llm-logs.mjs list [--days 7]
 node --env-file=.env.local scripts/llm-logs.mjs summary <id|latest>
 node --env-file=.env.local scripts/llm-logs.mjs show <id|latest>
+node --env-file=.env.local scripts/llm-logs.mjs models [--days 30]
 ```
 
 | Command | What it does |
 |---|---|
-| `list` | One line per sweep that ran, newest first: id, time, outcome, calls that worked, input and output tokens, searches, pages |
-| `summary` | One sweep's totals, each category's outcome, tokens, pages and time, then every page search found (link, and title and age where the log has them) and the passages each category quoted |
+| `list` | One line per sweep that ran, newest first: id, time, outcome, calls that worked, input and output tokens, searches, pages, model, cost |
+| `summary` | One sweep's model and cost, its totals, each category's outcome, tokens, pages, time and cost, then every page search found (link, and title and age where the log has them) and the passages each category quoted |
 | `show` | The whole log as JSON: every request and response |
+| `models` | The logs grouped by model (`--days` 1 to 30, default 30), with averages per sweep: items, pages, searches, tokens, cost and cost per item, then failed calls, calls that quoted a passage, and pages older than 30 days (of those search gave an age for). Volume, freshness and cost, not quality: for quality, review the items ([haiku-test.md](docs/subscriptions/haiku-test.md) or `scripts/score-items.mjs`) |
+
+The model is the one each call asked for (`request.model`). Costs are the list prices in `scripts/compare-models.mjs`
+applied to the usage the API reported, as `cost-per-run.mjs` does; a call with no usage (it failed before a reply)
+or a model with no price is shown as not priced, never guessed.
 
 `scripts/cost-per-run.mjs` turns the same logs into dollars. It is also read-only and not deployed:
 
