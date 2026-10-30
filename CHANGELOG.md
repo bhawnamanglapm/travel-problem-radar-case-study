@@ -5,6 +5,8 @@ grouped by date.
 
 ## 2026-10-30
 
+- Admin link in the footer. Every page's site footer ends with Admin, linking `/admin/`, which still asks for the
+  owner's user and password. `check.mjs` expects it in every footer.
 - Source freshness. Each sweep matches an item's link to the page web search returned and saves `sourceDate`, the
   date search gave that page. An item whose source is over 60 days old (the prompt's window) is dropped and kept in
   the LLM log; one with no age is kept undated. Cards, the home page list, the email and the text export show
