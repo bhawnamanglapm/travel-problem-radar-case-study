@@ -1,21 +1,25 @@
 // Slack delivery for the scheduled sweep: the digest after a saved sweep, or a short notice
 // when nothing could be saved. Optional; it runs only when SLACK_WEBHOOK_URL is set.
 // Text uses Slack's mrkdwn, laid out like the component's "Copy report" digest.
-import { CATS } from "./radar.js";
+import { CATS, ERR_MAX, failedCats, failedLine } from "./radar.js";
 
 // &, < and > are control characters in Slack text.
 const esc = (s = "") => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const when = (at) => at.slice(0, 16).replace("T", " ") + " UTC";
 
 export function buildDigest({ at, problems, perCat = {}, manual = false }, liveUrl = "") {
-  const failed = CATS.filter((c) => /^failed/.test(perCat[c.key] || "")).map((c) => esc(c.label));
+  const failed = failedCats(perCat);
   const newCount = problems.filter((p) => p.isNew).length;
   const highCount = problems.filter((p) => p.severity === "High").length;
   const lines = [
     manual ? "*Travel Problem Radar: digest (manual run)*" : "*Travel Problem Radar: digest*",
     `Swept ${when(at)} · ${problems.length} problems · ${newCount} new · ${highCount} high severity`,
   ];
-  if (failed.length) lines.push(`Failed this run: ${failed.join(", ")}`);
+  // The owner's alert when some categories failed (all failing is buildFailureNotice): each with its error.
+  if (failed.length) {
+    lines.push(`*FAILED: ${esc(failedLine(failed, CATS.length))}*`);
+    failed.forEach((f) => lines.push(`• ${esc(f.label)}: ${esc(f.error)}`));
+  }
   if (liveUrl) lines.push(`<${liveUrl}|Open the live board>`);
   CATS.forEach((c) => {
     const items = problems.filter((p) => p.cat === c.key);
@@ -38,7 +42,7 @@ export function buildFailureNotice({ at, perCat = {}, error = "" }) {
     `${when(at)}: nothing was saved, so the live board still shows the previous sweep.`,
   ];
   if (error) lines.push(`Error: ${esc(error)}`);
-  CATS.forEach((c) => { if (perCat[c.key]) lines.push(`• ${esc(c.label)}: ${esc(perCat[c.key])}`); });
+  CATS.forEach((c) => { if (perCat[c.key]) lines.push(`• ${esc(c.label)}: ${esc(String(perCat[c.key]).slice(0, ERR_MAX))}`); });
   return lines.join("\n");
 }
 

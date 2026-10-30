@@ -15,6 +15,21 @@ export const CATS = [
     desc: "strikes, bankruptcies, capacity cuts, overtourism, pricing shocks, and major operational disruptions" },
 ];
 
+// The categories a sweep's perCat marks failed, each with its error (the text after "failed: ") cut to
+// ERR_MAX characters. Only the owner's digest and failure notices show these; subscriber emails never do.
+export const ERR_MAX = 300;
+export function failedCats(perCat = {}, cats = CATS) {
+  return cats.filter((c) => /^failed/.test(perCat[c.key] || "")).map((c) => ({
+    label: c.label,
+    error: String(perCat[c.key]).replace(/^failed:?\s*/, "").slice(0, ERR_MAX) || "no reason given",
+  }));
+}
+// "1 of 4 categories failed this run; its problems are missing from this sweep."
+export function failedLine(failed, of) {
+  const n = failed.length;
+  return `${n} of ${of} categor${of === 1 ? "y" : "ies"} failed this run; ${n === 1 ? "its" : "their"} problems are missing from this sweep.`;
+}
+
 // Areas (T37): a fixed list the board filters by, and areaOf() to place the AI's free-text region in one.
 // The same text is in travel-problem-radar.jsx and api/_lib/radar.js; scripts/check.mjs fails if they differ.
 const AREAS = ["Global", "Asia", "Europe", "North America", "Latin America", "Middle East & Africa", "Oceania", "Other"];
