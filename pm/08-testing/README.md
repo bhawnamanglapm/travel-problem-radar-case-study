@@ -10,7 +10,7 @@ Testing is strong offline and thin everywhere else.
 - **In place:**
   - 8 offline suites with 1,582 checks (`npm test`);
   - 244 site checks (`npm run check`);
-  - both run in CI on every push, with a check that the built bundles match their source
+  - both run in CI on every pull request and push to `main`, with a check that the built bundles match their source
     ([check.yml](../../.github/workflows/check.yml)).
 - **Not written down anywhere:**
   - browser, email-client, accessibility, performance, security and production checks;
@@ -71,7 +71,7 @@ The pasted table names the roles a team usually has. This is a one-person team, 
 | [TS09](TS09-functional-testing.md) | Functional testing | Partial | `traceability.md` maps REQs to tests; its counts are stale |
 | [TS10](TS10-ui-ux-testing.md) | UI/UX testing | Not started | 3 open bugs are UI |
 | [TS11](TS11-api-testing.md) | API testing | Partial (offline) | 10 endpoints tested offline |
-| [TS12](TS12-regression-testing.md) | Regression testing | Partial | CI on every push; no browser or email regression |
+| [TS12](TS12-regression-testing.md) | Regression testing | Partial | CI on every PR and push to `main`; no browser or email regression |
 | [TS13](TS13-smoke-testing.md) | Smoke testing | Not started | No post-deploy list |
 | [TS14](TS14-performance-testing.md) | Performance testing | Not started | Sweep time is logged; nothing has a target |
 | [TS15](TS15-security-testing.md) | Security testing | Partial | Many guards tested; no review, no headers |
