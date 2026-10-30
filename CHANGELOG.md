@@ -5,6 +5,11 @@ grouped by date.
 
 ## 2026-10-30
 
+- Model test results: Haiku 5.5 stays. `compare-models.mjs` ran 3 rounds ($1.10). In the blind review Haiku kept
+  28 of 55 items (51%) and Sonnet 15 of 52 (29%), with none invented. A sweep cost $0.1215 on Haiku and $0.2440 on
+  Sonnet. Haiku failed two automatic checks: cost (50% of Sonnet's, the mark was 40%) and links (4 broken, Sonnet 1).
+  Only 43 of all 107 items were kept, and Website & app was the weakest category for both. Written up in
+  `docs/subscriptions/model-test-2026-10-30.md`; `haiku-test.md` and `costing.md` link to it. Docs only.
 - Measuring the output. The LLM log marks each item's source `searched: true` or `false`: whether web search
   returned its link, or the model gave it from memory. `llm-logs.mjs models` counts them and `summary` lists them;
   older logs are matched from their pages. On the 10 logs from 26 to 30 Oct, 1 of 190 items had a link search never
