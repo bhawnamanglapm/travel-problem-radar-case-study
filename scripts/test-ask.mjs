@@ -110,4 +110,139 @@ check(checkAnswer(null, 2).ok === false && checkAnswer({ answer: "" }, 2).ok ===
   check(r.status === "none" && r.called && r.answer === "The board has nothing on prices.", "ask: the model's 'nothing found' is passed on");
 }
 
+// ---- POST /api/account ask and vote (T43)
+{
+  const { makeAccountHandler, MAX_VOTES } = await import("../api/_lib/subscription-handlers.js");
+  const { signSession } = await import("../api/_lib/session.js");
+  const { KEY_SEARCH, sweepKey } = await import("../api/_lib/radar.js");
+  const { getSubscriber, newPending, putSubscriber } = await import("../api/_lib/subscribers.js");
+  const { memStorage, mockRes } = await import("./test-helpers.mjs");
+  const T0 = Date.UTC(2026, 9, 31, 8, 0, 0);
+  const DAY = 24 * 3600 * 1000;
+  const SECRET = "test-session-secret-0123456789abcdef";
+  const BASE = { SUBSCRIPTIONS_ENABLED: "1", SITE_URL: "https://site.example", SESSION_SECRET: SECRET, ANTHROPIC_API_KEY: "k", ASK_ENABLED: "1" };
+  const SWEEP = "1793000000000";
+  const stored = [
+    item(1, { id: "traveler_pain:rail-refunds", cat: "traveler_pain", title: "Rail refunds stuck for weeks", summary: "IRCTC refunds take weeks.", region: "India", link: "https://news.example/rail" }),
+    item(2, { id: "gov_policy:visa", cat: "gov_policy", title: "Visa delays for Schengen", summary: "Appointments booked out.", region: "Europe" }),
+  ];
+  const seq = () => { let n = 1; return (len) => Buffer.alloc(len, n++ % 256); };
+  const world = async ({ env = {}, rec: over = {}, reply = '{"answer": "Refunds take weeks [1].", "cites": [1], "found": true}', status = 200, now = T0 } = {}) => {
+    const st = memStorage();
+    st.m.set(KEY_SEARCH, JSON.stringify({ sweeps: [SWEEP], items: stored }));
+    st.m.set(sweepKey(SWEEP), JSON.stringify({ at: new Date(T0 - DAY).toISOString(), problems: stored }));
+    const rec = { ...newPending("asker@example.com", { now: T0 - 2 * DAY, randomBytes: seq() }), token: "tok-asker", status: "active", confirmedAt: new Date(T0 - DAY).toISOString(), plan: "pro", proSource: "owner", ...over };
+    await putSubscriber(st, rec);
+    const model = fakeFetch(reply, status);
+    const logs = [];
+    const acct = makeAccountHandler({ env: { ...BASE, ...env }, storage: st, fetchFn: model, now: () => now, randomBytes: seq(), log: (...a) => logs.push(a.join(" ")) });
+    const cookie = `tpr_session=${signSession(rec, { secret: SECRET, now })}`;
+    const call = async ({ method = "POST", body = {}, query = {}, link = false, cookie: c = cookie, origin = "https://site.example" } = {}) => {
+      const headers = { host: "site.example", "content-type": "application/json" };
+      if (c) headers.cookie = c;
+      if (origin) headers.origin = origin;
+      const res = mockRes();
+      const ids = link ? { id: rec.id, t: rec.token } : {};
+      await acct({ method, headers, query: method === "GET" ? { ...ids, ...query } : {}, body: method === "POST" ? { ...ids, ...body } : undefined }, res);
+      return res;
+    };
+    const ask = (question = "Indian rail refunds", more = {}) => call({ body: { action: "ask", question, ...more } });
+    const voteOn = (itemId, v, more = {}) => call({ body: { action: "vote", sweepId: SWEEP, itemId, vote: v, ...more } });
+    return { st, rec, call, ask, voteOn, model, logs, get: () => getSubscriber(st, rec.id) };
+  };
+
+  // Ask
+  let w = await world();
+  let r = await w.ask();
+  check(r.code === 200 && r.json().status === "answered" && r.json().answer === "Refunds take weeks [1]." && r.json().left === 19,
+    "ask action: a Pro member gets the answer and 19 questions left today");
+  check(r.json().items.length === 1 && r.json().items[0].link === "https://news.example/rail" && r.json().items[0].id === "traveler_pain:rail-refunds",
+    "ask action: the cited item and its link come from the store");
+  const rec1 = await w.get();
+  check(rec1.ask.day === "20261031" && rec1.ask.n === 1 && !JSON.stringify(rec1).includes("rail refunds") && !JSON.stringify(rec1).includes("Refunds take"),
+    "ask action: only the day's count is kept; the question and answer are not stored");
+  check([...w.st.m.keys()].some((k) => k.includes("-asked-")) && w.logs.length === 1 && !w.logs[0].includes("rail") && /"ask":"answered"/.test(w.logs[0]) && /input_tokens/.test(w.logs[0]),
+    "ask action: an 'asked' event is counted, and the log has the outcome and tokens, not the question");
+  r = await w.call({ method: "GET" });
+  check(r.json().ask === true && r.json().askLeft === 19, "account GET: ask is on for Pro, with the questions left");
+
+  w = await world({ reply: '{"answer": "See [5].", "cites": [5], "found": true}' });
+  r = await w.ask();
+  check(r.code === 200 && r.json().status === "unchecked" && r.json().answer === null && r.json().items.length === 0, "ask action: a forged citation is not shown");
+  w = await world();
+  r = await w.ask("spaceship tickets to Mars");
+  check(r.code === 200 && r.json().status === "none" && w.model.calls.length === 0 && (await w.get()).ask.n === 1, "ask action: nothing on the board means no model call (the question still counts)");
+  w = await world({ status: 500 });
+  r = await w.ask();
+  check(r.code === 502 && r.json().error === "model_error" && r.json().left === 19 && (await w.get()).ask.n === 1, "ask action: a model failure is 502 and still counts");
+
+  // Limits and checks
+  w = await world({ env: { ASK_PER_DAY: "2" } });
+  await w.ask(); await w.ask();
+  r = await w.ask();
+  check(r.code === 429 && r.json().error === "ask_limit" && r.json().perDay === 2 && w.model.calls.length === 2, "ask action: past ASK_PER_DAY is 429 with no model call");
+  w = await world({ env: { ASK_PER_DAY: "2" }, rec: { ask: { day: "20261030", n: 2 } } });
+  r = await w.ask();
+  check(r.code === 200 && (await w.get()).ask.day === "20261031" && (await w.get()).ask.n === 1, "ask action: the count starts again each UTC day");
+  w = await world({ env: { ASK_PER_DAY: "lots" } });
+  r = await w.call({ method: "GET" });
+  check(r.json().askLeft === 20, "ask action: a bad ASK_PER_DAY falls back to 20");
+  w = await world({ env: { ASK_ENABLED: "" } });
+  r = await w.ask();
+  const g = await w.call({ method: "GET" });
+  check(r.code === 503 && r.json().error === "ask_off" && w.model.calls.length === 0 && g.json().ask === false, "ask action: switched off is 503 ask_off, and the box isn't offered");
+  w = await world({ env: { ANTHROPIC_API_KEY: "" } });
+  check((await w.ask()).code === 503, "ask action: no API key is 503");
+  w = await world({ rec: { plan: "free", proSource: null } });
+  r = await w.ask();
+  check(r.code === 402 && r.json().error === "pro_only" && w.model.calls.length === 0 && (await w.call({ method: "GET" })).json().ask === false, "ask action: Free is 402 pro_only");
+  w = await world({ rec: { proUntil: new Date(T0 - 3 * DAY).toISOString(), proSource: "razorpay" } });
+  check((await w.ask()).code === 402, "ask action: a lapsed Pro is 402");
+  w = await world();
+  check((await w.call({ body: { action: "ask", question: "Indian rail refunds" }, cookie: null, link: true })).code === 403, "ask action: an emailed link without signing in is 403");
+  check((await w.call({ body: { action: "ask", question: "Indian rail refunds" }, origin: "https://evil.example" })).code === 403, "ask action: another site's origin is 403");
+  check((await w.call({ body: { action: "ask", question: "Indian rail refunds" }, cookie: null })).code === 401, "ask action: signed out is 401");
+  const bad = await Promise.all(["hi", "x".repeat(301), 42, ""].map((q) => w.ask(q)));
+  check(bad.every((x) => x.code === 400 && x.json().error === "bad_question") && w.model.calls.length === 0 && !(await w.get()).ask, "ask action: a question under 3 or over 300 characters is 400 and doesn't count");
+  r = await w.ask("rail refunds", { cat: "made_up" });
+  check(r.code === 400 && r.json().error === "bad_cat", "ask action: an unknown category is 400");
+  r = await w.ask("rail refunds", { cat: "gov_policy" });
+  check(r.code === 200 && r.json().status === "none" && w.model.calls.length === 0, "ask action: a category with no matching item makes no call");
+  w = await world();
+  w.st.m.delete(KEY_SEARCH);
+  r = await w.ask();
+  check(r.code === 200 && r.json().status === "none" && w.model.calls.length === 0, "ask action: no search file yet means 'none'");
+
+  // Votes
+  w = await world();
+  r = await w.voteOn("traveler_pain:rail-refunds", 1);
+  check(r.code === 200 && r.json().votes["traveler_pain:rail-refunds"] === 1, "vote: a Pro marks an item useful");
+  r = await w.voteOn("traveler_pain:rail-refunds", -1);
+  const v = (await w.get()).votes;
+  check(r.code === 200 && v.length === 1 && v[0].v === -1, "vote: voting again replaces the vote");
+  r = await w.voteOn("gov_policy:visa", 1);
+  r = await w.call({ method: "GET", query: { action: "saved" } });
+  check(r.code === 200 && r.json().votes["gov_policy:visa"] === 1 && r.json().votes["traveler_pain:rail-refunds"] === -1, "vote: the saved GET returns the member's votes");
+  r = await w.voteOn("traveler_pain:rail-refunds", 0);
+  check(r.code === 200 && !("traveler_pain:rail-refunds" in r.json().votes) && (await w.get()).votes.length === 1, "vote: 0 removes the vote");
+  check((await w.voteOn("traveler_pain:made-up", 1)).code === 404 && (await w.voteOn("traveler_pain:rail-refunds", 1, { sweepId: "1700000000000" })).code === 404,
+    "vote: an item not in its sweep, or a sweep not kept, is 404");
+  check((await w.voteOn("traveler_pain:rail-refunds", 2)).code === 400 && (await w.voteOn("traveler_pain:rail-refunds", "1")).code === 400 && (await w.voteOn("", 1)).code === 400,
+    "vote: a vote other than 1, -1 or 0, or no item, is 400");
+  check((await w.voteOn("traveler_pain:rail-refunds", 1, { sweepId: "abc" })).code === 400, "vote: a bad sweep id is 400");
+  w = await world({ rec: { plan: "free", proSource: null, votes: [{ id: "gov_policy:visa", v: 1, at: "x" }] } });
+  check((await w.voteOn("traveler_pain:rail-refunds", 1)).code === 402 && (await w.voteOn("gov_policy:visa", 0)).code === 200 && (await w.get()).votes.length === 0,
+    "vote: Free can't vote but can remove an old vote");
+  const old = Array.from({ length: MAX_VOTES }, (_, i) => ({ id: "traveler_pain:old" + i, v: 1, at: "2026-10-01T00:00:00.000Z" }));
+  w = await world({ rec: { votes: old } });
+  r = await w.voteOn("gov_policy:visa", 1);
+  const capped = (await w.get()).votes;
+  check(r.code === 200 && MAX_VOTES === 500 && capped.length === 500 && capped[0].id === "gov_policy:visa" && !capped.some((x) => x.id === "traveler_pain:old499"),
+    "vote: at 500 votes the oldest is dropped");
+  w = await world({ rec: { votes: [{ id: "gov_policy:visa", v: 1, at: "x" }] } });
+  r = await w.call({ body: { action: "delete-account" } });
+  check(r.code === 200 && (await w.get()) === null, "vote: deleting the account deletes the votes with the record");
+  check(w.logs.every((l) => !l.includes("@")), "ask and vote: no address is logged");
+}
+
 finish("ask tests");
