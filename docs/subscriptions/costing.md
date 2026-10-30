@@ -76,7 +76,9 @@ what the Pro price has to cover. **The price itself is the owner's decision**; t
 - web search with `max_uses: 3`.
 
 The model is `claude-haiku-5-5` unless the `RADAR_MODEL` variable names another (`api/_lib/handlers.js`). The runs
-measured below were on `claude-sonnet-5-5`; Haiku's measured usage is in [haiku-test.md](haiku-test.md).
+measured below were on `claude-sonnet-5-5`; Haiku's measured usage is in [haiku-test.md](haiku-test.md). In the
+side-by-side test on 30 Oct 2026 ([model-test-2026-10-30.md](model-test-2026-10-30.md)), on the same news, a Haiku
+sweep cost **$0.1215** and a Sonnet sweep **$0.2440**. Searches were $0.107 of Haiku's cost.
 
 **Measured.** The sweep's reply includes `usage: { input, output, searches }`, summed over its four calls. These are
 the last five successful scheduled runs in GitHub Actions:
