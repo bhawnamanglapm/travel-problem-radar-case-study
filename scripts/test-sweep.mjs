@@ -351,7 +351,22 @@ const sweepOpts = (storage, byCat, now) => ({
     + "  Per sweep: 3.0 items, 3.0 pages, 2.0 searches, 50,000 input and 10,000 output tokens\n"
     + "  Cost: $0.0300 a sweep, $0.0100 an item (2 calls not priced, left out)\n"
     + "  Calls that quoted a passage: 2 of 4\n"
-    + "  Pages older than 30 days: 2 of 4 with an age (50%); 2 with no age"), "llm-logs models: a model's averages, cost per item, quotes and page age");
+    + "  Item sources: 0 items, median - old; 0 over 30 days, 0 not dated; 0 dropped (over 60 days)\n"
+    + "  Search pages older than 30 days: 2 of 4 with an age (50%); 2 with no age"), "llm-logs models: a model's averages, cost per item, quotes and page age");
+  // Item source freshness: from the ages the sweep logged, or for an older log from its answer and logged pages.
+  const dated = logOf(6, 29, "claude-haiku-5-5", [{ cat: "traveler_pain", items: 3, usage: U,
+    sources: [{ link: "https://a.example/1", days: 8 }, { link: "https://b.example/2", days: 40 }, { link: "https://c.example/3", days: null }],
+    dropped: [{ title: "Old news", link: "https://o.example/9", age: "70 days ago" }] }]);
+  check(tool.formatModels([dated], 30).includes("  Item sources: 3 items, median 24 days old; 1 over 30 days, 1 not dated; 1 dropped (over 60 days)\n"),
+    "llm-logs models: item source ages and drops, from the ages the sweep logged");
+  const answer = JSON.stringify(["https://a.example/1", "https://b.example/2/", "https://c.example/3", "https://d.example/4"].map((link, i) => item(i, { link })));
+  const before = logOf(7, 29, "claude-haiku-5-5", [{ cat: "traveler_pain", items: 4, usage: U, response: { content: [
+    { type: "web_search_tool_result", pages: [...pages, { url: "https://d.example/4", age: "70 days ago" }] }, { type: "text", text: answer }] } }]);
+  check(tool.formatModels([before], 30).includes("  Item sources: 4 items, median 40 days old; 2 over 30 days, 1 not dated; 0 dropped (over 60 days)\n"),
+    "llm-logs models: an older log's item sources, matched from its answer and pages; one that would now be dropped counts as old");
+  const ds = tool.formatSummary(dated);
+  check(/^traveler_pain +3 items, 1 dropped;/m.test(ds) && ds.includes("Dropped, source over 60 days old:\n  traveler_pain: Old news (70 days ago)  https://o.example/9"),
+    "llm-logs summary: a category's dropped count, and each dropped item with its age");
   check(mv.includes("claude-sonnet-5-5: 1 sweep, 2026-10-28 to 2026-10-28\n  Failed calls: 0 of 1 (0%)\n")
     && mv.includes("  Cost: $0.2200 a sweep, $0.0550 an item\n") && !mv.includes("nothing to compare") && /not quality/.test(mv),
     "llm-logs models: the second model, and the note that this isn't quality");
