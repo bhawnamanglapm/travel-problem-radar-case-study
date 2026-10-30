@@ -1,6 +1,6 @@
 # KPI catalogue
 
-> **Stage 2 of 8.** How success would be measured. Updated 2026-10-30 with the values the repository now gives, and KPI-20 (India, T42). **Targets are OWNER INPUT NEEDED.** The current value is
+> **Stage 2 of 8.** How success would be measured. Updated 2026-10-30 with the values the repository now gives, and KPI-20 (India, T42). **Targets are OWNER INPUT NEEDED**, except KPI-20's, set by the owner on 2026-10-31. The current value is
 > **Not measured** unless a source in this repository gives one. Stage 7 will describe how each KPI is computed
 > from the stored data.
 
@@ -24,7 +24,7 @@ the `searched` flag and the dropped items (R-15).
 
 | ID | KPI | Formula | Data source | Target | Current |
 |---|---|---|---|---|---|
-| KPI-20 | India's share of items | items the board places in India ÷ all items shown, over 7 days; also India items a sweep | The LLM logs: `node --env-file=.env.local scripts/llm-logs.mjs areas --days 7` | **OWNER INPUT NEEDED** | Baseline before T42: 2 of 190 items (1.1%), 0.2 a sweep, over 10 sweeps 26 to 30 Oct (`node --env-file=.env.local scripts/llm-logs.mjs areas --days 7`, read 2026-10-30). A looser count of regions that mention India gave 5 (2.6%): two named India with another area and count as Global, and one was a South Korea rule for Indian passport holders (Asia) |
+| KPI-20 | India's share of items | items the board places in India ÷ all items shown, over 7 days; also India items a sweep | The LLM logs: `node --env-file=.env.local scripts/llm-logs.mjs areas --days 7` | **20%**, with 4 or more India items a sweep, as long as India items are dropped as too old or have links search never returned no more often than other items (R-15). Below 10% (2 a sweep) fails, and points to the India-only call (RM-38). Stretch: 25% and 6 a sweep, with 7 of 10 India items scored useful by the owner. Set by the owner, 2026-10-31. A sweep can hold at most 8 India places (4 categories × 2), so about 30% is the ceiling | Baseline before T42: 2 of 190 items (1.1%), 0.2 a sweep, over 10 sweeps 26 to 30 Oct (`node --env-file=.env.local scripts/llm-logs.mjs areas --days 7`, read 2026-10-30). A looser count of regions that mention India gave 5 (2.6%): two named India with another area and count as Global, and one was a South Korea rule for Indian passport holders (Asia) |
 
 ## Cost and reliability (goals G5 and G6)
 

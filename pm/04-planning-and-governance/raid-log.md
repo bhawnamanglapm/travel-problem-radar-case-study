@@ -1,6 +1,6 @@
 # RAID log: risks, assumptions, issues, dependencies
 
-> **Stage 4 of 8.** State on 2026-10-30 (first written 2026-10-24). Each row cites where it comes from; the cost and safeguard rows summarise
+> **Stage 4 of 8.** State on 2026-10-31 (first written 2026-10-24). Each row cites where it comes from; the cost and safeguard rows summarise
 > [costing.md](../../docs/subscriptions/costing.md#risks-and-safeguards), which stays the detailed source. "Owner"
 > means a step only the owner can take. Links to the [roadmap](roadmap.md) are by `RM-` ID.
 
@@ -24,10 +24,11 @@
 | R-14 | `staging` is 121 commits behind `main` | The real Razorpay, Resend and Google checks (IT-1 to IT-8) would test old code, so they were blocked in the first test run | — | Update `staging` before the next test run | [progress.md](../../docs/subscriptions/tasks/progress.md), T20; [TS07 results](../08-testing/results/TS07-integration-testing-results-2026-10-30.md) |
 | R-15 | Asking for India items yields weak or invented ones | Items stretched to fill the 2 India places, or with a source search never returned, shown to paying members | The prompt says to return none rather than stretch (T42); sources over 60 days old are dropped (REQ-45); the log's `searched` flag marks a link search never returned | No India item has been scored. On or after 2026-11-06, a week after T42 went live, read `llm-logs.mjs models` (`searched`, dropped) beside `llm-logs.mjs areas` (RM-38) | [T42](../../docs/subscriptions/tasks/T42-india-focus.md) |
 | R-16 | Indian sources are paywalled or not indexed by web search | Few India items, or ones from secondary sites, so KPI-20 stays low | The prompt names the kinds of Indian source: DGCA, the Ministry of Civil Aviation, IRCTC and Indian Railways, Indian airlines and online travel agencies, Indian news and consumer forums | Which sources search returns isn't known until a week of sweeps is read (RM-38) | [T42](../../docs/subscriptions/tasks/T42-india-focus.md) |
+| R-17 | Taking the radar to government (RM-40) | A wrong or invented item costs far more in front of a ministry than a PM; government work brings duties under India's data law (the Digital Personal Data Protection Act, 2023) | The R-15 safeguards; every item links its source | No check of the data law has been done; it is to be done before RM-40 (owner) | The owner, "I want to take this till govt of india" (2026-10-31) |
 
 ## Assumptions
 
-The product assumptions are `DSC-01` to `DSC-09` in the [discovery log](../01-discovery/discovery-log.md#assumptions-and-their-evidence).
+The product assumptions are `DSC-01` to `DSC-10` in the [discovery log](../01-discovery/discovery-log.md#assumptions-and-their-evidence).
 The ones below are planning assumptions: the numbers and outside rules the plan rests on.
 
 | ID | Assumption | Status | Source |

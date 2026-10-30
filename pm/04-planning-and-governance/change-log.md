@@ -1,6 +1,6 @@
 # Change log: decisions that were revised
 
-> **Stage 4 of 8.** Updated 2026-10-30 with CR-15 to CR-23. Each row is a decision in [decisions.md](../../docs/decisions.md) that a later decision changed,
+> **Stage 4 of 8.** Updated 2026-10-31 with CR-15 to CR-24. Each row is a decision in [decisions.md](../../docs/decisions.md) that a later decision changed,
 > written as a change request. There was no change board: the owner decided, often in conversation while building, and
 > the decision log recorded it. Where the log says the reason isn't recorded, this page says so too. Dates are when
 > the change appears in the repository.
@@ -30,6 +30,7 @@
 | CR-21 | 2026-10-28 | The site at `travel-problem-radar.vercel.app` | `radar.pehchanthetraveller.com`; the old address redirects, `/api/` excepted | Signing in on one address and opening the other looked signed out, and a Google sign-in from the custom domain came back without its cookie. Also the next step parked for I-04 | `SITE_URL` and Google's redirect URI had to change. Whether Chrome's warning is gone isn't recorded | [CHANGELOG](../../CHANGELOG.md) 2026-10-28 |
 | CR-22 | 2026-10-30 | Vercel's backstop sweep at 01:30 UTC | At 00:05 UTC, sweeping slot 00 | GitHub starts scheduled sweeps 3.5 to 5.5 hours late (BUG-008) | The first email of the day is promised for about 05:30 to 06:30 IST; `/manage/` says later emails often arrive a few hours late | [CHANGELOG](../../CHANGELOG.md) 2026-10-30 |
 | CR-23 | 2026-10-30 | Up to 5 items a category from anywhere, with 3 searches a call; India one place name inside Asia | The same 5, plus up to 2 about India where real ones exist, with 4 searches a call; India its own area, and an Asia choice saved before then includes India (T42) | The owner: "I want that India specific things are also focused much". The owner chose more India in each call over a separate India-only call | Up to 4 more searches a sweep, plus their pages as input tokens; the cost is to be measured against $0.1121 (RM-38). Asking for India items risks weak ones (R-15). Live 2026-10-30 (#132) | [decisions.md](../../docs/decisions.md) 2026-10-30; [T42](../../docs/subscriptions/tasks/T42-india-focus.md) |
+| CR-24 | 2026-10-31 | The plan targets travel PMs only, starting with those in India | Travel PMs first; the Government of India later, through a free monthly India report (RM-39, RM-40) | The owner: "I want to take this till govt of india" (2026-10-31) | A second audience that wants evidence of problems, not product ideas; accuracy matters more (R-17). Nothing built yet | [decisions.md](../../docs/decisions.md) 2026-10-31 |
 
 ## What the pattern shows
 

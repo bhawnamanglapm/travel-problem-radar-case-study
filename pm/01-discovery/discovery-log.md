@@ -3,7 +3,7 @@
 > **Stage 1 of 8.** What was believed, what evidence backs it, and what building the product taught. **No user
 > research has been done.** Every assumption below is open unless evidence in this repository says otherwise, and the
 > interview plan at the end is a proposal, not a record. Updated 2026-10-30: DSC-02, DSC-06 and DSC-08 have new
-> evidence, and DSC-09 (India, T42) is added; no interviews have been run.
+> evidence, DSC-09 (India, T42) is added, and DSC-10 (government, 2026-10-31); no interviews have been run.
 
 ## Problem framing
 
@@ -28,6 +28,7 @@
 | DSC-07 | The running cost is almost all fixed, so a flat monthly price fits it | No user can trigger the AI. A sweep cost $0.21 on Sonnet, measured over 5 production runs ([costing.md](../../docs/subscriptions/costing.md#summary)); on Haiku, $0.1121 over 10 sweeps (26 to 30 Oct). Since T32 the number of sweeps a day follows the most frequent Pro member's choice, 1 to 5 | **Supported** by code and measurement |
 | DSC-08 | A cheaper model could do the sweep as well | Haiku has been the default since 2026-10-25 (CR-19). The 2026-10-30 [model test](../../docs/subscriptions/model-test-2026-10-30.md) kept it: in a blind review marked by ChatGPT, 28 of 55 Haiku items were kept against 15 of 52 Sonnet items; Haiku failed the test's cost and link checks. Measured cost: $0.1121 a sweep over 10 sweeps. Was: estimated, not run ([haiku-test.md](../../docs/subscriptions/haiku-test.md)) | **Partly tested.** No person has scored either model's items |
 | DSC-09 | PMs at Indian travel companies find India items more useful than worldwide ones | None. The owner asked for an India focus on 2026-10-30 ([T42](../../docs/subscriptions/tasks/T42-india-focus.md)); no Indian PM has been asked. Before T42, 2 of 190 live items (1.1%) were placed in India, over 10 sweeps 26 to 30 Oct (`node --env-file=.env.local scripts/llm-logs.mjs areas --days 7`, read 2026-10-30) | **Untested** |
+| DSC-10 | Government bodies, central ministries or state tourism departments, would use a monthly report of what goes wrong for travellers in India | None. The owner: "I want to take this till govt of india" (2026-10-31); no official has been asked. Unlike a PM, a ministry wants evidence of the problem rather than a product opportunity | **Untested** |
 
 ## What building taught
 
