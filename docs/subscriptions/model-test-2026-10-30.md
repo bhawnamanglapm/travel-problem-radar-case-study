@@ -1,8 +1,9 @@
 # Model test, 30 Oct 2026: Haiku 5.5 vs Sonnet 5.5
 
-**Result: keep Haiku.** It passed the blind review. It found more items worth keeping than Sonnet, invented none, and
-cost half as much a sweep. The test plan, its pass marks and how to run it again are in
-[haiku-test.md](haiku-test.md).
+**Result: keep Haiku.** It cost half as much a sweep. In the blind review it found more items worth keeping than
+Sonnet and none were marked invented, but **the review was marked by ChatGPT, not by a person** (see
+[Blind review](#blind-review)). So the cost result is measured; the quality result is one other model's judgement. The
+test plan, its pass marks and how to run it again are in [haiku-test.md](haiku-test.md).
 
 ## What ran
 
@@ -58,14 +59,30 @@ $0.1215, which is why the saving is 50% rather than the 60% the plan aimed for.
 ## Blind review
 
 All 107 items, each model's once, were shuffled into `review.csv` without the model's name and marked `keep` y, n or
-f. The marks were then matched to the models with `key.json` (`--score`).
+f. **The `keep` column was filled in by ChatGPT**, not by a person. The marks were then matched to the models with
+`key.json` (`--score`).
+
+The files are in [model-test-2026-10-30/](model-test-2026-10-30/):
+- `modeltesting.csv`: the review file as the script wrote it, `keep` blank.
+- `modeltesting_labeled.csv`: the same file with ChatGPT's marks.
+
+Neither says which model found an item. `key.json`, which does, wasn't added.
+
+What an LLM judge means for the result:
+- The model names were hidden, so the marks weren't biased by the name. But ChatGPT judges as a language model does,
+  and may favour the style one model writes in.
+- **0 invented doesn't mean the links were checked.** It's not recorded whether ChatGPT opened the links. An item can
+  read well and still not be backed by its source.
+- The test plan asks a person to judge, so this doesn't fully meet it. A person checking a sample would make it
+  stronger: the 28 Haiku items kept, or 10 from each model.
 
 | | Kept (y) | Dropped (n) | Invented (f) | Keep rate |
 |---|---|---|---|---|
 | **Haiku 5.5** | 28 | 27 | 0 | **51%** |
 | Sonnet 5.5 | 15 | 37 | 0 | 29% |
 
-**PASS:** no invented Haiku item, and its keep rate is at least 80% of Sonnet's (it is 1.75 times Sonnet's).
+**PASS on ChatGPT's marks:** no invented Haiku item, and its keep rate is at least 80% of Sonnet's (it is 1.75
+times Sonnet's).
 
 By category, items kept of those found:
 
@@ -80,13 +97,14 @@ By category, items kept of those found:
 
 1. **Keep `claude-haiku-5-5`** as the production model. Nothing changes in the code or in Vercel.
 2. The cost check failed, but the plan says a cost-only failure is decided on the two measured costs. Haiku halves
-   the cost of a sweep and did better in the review.
-3. Haiku's broken links are worth watching. `scripts/llm-logs.mjs models` counts links search didn't return, and
+   the cost of a sweep and did better in ChatGPT's review.
+3. The quality result rests on ChatGPT's marks. If a person's check of a sample disagrees, run this decision again.
+4. Haiku's broken links are worth watching. `scripts/llm-logs.mjs models` counts links search didn't return, and
    `scripts/score-items.mjs` checks links on saved items.
 
 ## What it shows beyond the model
 
-- **Only 40% of all items were kept** (43 of 107). Most items are real but not useful enough to show. This is the
+- **Only 40% of all items were kept** (43 of 107, on ChatGPT's marks). Most items are real but not useful enough to show. This is the
   next quality step, not the model.
 - **Website & app is the weakest category** for both models: 6 of 26 kept.
 - The reasons for each `n` weren't recorded. Recording them (too vague, too old, wrong category, weak opportunity)
@@ -94,6 +112,7 @@ By category, items kept of those found:
 
 ## Limits
 
-- One day's news, 107 items, marked once. A different day could give different numbers.
+- One day's news, 107 items, marked once, by ChatGPT. A different day or a person could give different numbers.
 - The broken links weren't checked by hand; some may be sites that refuse scripts.
-- The files (`results.json`, `review.csv`, `key.json`, `summary.txt`) are kept outside the repo.
+- The two review files are in the repo. The script's other files (`results.json`, `key.json`, `summary.txt`) are
+  kept outside it.

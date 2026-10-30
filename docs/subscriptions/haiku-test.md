@@ -1,7 +1,8 @@
 # Haiku 5.5 vs Sonnet 5.5: sweep test plan
 
-**Status:** run on 30 Oct 2026 (3 rounds, $1.10). **Haiku passed the blind review and stays.** Kept items: Haiku
-28 of 55 (51%), Sonnet 15 of 52 (29%); invented: none from either. Haiku cost $0.1215 a sweep against Sonnet's
+**Status:** run on 30 Oct 2026 (3 rounds, $1.10). **Haiku passed the blind review and stays.** The review was
+marked by ChatGPT, not a person. Kept items: Haiku 28 of 55 (51%), Sonnet 15 of 52 (29%); invented: none from
+either. Haiku cost $0.1215 a sweep against Sonnet's
 $0.2440 (50%, so the 40% cost check failed), and 4 of its links were broken against Sonnet's 1. Full results and the
 decision: [model-test-2026-10-30.md](model-test-2026-10-30.md).
 

@@ -10,6 +10,8 @@ grouped by date.
   Sonnet. Haiku failed two automatic checks: cost (50% of Sonnet's, the mark was 40%) and links (4 broken, Sonnet 1).
   Only 43 of all 107 items were kept, and Website & app was the weakest category for both. Written up in
   `docs/subscriptions/model-test-2026-10-30.md`; `haiku-test.md` and `costing.md` link to it. Docs only.
+- Model test files. The blind review was marked by ChatGPT, not a person; the results doc now says so and what it
+  means for the result. The review file, blank and marked, is in `docs/subscriptions/model-test-2026-10-30/`.
 - Measuring the output. The LLM log marks each item's source `searched: true` or `false`: whether web search
   returned its link, or the model gave it from memory. `llm-logs.mjs models` counts them and `summary` lists them;
   older logs are matched from their pages. On the 10 logs from 26 to 30 Oct, 1 of 190 items had a link search never
