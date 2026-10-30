@@ -189,6 +189,12 @@ const sweepOpts = (storage, byCat, now) => ({
   check(lg.summary.pages === 3 && lg.summary.links.join() === "https://a.example/1,https://b.example/2,https://c.example/3",
     "summary: pages found by search, each link once across the sweep");
   check(out.usage.pages === 3, "the sweep's usage counts the pages too");
+  const ubc = lg.summary.usageByCat || {};
+  check(Object.keys(ubc).sort().join() === "gov_policy,traveler_pain,web_app" && ubc.web_app.input === 1000,
+    "summary: usage per category, a failed call that was billed included, one with no usage left out");
+  check(["input", "output", "searches"].every((k) => Object.values(ubc).reduce((a, u) => a + u[k], 0) === lg.summary[k]),
+    "summary: usage per category adds up to the total");
+  check(!/usageByCat/.test(st.m.get(sweepKey(out.id))) && !("usageByCat" in out.usage), "usage per category is in the private log only, not the public sweep file");
   const tp = lg.calls.find((c) => c.cat === "traveler_pain");
   check(tp.request.messages[0].content.includes('"Traveler pain"') && tp.request.model === "claude-test" && tp.request.max_tokens === 16000,
     "a call keeps its request: prompt, model, limits");
