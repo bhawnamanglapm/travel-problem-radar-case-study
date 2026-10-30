@@ -5,6 +5,12 @@ grouped by date.
 
 ## 2026-10-30
 
+- `scripts/llm-logs.mjs` shows each sweep's model and cost: `summary` per sweep and per call, and `list` per line.
+  Costs are list prices applied to the reported usage, as `cost-per-run.mjs` does; a call it can't price is named,
+  not guessed. A new `models [--days 30]` command groups the logs by model, with averages per sweep: items, pages,
+  searches, tokens, cost (and cost per item), failed calls, calls that quoted a passage, and pages older than 30
+  days. It measures volume, freshness and cost, not quality. Every log so far is on `claude-haiku-5-5`
+  (10 sweeps, 26 to 30 Oct: $0.1121 a sweep, 19.0 items), so there's nothing to compare yet.
 - Paid Pro lifecycle (T22). A paid Pro due to renew stays Pro for 48 hours past its period end, so a late `charged`
   event no longer drops it to Free. The sweep moves a paid Pro whose period has ended and whose Razorpay plan is
   cancelled, completed, halted or expired to Free if its webhook was missed (`subscribers.proLapsed` in the reply),

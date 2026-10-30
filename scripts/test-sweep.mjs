@@ -315,6 +315,51 @@ const sweepOpts = (storage, byCat, now) => ({
   check((await run(["show", "1700000000000"])).code === 1, "llm-logs show: unknown id is not found (exit 1)");
   check((await run(["show"])).code === 2 && (await run(["drop", "x"])).code === 2 && (await run(["list", "--days", "0"])).code === 2,
     "llm-logs: bad usage exits 2");
+
+  // Model and cost, at the list prices in compare-models.mjs. These sweeps ran on model "m", which has no price.
+  check(/ {2}m {2}not known \(4 calls not priced: /.test(ls.out.split("\n")[0]), "llm-logs list: each sweep's model, and why it has no cost");
+  check(/^Model: m\. Cost: not known \(4 calls not priced: .*no price for m.*\), at list prices\.$/m.test(sum.out) && /gov_policy .*, not priced$/m.test(sum.out),
+    "llm-logs summary: the model, and no guessed cost for a model with no price");
+  const U = { input: 50_000, output: 10_000, searches: 2, pages: 3 }; // under 100K input, so Haiku's lower prices
+  const logOf = (id, day, model, calls) => ({
+    id: String(id), at: `2026-10-${day}T02:27:00.000Z`, status: "saved",
+    summary: ["input", "output", "searches", "pages"].reduce((s, k) => ({ ...s, [k]: calls.reduce((a, c) => a + ((c.usage || {})[k] || 0), 0) }),
+      { calls: calls.length, failed: calls.filter((c) => c.error).length }),
+    calls: calls.map((c) => ({ ...c, ...(model ? { request: { model } } : {}) })),
+  });
+  const pages = [{ url: "https://a.example/1", title: "A", age: "2 days ago" }, { url: "https://b.example/2", title: "B", age: "40 days ago" }, "https://c.example/3"];
+  const haiku = (id, day) => logOf(id, day, "claude-haiku-5-5", [
+    { cat: "traveler_pain", items: 3, usage: U, response: { content: [{ type: "web_search_tool_result", pages },
+      { type: "text", text: "t", citations: [{ url: "https://a.example/1", quote: "q" }] }] } },
+    { cat: "gov_policy", items: 0, error: "http 529" },
+  ]);
+  const h1 = haiku(1, 26), h2 = haiku(2, 27);
+  const s1 = logOf(3, 28, "claude-sonnet-5-5", [{ cat: "traveler_pain", items: 4, usage: U }]);
+  const hs = tool.formatSummary(h1);
+  check(/^Model: claude-haiku-5-5\. Cost: \$0\.0300 \(1 call not priced: 1 no usage reported\), at list prices\.$/m.test(hs)
+    && /^traveler_pain .*, \$0\.0300$/m.test(hs) && /^gov_policy +failed: http 529;.*, not priced$/m.test(hs),
+    "llm-logs summary: the sweep's cost and each call's, and a failed call with no usage is not priced");
+  check(/^Model: unknown\. Cost: not known \(1 call not priced: 1 no price for an unknown model\)/m.test(tool.formatSummary(logOf(4, 28, null, [{ cat: "web_app", items: 1, usage: U }]))),
+    "llm-logs summary: a log with no model says unknown");
+  check(tool.modelOf(logOf(5, 28, null, [{ cat: "a", request: { model: "x" } }, { cat: "b", request: { model: "y" } }])) === "x+y", "llm-logs: a sweep on two models names both");
+  check(tool.ageDays("34 days ago") === 34 && tool.ageDays("2 weeks ago") === 14 && tool.ageDays("1 year ago") === 365
+    && tool.ageDays("yesterday") === null && tool.ageDays(undefined) === null, "llm-logs: a page's age in days, from search's text");
+  const mv = tool.formatModels([h1, s1, h2], 30);
+  check(mv.startsWith("LLM logs from the last 30 days: 3 sweeps, 2 models.") && mv.indexOf("claude-haiku-5-5:") < mv.indexOf("claude-sonnet-5-5:"),
+    "llm-logs models: one block per model, the most used first");
+  check(mv.includes("claude-haiku-5-5: 2 sweeps, 2026-10-26 to 2026-10-27\n  Failed calls: 2 of 4 (50%)\n"
+    + "  Per sweep: 3.0 items, 3.0 pages, 2.0 searches, 50,000 input and 10,000 output tokens\n"
+    + "  Cost: $0.0300 a sweep, $0.0100 an item (2 calls not priced, left out)\n"
+    + "  Calls that quoted a passage: 2 of 4\n"
+    + "  Pages older than 30 days: 2 of 4 with an age (50%); 2 with no age"), "llm-logs models: a model's averages, cost per item, quotes and page age");
+  check(mv.includes("claude-sonnet-5-5: 1 sweep, 2026-10-28 to 2026-10-28\n  Failed calls: 0 of 1 (0%)\n")
+    && mv.includes("  Cost: $0.2200 a sweep, $0.0550 an item\n") && !mv.includes("nothing to compare") && /not quality/.test(mv),
+    "llm-logs models: the second model, and the note that this isn't quality");
+  check(tool.formatModels([s1], 30).includes("Only one model in these logs, so there's nothing to compare yet."), "llm-logs models: one model, nothing to compare");
+  const mr = await run(["models"]);
+  check(mr.code === 0 && mr.out.includes("m: 2 sweeps") && mr.out.includes("(8 calls not priced, left out)"), "llm-logs models: reads the store's logs");
+  check((await run(["models", "--days", "31"])).code === 2 && (await run(["models", "x"])).code === 2 && (await run(["models", "--days", "1"])).out.includes("1 sweep,"),
+    "llm-logs models: --days is 1 to 30; no other arguments");
 }
 
 // ---- 60-sweep cap
