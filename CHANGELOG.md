@@ -8,6 +8,10 @@ grouped by date.
 - PM docs: KPI-20's target set by the owner (20% of items in India, 4 or more a sweep; floor 10%, stretch 25%).
   Indian communities to try, all to verify, and a proposed path to the Government of India: DSC-10, R-17, CR-24,
   RM-39 (a monthly India report) and RM-40 (government, state tourism departments first).
+- `scripts/score-items.mjs --area India` scores only the items the board places in India (KPI-20, RM-38).
+- Docs: [dpdp-check.md](docs/subscriptions/dpdp-check.md), India's data law duty by duty against what the radar does
+  today, for an adviser (not legal advice; T30 step 9, R-17). The Indian communities in go-to-market checked against
+  sources; Pragmatic Leaders, a course company, dropped.
 
 ## 2026-10-30
 

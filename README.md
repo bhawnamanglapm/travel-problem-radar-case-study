@@ -110,7 +110,8 @@ TS20, is in [pm/08-testing/results/](pm/08-testing/results/README.md).
 - the opportunity names a user and something buildable.
 
 Report the share that passes each one. `scripts/score-items.mjs` picks the items from the saved sweeps (read-only),
-checks the links and dates itself, and writes a CSV for the other four; `--score` reports the shares.
+checks the links and dates itself, and writes a CSV for the other four; `--score` reports the shares. `--area India`
+picks only the items the board places in India (KPI-20).
 
 **Before and after.** On 18 Oct 2026 the case study was checked against the repo, and claims without evidence were
 changed:

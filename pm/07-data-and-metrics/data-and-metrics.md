@@ -61,7 +61,7 @@ also shows members, plans, areas and payment mode, behind its own user and passw
 |---|---|---|---|
 | `node scripts/llm-logs.mjs models` (also `list`, `summary`, `show`, `areas`) | `radar:llmlog:` | Per model, averages per sweep: items, pages, searches, tokens, cost and cost per item; failed calls; the items' source ages and links search never returned (`searched`). With `areas`, the items shown by area and India's share (T42) | KPI-20, KPI-01 (a proxy), KPI-03, KPI-06, KPI-08, KPI-09 |
 | [`scripts/cost-per-run.mjs`](../../scripts/cost-per-run.mjs) | `radar:llmlog:` | Each sweep's cost and each category's, at list prices (T29) | KPI-06 |
-| [`scripts/score-items.mjs`](../../scripts/score-items.mjs) | Saved sweeps | Picks 20 items, checks links and dates, writes a review sheet outside the repo for a person to score; then totals it | KPI-01 to KPI-05. Built; **no scoring recorded yet** |
+| [`scripts/score-items.mjs`](../../scripts/score-items.mjs) | Saved sweeps | Picks 20 items (`--area India`: only India's), checks links and dates, writes a review sheet outside the repo for a person to score; then totals it | KPI-01 to KPI-05. Built; **no scoring recorded yet** |
 
 Readings so far, from `node scripts/llm-logs.mjs models` on 2026-10-30: 10 sweeps 26 to 30 Oct, all on `claude-haiku-5-5`, $0.1121 and 19.0
 items a sweep on average; 1 of 190 items had a link search never returned; the 18 items with a `sourceDate` had a

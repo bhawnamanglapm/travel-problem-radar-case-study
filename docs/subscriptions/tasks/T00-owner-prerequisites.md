@@ -43,7 +43,8 @@ deferred by the owner (step 8).
 7. **Answer the decisions** D1 to D9 in [README.md](README.md#decisions-to-settle-before-or-during-the-build-owner-input-needed).
    Write the answers in the table below and commit it.
 8. **Get advice on India's DPDP Act** for storing email addresses, before launch (T12). Note who gave it and what
-   it changed. **Deferred by the owner on 2026-10-21**; revisit before T12 step 9 (publishing the links).
+   it changed. **Deferred by the owner on 2026-10-21**; revisit before T12 step 9 (publishing the links). A
+   checklist to take to the adviser: [dpdp-check.md](../dpdp-check.md) (2026-10-31).
 
 ## Decisions record
 

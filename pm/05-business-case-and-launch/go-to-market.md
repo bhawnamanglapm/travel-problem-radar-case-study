@@ -61,7 +61,7 @@ and no marketing budget is recorded ([costing.md](../../docs/subscriptions/costi
 | The owner's LinkedIn profile | Linked from `/about/` | Posts about what the radar finds, each linking its source | KPI-10, by day of the post |
 | The Free teaser email | Yes | The daily headlines; the reason to upgrade | KPI-13 Pro requests; KPI-17 after payments open |
 | Direct invitations to travel PMs | No list exists | The pilot below; the interview plan | KPI-10, KPI-11, interviews |
-| Communities and groups of Indian travel PMs | To try, each **to verify** (named from memory on 2026-10-31; none was opened): PM communities (The Product Folks, Pragmatic Leaders); iSPIRT; NASSCOM; travel trade bodies (TAAI, IATO, ADTOI, OTOAI, FAITH); the SATTE and OTM trade shows; PMs at Indian online travel agencies, airlines, rail and payments companies on LinkedIn. Whether the owner is already in any: **OWNER INPUT NEEDED** | Posts about India items, each linking its source; the interview plan's India segment | KPI-10, interviews |
+| Communities and groups of Indian travel PMs | To try. **Checked 2026-10-31** against the source linked: [The Product Folks](https://communityplaybooks.substack.com/p/the-product-folks-suhas-motwani), a volunteer-led community of Indian PMs with Slack, events and a job board; [iSPIRT](https://ispirt.in/who-we-are/), a non-profit think tank since 2013, known for India Stack; [FAITH](https://iato.in/circulars/view/1887), the federation of 10 travel and hospitality associations, among them TAAI, IATO and ADTOI; the [SATTE](https://www.jetro.go.jp/en/database/j-messe/tradefair/detail/157241) trade show in New Delhi, next listed for 19–21 Jan 2027; [OTM](https://maharashtratourism.gov.in/otm-mumbai-2026/) in Mumbai, held 5–7 Feb 2026, 2027 dates not found. **To verify**: the India Product Management Association (IPMA) and the [Institute of Product Leadership](https://www.productleadership.com/about-ipl/)'s Product Leaders Forum; NASSCOM; OTOAI (its full name differs between sources); member counts. Pragmatic Leaders, listed before, is a paid PM course company, not a community ([Inc42](https://inc42.com/buzz/pragmatic-leaders-product-manager/)). Also PMs at Indian online travel agencies, airlines, rail and payments companies on LinkedIn. Whether the owner is already in any: **OWNER INPUT NEEDED** | Posts about India items, each linking its source; the interview plan's India segment | KPI-10, interviews |
 
 No page-analytics script is in the site's code, so visits aren't counted; sign-ups are the first measured step
 ([data-and-metrics.md](../07-data-and-metrics/data-and-metrics.md#what-isnt-measured)).
@@ -134,7 +134,8 @@ rather than a product opportunity (DSC-10). So this is a second audience, served
 | Railways | IRCTC; CRIS, Railways' IT arm | Many traveller problems |
 | Formal routes | DPIIT's Startup India recognition; Smart India Hackathon, where ministries post problem statements; GeM, the Government e-Marketplace | The official ways in, and the way government buys |
 
-Before step 3: a check of India's data law (the Digital Personal Data Protection Act, 2023) for subscriber data, and
+Before step 3: a check of India's data law (the Digital Personal Data Protection Act, 2023) for subscriber data
+(the checklist for an adviser: [dpdp-check.md](../../docs/subscriptions/dpdp-check.md)), and
 the R-15 safeguards, because a wrong item costs more here (R-17). Nothing is to be claimed to an official that KPI-20
 and the scored items don't show.
 
