@@ -68,7 +68,7 @@ working in a real inbox; that is T12's staged launch.
   ticked sent as `null`, nothing ticked blocking Save, the disabled section when asking for Pro (no areas sent),
   375px in light and dark, and a rendered sample email for Asia. Not in CI.
 - Not checked: a real Pro email in production with areas chosen; that waits for a member to choose some.
-- Follow-up: show areas on the admin page.
+- Follow-up done: `/admin/` shows Pro areas (a card, a column and a CSV field).
 
 ### T40
 - No new function: `/p/<sweep>/<item>` is a `vercel.json` rewrite to `/api/data?page=item`, so `api/` stays at 10

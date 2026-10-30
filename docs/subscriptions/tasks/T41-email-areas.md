@@ -74,7 +74,7 @@ every European and American problem too. T37 gives each item an area, so the ema
 - **Areas aren't carried through checkout or a Pro request.** A new Pro starts on all areas and chooses on the
   account page once Pro is on.
 - **Saved with `set-plan`** as well as the new `set-areas`, because the card has one Save button.
-- **Not in this task:** the admin page doesn't show areas yet. `scripts/subscribers.mjs show` prints them (it prints
+- **Not in this task, done after:** the admin page shows areas (a card, a column and a CSV field). `scripts/subscribers.mjs show` prints them too (it prints
   the whole record but the token).
 
 ### Groups and the deadline
