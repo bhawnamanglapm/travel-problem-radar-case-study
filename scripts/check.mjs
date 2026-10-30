@@ -70,6 +70,13 @@ const vercelJson = JSON.parse(readFileSync("vercel.json", "utf8"));
 // The site build lives in package.json's build:site: Vercel caps vercel.json's buildCommand at 256 characters.
 const siteBuild = JSON.parse(readFileSync("package.json", "utf8")).scripts["build:site"] || "";
 check(vercelJson.buildCommand === "npm run build:site" && siteBuild.length > 0, "vercel.json's buildCommand runs package.json's build:site (Vercel allows 256 characters, too few for the list)");
+// BUG-009: @vercel/blob → @vercel/oidc → @vercel/cli-config pins zod 4.1.11 exactly, which npm audit rates high. The
+// override lifts it to the fixed 4.6.6; drop it once cli-config stops pinning an old zod.
+const zodOver = (JSON.parse(readFileSync("package.json", "utf8")).overrides || {}).zod || "";
+const zodLocked = ((JSON.parse(readFileSync("package-lock.json", "utf8")).packages || {})["node_modules/zod"] || {}).version || "";
+const atLeast = (v, min) => { const a = v.split(".").map(Number), b = min.split(".").map(Number); return a[0] > b[0] || (a[0] === b[0] && (a[1] > b[1] || (a[1] === b[1] && a[2] >= b[2]))); };
+check(/^\d+\.\d+\.\d+$/.test(zodOver) && atLeast(zodOver, "4.6.6") && zodLocked === zodOver,
+  `package.json overrides zod to 4.6.6 or later and the lockfile installs it (${zodOver || "no override"}, locked ${zodLocked || "none"}) (BUG-009)`);
 check(/\bcp -r [^&]*\bsubscribe\b[^&]* public\//.test(siteBuild), "build:site copies subscribe into public/");
 
 // Admin page: self-contained, ships, talks to /api/admin, not indexed, and holds no credential or address.
