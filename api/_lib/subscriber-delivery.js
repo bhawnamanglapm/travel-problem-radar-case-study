@@ -173,8 +173,8 @@ export async function deliverToSubscribers({ env, storage, fetchFn, now, randomB
         const problems = all.filter((p) => (!cats || cats.includes(p.cat)) && (!areas || inAreas(p)));
         if (!problems.length) { result.pro.emptyForCats += recs.length; continue; }
         if (halted) { result.pro.deferred += recs.length; continue; }
-        const perCat = cats ? Object.fromEntries(Object.entries(sweep.perCat || {}).filter(([k]) => cats.includes(k))) : sweep.perCat;
-        const mail = buildDigestEmail({ at: sweep.at, problems, perCat }, liveUrl, { heading: "Travel Problem Radar: Pro update", cats, areas });
+        // A failed category is the owner's alert, not the subscriber's: no "Failed this run" line here.
+        const mail = buildDigestEmail({ at: sweep.at, problems, perCat: {} }, liveUrl, { heading: "Travel Problem Radar: Pro update", cats, areas });
         const r = await sendBatch(creds, recs.map((rec) => message(rec, mail, "pro")), {
           fetchFn, shouldStop,
           idempotencyKey: (key === "all" ? `${sweep.id}-pro` : `${sweep.id}-pro-${key}`) + (areaKey === "all" ? "" : `-a-${areaKey}`)

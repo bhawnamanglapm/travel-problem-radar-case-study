@@ -1849,8 +1849,10 @@ const iso = (ms) => new Date(ms).toISOString();
     "pro cats: the subject and heading counts are for their categories, and the email names them");
   check(!/Failed this run/.test(gov.text), "pro cats: a failed category they didn't choose isn't mentioned");
   const all = d.to("all@example.com")[0];
-  check(all && /4 problems, 2 new$/.test(all.subject) && /Item t1/.test(all.text) && /Item w1/.test(all.text) && /Failed this run: Industry/.test(all.text) && !/Your categories/.test(all.text),
+  check(all && /4 problems, 2 new$/.test(all.subject) && /Item t1/.test(all.text) && /Item w1/.test(all.text) && !/Your categories/.test(all.text),
     "pro cats: no choice (null) gets every category, as before");
+  check(!/fail|timeout/i.test(all.text) && !/fail|timeout/i.test(all.html) && !/fail/i.test(all.subject),
+    "pro cats: a failed category is the owner's alert; a member who gets every category isn't told");
   const govCall = d.calls.find((c) => c.body.some((m) => m.to[0] === "gov1@example.com"));
   check(govCall.body.length === 2 && govCall.body.some((m) => m.to[0] === "gov2@example.com") && govCall.body[0].subject === govCall.body[1].subject
     && govCall.body[0].text.split("\n--\n")[0] === govCall.body[1].text.split("\n--\n")[0],
@@ -1858,6 +1860,13 @@ const iso = (ms) => new Date(ms).toISOString();
   const proKeys = d.calls.filter((c) => c.body.some((m) => /Pro update/.test(m.text))).map((c) => c.key);
   check(proKeys.length === 2 && proKeys.includes(`${sweep.id}-pro-0`) && proKeys.includes(`${sweep.id}-pro-gov_policy-0`),
     "pro cats: \"all\" keeps the old idempotency key; another set gets its own");
+  // LLM-failure alert: a member who chose the failed category gets the rest, with no word of the failure.
+  const df = await dw([{ email: "indweb@example.com", cats: ["industry", "web_app"] }, { email: "free2@example.com", plan: "free" }]);
+  const iw = df.to("indweb@example.com")[0];
+  check(iw && /Item w1/.test(iw.text) && !/Item t1|Item g1/.test(iw.text) && /Your categories: Website & app, Industry/.test(iw.text)
+    && !/fail|timeout/i.test(iw.text + iw.html + iw.subject), "pro cats: chose the failed category too: the saved one comes, the failure isn't mentioned");
+  const fr = df.to("free2@example.com")[0];
+  check(fr && /Item t1/.test(fr.text) && !/fail|timeout/i.test(fr.text + fr.html + fr.subject), "free: a failed category isn't mentioned either");
   check(d.to("ind@example.com").length === 0 && d.out.pro.emptyForCats === 1 && d.out.pro.due === 4 && d.out.pro.sent === 3 && d.out.pro.deferred === 0,
     "pro cats: a set with nothing this sweep is not sent and is counted as emptyForCats");
   for (const e of ["free@example.com", "lapsed@example.com"]) {
