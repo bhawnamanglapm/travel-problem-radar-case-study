@@ -622,7 +622,7 @@ mapping doesn't know is stored under `radar/other/`.
 | `radar:items` | `radar/history/items.json` | Each item's history (T36): first sweep, number of sweeps, up to 6 latest sweep ids, and `e: 1` when it was seen before the index existed. Trimmed to the ids in `radar:seenIds`. Built once from the saved sweeps when missing. The sweep copies it onto each saved item as `firstAt`, `seen`, `prev` and `firstEarlier` | No |
 | `radar:lastScheduled` | `radar/state/last-scheduled.json` | When the last scheduled sweep started, saved or not, and its slot (`{ at, slotAt }`; before T35 just the time); the one-sweep-per-slot rule reads it | No |
 | `radar:llmlog:<id>` | `radar/logs/llm-log-YYYY-MM-DD-HH-MM-<id>.json` | One sweep's LLM log: each Claude call's request (prompt, model, limits, tools; never the headers or key) and response (thinking, search queries, answer, stop reason, usage), and a summary of input and output tokens, searches, and the pages search found, **as links only** (page contents are encrypted and left out). Written for every sweep that ran: saved, empty, or not saved. `<id>` is the sweep's id. Deleted after 30 days by the day's first sweep. Read with `scripts/llm-logs.mjs` | No |
-| `radar:sub:<id>` | `radar/subscribers/<id>.json` | One subscriber: address, status, plan, token, dates, and chosen categories (`cats`, Pro only). Since T16 also `signin` (the SHA-256 of an unused sign-in code, its expiry and when it was sent; `null` once used) and, optionally, `sessionVer` (raising it by hand signs that subscriber out on every browser). Since T17, a Pro record whose emails stopped has `emailOff`: `unsubscribed`, `bounced` or `complained`. Since 2026-10-27, optionally `pw` (a scrypt hash of the password; see [Passwords](#passwords)), `pendingPw` (a sign-up's password waiting for its confirmation link, with the SHA-256 of the link's key) and `pwFails` (wrong passwords this hour). Since T39, optionally `saved` (Pro): up to 100 problems saved on the board, newest first, `{ id, sweepId, at, item }` with `item` the server's copy from the sweep file; kept if Pro ends, deleted with the record. `<id>` is the SHA-256 of the canonical address (Gmail without dots or `+tags`, and `+tags` dropped for the big providers; see [email-signup.md](docs/subscriptions/email-signup.md#flow)). Records made before 2026-10-22 keep the SHA-256 of the lowercased address | No |
+| `radar:sub:<id>` | `radar/subscribers/<id>.json` | One subscriber: address, status, plan, token, dates, and chosen categories (`cats`, Pro only). Since T16 also `signin` (the SHA-256 of an unused sign-in code, its expiry and when it was sent; `null` once used) and, optionally, `sessionVer` (raising it by hand signs that subscriber out on every browser). Since T17, a Pro record whose emails stopped has `emailOff`: `unsubscribed`, `bounced` or `complained`. Since 2026-10-27, optionally `pw` (a scrypt hash of the password; see [Passwords](#passwords)), `pendingPw` (a sign-up's password waiting for its confirmation link, with the SHA-256 of the link's key) and `pwFails` (wrong passwords this hour). Since T39, optionally `saved` (Pro): up to 100 problems saved on the board, newest first, `{ id, sweepId, at, item }` with `item` the server's copy from the sweep file; kept if Pro ends, deleted with the record. Since T41, `areas` (Pro): `null` for all areas, or a list of the areas chosen (from Asia, Europe, North America, Latin America, Middle East & Africa, Oceania and Other); a record without the field reads as `null`. `<id>` is the SHA-256 of the canonical address (Gmail without dots or `+tags`, and `+tags` dropped for the big providers; see [email-signup.md](docs/subscriptions/email-signup.md#flow)). Records made before 2026-10-22 keep the SHA-256 of the lowercased address | No |
 | `radar:event:<YYYYMMDD>-<time>-<type>-<random>` | `radar/events/event-YYYY-MM-DD-HH-MM-SS-mmm-<type>-<random>.json` | One sign-up, confirmation, sign-in email, unsubscribe, emails-off, account-deleted, Pro, bounce or complaint event: type, time and plan, **no address or id**. Kept until `prune-events` deletes it | No |
 | `radar:deliveries:<YYYYMMDD>` | `radar/deliveries/deliveries-YYYY-MM-DD.json` (one a day, no time) | Record ids already sent that day's Free digest. Deleted by the sweep after 7 days | No |
 | `radar:subscriberCount` | `radar/state/subscriber-count.json` | Pending plus active records at the last saved sweep; the sign-up cap reads it | No |
@@ -854,8 +854,8 @@ then. The owner's digest is always sent first, so a used-up quota stops subscrib
 ```
 
 - `pro` is `{ "skipped": "manual run" }` for a manual run.
-- `pro.emptyForCats` counts Pro subscribers who chose categories that had nothing in this sweep. They are sent
-  nothing for it.
+- `pro.emptyForCats` counts Pro subscribers who chose categories (or, since T41, areas) that had nothing in this
+  sweep. They are sent nothing for it.
 - `free.alreadySent` counts subscribers who already had today's digest; later sweeps that day send them nothing.
 - `deferred` is anyone not reached this time, because the 240-second deadline passed or sending stopped. They are
   tried again at the next sweep, and nobody gets the same day's Free digest twice.
@@ -1482,6 +1482,12 @@ it (`pro.emptyForCats` in the sweep reply). Free subscribers see the plan card o
 and always get every category in the daily digest. If Pro ends, the choice stays stored but is ignored, so it applies again if Pro is granted again.
 `show <email>` prints it.
 
+**Pro areas (T41).** On the same card, a Pro subscriber picks All areas or Choose areas (Asia, Europe, North
+America, Latin America, Middle East & Africa, Oceania, and Other for places that weren't recognised). Save changes
+sends them with `set-plan` (`set-areas` also works on its own), stored as `areas`: `null` means all. Worldwide
+problems always come. A choice with nothing in a sweep sends nothing (counted in `pro.emptyForCats`). Free can't set
+areas (`403`), and the plan card shows them disabled until Pro is on.
+
 ### Sweeps a day (T32)
 
 Each Pro member chooses 1 to 5 emails a day on `/manage/` (no choice counts as 2). The GitHub schedule still fires at
@@ -1595,7 +1601,7 @@ covers a missed 00:17 run.
 | `subscribers.stopped: "deadline"`, with `deferred` counts | The sweep reached 240 seconds before sending finished | The rest go at the next sweep; nothing is sent twice |
 | `free.due: 0` with `alreadySent` above 0 | Today's Free digest has already gone to those subscribers | Expected; the next one goes after the first sweep of the next UTC day |
 | `pro: { "skipped": "manual run" }` | Pro email goes only with scheduled sweeps (decision D4) | Expected |
-| A Pro subscriber got no Pro email | Pro was granted after the last scheduled sweep; `proUntil` has passed (`list` shows `pro (lapsed)`); or the categories they chose had nothing in that sweep (`pro.emptyForCats` above 0) | Wait for the next scheduled sweep, or grant again. For categories, `show <email>` prints `cats`; they can tick more on `/manage/` |
+| A Pro subscriber got no Pro email | Pro was granted after the last scheduled sweep; `proUntil` has passed (`list` shows `pro (lapsed)`); or the categories or areas they chose had nothing in that sweep (`pro.emptyForCats` above 0) | Wait for the next scheduled sweep, or grant again. For categories and areas, `show <email>` prints `cats` and `areas`; they can tick more on `/manage/` |
 | A confirm or manage link says "This link isn't valid" | The record was deleted (a Free account unsubscribed, someone pressed Delete my account, or it was pending for more than 7 days), or the mail app cut the link short | Sign up again, or use the links in the most recent email |
 | `/subscribe/`, `/signin/`, `/manage/` or `/live/` opened on GitHub Pages | Pages has no `/api/`, so these pages send the visit on to the Vercel copy | Nothing to fix; link to `https://travel-problem-radar.vercel.app/subscribe/` |
 

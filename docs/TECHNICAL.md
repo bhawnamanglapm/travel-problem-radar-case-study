@@ -77,6 +77,12 @@ Subscriber -> links in each email -> /manage/ (/api/account: plan, Request Pro o
   for everyone, the summary, opportunity and source for a signed-in Pro. The Open Graph and Twitter tags carry only
   the teaser fields, with `og.png` as the image, so a link preview is the same for everyone. `noindex` and
   `no-store`. On a phone Share opens the share sheet; elsewhere it copies the link.
+- **Areas in the Pro email (T41).** `areas` on the record (`null` for all), checked by `normaliseAreas` against
+  T37's areas without Global, and saved with `set-plan` or `set-areas` (Pro only, `403 pro_only` otherwise).
+  Delivery groups Pro members by `cats|areas|f` and keeps a problem when `areaOf(region)` is Global or chosen. With
+  all areas the email and its idempotency key are byte for byte what they were before; otherwise the key gets
+  `-a-<areas>` and the email a "Your areas" line.
+
 - The API key is held as a Vercel secret, never in the page or the code.
 - Items are AI-gathered and not verified; the page tells visitors to check each source link.
 

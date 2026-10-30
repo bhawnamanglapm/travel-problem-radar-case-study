@@ -53,10 +53,22 @@ working in a real inbox; that is T12's staged launch.
 | [T37](T37-areas.md) Areas | built 2026-10-29 on `feat/t37-areas`, merged to main (#101, `8f1b220`) and live | 42a8a24, 2828648 | 1,300 pass | Added 2026-10-29, Phase 5. See T37 notes below |
 | [T38](T38-search-all-sweeps.md) Search all sweeps | built 2026-10-29 on `feat/t38-search-all-sweeps`, merged to main (#102, `fd3aad6`) and live | aff0218, 74b7bae, 5ef7ebd | 1,324 pass | Added 2026-10-29, Phase 5. See T38 notes below |
 | [T39](T39-saved-problems.md) Saved problems | built 2026-10-29 on `feat/t39-saved-problems`, merged to main (#103, `76a2d17`) and live | bc2c4cc, 9d7a9ac, 48957ef, 54fd29b | 1,358 pass | Added 2026-10-29, Phase 5. See T39 notes below |
-| [T40](T40-share-a-problem.md) Share one problem | built 2026-10-30 on `feat/t40-share-a-problem` | 11c660d, dac9282, 8a009d4 | 1,383 pass | Added 2026-10-29, Phase 5. See T40 notes below |
-| [T41](T41-email-areas.md) Areas in Pro email | todo | | | Added 2026-10-29, Phase 5 |
+| [T40](T40-share-a-problem.md) Share one problem | built 2026-10-30 on `feat/t40-share-a-problem`, merged to main (#104, `8613844`) and live | 11c660d, dac9282, 8a009d4 | 1,383 pass | Added 2026-10-29, Phase 5. See T40 notes below |
+| [T41](T41-email-areas.md) Areas in Pro email | built 2026-10-30 on `feat/t41-email-areas` | 577fb4e, bbd9259 | 1,417 pass | Added 2026-10-29, Phase 5. See T41 notes below |
 
 ## Notes per task
+
+### T41
+- "All areas" is byte for byte today's email: a fingerprint (SHA-256) of the Pro emails and idempotency keys for
+  members with no areas was taken on `main` and is checked in the tests, with `areas: null` and with the field
+  absent.
+- Free gets `403 pro_only` like the other plan actions, not the task's `402`.
+- Checked by hand in headless Chrome against a local server running the real account handler on an in-memory
+  store (22 checks): the section's place, choosing two areas, Save, reload, all areas saving `null`, all seven
+  ticked sent as `null`, nothing ticked blocking Save, the disabled section when asking for Pro (no areas sent),
+  375px in light and dark, and a rendered sample email for Asia. Not in CI.
+- Not checked: a real Pro email in production with areas chosen; that waits for a member to choose some.
+- Follow-up: show areas on the admin page.
 
 ### T40
 - No new function: `/p/<sweep>/<item>` is a `vercel.json` rewrite to `/api/data?page=item`, so `api/` stays at 10
