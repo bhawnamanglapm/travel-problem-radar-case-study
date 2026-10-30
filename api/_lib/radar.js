@@ -215,17 +215,29 @@ export function normalize(cat, p) {
 
 // A response's content blocks for the LLM log, without the encrypted parts (page contents, citation
 // indexes, thinking signatures): they can't be read and are most of the size. A searched page is kept
-// as its link only.
+// as its link, title and age; a citation as its link, title and the passage the model quoted.
+export const LOG_TITLE_MAX = 300;
+export const LOG_QUOTE_MAX = 500;
+// Text from other sites, cleaned for the log: no control characters (a title can't send escape codes
+// to the terminal that prints it), trimmed and capped. Empty gives undefined, so the field is left out.
+const siteText = (s, max) => String(s ?? "").replace(/[\u0000-\u001f\u007f-\u009f]/g, " ").trim().slice(0, max) || undefined;
+const defined = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
+
 export function logContent(blocks = []) {
   return blocks.map((b) => {
     if (b.type === "web_search_tool_result") {
       return Array.isArray(b.content)
-        ? { type: b.type, tool_use_id: b.tool_use_id, pages: b.content.map((r) => r.url).filter(Boolean) }
+        ? { type: b.type, tool_use_id: b.tool_use_id, pages: b.content.filter((r) => r.url).map((r) => defined({
+          url: r.url, title: siteText(r.title, LOG_TITLE_MAX), age: siteText(r.page_age, 50),
+        })) }
         : { type: b.type, tool_use_id: b.tool_use_id, error: b.content && b.content.error_code };
     }
     if (b.type === "text") {
       const out = { type: "text", text: b.text };
-      const cited = [...new Set((b.citations || []).map((c) => c.url).filter(Boolean))];
+      const seen = new Set();
+      const cited = (b.citations || []).filter((c) => c.url).map((c) => defined({
+        url: c.url, title: siteText(c.title, LOG_TITLE_MAX), quote: siteText(c.cited_text, LOG_QUOTE_MAX),
+      })).filter((c) => !seen.has(c.url + "\n" + c.quote) && seen.add(c.url + "\n" + c.quote));
       if (cited.length) out.citations = cited;
       return out;
     }

@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { buildDigestEmail } from "../api/_lib/email.js";
 import { makeDataHandler, makeSweepHandler } from "../api/_lib/handlers.js";
 import { buildDigest } from "../api/_lib/slack.js";
-import { AREAS, CATS, KEY_ITEMS, KEY_LLMLOG_PREFIX, KEY_SEARCH, areaOf, extractProblems, llmLogKey, mergeSearch, runDailySweep, scanCategory, sweepKey, trackItems, trimSeen } from "../api/_lib/radar.js";
+import { AREAS, CATS, KEY_ITEMS, KEY_LLMLOG_PREFIX, KEY_SEARCH, LOG_QUOTE_MAX, LOG_TITLE_MAX, areaOf, extractProblems, llmLogKey, logContent, mergeSearch, runDailySweep, scanCategory, sweepKey, trackItems, trimSeen } from "../api/_lib/radar.js";
 import { SLOTS_BY_FREQ, dueSlot, normaliseSweepsPerDay, previousSlotAt, siteSweepsPerDay, slotOf, sweepLimits, sweepsPerDayOf } from "../api/_lib/schedule.js";
 import { check, finish, memStorage, mockRes } from "./test-helpers.mjs";
 
@@ -203,7 +203,13 @@ const sweepOpts = (storage, byCat, now) => ({
   check(tp.response.content.some((b) => b.type === "server_tool_use" && b.input.query === "refund complaints")
     && tp.response.content.find((b) => b.type === "thinking").thinking === "look for refunds",
     "a call keeps the search queries and the thinking");
-  check(!/ENC|IDX|SIG|quoted/.test(raw), "encrypted page contents, citation indexes and signatures are left out; pages are links only");
+  check(!/ENC|IDX|SIG/.test(raw), "encrypted page contents, citation indexes and signatures are left out");
+  const sr = tp.response.content.find((b) => b.type === "web_search_tool_result" && b.pages);
+  check(sr.pages[0].url === "https://a.example/1" && sr.pages[0].title === "T" && sr.pages[0].age === "1 day", "a searched page keeps its link, title and age");
+  const tx = tp.response.content.find((b) => b.type === "text");
+  check(tx.citations.length === 1 && tx.citations[0].url === "https://a.example/1" && tx.citations[0].quote === "quoted" && tx.citations[0].title === "T",
+    "a citation keeps its link, title and the passage the model quoted");
+  check(lg.summary.links.every((l) => typeof l === "string"), "the summary's pages are still links only");
   check(!raw.includes("sekret"), "the API key is never in the log");
   const wa = lg.calls.find((c) => c.cat === "web_app");
   const ind = lg.calls.find((c) => c.cat === "industry");
@@ -229,6 +235,29 @@ const sweepOpts = (storage, byCat, now) => ({
   const noLog = { ...st3, set: async (k, v) => { if (k.startsWith(KEY_LLMLOG_PREFIX)) throw new Error("down"); return st3.set(k, v); } };
   const out3 = await runDailySweep(sweepOpts(noLog, { traveler_pain: [item(1)], gov_policy: [], web_app: [], industry: [] }, () => t));
   check(out3.status === "saved" && out3.llmLog === null, "a log that can't be written leaves the sweep saved (llmLog: null)");
+}
+
+// ---- LLM log: search page titles and quoted passages are text from other sites, cleaned
+{
+  const esc = "\u001b[31mred\u001b[0m\nline";
+  const [sr, tx] = logContent([
+    { type: "web_search_tool_result", tool_use_id: "s", content: [
+      { type: "web_search_result", url: "https://a.example/1", title: esc, page_age: "2 days", encrypted_content: "ENC" },
+      { type: "web_search_result", url: "https://b.example/2", title: "x".repeat(1000) },
+      { type: "web_search_result", title: "no url" },
+    ] },
+    { type: "text", text: "t", citations: [
+      { url: "https://a.example/1", title: "A", cited_text: esc, encrypted_index: "IDX" },
+      { url: "https://a.example/1", title: "A", cited_text: esc, encrypted_index: "IDX2" },
+      { url: "https://a.example/1", title: "A", cited_text: "q".repeat(2000) },
+    ] },
+  ]);
+  check(!/[\u0000-\u001f\u007f]/.test(sr.pages[0].title + tx.citations[0].quote) && /red/.test(sr.pages[0].title) && /line/.test(tx.citations[0].quote),
+    "log: control characters in a title or quote become spaces; the text stays");
+  check(sr.pages[1].title.length === LOG_TITLE_MAX && !("age" in sr.pages[1]) && tx.citations[1].quote.length === LOG_QUOTE_MAX,
+    "log: a long title and quote are capped; an age the API didn't give is left out");
+  check(sr.pages.length === 2 && tx.citations.length === 2, "log: a result with no link is dropped; a repeated citation is kept once");
+  check(!/ENC|IDX/.test(JSON.stringify([sr, tx])), "log: encrypted contents and indexes are still left out");
 }
 
 // ---- LLM logs older than 30 days go, listed on the first sweep of a UTC day only
