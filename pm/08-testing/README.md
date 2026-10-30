@@ -27,7 +27,7 @@ Testing is strong offline and thin everywhere else.
 - **Accounts:** emailed sign-in link, Continue with Google, password, the `/manage/` page.
 - **Payments:** Razorpay checkout, cancel, renew, expiry and the webhook.
 - **Admin:** the admin page and `scripts/subscribers.mjs`.
-- **Static pages:** home, about, pricing, subscribe, sign-in, sign-up and the legal pages.
+- **Static pages:** home, about, pricing, sign-in, sign-up and the legal pages (`/subscribe/` redirects to `/pricing/`).
 
 **Out of scope.** Anthropic, Vercel, Blob, Resend, Razorpay and Google themselves. We test only our use of them.
 
@@ -76,7 +76,7 @@ The pasted table names the roles a team usually has. This is a one-person team, 
 | [TS14](TS14-performance-testing.md) | Performance testing | Not started | Sweep time is logged; nothing has a target |
 | [TS15](TS15-security-testing.md) | Security testing | Partial | Many guards tested; no review, no headers |
 | [TS16](TS16-user-acceptance-testing.md) | UAT | Partial | The model test's review was marked by ChatGPT, not a person |
-| [TS17](TS17-accessibility-testing.md) | Accessibility testing | Partial | Contrast checked (42 pairs a theme); no keyboard or screen-reader pass |
+| [TS17](TS17-accessibility-testing.md) | Accessibility testing | Partial | Contrast checked (42 pairs a theme); skip link on the home page only; no keyboard or screen-reader pass |
 | [TS18](TS18-cross-browser-and-device-testing.md) | Cross-browser and device | Not started | No matrix |
 | [TS19](TS19-bug-reporting-and-retesting.md) | Bug reporting and retesting | Not started | 7 notes; now logged there |
 | [TS20](TS20-production-validation.md) | Production validation | Partial | Sweep slots and logs checked by hand; no checklist |

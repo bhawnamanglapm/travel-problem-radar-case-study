@@ -34,7 +34,7 @@ sweep ran. If smoke fails, nothing else is tested; the deploy is rolled back or 
 | SM-3 | Open `/live/` signed out | The locked board shows |
 | SM-4 | Open `/live/` as the owner's Pro | The board shows the latest sweep, with its time |
 | SM-5 | Open `/pricing/` | The price matches `plan.json` |
-| SM-6 | Open `/subscribe/`, `/signin/`, `/manage/` | Each loads |
+| SM-6 | Open `/signup/`, `/signin/`, `/manage/`; open `/subscribe/` | Each loads; `/subscribe/` lands on `/pricing/` |
 | SM-7 | Open one legal page | Loads, with the footer |
 | SM-8 | API-1 and API-2 from [TS11](TS11-api-testing.md) | 401 and 401 |
 | SM-9 | The last sweep's time on the board | Within the last scheduled slot (slots at 0, 5, 10, 15 and 20 UTC; a slot nobody chose is skipped) |

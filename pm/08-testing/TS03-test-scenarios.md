@@ -128,7 +128,7 @@ IDs are SC-<journey>-<n>. H is a happy path, N negative, E an edge case.
 |---|---|---|
 | SC-L-1 | H | Every page loads, with the same footer (REQ-30) |
 | SC-L-2 | H | Pricing, manage and the policy pages show the values in `plan.json` (REQ-29) |
-| SC-L-3 | E | `/subscribe/` and `/manage/`: each page's job is clear (bug note 7) |
+| SC-L-3 | E | `/subscribe/` redirects to `/pricing/` (since 2026-10-28); `/pricing/` and `/manage/` each have a clear job (bug note 7) |
 | SC-L-4 | E | No spelling mistakes (bug note 6) |
 
 ## Done when

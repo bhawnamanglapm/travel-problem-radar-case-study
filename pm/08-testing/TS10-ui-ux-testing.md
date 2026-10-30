@@ -36,7 +36,7 @@ true things about Pro, by the rules in
 |---|---|---|
 | 5 | A Sign in option shows on the pricing page when already signed in | S3 |
 | 6 | Check the demo for spelling mistakes | S4 |
-| 7 | `/subscribe/` and `/manage/`: what's the difference? The two pages overlap | S3 |
+| 7 | `/subscribe/` and `/manage/`: what's the difference? Since 2026-10-28 `/subscribe/` redirects to `/pricing/`, because it duplicated pricing (`aa080e2`). Retest as pricing against manage | S3, or closed on retest |
 
 ## The work
 
@@ -48,7 +48,7 @@ true things about Pro, by the rules in
 | `/about/` | — |
 | `/demo/` | Each tab: board, report (digest), detail panel |
 | `/live/` | Locked (signed out, Free); open (Pro); empty search; no saved problems; a shared problem link |
-| `/subscribe/` | New, already subscribed, closed, error |
+| `/subscribe/` | Redirects to `/pricing/` |
 | `/signup/`, `/signin/` | Each method; wrong code; too many tries |
 | `/manage/` | Free, Pro, Pro cancelled, lapsed; checkout summary |
 | `/pricing/` | Signed out, signed in Free, signed in Pro |
@@ -69,9 +69,10 @@ true things about Pro, by the rules in
 4. **Bug note 6:** spell-check the demo and every shipped page. Copy the visible text out (the browser's Select All,
    or a script that strips tags from the built pages) and run it through a spell checker. The sample data's titles
    and summaries come from the AI and the news; fix only our own copy.
-5. **Bug note 7:** write down each page's one job. A proposal for the owner to decide: `/subscribe/` is for joining
-   (no account yet); `/manage/` is for members (plan, email choices, billing). Then remove what overlaps, and have
-   each page link to the other for the wrong visitor.
+5. **Bug note 7:** retest first, since `/subscribe/` now redirects to `/pricing/`. If pricing and manage still
+   overlap, write down each page's one job. A proposal for the owner to decide: `/pricing/` is for deciding and
+   joining (no account or Free); `/manage/` is for members (plan, email choices, billing). Then remove what
+   overlaps, and have each page link to the other for the wrong visitor.
 6. Log each finding in [TS19](TS19-bug-reporting-and-retesting.md) with a screenshot (no addresses showing).
 
 ## Done when

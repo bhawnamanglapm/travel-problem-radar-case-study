@@ -65,7 +65,7 @@ All on the `staging` Preview with Razorpay test keys and the owner's test inboxe
 
 | ID | Scenario | Preconditions | Steps | Expected |
 |---|---|---|---|---|
-| TC-F-1 | SC-F-1 | A test inbox not yet subscribed | 1. Sign up on `/subscribe/`. 2. Open the confirm email. 3. Open the link. 4. Press Confirm | The confirm page shows a button and doesn't confirm on open. After pressing, the page says you're subscribed and a welcome email arrives |
+| TC-F-1 | SC-F-1 | A test inbox not yet subscribed | 1. Sign up on `/signup/`. 2. Open the confirm email. 3. Open the link. 4. Press Confirm | The confirm page shows a button and doesn't confirm on open. After pressing, the page says you're subscribed and a welcome email arrives |
 | TC-F-2 | SC-F-7 | A new pending sign-up | Open the confirm link only (don't press) | Still pending after 1 minute (`subscribers.mjs` on staging) |
 | TC-F-3 | SC-F-8 | Three test inboxes | Sign up once by email, once by Google, once with a password | Each path proves the inbox before anything is sent to it. Record what each path does |
 | TC-U-1 | SC-U-2 | A confirmed test subscriber in Gmail | Press Gmail's own Unsubscribe next to the sender | No more email to that inbox; the record shows unsubscribed |
