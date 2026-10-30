@@ -5,6 +5,9 @@ grouped by date.
 
 ## 2026-10-30
 
+- The LLM logs keep more of each search page: its title and age, and the passages the model quoted (with links),
+  not just the link. Page text is still encrypted by the API and left out. Titles and quotes are cleaned of control
+  characters and capped. `scripts/llm-logs.mjs summary` prints them; older logs print as before.
 - Cost per run (T29): `scripts/cost-per-run.mjs` reads the private LLM logs and prices each sweep, each category
   and failed calls at the list prices in `scripts/compare-models.mjs`. Each log's summary now also has `usageByCat`.
   The public sweep record and `/api/data` are unchanged. costing.md's re-measure steps use the script in place of
