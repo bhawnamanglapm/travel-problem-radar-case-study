@@ -5,6 +5,8 @@ grouped by date.
 
 ## 2026-10-30
 
+- The admin page shows Pro members' areas: a Pro areas card with a count per area, an Areas column in the list, and an
+  `areas` field in the CSV (T41 follow-up).
 - Pro members can choose areas for their email as well as categories: All areas, or any of Asia, Europe, North
   America, Latin America, Middle East & Africa, Oceania and Other, on the account page. Worldwide problems always
   come. The email says which areas it covers. A choice with nothing in a sweep sends nothing. Free is unchanged

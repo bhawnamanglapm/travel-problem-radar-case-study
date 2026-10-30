@@ -1399,9 +1399,9 @@ too; whether it opens a private file is **not confirmed**.
 ### Admin dashboard
 
 `/admin/` shows every subscriber with their address, status, plan, type (monthly, yearly or granted by the owner),
-price paid, categories, emails a day, sign-up and confirmation dates, Pro end date and billing state (renews,
+price paid, categories, areas, emails a day, sign-up and confirmation dates, Pro end date and billing state (renews,
 cancelled, payment retrying or failed). Above the list: counts (Free, Pro, monthly, yearly, renewing, asked for Pro,
-emails off), Pro's categories and emails a day, the paid Pro value per month (a yearly price counted as a twelfth),
+emails off), Pro's categories, areas and emails a day, the paid Pro value per month (a yearly price counted as a twelfth),
 and a day-by-day table of sign-ups, confirmations, unsubscribes, Pro requests, bounces and Free digests sent (7, 30 or
 90 days, UTC). The list can be searched and filtered, and **Download CSV** saves the rows shown. A **Payments** card
 at the top says whether Razorpay payments are on for that deployment (test or live mode, which periods) and, if
