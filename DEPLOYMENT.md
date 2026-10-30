@@ -623,7 +623,7 @@ mapping doesn't know is stored under `radar/other/`.
 | `radar:seenIds` | `radar/history/seen-ids.json` | Up to 800 item IDs already seen, used for the New flag | No |
 | `radar:items` | `radar/history/items.json` | Each item's history (T36): first sweep, number of sweeps, up to 6 latest sweep ids, and `e: 1` when it was seen before the index existed. Trimmed to the ids in `radar:seenIds`. Built once from the saved sweeps when missing. The sweep copies it onto each saved item as `firstAt`, `seen`, `prev` and `firstEarlier` | No |
 | `radar:lastScheduled` | `radar/state/last-scheduled.json` | When the last scheduled sweep started, saved or not, and its slot (`{ at, slotAt }`; before T35 just the time); the one-sweep-per-slot rule reads it | No |
-| `radar:llmlog:<id>` | `radar/logs/llm-log-YYYY-MM-DD-HH-MM-<id>.json` | One sweep's LLM log: each Claude call's request (prompt, model, limits, tools; never the headers or key) and response (thinking, search queries, answer, stop reason, usage), and a summary of input and output tokens, searches, and the pages search found, **as links only** (page contents are encrypted and left out). Written for every sweep that ran: saved, empty, or not saved. `<id>` is the sweep's id. Deleted after 30 days by the day's first sweep. Read with `scripts/llm-logs.mjs` | No |
+| `radar:llmlog:<id>` | `radar/logs/llm-log-YYYY-MM-DD-HH-MM-<id>.json` | One sweep's LLM log: each Claude call's request (prompt, model, limits, tools; never the headers or key) and response (thinking, search queries, answer, stop reason, usage), and a summary of input and output tokens, searches, the usage of each category (`usageByCat`), and the pages search found, **as links only** (page contents are encrypted and left out). Written for every sweep that ran: saved, empty, or not saved. `<id>` is the sweep's id. Deleted after 30 days by the day's first sweep. Read with `scripts/llm-logs.mjs` | No |
 | `radar:sub:<id>` | `radar/subscribers/<id>.json` | One subscriber: address, status, plan, token, dates, and chosen categories (`cats`, Pro only). Since T16 also `signin` (the SHA-256 of an unused sign-in code, its expiry and when it was sent; `null` once used) and, optionally, `sessionVer` (raising it by hand signs that subscriber out on every browser). Since T17, a Pro record whose emails stopped has `emailOff`: `unsubscribed`, `bounced` or `complained`. Since 2026-10-27, optionally `pw` (a scrypt hash of the password; see [Passwords](#passwords)), `pendingPw` (a sign-up's password waiting for its confirmation link, with the SHA-256 of the link's key) and `pwFails` (wrong passwords this hour). Since T39, optionally `saved` (Pro): up to 100 problems saved on the board, newest first, `{ id, sweepId, at, item }` with `item` the server's copy from the sweep file; kept if Pro ends, deleted with the record. Since T41, `areas` (Pro): `null` for all areas, or a list of the areas chosen (from Asia, Europe, North America, Latin America, Middle East & Africa, Oceania and Other); a record without the field reads as `null`. `<id>` is the SHA-256 of the canonical address (Gmail without dots or `+tags`, and `+tags` dropped for the big providers; see [email-signup.md](docs/subscriptions/email-signup.md#flow)). Records made before 2026-10-22 keep the SHA-256 of the lowercased address | No |
 | `radar:event:<YYYYMMDD>-<time>-<type>-<random>` | `radar/events/event-YYYY-MM-DD-HH-MM-SS-mmm-<type>-<random>.json` | One sign-up, confirmation, sign-in email, unsubscribe, emails-off, account-deleted, Pro, bounce or complaint event: type, time and plan, **no address or id**. Kept until `prune-events` deletes it | No |
 | `radar:deliveries:<YYYYMMDD>` | `radar/deliveries/deliveries-YYYY-MM-DD.json` (one a day, no time) | Record ids already sent that day's Free digest. Deleted by the sweep after 7 days | No |
@@ -1396,6 +1396,17 @@ node --env-file=.env.local scripts/llm-logs.mjs show <id|latest>
 | `list` | One line per sweep that ran, newest first: id, time, outcome, calls that worked, input and output tokens, searches, pages |
 | `summary` | One sweep's totals, each category's outcome, tokens, pages and time, then the links of every page search found |
 | `show` | The whole log as JSON: every request and response |
+
+`scripts/cost-per-run.mjs` turns the same logs into dollars. It is also read-only and not deployed:
+
+```
+node --env-file=.env.local scripts/cost-per-run.mjs [--days 7] [--out DIR]
+```
+
+It prints each sweep's cost and the average for all sweeps and for scheduled sweeps only. It also prints each
+category's average and share, what failed calls cost, and any call it couldn't price. `--days` goes back 1 to 30
+days; `--out` also writes `DIR/sweeps.csv`. These are the list prices in `scripts/compare-models.mjs`, applied to the
+usage the API reported, not the Anthropic invoice. See [costing.md](docs/subscriptions/costing.md#how-to-re-measure).
 
 The Blob store's browser in the Vercel dashboard (**Storage**, then the store, under `radar/`) lists the log files
 too; whether it opens a private file is **not confirmed**.

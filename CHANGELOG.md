@@ -5,6 +5,10 @@ grouped by date.
 
 ## 2026-10-30
 
+- Cost per run (T29): `scripts/cost-per-run.mjs` reads the private LLM logs and prices each sweep, each category
+  and failed calls at the list prices in `scripts/compare-models.mjs`. Each log's summary now also has `usageByCat`.
+  The public sweep record and `/api/data` are unchanged. costing.md's re-measure steps use the script in place of
+  reading Actions logs.
 - When some categories fail in a sweep, subscribers no longer see it: Pro emails dropped their "Failed this run"
   line, as Free already had. The owner gets a clearer alert instead: the email subject starts `FAILED: <categories>`,
   and the email and Slack digest list each failed category with its error (cut to 300 characters).
