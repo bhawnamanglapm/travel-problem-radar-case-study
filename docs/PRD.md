@@ -33,7 +33,7 @@ found late or not at all. *(From the case study.)*
 | # | Goal | Proposed measure | Status |
 |---|---|---|---|
 | G1 | Findings are real and sourced | Share of items whose link loads and supports the summary | Not measured. 7 of 8 sample links load; contents not checked. |
-| G2 | Findings are current | Share of items dated within the last 30 days | Not measured |
+| G2 | Findings are current | Share of items whose source was published within the last 60 days (the window the site promises) | Not measured. The first 20-item score (`scripts/score-items.mjs`) is waiting for review. |
 | G3 | Opportunities are useful | Share of items a PM would act on, as judged by a PM | Not measured |
 | G4 | "New" means new | Share of items flagged New that are new events, not reworded repeats | Not measured. Known gap: matching is by headline. |
 | G5 | Cost stays flat | AI calls per day, regardless of traffic | Built in: 1 sweep a day, 4 calls, up to 3 searches each. Real token counts not recorded yet. |
