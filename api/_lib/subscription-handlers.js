@@ -12,7 +12,7 @@ import { sweepKey } from "./radar.js";
 import { hashPassword, passwordProblem, storedHash, verifyPassword } from "./password.js";
 import { clearCookie, originOk, parseCookies, readSession, sessionCookie, sessionSecret, signSession } from "./session.js";
 import {
-  CONFIRM_RESEND_MINUTES, KEY_RZPSUB_PREFIX, KEY_SUB_PREFIX, MAX_CONFIRMS_PER_ADDRESS, PENDING_TTL_DAYS, countEvents, deleteSubscriber, deleteSubscriberData, effectivePlan, findSubscriber, getSubscriber, newPending, normaliseCats, normaliseEmail, putSubscriber,
+  CONFIRM_RESEND_MINUTES, KEY_RZPSUB_PREFIX, KEY_SUB_PREFIX, MAX_CONFIRMS_PER_ADDRESS, PENDING_TTL_DAYS, countEvents, deleteSubscriber, deleteSubscriberData, effectivePlan, findSubscriber, getSubscriber, newPending, normaliseAreas, normaliseCats, normaliseEmail, putSubscriber,
   recordEvent, tokenOk, updateSubscriber, utcDay,
 } from "./subscribers.js";
 
@@ -580,6 +580,7 @@ const accountView = (record, t, env) => ({
   proSource: record.proSource || null,
   proRequestedAt: record.proRequestedAt || null,
   cats: record.cats || null,
+  areas: normaliseAreas(record.areas).ok ? normaliseAreas(record.areas).areas : null, // T41: null is all areas
   // Emails a day (T32): the stored choice, or null for the default; the page offers 1 to the max.
   sweepsPerDay: normaliseSweepsPerDay(record.sweepsPerDay, sweepLimits(env).max).ok ? record.sweepsPerDay : null,
   sweepsPerDayDefault: DEFAULT_SWEEPS_PER_DAY,
@@ -626,6 +627,7 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
     let params;
     let action = "";
     let cats;
+    let areas;
     let sweepsPerDay;
     let months;
     let password;
@@ -634,7 +636,7 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
     try {
       params = await linkParams(req, { queryOnly: false });
       if (params.fields && typeof params.fields.action === "string") action = params.fields.action;
-      if (params.fields) ({ cats, sweepsPerDay, months, password, sweepId, itemId } = params.fields);
+      if (params.fields) ({ cats, areas, sweepsPerDay, months, password, sweepId, itemId } = params.fields);
     } catch (e) {
       if (e instanceof BodyTooLargeError) return sendJson(res, 413, { error: "request too large" });
       throw e;
@@ -705,6 +707,17 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
         if (!changed) return sendJson(res, 403, { error: "pro_only" });
         return sendJson(res, 200, { ok: true, ...view(updated) });
       }
+      // POST action "set-areas" (T41): like set-cats, for the areas a Pro member's email covers.
+      if (action === "set-areas") {
+        if (record.status !== "active") return sendJson(res, 409, { error: "not_confirmed" });
+        if (effectivePlan(record, t) !== "pro") return sendJson(res, 403, { error: "pro_only" });
+        const chosen = normaliseAreas(areas);
+        if (!chosen.ok) return sendJson(res, 400, { error: "unknown area" });
+        const { record: updated, changed } = await save((r) => (effectivePlan(r, t) === "pro" ? { ...r, areas: chosen.areas } : null));
+        if (!updated) return gone();
+        if (!changed) return sendJson(res, 403, { error: "pro_only" });
+        return sendJson(res, 200, { ok: true, ...view(updated) });
+      }
       if (action === "set-freq") {
         if (record.status !== "active") return sendJson(res, 409, { error: "not_confirmed" });
         if (effectivePlan(record, t) !== "pro") return sendJson(res, 403, { error: "pro_only" });
@@ -722,7 +735,14 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
         if (cats === undefined || sweepsPerDay === undefined) return sendJson(res, 400, { error: "unknown category" });
         const c = readChoice({ cats, sweepsPerDay }, env);
         if (!c.ok) return sendJson(res, 400, { error: c.error });
-        const { record: updated, changed } = await save((r) => (effectivePlan(r, t) === "pro" ? { ...r, cats: c.cats, sweepsPerDay: c.perDay } : null));
+        // Areas (T41) are optional here: a page from before T41 sends none, and what's stored stays.
+        let a = null;
+        if (areas !== undefined) {
+          a = areas === null ? { ok: true, areas: null } : normaliseAreas(areas);
+          if (!a.ok) return sendJson(res, 400, { error: "unknown area" });
+        }
+        const { record: updated, changed } = await save((r) => (effectivePlan(r, t) === "pro"
+          ? { ...r, cats: c.cats, sweepsPerDay: c.perDay, ...(a ? { areas: a.areas } : {}) } : null));
         if (!updated) return gone();
         if (!changed) return sendJson(res, 403, { error: "pro_only" });
         return sendJson(res, 200, { ok: true, ...view(updated) });

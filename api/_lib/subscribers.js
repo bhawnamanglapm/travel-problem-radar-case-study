@@ -4,7 +4,7 @@
 // listSubscribers hand it back, to their caller.
 // Times are milliseconds since the epoch (what the handlers' injected now() returns).
 import { createHash, timingSafeEqual } from "node:crypto";
-import { CATS } from "./radar.js";
+import { CATS, AREAS } from "./radar.js";
 
 export const KEY_SUB_PREFIX = "radar:sub:";
 export const KEY_EVENT_PREFIX = "radar:event:";
@@ -209,6 +209,19 @@ export function normaliseCats(input) {
   return { ok: true, cats: cats.length === CATS.length ? null : cats };
 }
 
+// A Pro subscriber's chosen areas (T41), shaped like normaliseCats. Global isn't a choice: worldwide
+// problems always come (owner decision O2). Returns the areas in AREAS order, or null when all seven
+// are chosen. Anything else (not a list, empty, Global, an unknown name) is { ok: false }.
+// A function, not a constant: radar.js and this file import each other, so AREAS isn't set at load.
+export const areaChoices = () => AREAS.filter((a) => a !== "Global");
+export function normaliseAreas(input) {
+  const choices = areaChoices();
+  if (!Array.isArray(input) || input.length === 0 || input.length > choices.length) return { ok: false };
+  if (!input.every((a) => typeof a === "string" && choices.includes(a))) return { ok: false };
+  const areas = choices.filter((a) => input.includes(a));
+  return { ok: true, areas: areas.length === choices.length ? null : areas };
+}
+
 export function newPending(email, { now, randomBytes }) {
   const e = normaliseEmail(email);
   if (!e) throw new Error("newPending: bad address");
@@ -228,6 +241,7 @@ export function newPending(email, { now, randomBytes }) {
     confirmedAt: null,
     proRequestedAt: null, // set when the subscriber asks for Pro; the owner grants it (until payments exist)
     cats: null,
+    areas: null, // areas a Pro member chose (T41); null is all of them
     sweepsPerDay: null, // emails a day a Pro member chose (T32); null is the default
     rzp: null,
   };

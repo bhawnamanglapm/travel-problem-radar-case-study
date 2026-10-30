@@ -1,12 +1,12 @@
 // Offline tests for the subscriber features (docs/subscriptions/tasks). No network, no API
 // key: Blob storage and Resend are faked.
 //   node scripts/test-subscriptions.mjs
-import { createHmac, randomBytes } from "node:crypto";
+import { createHash, createHmac, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { blobStorage } from "../api/_lib/storage.js";
 import {
   CONFIRM_RESEND_MINUTES, MAX_CONFIRMS_PER_ADDRESS, PENDING_TTL_DAYS, countEvents, deleteSubscriber, effectivePlan, getSubscriber, listSubscribers,
-  newPending, newToken, normaliseCats, normaliseEmail, putSubscriber, recordEvent, subscriberId, tokenOk, utcDay,
+  newPending, newToken, normaliseAreas, normaliseCats, normaliseEmail, putSubscriber, recordEvent, subscriberId, tokenOk, utcDay,
 } from "../api/_lib/subscribers.js";
 import { BodyTooLargeError, allowMethods, bearerOk, esc, parseForm, readBody, readFields, sendJson, sendPage } from "../api/_lib/http.js";
 import { DEFAULT_FROM, buildConfirmEmail, buildDigestEmail, sendBatch, sendOne, withSubscriberFooter } from "../api/_lib/email.js";
@@ -14,7 +14,7 @@ import {
   KEY_IPHIT_PREFIX, KEY_SUBSCRIBER_COUNT, WEBHOOK_TOLERANCE_S, clientIp, makeConfirmHandler, makeResendWebhookHandler, makeSubscribeHandler, makeUnsubscribeHandler,
   siteUrl, utcHour, verifySvix,
 } from "../api/_lib/subscription-handlers.js";
-import { deliverToSubscribers, proCatsKey } from "../api/_lib/subscriber-delivery.js";
+import { deliverToSubscribers, proAreasKey, proCatsKey } from "../api/_lib/subscriber-delivery.js";
 import { makeDataHandler } from "../api/_lib/handlers.js";
 import { RAZORPAY_API, cancelSubscription, createSubscription, fetchSubscription, isTestKey, razorpayConfigured, verifyCheckout, verifyWebhook } from "../api/_lib/razorpay.js";
 import { check, finish, memStorage, mockRes } from "./test-helpers.mjs";
@@ -1864,6 +1864,125 @@ const iso = (ms) => new Date(ms).toISOString();
     const m = d.to(e);
     check(m.length === 1 && /daily digest/.test(m[0].text) && /Item t1/.test(m[0].text) && /Item w1/.test(m[0].text) && !/Your categories/.test(m[0].text),
       `pro cats: ${e.split("@")[0]} gets every category in the daily digest; cats is ignored`);
+  }
+
+  // ---- T41: areas in the Pro email
+  const SEVEN = ["Asia", "Europe", "North America", "Latin America", "Middle East & Africa", "Oceania", "Other"];
+  const na = normaliseAreas(["Europe", "Asia", "Europe"]);
+  check(na.ok && JSON.stringify(na.areas) === '["Asia","Europe"]', "normaliseAreas: keeps AREAS order and drops repeats");
+  check(normaliseAreas([...SEVEN].reverse()).ok && normaliseAreas([...SEVEN].reverse()).areas === null, "normaliseAreas: all seven is stored as null");
+  check([[], "Asia", null, undefined, ["Global"], ["Asia", "Global"], ["Mars"], ["asia"], ["Asia", 3], [...SEVEN, "Asia"], { 0: "Asia" }].every((x) => normaliseAreas(x).ok === false),
+    "normaliseAreas: refuses an empty list, a non-list, Global, an unknown name, a wrong case, a non-string and more than seven");
+  check(proAreasKey(null) === "all" && proAreasKey(["Middle East & Africa", "Asia"]) === "asia+middle-east-africa" && proAreasKey(["Global"]) === "all" && proAreasKey(SEVEN) === "all",
+    "proAreasKey: \"all\", or the chosen areas as slugs joined with +; a stored value that isn't valid counts as all");
+  check(newPending("n@example.com", { now: T0, randomBytes: seeded(5) }).areas === null, "newPending: areas starts as null (all areas)");
+
+  // POST /api/account action set-areas
+  {
+    const storedAreas = async (rec) => (await getSubscriber(st, rec.id)).areas;
+    const postAreas = (rec, areas, t = rec.token) => call({ method: "POST", body: { id: rec.id, t, action: "set-areas", areas } });
+    const areaReplies = [];
+    const sentBefore = sent.length;
+    const lapsedA = await add("lapsed-areas@example.com", { plan: "pro", proSource: "owner", proUntil: iso(T0 - 1000), areas: ["Oceania"] });
+    let ra = await postAreas(pro, ["Europe", "Asia"]);
+    areaReplies.push(ra.body);
+    check(ra.code === 200 && JSON.stringify(ra.json().areas) === '["Asia","Europe"]' && JSON.stringify(await storedAreas(pro)) === '["Asia","Europe"]', "set-areas: a Pro member saves [Asia, Europe] and it is stored");
+    ra = await call({ method: "GET", query: { id: pro.id, t: pro.token } });
+    check(JSON.stringify(ra.json().areas) === '["Asia","Europe"]', "account GET: returns the chosen areas");
+    ra = await call({ method: "GET", query: { id: free.id, t: free.token } });
+    check(ra.json().areas === null, "account GET: areas is null for someone who never chose");
+    ra = await postAreas(free, ["Asia"]);
+    areaReplies.push(ra.body);
+    check(ra.code === 403 && ra.json().error === "pro_only" && !(await storedAreas(free)), "set-areas: Free gets 403 pro_only and nothing is stored");
+    ra = await postAreas(lapsedA, ["Asia"]);
+    check(ra.code === 403 && JSON.stringify(await storedAreas(lapsedA)) === '["Oceania"]', "set-areas: a lapsed Pro gets 403 and keeps what they chose before");
+    ra = await postAreas(pend, ["Asia"]);
+    check(ra.code === 409 && ra.json().error === "not_confirmed", "set-areas: a pending address gets 409 not_confirmed");
+    for (const bad of [["Global"], ["Mars"], [], "Asia", undefined]) {
+      ra = await postAreas(pro, bad);
+      areaReplies.push(ra.body);
+      check(ra.code === 400 && ra.json().error === "unknown area" && JSON.stringify(await storedAreas(pro)) === '["Asia","Europe"]', `set-areas: ${JSON.stringify(bad) || "no list"} is refused with 400 and nothing changes`);
+    }
+    ra = await postAreas(pro, ["Asia"], "wrong-token");
+    check(ra.code === 404, "set-areas: a wrong token is 404");
+    ra = await postAreas(pro, SEVEN);
+    check(ra.code === 200 && ra.json().areas === null && (await storedAreas(pro)) === null, "set-areas: choosing all seven stores null");
+    check(areaReplies.every((b) => !b.includes("@") && !b.includes(pro.token)), "set-areas: no address or token in any reply");
+    check(sent.length === sentBefore, "set-areas: sends no email");
+
+    // set-plan, the plan card's one Save, takes areas too; a page that sends none keeps what's stored
+    const plan = (body) => call({ method: "POST", body: { id: pro.id, t: pro.token, action: "set-plan", cats: null, sweepsPerDay: 2, ...body } });
+    ra = await plan({ areas: ["Oceania"] });
+    check(ra.code === 200 && JSON.stringify(await storedAreas(pro)) === '["Oceania"]', "set-plan: saves the areas sent with it");
+    ra = await plan({});
+    check(ra.code === 200 && JSON.stringify(await storedAreas(pro)) === '["Oceania"]', "set-plan: without areas, the stored areas stay");
+    ra = await plan({ areas: ["Global"] });
+    check(ra.code === 400 && ra.json().error === "unknown area" && JSON.stringify(await storedAreas(pro)) === '["Oceania"]', "set-plan: a bad areas list is refused and nothing changes");
+    ra = await plan({ areas: null });
+    check(ra.code === 200 && (await storedAreas(pro)) === null, "set-plan: areas null goes back to all areas");
+  }
+
+  // delivery by area
+  {
+    const aprob = (id, cat, region, over = {}) => ({ id, cat, title: "Item " + id, summary: "S " + id, source: "S", link: "https://example.com/" + id, region, date: "2026-10-20", severity: "Medium", opportunity: "O " + id, isNew: false, ...over });
+    const aproblems = [
+      aprob("a1", "traveler_pain", "Japan", { isNew: true }), aprob("e1", "traveler_pain", "Spain"), aprob("g1", "gov_policy", "Worldwide", { severity: "High" }),
+      aprob("o1", "web_app", "Atlantis"), aprob("n1", "industry", "Canada", { isNew: true }), aprob("x1", "gov_policy", "US and Europe"),
+    ];
+    const asweep = { id: "1792570150123", at: iso(AT10), problems: aproblems, perCat: { traveler_pain: "2 items", gov_policy: "2 items", web_app: "1 item", industry: "1 item" }, newCount: 2 };
+    const da = async (subs, { absent = false } = {}) => {
+      const ds = memStorage();
+      for (const [i, s] of subs.entries()) {
+        const rec = { ...newPending(s.email, { now: T0 - 3600_000, randomBytes: seeded(300 + i) }), token: "tok" + i, status: "active", plan: s.plan || "pro", proSource: s.plan === "free" ? null : "owner", cats: s.cats || null, areas: s.areas || null };
+        if (absent) delete rec.areas;
+        await putSubscriber(ds, rec);
+      }
+      const calls = [];
+      const fetchFn = async (url, init) => {
+        const body = JSON.parse(init.body);
+        calls.push({ key: init.headers["idempotency-key"], body });
+        return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ data: body.map((_, i) => ({ id: "m" + i })) }) };
+      };
+      const out = await deliverToSubscribers({ env: DENV, storage: ds, fetchFn, now: () => AT10, randomBytes: seeded(9), sweep: asweep, scheduled: true, log: () => {} });
+      const mails = calls.flatMap((c) => c.body);
+      return { out, calls, mails, to: (e) => mails.filter((m) => m.to[0] === e) };
+    };
+    const items = (m) => aproblems.map((p) => p.id).filter((id) => new RegExp(`Item ${id}\\b`).test(m.text));
+
+    const d1 = await da([
+      { email: "asia1@example.com", areas: ["Asia"] },
+      { email: "asia2@example.com", areas: ["Asia"] },
+      { email: "asiaother@example.com", areas: ["Asia", "Other"] },
+      { email: "govasia@example.com", areas: ["Asia"], cats: ["gov_policy"] },
+      { email: "oceania@example.com", areas: ["Oceania"], cats: ["web_app"] },
+      { email: "every@example.com" },
+      { email: "free@example.com", plan: "free", areas: ["Asia"] },
+    ]);
+    const asia = d1.to("asia1@example.com")[0];
+    check(asia && JSON.stringify(items(asia)) === '["a1","g1","x1"]', "pro areas: Asia gets the Asian item and the worldwide ones (one named Worldwide, one spanning two areas), nothing from Europe, North America or unplaced");
+    check(/Your areas: Asia, plus worldwide problems/.test(asia.text) && /Your areas: Asia, plus worldwide problems/.test(asia.html) && /· 3 problems, 1 new$/.test(asia.subject),
+      "pro areas: the email names the areas, and the subject counts only what it holds");
+    check(JSON.stringify(items(d1.to("asiaother@example.com")[0])) === '["a1","g1","o1","x1"]', "pro areas: ticking Other adds the item whose place wasn't recognised");
+    check(JSON.stringify(items(d1.to("govasia@example.com")[0])) === '["g1","x1"]', "pro areas: categories and areas together keep only items that pass both");
+    const asiaCall = d1.calls.find((c) => c.body.some((m) => m.to[0] === "asia1@example.com"));
+    check(asiaCall.body.length === 2 && asiaCall.body.some((m) => m.to[0] === "asia2@example.com") && asiaCall.body[0].text.split("\n--\n")[0] === asiaCall.body[1].text.split("\n--\n")[0],
+      "pro areas: two members with the same categories, areas and emails a day share one body and one batch call");
+    const keys = d1.calls.map((c) => c.key);
+    check(keys.includes(`${asweep.id}-pro-0`) && keys.includes(`${asweep.id}-pro-a-asia-0`) && keys.includes(`${asweep.id}-pro-a-asia+other-0`) && keys.includes(`${asweep.id}-pro-gov_policy-a-asia-0`),
+      "pro areas: each choice gets its own idempotency key, and all areas keeps the old one");
+    check(d1.to("oceania@example.com").length === 0 && d1.out.pro.emptyForCats === 1 && d1.out.pro.sent === 5,
+      "pro areas: a choice that finds nothing this sweep sends no email and is counted as emptyForCats");
+    const every = d1.to("every@example.com")[0];
+    check(every && items(every).length === 6 && !/Your areas/.test(every.text), "pro areas: no choice (null) gets every area and no areas line");
+    const fr = d1.to("free@example.com");
+    check(fr.length === 1 && /daily digest/.test(fr[0].text) && !/Your areas/.test(fr[0].text) && items(fr[0]).length === 6, "pro areas: Free gets the daily digest of every area; areas is ignored");
+
+    // Unchanged for everyone without areas: the Pro emails and their keys hash to what main sent before T41
+    // (computed from 8613844 with the same members and sweep), with areas null and with no areas field at all.
+    const fp = (d) => createHash("sha256").update(JSON.stringify(d.calls.filter((c) => c.body.some((m) => /Pro update/.test(m.text))))).digest("hex");
+    const before = [{ email: "all@example.com" }, { email: "gov@example.com", cats: ["gov_policy", "traveler_pain"] }];
+    const MAIN = "27b45fcb7f59e0d59d0a2f4a4a104722b687323a7384fd4aa0fcc3cdd3d4f7e5";
+    check(fp(await da(before)) === MAIN && fp(await da(before, { absent: true })) === MAIN, "pro areas: with no areas chosen, the Pro emails and idempotency keys are byte for byte what they were before T41");
   }
 
   // a stop in one group defers the groups after it

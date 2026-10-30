@@ -3,10 +3,10 @@
 // remembered in radar:deliveries:<YYYYMMDD>, so a send that is cut off picks up later without
 // sending anyone the same digest twice. Never throws; the result and the log hold counts only.
 import { buildDigestEmail, buildPlanEndingEmail, sendBatch, withSubscriberFooter } from "./email.js";
-import { KEY_INDEX, sweepKey } from "./radar.js";
+import { KEY_INDEX, areaOf, sweepKey } from "./radar.js";
 import { IPHIT_KEEP_HOURS, KEY_IPHIT_PREFIX, KEY_RZPEVENT_PREFIX, KEY_SUBSCRIBER_COUNT, RZP_EVENT_KEEP_DAYS, managePath, senderOk, siteUrl, utcHour } from "./subscription-handlers.js";
 import { DEFAULT_SWEEPS_PER_DAY, SLOTS_BY_FREQ, previousSlotAt, slotOf, sweepLimits, sweepsPerDayOf } from "./schedule.js";
-import { KEY_DELIVERIES_PREFIX, PENDING_TTL_DAYS, deleteSubscriber, effectivePlan, listSubscribers, normaliseCats, recordEvent, updateSubscriber, utcDay } from "./subscribers.js";
+import { KEY_DELIVERIES_PREFIX, PENDING_TTL_DAYS, deleteSubscriber, effectivePlan, listSubscribers, normaliseAreas, normaliseCats, recordEvent, updateSubscriber, utcDay } from "./subscribers.js";
 
 export { KEY_DELIVERIES_PREFIX };
 const DAY_MS = 24 * 3600 * 1000;
@@ -75,6 +75,14 @@ export function proCatsKey(cats) {
   return n.ok && n.cats ? n.cats.join("+") : "all";
 }
 
+// A Pro record's areas (T41) as a group key, like proCatsKey: "all", or the chosen areas as slugs
+// joined with "+" ("asia+europe"). A stored value normaliseAreas wouldn't accept counts as "all".
+const areaSlug = (a) => a.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+export function proAreasKey(areas) {
+  const n = normaliseAreas(areas);
+  return n.ok && n.areas ? n.areas.map(areaSlug).join("+") : "all";
+}
+
 export async function deliverToSubscribers({ env, storage, fetchFn, now, randomBytes, sweep, scheduled, deadlineAt, log = console.log }) {
   try {
     const site = siteUrl(env);
@@ -136,11 +144,13 @@ export async function deliverToSubscribers({ env, storage, fetchFn, now, randomB
       for (const rec of pro) {
         const f = sweepsPerDayOf(rec, max);
         const key = proCatsKey(rec.cats);
-        const g = `${key}|${f}`;
-        if (!groups.has(g)) groups.set(g, { key, f, recs: [] });
+        const areaKey = proAreasKey(rec.areas);
+        const g = `${key}|${areaKey}|${f}`;
+        if (!groups.has(g)) groups.set(g, { key, areaKey, f, areas: normaliseAreas(rec.areas).areas || null, recs: [] });
         groups.get(g).recs.push(rec);
       }
-      const order = (a, b) => (a.key === b.key ? a.f - b.f : a.key === "all" ? -1 : b.key === "all" ? 1 : a.key < b.key ? -1 : 1);
+      const byKey = (a, b) => (a === b ? 0 : a === "all" ? -1 : b === "all" ? 1 : a < b ? -1 : 1);
+      const order = (a, b) => byKey(a.key, b.key) || byKey(a.areaKey, b.areaKey) || a.f - b.f;
       // A member on fewer a day than the site gets every scheduled sweep since their last slot, so
       // nothing found in between is missed. On the site's number, that is only this sweep.
       const slotAtOf = (e) => (e.slotAt ? Date.parse(e.slotAt) : slotOf(Date.parse(e.at)).at);
@@ -154,18 +164,21 @@ export async function deliverToSubscribers({ env, storage, fetchFn, now, randomB
         }
         return sinceSlot.get(f);
       };
-      for (const { key, f, recs } of [...groups.values()].sort(order)) {
+      for (const { key, areaKey, f, areas, recs } of [...groups.values()].sort(order)) {
         if (!SLOTS_BY_FREQ[f].includes(slot.hour)) { result.pro.notThisSlot += recs.length; continue; }
         const cats = key === "all" ? null : key.split("+");
         const all = await problemsFor(f);
-        const problems = cats ? all.filter((p) => cats.includes(p.cat)) : all;
+        // Areas (T41): a problem in a chosen area, or a worldwide one (owner decision O2).
+        const inAreas = (p) => { const a = areaOf(p.region); return a === "Global" || areas.includes(a); };
+        const problems = all.filter((p) => (!cats || cats.includes(p.cat)) && (!areas || inAreas(p)));
         if (!problems.length) { result.pro.emptyForCats += recs.length; continue; }
         if (halted) { result.pro.deferred += recs.length; continue; }
         const perCat = cats ? Object.fromEntries(Object.entries(sweep.perCat || {}).filter(([k]) => cats.includes(k))) : sweep.perCat;
-        const mail = buildDigestEmail({ at: sweep.at, problems, perCat }, liveUrl, { heading: "Travel Problem Radar: Pro update", cats });
+        const mail = buildDigestEmail({ at: sweep.at, problems, perCat }, liveUrl, { heading: "Travel Problem Radar: Pro update", cats, areas });
         const r = await sendBatch(creds, recs.map((rec) => message(rec, mail, "pro")), {
           fetchFn, shouldStop,
-          idempotencyKey: (key === "all" ? `${sweep.id}-pro` : `${sweep.id}-pro-${key}`) + (f === DEFAULT_SWEEPS_PER_DAY ? "" : `-f${f}`),
+          idempotencyKey: (key === "all" ? `${sweep.id}-pro` : `${sweep.id}-pro-${key}`) + (areaKey === "all" ? "" : `-a-${areaKey}`)
+            + (f === DEFAULT_SWEEPS_PER_DAY ? "" : `-f${f}`),
         });
         result.pro.sent += r.sent;
         result.pro.failed += r.failed;
