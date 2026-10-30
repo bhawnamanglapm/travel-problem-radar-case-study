@@ -1326,7 +1326,7 @@ async function googleSignIn({ res, record, isNew = false, pro, env, storage, fet
 const signupPage = (email, pro) => ({
   title: "Create your account",
   body: `<p>You&rsquo;re signing up with <b>${esc(email)}</b>, the address Google confirmed.</p>
-<p>Your account includes the free daily summary: how many travel-industry problems were found in the last 24 hours, and their headlines. Unsubscribing from it deletes the account.</p>
+<p>Your account includes the free daily summary: how many travel-industry problems were found in the last 24 hours (from sources published in about the last 60 days), and their headlines. Unsubscribing from it deletes the account.</p>
 <form method="post" action="/api/session"><input type="hidden" name="action" value="google-signup">
 <p><label><input type="checkbox" name="wantsPro" value="1"${pro ? " checked" : ""}> I&rsquo;d also like Pro (the live board and 1 to 5 emails a day). You&rsquo;ll get the daily email until it&rsquo;s switched on.</label></p>
 <p><button type="submit">Create account</button></p></form>

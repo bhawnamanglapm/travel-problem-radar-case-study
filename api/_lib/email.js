@@ -162,7 +162,7 @@ export function withSubscriberFooter(mail, { unsubscribeUrl, manageUrl = "", pla
 export function buildConfirmEmail({ confirmUrl, siteUrl = "", withPassword = false }) {
   if (!LINK_OK.test(confirmUrl || "")) throw new Error("buildConfirmEmail: bad confirm link");
   const subject = "Confirm your Travel Problem Radar subscription";
-  const intro = "You asked to get the Travel Problem Radar digest by email: one email a day about the travel problems an AI model found in the last 24 hours."
+  const intro = "You asked to get the Travel Problem Radar digest by email: one email a day about the travel problems an AI model found in the last 24 hours, from sources published in about the last 60 days."
     + (withPassword ? " Confirming also turns on the password you chose." : "");
   const ignore = withPassword
     ? "If you didn't ask for this, ignore this email: nothing more will be sent, and no account or password is made."

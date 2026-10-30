@@ -153,6 +153,8 @@ check(/name="password" type="password" autocomplete="new-password" minlength="10
 check(/Questions or a deletion request: email <a href="mailto:pehchanthetraveller19@gmail\.com">/.test(upPage) && /Gathered by an AI model with web search\. Items are not verified/.test(upPage), "signup/index.html has the contact address and the AI notice");
 check(/includes the free daily summary/.test(upPage) && /Unsubscribing from it deletes the account/.test(upPage), "signup/index.html says the account includes the daily summary and how to delete it");
 check(![page, subPage, upPage].some((s) => /everything found in the last 24 hours/i.test(s)), "home, subscribe and sign-up pages don't promise Free everything (it gets a summary, T18)");
+check([subPage, upPage, readFileSync("pricing/index.html", "utf8"), readFileSync("api/_lib/email.js", "utf8")].every((s) => /from sources published in about the last 60 days/.test(s)),
+  "subscribe, sign-up and pricing pages and the email intro say the sources are from about the last 60 days, not the last 24 hours");
 check(/href="\.\.\/signin\/"/.test(upPage) && /href="\.\.\/signup\/"/.test(inPage), "signup and signin pages link to each other");
 // /live and /demo without the trailing slash load their script from the site root (a 404): each page adds the slash.
 const slashFix = 'if (!/(\\/|\\.html)$/.test(location.pathname)) location.replace(location.pathname + "/" + location.search + location.hash);';
