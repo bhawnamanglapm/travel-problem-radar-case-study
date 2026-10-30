@@ -6,7 +6,7 @@
 > their meaning here as `REQ-01` to `REQ-11`. Built and tested items link their task. The 2026-10-30 update closes
 > the drift D1 to D8 that the first test run found
 > ([TS01 results](../08-testing/results/TS01-requirements-validation-results-2026-10-30.md)); the owner hasn't yet
-> confirmed each change. **Targets are OWNER INPUT NEEDED; no goal has been measured against a target.**
+> confirmed each change. REQ-47 (India, T42) was added later on 2026-10-30, built but not yet live. **Targets are OWNER INPUT NEEDED; no goal has been measured against a target.**
 
 ## Summary
 
@@ -35,6 +35,7 @@ Only users with evidence behind them are listed. Others are hypotheses.
 |---|---|---|
 | **The owner**, a PM scouting for travel problems | Uses it; reported a Slack digest on 1 Aug 2026 ([README](../../README.md#users-and-iteration)) | A daily view of problems with a product angle |
 | **Prospective Free or Pro member**, a travel PM *(hypothesis)* | None. No users recorded besides the owner | To be found in the [interview plan](../01-discovery/discovery-log.md#interview-plan-proposed-not-done) |
+| **A PM at an Indian travel company** *(hypothesis, T42)* | None. The owner chose them as the first segment to test on 2026-10-30 | India items beside worldwide ones (DSC-09) |
 | **Visitors to the portfolio** (recruiters, hiring managers) | Named in the v1 PRD | The public demo and this case study |
 
 ## Goals
@@ -76,7 +77,7 @@ Status: **Live** (on production), **Built** (merged, switched off or not yet use
 
 | ID | Requirement | Task or source | Status |
 |---|---|---|---|
-| REQ-01 | Sweep four categories with one model call with web search each, up to 5 items each | v1 R1 | Live |
+| REQ-01 | Sweep four categories with one model call with web search each, up to 5 items each, plus up to 2 about India where real ones exist (T42) | v1 R1, changed; T42 | Live; the India part built 2026-10-30, not yet live |
 | REQ-02 | Each item has title, summary, source, link, region, date, severity (Low, Medium, High) and a one-line opportunity | v1 R2 | Live |
 | REQ-03 | Flag items not seen in any earlier sweep as New | v1 R3 | Live |
 | REQ-04 | Keep the last 60 sweeps; any past sweep can be opened | v1 R4 | Live |
@@ -134,6 +135,7 @@ These were built after v2 was first written (D7 of the TS01 results). Each is li
 | REQ-44 | Delete my account deletes at once, and cancels the account's Razorpay subscriptions first | [CHANGELOG](../../CHANGELOG.md) 2026-10-27 | Live |
 | REQ-45 | An item whose source is over 60 days old is dropped; each item keeps `sourceDate`, the date search gave its page | [CHANGELOG](../../CHANGELOG.md) 2026-10-30 | Live |
 | REQ-46 | Each sweep's model use and cost are logged privately, per category, and can be summarised by model | T29; `scripts/llm-logs.mjs`, `scripts/cost-per-run.mjs` | Live |
+| REQ-47 | Each category call also asks for up to 2 items about India, only where real, recent ones exist, with region "India", and may run 4 searches. India is its own area on the board, in `/manage/` and in Pro email; an Asia choice saved before then includes India. India's share of items can be read from the logs (KPI-20) | [T42](../../docs/subscriptions/tasks/T42-india-focus.md) | Built 2026-10-30; not yet live |
 
 ## Non-functional requirements
 

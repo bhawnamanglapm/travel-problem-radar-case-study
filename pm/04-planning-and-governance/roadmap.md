@@ -42,6 +42,7 @@
 | RM-14 | Count sweeps for a week and read a month of real spend | The cost model uses 5 Sonnet runs. 10 Haiku sweeps (26 to 30 Oct) are now logged at $0.1121 average (`node scripts/llm-logs.mjs models`); a month of real spend isn't read | [costing.md](../../docs/subscriptions/costing.md#measurement-checklist) rows 1 to 3 |
 | RM-15 | Run the interview plan | No one but the owner has been asked anything | [discovery-log.md](../01-discovery/discovery-log.md#interview-plan-proposed-not-done) |
 | RM-16 | Move to the owner's own domain | **Done** 2026-10-28: radar.pehchanthetraveller.com (CR-21). Whether the Chrome warning and the Junk filing improve isn't recorded | [account-flows.md](../../docs/subscriptions/account-flows.md#what-should-change) #1; [CHANGELOG](../../CHANGELOG.md) 2026-10-28 |
+| RM-38 | A week after T42 is live, read `llm-logs.mjs areas` and `models`, then decide whether a 5th, India-only call is needed | India's share was 1.1% before T42 (KPI-20). Whether one more search a call lifts it, how good the India items are, and what it costs aren't known (R-15, R-16) | [T42](../../docs/subscriptions/tasks/T42-india-focus.md); [kpis.md](../02-product-definition/kpis.md) |
 
 ## Later: only if users ask for it
 

@@ -3,7 +3,8 @@
 > **Desk research, read on 2026-10-23.** This compares what each alternative says it does. It is not a test of any
 > of them, and no user was asked which they use. Each row names its source. Where only third-party pages were
 > found, or sources disagree, the row says **verify**. Prices are left out unless the provider's own page states
-> them, because the third-party prices found disagreed with each other.
+> them, because the third-party prices found disagreed with each other. Updated 2026-10-30 with three Indian options
+> (ALT-08 to ALT-10, T42), found through news and directory pages; none of the three services was opened.
 
 ## The job
 
@@ -21,6 +22,9 @@ of what could be built. Today that means combining several kinds of sources by h
 | ALT-05 | **Government travel advice** (UK FCDO; US STEP) | The UK's foreign travel advice covers entry rules, safety and security and health, with email alerts per country or for all countries | Official and reliable for the policy category, but one government's view per service, written for travelers rather than for product teams. **Verify** what US STEP sends: its page refused automated requests | [GOV.UK foreign travel advice](https://www.gov.uk/foreign-travel-advice) |
 | ALT-06 | **Travel risk intelligence** (Crisis24 Horizon) | Real-time alerts on threats and disruptions worldwide, filtered by severity, category and location. A daily briefing gathers the last 24 hours of alerts. Built for companies' duty of care to their travelling staff | The closest in shape (sorted alerts, severity, daily briefing), but built for keeping employees safe, sold to organisations, and silent on product opportunities. The capability claims come from the vendor and its customers | [University of Michigan guide](https://global.umich.edu/crisis24/); [Crisis24 case study](https://www.crisis24.com/case-studies/use-case-from-early-warning-to-duty-of-care) |
 | ALT-07 | **General AI assistant on a schedule** (ChatGPT scheduled tasks) | Runs a saved prompt at set times, for example a morning news briefing, and can browse the web when it runs | The nearest do-it-yourself version of the radar. It keeps no structured history, so it has no "New" flag, no severity and no shared board unless you build them. **Verify** limits and plans with OpenAI: only secondary sources were found, and they disagree | [Analytics Vidhya, Jan 2025](https://www.analyticsvidhya.com/blog/2025/01/schedule-tasks-with-chatgpt/); [Pulse 2.0](https://pulse2.com/openai-chatgpt-launches-new-scheduled-tasks-page/) |
+| ALT-08 | **Air passenger grievance portal** (AirSewa, from India's Ministry of Civil Aviation) | A web portal and app, launched in 2016, where air passengers file and track complaints. Press reports put the first half of 2026 at over 64,000 complaints | A record of what goes wrong for Indian flyers, but built for passengers to file their own complaints; no public feed of the problems was found. **Verify** what, if anything, it publishes: the portal itself wasn't opened | [Business Standard, 2016](https://www.business-standard.com/article/news-ians/airsewa-portal-launched-for-hassle-free-air-travel-116112501233_1.html); [Free Press Journal, 2026](https://www.freepressjournal.in/mumbai/airsewa-portal-receives-over-64000-grievances-in-first-half-of-2026-resolves-998) |
+| ALT-09 | **Indian travel trade press** (ETTravelWorld, from The Economic Times) | Travel-industry news on aviation, tourism, hospitality and travel trends in India and worldwide, with feeds by topic | ALT-03's kind of source for India: edited news of the business, not sorted for a PM and with no product angle. **Verify** what it offers and whether there's a newsletter or a paid tier: its own site wasn't opened, and the description comes from a feed directory | [Feedspot, ET Travel feeds](https://rss.feedspot.com/ettravel_rss_feeds/) |
+| ALT-10 | **Consumer polls** (LocalCircles) | Online polls of its members, with the results published; several have been about Indian air travel, such as a December 2023 poll on problems while flying | Shows in numbers what Indian travellers complain about, but now and then rather than daily, and from a self-selected online sample. **Verify** how often travel polls run: only news reports of them were read | [Business Standard, Dec 2023](https://business-standard.com/industry/news/eight-out-of-ten-fliers-faced-issues-with-indian-airlines-says-survey-123122600737_1.html) |
 
 The radar itself began as ALT-07's kind of tool: a scheduled task in Claude's app that posted a digest to Slack
 ([README](../../README.md#users-and-iteration)).
@@ -41,5 +45,6 @@ The radar itself began as ALT-07's kind of tool: a scheduled task in Claude's ap
 
 - No user was asked which of these they use, or what they pay.
 - No alternative was tried side by side with the radar for a week.
+- The Indian options (ALT-08 to ALT-10) were found through news and directory pages; none was opened or tried.
 - Prices are missing for ALT-02, ALT-03, ALT-06 and ALT-07. Check them on each provider's own page before quoting
   any.

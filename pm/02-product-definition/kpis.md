@@ -1,6 +1,6 @@
 # KPI catalogue
 
-> **Stage 2 of 8.** How success would be measured. Updated 2026-10-30 with the values the repository now gives. **Targets are OWNER INPUT NEEDED.** The current value is
+> **Stage 2 of 8.** How success would be measured. Updated 2026-10-30 with the values the repository now gives, and KPI-20 (India, T42). **Targets are OWNER INPUT NEEDED.** The current value is
 > **Not measured** unless a source in this repository gives one. Stage 7 will describe how each KPI is computed
 > from the stored data.
 
@@ -16,6 +16,15 @@ Scored by hand on a sample of 20 or more live items, using the draft rubric in t
 | KPI-03 | Findings are current | items dated within 30 days of the sweep ÷ items scored | Item `date` field; `sourceDate` since 2026-10-30 | **OWNER INPUT NEEDED** | Not scored by hand. Of the 18 items with a `sourceDate` (26 to 30 Oct), the median source age was 8.5 days (`node scripts/llm-logs.mjs models`, read on 2026-10-30). Since 2026-10-30, sources over 60 days old are dropped |
 | KPI-04 | Opportunities are useful | items a PM would act on ÷ items shown | PM interviews ([plan](../01-discovery/discovery-log.md#interview-plan-proposed-not-done)) | **OWNER INPUT NEEDED** | Not measured |
 | KPI-05 | New means new | items flagged New that are new events ÷ items flagged New | Manual scoring | **OWNER INPUT NEEDED** | Not measured; known gap |
+
+## Coverage of India (T42)
+
+Counted from the LLM logs, not scored by hand. It says where the items are, not whether they're good: read it with
+the `searched` flag and the dropped items (R-15).
+
+| ID | KPI | Formula | Data source | Target | Current |
+|---|---|---|---|---|---|
+| KPI-20 | India's share of items | items the board places in India ÷ all items shown, over 7 days; also India items a sweep | The LLM logs: `node --env-file=.env.local scripts/llm-logs.mjs areas --days 7` | **OWNER INPUT NEEDED** | Baseline before T42: 2 of 190 items (1.1%), 0.2 a sweep, over 10 sweeps 26 to 30 Oct (`node --env-file=.env.local scripts/llm-logs.mjs areas --days 7`, read 2026-10-30). A looser count of regions that mention India gave 5 (2.6%): two named India with another area and count as Global, and one was a South Korea rule for Indian passport holders (Asia) |
 
 ## Cost and reliability (goals G5 and G6)
 

@@ -4,7 +4,7 @@
 > would be computed from it, and what isn't measured at all. Built from the code and from
 > [DEPLOYMENT.md](../../DEPLOYMENT.md#what-is-stored). **No counts are printed here**: running `stats` is the
 > owner's step, and this page never shows an address. Updated 2026-10-30 (first written 2026-10-24): the stores,
-> fields and scripts added by T29 and T32 to T41, and passwords.
+> fields and scripts added by T29 and T32 to T42, and passwords.
 
 ## Where the data lives
 
@@ -20,7 +20,7 @@ Full table, with Blob paths: [DEPLOYMENT.md](../../DEPLOYMENT.md#what-is-stored)
 | `radar:llmlog:<id>` | One sweep's LLM log: each Claude call's request and response (never the key), usage per category (`usageByCat`, T29), and every page search found, with its link, title and age | 30 days | No | No |
 | `radar:seenIds` | Item IDs already seen, for the New flag | Up to 800 | No | No |
 | `radar:lastScheduled` | When the last scheduled sweep started, and its slot (`slotAt`, T35) | Overwritten | No | No |
-| `radar:sub:<id>` | One subscriber: address, status, plan, dates, categories, sign-in state, `emailOff`, Razorpay state. Since 2026-10-27 an optional password hash (`pw`, scrypt). Since T39 `saved`: up to 100 saved problems. Since T41 `areas`. `<id>` is a SHA-256 of the address | Until unsubscribed (Free) or deleted (Pro) | **Yes**: the address | No |
+| `radar:sub:<id>` | One subscriber: address, status, plan, dates, categories, sign-in state, `emailOff`, Razorpay state. Since 2026-10-27 an optional password hash (`pw`, scrypt). Since T39 `saved`: up to 100 saved problems. Since T41 `areas`; since T42 `areasV`, which marks a list saved after India became its own area. `<id>` is a SHA-256 of the address | Until unsubscribed (Free) or deleted (Pro) | **Yes**: the address | No |
 | `radar:event:…` | One event: type, time and plan. **No address or id** | Until `prune-events` deletes it | No | No |
 | `radar:deliveries:<day>` | Record ids sent that day's Free digest | 7 days | Record ids, not addresses | No |
 | `radar:subscriberCount` | Pending plus active records at the last sweep | Overwritten | No | No |
@@ -59,13 +59,13 @@ also shows members, plans, areas and payment mode, behind its own user and passw
 
 | Script | Reads | Gives | KPIs |
 |---|---|---|---|
-| `node scripts/llm-logs.mjs models` (also `list`, `summary`, `show`) | `radar:llmlog:` | Per model, averages per sweep: items, pages, searches, tokens, cost and cost per item; failed calls; the items' source ages and links search never returned (`searched`) | KPI-01 (a proxy), KPI-03, KPI-06, KPI-08, KPI-09 |
+| `node scripts/llm-logs.mjs models` (also `list`, `summary`, `show`, `areas`) | `radar:llmlog:` | Per model, averages per sweep: items, pages, searches, tokens, cost and cost per item; failed calls; the items' source ages and links search never returned (`searched`). With `areas`, the items shown by area and India's share (T42) | KPI-20, KPI-01 (a proxy), KPI-03, KPI-06, KPI-08, KPI-09 |
 | [`scripts/cost-per-run.mjs`](../../scripts/cost-per-run.mjs) | `radar:llmlog:` | Each sweep's cost and each category's, at list prices (T29) | KPI-06 |
 | [`scripts/score-items.mjs`](../../scripts/score-items.mjs) | Saved sweeps | Picks 20 items, checks links and dates, writes a review sheet outside the repo for a person to score; then totals it | KPI-01 to KPI-05. Built; **no scoring recorded yet** |
 
 Readings so far, from `node scripts/llm-logs.mjs models` on 2026-10-30: 10 sweeps 26 to 30 Oct, all on `claude-haiku-5-5`, $0.1121 and 19.0
 items a sweep on average; 1 of 190 items had a link search never returned; the 18 items with a `sourceDate` had a
-median source age of 8.5 days.
+median source age of 8.5 days. From `llm-logs.mjs areas --days 7` the same day: 2 of 190 items (1.1%) in India.
 
 ## The `stats` command
 
@@ -102,6 +102,7 @@ should be is **OWNER INPUT NEEDED**.
 | KPI-17 Free to paid conversion | `checkoutstarted`, `progranted` events; Razorpay | New paid Pro in a month ÷ new Free in the month | `stats` doesn't print these events; count them by listing event keys |
 | KPI-18 Paid retention | Razorpay | Subscriptions still active after a month ÷ active at its start | — |
 | KPI-19 Refunds and chargebacks | Razorpay | Refunds ÷ payments | Refunds are revoked by hand, with `revoke-pro --paid` since 2026-10-29 (R-07) |
+| KPI-20 India's share of items | The LLM logs, `radar:llmlog:` | `llm-logs.mjs areas --days 7`: the items each sweep showed (a failed call's items and a dropped item left out), placed by `areaOf(region)` as on the board; India ÷ all, and India ÷ sweeps | Logs are kept 30 days. Text naming India and another area counts as Global, and India with elsewhere in Asia as Asia, so items that touch India are undercounted |
 
 ## Rules for the data
 
@@ -153,4 +154,5 @@ this table is now history; none of it is recorded as done except what `node scri
 | Start and end of the month | `stats --days 30`; Razorpay active subscriptions | KPI-12, KPI-14, KPI-16 |
 | End of the month | Razorpay: new, cancelled, refunded; `checkoutstarted` and `progranted` counts | KPI-17 to KPI-19 |
 | End of the month | Anthropic Console spend; provider invoices | KPI-06, KPI-07 |
+| A week after T42 is live | `llm-logs.mjs areas --days 7` and `llm-logs.mjs models` (RM-38) | KPI-20, KPI-06 |
 | End of the month | Fill the [benefits tracker](../05-business-case-and-launch/post-launch-plan.md#benefits-tracker) | G9 |

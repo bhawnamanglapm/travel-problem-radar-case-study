@@ -59,11 +59,17 @@ Subscriber -> links in each email -> /manage/ (/api/account: plan, Request Pro o
   Each `sources` entry in the log also says whether search returned the item's link at all (`searched`). With web
   search the only tool, a link it never returned came from the model's memory. This is logged only, to measure
   first; nothing is shown or dropped for it.
-- **Areas (T37).** The board filters by a fixed list of areas (Global, Asia, Europe, North America, Latin America,
+- **Areas (T37).** The board filters by a fixed list of areas (Global, Asia, India, Europe, North America, Latin America,
   Middle East & Africa, Oceania, Other). `areaOf` places the AI's free-text `region` in one from a name table;
   text that names two or more areas counts as Global, and text it can't place as Other. The area is worked out
   when needed, never stored, so `/api/data` is unchanged. The block is the same text in the server and the
   component, and `npm run check` fails if they differ.
+- **India focus (T42).** Each category's prompt also asks for up to 2 items about India, only where real, recent
+  ones exist, with `region` "India", and names the kinds of Indian source to search; `scanCategory` allows 4
+  searches, not 3. India is its own area, after Asia; text that names India and elsewhere in Asia counts as Asia.
+  A Pro member's stored `areas` is read through `readAreas`: a list with Asia and no `areasV` was saved when Asia
+  included India, so it reads with India. `set-areas` and `set-plan` store `areasV: 2`. `llm-logs.mjs areas`
+  gives India's share of the items (KPI-20).
 - **Search all sweeps (T38).** Beside the board's search box, "This sweep" or "All saved sweeps". All reads one
   search file (`radar:search`) that the sweep keeps: the latest copy of each item in the kept sweeps, with its
   sweep's id and time. `mergeSearch` is the same text in the server and the component, and `npm run check` fails

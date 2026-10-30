@@ -36,7 +36,8 @@ day. T33 to T35 (added 2026-10-25, at the owner's request) make Pro one plan the
 late. T33 brings forward the tier decision T31 had left until after launch. Phase 5 (T36 to T41, added 2026-10-29)
 improves the board itself: a detail panel, areas, search across sweeps, saved problems, share links and areas in Pro
 email. Its ideas came from a comparison with Mindtrip (mindtrip.ai), read from public write-ups because its site
-didn't render in a headless browser. Each one is built only when the owner says go.
+didn't render in a headless browser. Each one is built only when the owner says go. T42 (added 2026-10-30, at the owner's request) asks every
+category call for up to 2 items about India and makes India its own area.
 
 ```mermaid
 flowchart TD
@@ -98,6 +99,7 @@ flowchart TD
     T39["T39 Saved problems (Pro)"]
     T40["T40 Share one problem"]
     T41["T41 Areas in Pro email"]
+    T42["T42 India focus"]
   end
   T00 --> T04
   T01 --> T02
@@ -124,6 +126,7 @@ flowchart TD
   T29 -.-> T31
   T36 --> T39 & T40
   T37 --> T38 & T41
+  T41 --> T42
 ```
 
 **Pro before payments.** Phase 1 builds both plans. Until Phase 2, the owner grants Pro by hand with the admin
@@ -176,6 +179,7 @@ themselves. It is built only if the Phase 1 numbers pass the owner's gate ([pric
 | [T39](T39-saved-problems.md) | Saved problems for Pro: a star on each card, a Saved tab, up to 100 on the account record | Dev | M | T36 |
 | [T40](T40-share-a-problem.md) | Share one problem: `/p/<sweep>/<item>` with a preview card; headline-level fields for non-Pro | Dev | M | T36 |
 | [T41](T41-email-areas.md) | Pro email: choose areas as well as categories | Dev | M | T37 |
+| [T42](T42-india-focus.md) | India focus: up to 2 India items in each category call, 4 searches, India as its own area, India's share from the logs | Dev | M | T37, T41 |
 
 ## Decisions to settle before or during the build (OWNER INPUT NEEDED)
 
@@ -199,6 +203,7 @@ last column says what changes if the owner picks otherwise. Record each final ch
 | O4 | Can search engines index shared problem pages? | No (`noindex`) | Keeps Pro content and old headlines out of search results; easy to turn on later | T40 |
 | O5 | Most saved problems per account | 100 | Keeps the account record small | T39 |
 | O6 | Does choosing areas change Pro's price? | No | It narrows the email; it costs nothing extra to run | T41 |
+| O7 | How are India items found? | **Owner's choice, 2026-10-30:** up to 2 more in each category call, with one more search | Uses the calls that already run; a separate India-only call waits on a week of readings (RM-38) | T42 |
 
 ## Where these tasks differ from the draft designs
 

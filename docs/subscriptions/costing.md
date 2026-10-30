@@ -73,7 +73,7 @@ what the Pro price has to cover. **The price itself is the owner's decision**; t
 
 **Code.** A sweep makes 4 calls to Anthropic, one per category (`api/_lib/radar.js`). Each call has:
 - `max_tokens: 16000`;
-- web search with `max_uses: 3`.
+- web search with `max_uses: 4` (3 until T42 on 2026-10-30; every run measured below used 3).
 
 The model is `claude-haiku-5-5` unless the `RADAR_MODEL` variable names another (`api/_lib/handlers.js`). The runs
 measured below were on `claude-sonnet-5-5`; Haiku's measured usage is in [haiku-test.md](haiku-test.md). In the

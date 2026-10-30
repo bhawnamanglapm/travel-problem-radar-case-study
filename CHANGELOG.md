@@ -5,6 +5,13 @@ grouped by date.
 
 ## 2026-10-30
 
+- T42, India focus (branch `feat/india-focus`): each category call now also asks for up to 2 items about India,
+  only where real, recent ones exist, with region "India", and may run 4 searches instead of 3. India is its own
+  area after Asia on the board, `/manage/` and `/admin/`; a Pro member's Asia choice saved before this reads as
+  Asia and India (`readAreas`, `areasV: 2`), so no record is rewritten. `llm-logs.mjs areas` gives items by area
+  and India's share (KPI-20): 2 of 190 (1.1%) before the change. PM docs: DSC-09, ALT-08 to ALT-10, REQ-47,
+  KPI-20, R-15, R-16, CR-23, RM-38, and PMs at Indian travel companies as the first segment to test.
+  `npm test` 1,590, `npm run check` 249.
 - PM docs brought up to date: every stage of `pm/`, the README and `docs/decisions.md` now record go-live on
   2026-10-28, the ₹1 price (₹299 kept as the break-even analysis), the custom domain, Haiku, T22 and T29 to T41,
   and the first test run. Counts recounted at `e339d32`: `npm test` 1,582, `npm run check` 249. Docs only.
