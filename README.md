@@ -95,7 +95,8 @@ is no set of real results to score yet.
 - the severity is reasonable;
 - the opportunity names a user and something buildable.
 
-Report the share that passes each one.
+Report the share that passes each one. `scripts/score-items.mjs` picks the items from the saved sweeps (read-only),
+checks the links and dates itself, and writes a CSV for the other four; `--score` reports the shares.
 
 **Before and after.** On 18 Oct 2026 the case study was checked against the repo, and claims without evidence were
 changed:
