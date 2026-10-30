@@ -139,7 +139,7 @@ Email has been sent through a real Resend account since 21 Oct 2026, from the ve
 | `api/_lib/subscriber-delivery.js` | After a saved sweep: Pro and Free sends, the 24-hour roll-up, resuming a cut-off send |
 | `api/_lib/plan.js` | Pro's price from `plan.json` (T33): one plan, a `monthly` and a `yearly` price; the periods on sale; and `RAZORPAY_PLANS` (one ₹1 Razorpay plan per period; a subscription's quantity is the price). Used by `/api/account`, `fill-plan` and `check-plan` |
 | `api/_lib/razorpay.js` | Razorpay for paid Pro (T19): create, cancel and fetch a subscription, and the webhook and Checkout signature checks. Used by `/api/account`'s checkout, checkout-return and cancel (T20) |
-| `vercel.json` | Daily backstop cron (00:05 UTC), 300 s limit, build that publishes `index.html`, `demo/`, `live/`, `subscribe/`, `manage/`; the `/p/<sweep>/<item>` rewrite to `/api/data` (T40) |
+| `vercel.json` | Daily backstop cron (00:05 UTC), 300 s limit, build that publishes `index.html`, `demo/`, `live/`, `subscribe/`, `manage/`; the `/p/<sweep>/<item>` rewrite to `/api/data` (T40); security headers, with the full CSP report-only (BUG-010) |
 | `og.png`, `scripts/og-card.html` | The link-preview image (1200×630) and the page it was rendered from (T40) |
 | `travel-problem-radar.jsx` | The dashboard component (live in Claude's app, demo on the web) |
 | `sampleData.json` | 8 saved items, two per category, each with a source link |

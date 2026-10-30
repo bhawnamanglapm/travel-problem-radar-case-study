@@ -5,6 +5,9 @@ grouped by date.
 
 ## 2026-10-30
 
+- BUG-010 fixed: `vercel.json` sends security headers (`nosniff`, no framing, `Referrer-Policy` on pages) and a
+  report-only Content-Security-Policy that lists Razorpay Checkout, Google Fonts and the demo's API, to enforce once
+  checkout shows no violations. DEPLOYMENT.md and a `check.mjs` rule updated.
 - BUG-008 fixed: GitHub starts scheduled sweeps 3.5 to 5.5 hours late, so the Vercel backstop moves from 01:30 to
   00:05 UTC and sweeps slot 00. The first email of the day is now promised for about 05:30 to 06:30 IST (home,
   pricing, subscribe, manage, the confirm page), and `/manage/` says later emails often arrive a few hours after
