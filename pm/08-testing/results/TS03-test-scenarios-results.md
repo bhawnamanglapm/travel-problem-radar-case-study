@@ -22,8 +22,8 @@ A keyword match is a lead, not proof: the owner's review (TS03 "Done when") stil
 | SC-V-1 | Manual | Needs a browser; TS13 SM-1 and SM-2 cover it by status code only |
 | SC-V-2 | Gap | Code reading: the demo replays the sample (`demo ? replayCategory(...) : scanCategory(...)`, `travel-problem-radar.jsx`), but the bundle still contains the Anthropic call path and no check asserts the demo never takes it |
 | SC-V-3 | Covered (auto) | test-subscriptions: board switch 401 signed out, 402 Free |
-| SC-V-4 | Covered (auto) | test-subscriptions, 18 checks, e.g. "item page: signed out shows the headline…". Also live: API-5 in [TS11](TS11-results.md) |
-| SC-V-5 | Manual | Needs a phone or device mode ([TS18](TS18-results.md)) |
+| SC-V-4 | Covered (auto) | test-subscriptions, 18 checks, e.g. "item page: signed out shows the headline…". Also live: API-5 in [TS11](TS11-api-testing-results.md) |
+| SC-V-5 | Manual | Needs a phone or device mode ([TS18](TS18-cross-browser-and-device-testing-results.md)) |
 | SC-F-1 | Covered (auto) and Manual | test-subscriptions "confirm GET: a page with a form that POSTs the id and token"; TC-F-1 for the inbox |
 | SC-F-2 | Covered (auto) | test-subscriptions "delivery: 2 Pro + 3 Free, first sweep of the day: 5 emails" |
 | SC-F-3 | Covered (auto) | test-subscriptions, e.g. "normaliseEmail trims and lowercases" |
@@ -53,7 +53,7 @@ A keyword match is a lead, not proof: the owner's review (TS03 "Done when") stil
 | SC-P-6 | Covered (auto) | test-subscriptions grace checks (T22) |
 | SC-P-7 | Covered (auto) and Manual | test-subscriptions "checkout: the failure is logged as a status code only"; TC-P-3 |
 | SC-P-8 | Gap | No check found for the return arriving before the webhook; the `/manage/` wait is in the page script |
-| SC-P-9 | Covered (auto) | test-subscriptions signature and duplicate checks; live: unsigned POST gives 401 ([TS11](TS11-results.md)) |
+| SC-P-9 | Covered (auto) | test-subscriptions signature and duplicate checks; live: unsigned POST gives 401 ([TS11](TS11-api-testing-results.md)) |
 | SC-P-10 | Manual | TC-P-2 (bug note 1) |
 | SC-P-11 | Manual | Bug note 2; needs `subscribers.mjs show --check` on the accounts the owner names |
 | SC-P-12 | Covered (auto) | test-subscriptions and test-admin "a test key on Production is named and turns payments off" |
@@ -61,7 +61,7 @@ A keyword match is a lead, not proof: the owner's review (TS03 "Done when") stil
 | SC-A-2 | Covered (auto) | test-subscriptions grant, revoke and delete checks |
 | SC-A-3 | Covered (auto) | test-admin "after ADMIN_MAX_FAILS_PER_HOUR wrong tries the IP is refused" |
 | SC-A-4 | Covered (auto) | test-admin "503 without ADMIN_USER and ADMIN_PASSWORD" |
-| SC-A-5 | Manual | Bug note 3; counts only from `subscribers.mjs stats` ([TS05](TS05-results.md)) |
+| SC-A-5 | Manual | Bug note 3; counts only from `subscribers.mjs stats` ([TS05](TS05-test-data-results.md)) |
 | SC-W-1 | Covered (auto) | test-sweep and test-subscriptions, e.g. "a saved scheduled sweep still answers 200 saved"; live: 5 saved runs in Actions |
 | SC-W-2 | Covered (auto) | test-sweep "partial and total failure" section, "failures are reported per category" |
 | SC-W-3 | Covered (auto) | test-sweep "all four failed: nothing saved but the start time and the LLM log" |
@@ -73,7 +73,7 @@ A keyword match is a lead, not proof: the owner's review (TS03 "Done when") stil
 | SC-L-1 | Covered (auto) | `check.mjs` footer rule ("aria-label=Site" on every page); live: 13 pages 200 |
 | SC-L-2 | Covered (auto) | test-plan, 15 checks; live `/pricing/` matches `plan.json` |
 | SC-L-3 | Manual | Live: `/subscribe/` 307 to `/pricing/` (BUG-007 retest). The "one job each" half is the owner's judgment |
-| SC-L-4 | Manual | Mechanical check found nothing ([TS10](TS10-results.md)); a person still reads it |
+| SC-L-4 | Manual | Mechanical check found nothing ([TS10](TS10-ui-ux-testing-results.md)); a person still reads it |
 
 **Totals:** Covered (auto) only 32, Covered (auto) and Manual 11, Manual only 9, Gap 3 (55 in all). The 3 gaps: SC-V-2, SC-P-3,
 SC-P-8.

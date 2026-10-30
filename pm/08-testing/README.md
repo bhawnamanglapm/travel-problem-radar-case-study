@@ -62,26 +62,26 @@ From the first test run, 2026-10-30. The [results index](results/README.md) has 
 
 | # | Component | Status | Evidence |
 |---|---|---|---|
-| [TS01](TS01-requirements-validation.md) | Requirements validation | Run 2026-10-30 | Drift D1 to D8 confirmed (7 Pass, D3 needs the owner); the PRD isn't updated yet. [Results](results/TS01-results.md) |
-| [TS02](TS02-acceptance-criteria.md) | Acceptance criteria | Run: fails | 9 of 32 REQs have Given/When/Then lines; 5 drafts await the owner. [Results](results/TS02-results.md) |
-| [TS03](TS03-test-scenarios.md) | Test scenarios | Run 2026-10-30 | 55 scenarios marked: 43 automated, 9 manual only, 3 gaps. [Results](results/TS03-results.md) |
-| [TS04](TS04-test-cases.md) | Test cases | Partial | 1,582 + 244 automated checks pass; 14 manual cases wait for the owner; 6 manual scenarios have no case. [Results](results/TS04-results.md) |
-| [TS05](TS05-test-data.md) | Test data | Partial | Production counted read-only; the 2 test-mode subscriptions are still in the paid count. [Results](results/TS05-results.md) |
-| [TS06](TS06-unit-testing.md) | Unit testing | In place (server) | 8 suites pass; no coverage measure; the React boards have no tests. [Results](results/TS06-results.md) |
-| [TS07](TS07-integration-testing.md) | Integration testing | Partial | Production sweeps work (27 of 30 runs; 3 failed on credit, as designed); staging rows blocked. [Results](results/TS07-results.md) |
-| [TS08](TS08-system-testing.md) | System testing | Needs owner | BUG-003 answered by counts; the run sheet needs staging, inboxes and a browser. [Results](results/TS08-results.md) |
-| [TS09](TS09-functional-testing.md) | Functional testing | Run 2026-10-30 | 28 of 32 REQs pass, 4 not tested; the skip-link and header NFRs fail. [Results](results/TS09-results.md) |
-| [TS10](TS10-ui-ux-testing.md) | UI/UX testing | Partial | Pages load; BUG-005 fixed in code, 006 and 007 retested; the page-by-page review needs a browser. [Results](results/TS10-results.md) |
-| [TS11](TS11-api-testing.md) | API testing | Run 2026-10-30 | API-1 to API-6 pass on production. [Results](results/TS11-results.md) |
-| [TS12](TS12-regression-testing.md) | Regression testing | Partial | CI green (20 of 20); the manual list RG-1 to RG-8 not run. [Results](results/TS12-results.md) |
-| [TS13](TS13-smoke-testing.md) | Smoke testing | Run 2026-10-30 | 9 of 10 pass by curl and logs; SM-4 needs the owner. [Results](results/TS13-results.md) |
-| [TS14](TS14-performance-testing.md) | Performance testing | Partial | Sweeps take 14 to 16 s but start 2.5 to 7 hours late (BUG-008); Lighthouse blocked by the API quota. [Results](results/TS14-results.md) |
-| [TS15](TS15-security-testing.md) | Security testing | Run: 2 fails | Checklist 8 of 10 pass; `npm audit` (BUG-009) and headers (BUG-010) fail; no keys in history. [Results](results/TS15-results.md) |
-| [TS16](TS16-user-acceptance-testing.md) | UAT | Needs owner | 20 live items picked for marking; no sign-off. [Results](results/TS16-results.md) |
-| [TS17](TS17-accessibility-testing.md) | Accessibility testing | Partial | Static scan: 7 of 8 checks pass; skip link on 1 of 14 pages (BUG-011); keyboard and screen reader not run. [Results](results/TS17-results.md) |
-| [TS18](TS18-cross-browser-and-device-testing.md) | Cross-browser and device | Needs owner | Matrix ready; nothing run. [Results](results/TS18-results.md) |
-| [TS19](TS19-bug-reporting-and-retesting.md) | Bug reporting and retesting | In use | 11 bugs logged (BUG-008 to 011 from this run); 4 retested. [Results](results/TS19-results.md) |
-| [TS20](TS20-production-validation.md) | Production validation | Partial | The latest sweep ran and no key mismatch; inbox and admin checks need the owner. [Results](results/TS20-results.md) |
+| [TS01](TS01-requirements-validation.md) | Requirements validation | Run 2026-10-30 | Drift D1 to D8 confirmed (7 Pass, D3 needs the owner); the PRD isn't updated yet. [Results](results/TS01-requirements-validation-results.md) |
+| [TS02](TS02-acceptance-criteria.md) | Acceptance criteria | Run: fails | 9 of 32 REQs have Given/When/Then lines; 5 drafts await the owner. [Results](results/TS02-acceptance-criteria-results.md) |
+| [TS03](TS03-test-scenarios.md) | Test scenarios | Run 2026-10-30 | 55 scenarios marked: 43 automated, 9 manual only, 3 gaps. [Results](results/TS03-test-scenarios-results.md) |
+| [TS04](TS04-test-cases.md) | Test cases | Partial | 1,582 + 244 automated checks pass; 14 manual cases wait for the owner; 6 manual scenarios have no case. [Results](results/TS04-test-cases-results.md) |
+| [TS05](TS05-test-data.md) | Test data | Partial | Production counted read-only; the 2 test-mode subscriptions are still in the paid count. [Results](results/TS05-test-data-results.md) |
+| [TS06](TS06-unit-testing.md) | Unit testing | In place (server) | 8 suites pass; no coverage measure; the React boards have no tests. [Results](results/TS06-unit-testing-results.md) |
+| [TS07](TS07-integration-testing.md) | Integration testing | Partial | Production sweeps work (27 of 30 runs; 3 failed on credit, as designed); staging rows blocked. [Results](results/TS07-integration-testing-results.md) |
+| [TS08](TS08-system-testing.md) | System testing | Needs owner | BUG-003 answered by counts; the run sheet needs staging, inboxes and a browser. [Results](results/TS08-system-testing-results.md) |
+| [TS09](TS09-functional-testing.md) | Functional testing | Run 2026-10-30 | 28 of 32 REQs pass, 4 not tested; the skip-link and header NFRs fail. [Results](results/TS09-functional-testing-results.md) |
+| [TS10](TS10-ui-ux-testing.md) | UI/UX testing | Partial | Pages load; BUG-005 fixed in code, 006 and 007 retested; the page-by-page review needs a browser. [Results](results/TS10-ui-ux-testing-results.md) |
+| [TS11](TS11-api-testing.md) | API testing | Run 2026-10-30 | API-1 to API-6 pass on production. [Results](results/TS11-api-testing-results.md) |
+| [TS12](TS12-regression-testing.md) | Regression testing | Partial | CI green (20 of 20); the manual list RG-1 to RG-8 not run. [Results](results/TS12-regression-testing-results.md) |
+| [TS13](TS13-smoke-testing.md) | Smoke testing | Run 2026-10-30 | 9 of 10 pass by curl and logs; SM-4 needs the owner. [Results](results/TS13-smoke-testing-results.md) |
+| [TS14](TS14-performance-testing.md) | Performance testing | Partial | Sweeps take 14 to 16 s but start 2.5 to 7 hours late (BUG-008); Lighthouse blocked by the API quota. [Results](results/TS14-performance-testing-results.md) |
+| [TS15](TS15-security-testing.md) | Security testing | Run: 2 fails | Checklist 8 of 10 pass; `npm audit` (BUG-009) and headers (BUG-010) fail; no keys in history. [Results](results/TS15-security-testing-results.md) |
+| [TS16](TS16-user-acceptance-testing.md) | UAT | Needs owner | 20 live items picked for marking; no sign-off. [Results](results/TS16-user-acceptance-testing-results.md) |
+| [TS17](TS17-accessibility-testing.md) | Accessibility testing | Partial | Static scan: 7 of 8 checks pass; skip link on 1 of 14 pages (BUG-011); keyboard and screen reader not run. [Results](results/TS17-accessibility-testing-results.md) |
+| [TS18](TS18-cross-browser-and-device-testing.md) | Cross-browser and device | Needs owner | Matrix ready; nothing run. [Results](results/TS18-cross-browser-and-device-testing-results.md) |
+| [TS19](TS19-bug-reporting-and-retesting.md) | Bug reporting and retesting | In use | 11 bugs logged (BUG-008 to 011 from this run); 4 retested. [Results](results/TS19-bug-reporting-and-retesting-results.md) |
+| [TS20](TS20-production-validation.md) | Production validation | Partial | The latest sweep ran and no key mismatch; inbox and admin checks need the owner. [Results](results/TS20-production-validation-results.md) |
 
 ## Order of work
 

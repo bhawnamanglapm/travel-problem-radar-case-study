@@ -12,7 +12,7 @@
 
 | Area | Check | Result | Evidence |
 |---|---|---|---|
-| Access control | Every endpoint refuses the wrong person | Pass (signed out) | Signed out: `/api/data` 401, `/api/sweep` 401, `/api/admin` 401, `/api/account` 401 ([TS11](TS11-results.md)). Free on Pro data, another member's account and not-admin are covered offline (`test-subscriptions`, `test-admin`); on production they need test accounts |
+| Access control | Every endpoint refuses the wrong person | Pass (signed out) | Signed out: `/api/data` 401, `/api/sweep` 401, `/api/admin` 401, `/api/account` 401 ([TS11](TS11-api-testing-results.md)). Free on Pro data, another member's account and not-admin are covered offline (`test-subscriptions`, `test-admin`); on production they need test accounts |
 | Crypto | Constant-time secret comparison; signed values expire | Pass | `timingSafeEqual` is used in 8 `api/_lib` modules (admin, google, http, password, razorpay, session, subscribers, subscription-handlers). Expiry of links and sessions is tested offline |
 | Injection | Request and AI values reach HTML only through `esc()` or React | Pass | The board is React; its one `dangerouslySetInnerHTML` is the static CSS. `admin/index.html` builds tables with `innerHTML` but passes every text value through `esc()`; the unescaped values are server-computed numbers. Note: the admin CSV export quotes cells but doesn't neutralise a leading `=`, `+`, `-` or `@` (spreadsheet formula injection). Owner-only and low risk; worth a line if the CSV is ever opened in Excel |
 | Design | Every action that costs money has a cap | Pass | Manual sweeps capped at 3 a day (REQ-32, 429 on the 4th); email has one switch and a cap (REQ-18); delivery stops before the time limit (REQ-16) |
@@ -39,7 +39,7 @@
 ## Bugs found
 
 BUG-009 (`npm audit` high findings) and BUG-010 (missing security headers), both proposed S3. See
-[TS19 results](TS19-results.md).
+[TS19 results](TS19-bug-reporting-and-retesting-results.md).
 
 ## Left to do
 

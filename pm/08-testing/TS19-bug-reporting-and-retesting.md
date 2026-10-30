@@ -82,7 +82,7 @@ GitHub Issues and labels: free. No new tools.
 ## The log
 
 The owner's 7 notes, as of 2026-10-30, with addresses left out, then the bugs found by the first test run
-(BUG-008 onwards, [results](results/TS19-results.md)). Severities are proposals for the owner.
+(BUG-008 onwards, [results](results/TS19-bug-reporting-and-retesting-results.md)). Severities are proposals for the owner.
 
 | ID | What was seen | Severity (proposed) | Found in | Next step | Task | State |
 |---|---|---|---|---|---|---|

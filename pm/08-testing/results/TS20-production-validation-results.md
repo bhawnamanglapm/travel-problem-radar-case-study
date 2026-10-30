@@ -12,9 +12,9 @@
 
 | ID | Check | Result | Evidence |
 |---|---|---|---|
-| PV-1 | The latest scheduled sweep ran | Pass, late (BUG-008) | `llm-logs.mjs list --days 1`: 30 Oct 02:27 UTC (slot 0), saved, 4 of 4 calls OK, Haiku, $0.1142, in line with the 7-day range of $0.0921 to $0.1254. The one before: 29 Oct 16:58 UTC (slot 10), saved, $0.1143. Both hours after their slot ([TS14](TS14-results.md)) |
+| PV-1 | The latest scheduled sweep ran | Pass, late (BUG-008) | `llm-logs.mjs list --days 1`: 30 Oct 02:27 UTC (slot 0), saved, 4 of 4 calls OK, Haiku, $0.1142, in line with the 7-day range of $0.0921 to $0.1254. The one before: 29 Oct 16:58 UTC (slot 10), saved, $0.1143. Both hours after their slot ([TS14](TS14-performance-testing-results.md)) |
 | PV-2 | No failure alert | Needs owner | Needs the owner's inbox and Slack. From the logs: the last failed runs were 24 Oct 14:01 and 25 Oct 04:49 and 14:25 UTC (Anthropic credit too low); each should have sent an alert. None since |
-| PV-3 | The board shows that sweep | Needs owner | `/live/` as the owner's Pro. The share link for an item of that sweep loads (API-5, [TS11](TS11-results.md)) |
+| PV-3 | The board shows that sweep | Needs owner | `/live/` as the owner's Pro. The share link for an item of that sweep loads (API-5, [TS11](TS11-api-testing-results.md)) |
 | PV-4 | No key mismatch | Pass | The sweep replies in the Actions logs read for this run have no `razorpay: "key mismatch"` |
 | PV-5 | Payment mode | Needs owner | `/admin/` needs the owner's sign-in (signed out it gives 401) |
 | PV-6 | Emailed sign-in | Needs owner | Needs an inbox |

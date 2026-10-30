@@ -37,7 +37,7 @@ The targets in TS14 step 1 are proposals the owner hasn't approved yet; results 
 ## Bugs found
 
 BUG-008: scheduled sweeps run 2.5 to 7 hours after their slot, later than `/manage/` tells members. Proposed S3. See
-[TS19 results](TS19-results.md).
+[TS19 results](TS19-bug-reporting-and-retesting-results.md).
 
 ## Left to do
 

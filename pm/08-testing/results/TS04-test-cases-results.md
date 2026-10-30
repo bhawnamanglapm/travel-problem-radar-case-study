@@ -29,7 +29,7 @@ From `npm test` on `d2b9639` (Node v24.18.0), 2026-10-30 about 08:52 UTC. Every 
 
 | ID | Check | Result | Evidence |
 |---|---|---|---|
-| TC-0 | Every scenario marked Covered (auto) names its suite and section | Pass | [TS03 results](TS03-results.md): all 43 auto rows name a suite and an example check label |
+| TC-0 | Every scenario marked Covered (auto) names its suite and section | Pass | [TS03 results](TS03-test-scenarios-results.md): all 43 auto rows name a suite and an example check label |
 | TC-00 | Every scenario marked Manual has a case | Fail | 6 Manual scenarios have no TC: SC-V-1, SC-V-5, SC-P-11, SC-A-5, SC-L-3, SC-L-4. Each is covered by another task's sheet instead (TS13 SM-1/2, TS18, TS08, TS10) |
 | TC-F-1 to TC-F-3 | Sign-up cases | Needs owner | Need a test inbox; not run |
 | TC-U-1, TC-U-2 | Unsubscribe cases | Needs owner | Need Gmail and a Pro test account |
