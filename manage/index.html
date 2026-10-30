@@ -400,7 +400,8 @@
     }, 5000);
   }
   function show(a) {
-    if (polls && a.effectivePlan === "pro" && !(acct && acct.effectivePlan === "pro")) say("Payment confirmed: Pro is on.", false);
+    // Pro started while waiting for the webhook (BUG-001): on to the board, as checkoutDone does when it starts at once.
+    if (polls && a.effectivePlan === "pro" && !(acct && acct.effectivePlan === "pro")) { say("Payment confirmed: Pro is on.", false); toBoard(); }
     acct = a;
     ask.hidden = buy.hidden = billing.hidden = true;
     document.getElementById("signOutRow").hidden = !a.signedIn;

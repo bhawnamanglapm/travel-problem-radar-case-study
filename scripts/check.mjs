@@ -121,6 +121,10 @@ const manSrcs = [...manPage.matchAll(/\.src\s*=\s*([^;]+);/g)].map((m) => m[1].t
 check(/var CHECKOUT_JS = "https:\/\/checkout\.razorpay\.com\/v1\/checkout\.js";/.test(manPage) && manSrcs.length === 1 && manSrcs[0] === "CHECKOUT_JS"
   && /action: "checkout"/.test(manPage) && /action: "checkout-return"/.test(manPage) && /action: "cancel"/.test(manPage),
   "manage/index.html loads only Razorpay's Checkout script, and posts checkout, checkout-return and cancel (T20)");
+// BUG-001: after paying, both ways Pro can start lead to the board: checkout-return at once, or the webhook while polling.
+const showFn = (manPage.match(/function show\(a\) \{[\s\S]*?\n  \}/) || [""])[0];
+check(/x\.body\.effectivePlan === "pro"\) toBoard\(\)/.test(manPage) && /polls && a\.effectivePlan === "pro"[^\n]*toBoard\(\)/.test(showFn),
+  "manage/index.html goes on to the live board when Pro starts, at checkout-return or while waiting for the webhook (BUG-001)");
 check(/>Request Pro</.test(manPage) && />Upgrade to Pro</.test(manPage) && /a\.payments/.test(manPage) && !/\brzp_(test|live)_/.test(manPage) && !/prefill/.test(manPage),
   "manage/index.html keeps Request Pro for when payments are off, holds no Razorpay key and sends Checkout no address");
 // The switch is set in Vercel's settings when T22 turns it on, never in the repo.

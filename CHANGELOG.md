@@ -5,6 +5,9 @@ grouped by date.
 
 ## 2026-10-30
 
+- BUG-001 fixed: after paying, `/manage/` now goes on to the live board when Pro starts by Razorpay's webhook
+  while the page waits, not only when it starts at checkout-return. A `check.mjs` rule covers both ways. Retest
+  due with one payment.
 - First test run. TS01 to TS20 ran offline and read-only against production; nothing was swept, emailed, paid
   for or deployed, and staging wasn't used (about 121 commits behind). Each task's result is in
   `pm/08-testing/results/`, with an index, counts and the release verdict: not ready to sign off (open proposed S1
