@@ -393,6 +393,23 @@ const sweepOpts = (storage, byCat, now) => ({
   check(mr.code === 0 && mr.out.includes("m: 2 sweeps") && mr.out.includes("(8 calls not priced, left out)"), "llm-logs models: reads the store's logs");
   check((await run(["models", "--days", "31"])).code === 2 && (await run(["models", "x"])).code === 2 && (await run(["models", "--days", "1"])).out.includes("1 sweep,"),
     "llm-logs models: --days is 1 to 30; no other arguments");
+
+  // T42: items by area and India's share (KPI-20)
+  const said = (cat, list, more = {}) => ({ cat, items: list.length, ...more, response: { content: [{ type: "text", text: JSON.stringify(list) }] } });
+  const ar = logOf(6, 29, "m", [
+    said("traveler_pain", [item(1, { region: "Mumbai, India" }), item(2, { region: "Japan" }), item(3, { region: "India" })], { dropped: [{ title: "Problem 3" }] }),
+    said("gov_policy", [item(4, { region: "Bengaluru" }), item(5, { region: "United States" }), item(6, { region: "Worldwide" })]),
+    { ...said("web_app", [item(7, { region: "India" })]), error: "http 529" },
+  ]);
+  check(JSON.stringify(tool.shownItems(ar).map((x) => x.title)) === JSON.stringify(["Problem 1", "Problem 2", "Problem 4", "Problem 5", "Problem 6"]),
+    "llm-logs areas: the items shown, without a failed call's or a dropped one");
+  const at = tool.formatAreas([ar], 7);
+  check(/^Items by area, from 1 sweep in the last 7 days: 5 items shown.$/m.test(at) && /^ {2}India +2 {2}40.0%$/m.test(at) && /^ {2}Asia +1 {2}20.0%$/m.test(at)
+    && /^ {2}North America +1 {2}20.0%$/m.test(at) && /^ {2}Global +1 {2}20.0%$/m.test(at) && /^India: 2 of 5 \(40\.0%\), 2\.0 a sweep \(KPI-20\)\.$/m.test(at),
+    "llm-logs areas: each area's count and share, and India's share a sweep");
+  const ra = await run(["areas"]);
+  check(ra.code === 0 && /from 2 sweeps in the last 7 days: 2 items shown/.test(ra.out) && /^India: 0 of 2/m.test(ra.out) && (await run(["areas", "x"])).code === 2,
+    "llm-logs areas: reads the store's logs; no other arguments");
 }
 
 // ---- source freshness: each item's source dated from search's page age, sources over 60 days dropped
