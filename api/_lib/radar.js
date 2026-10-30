@@ -102,6 +102,8 @@ export const KEY_INDEX = "radar:history";
 export const KEY_ITEMS = "radar:items";
 // Every item in the kept sweeps, latest copy each (T38). Readable through /api/data, for "All saved sweeps".
 export const KEY_SEARCH = "radar:search";
+// The model for a sweep and for Ask the board (T43), unless RADAR_MODEL names another.
+export const DEFAULT_MODEL = "claude-haiku-5-5";
 // When the last scheduled sweep started, saved or not. Not readable through /api/data.
 export const KEY_LAST_SCHEDULED = "radar:lastScheduled";
 export const sweepKey = (id) => "radar:sweep:" + id;

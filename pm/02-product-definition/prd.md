@@ -136,6 +136,7 @@ These were built after v2 was first written (D7 of the TS01 results). Each is li
 | REQ-45 | An item whose source is over 60 days old is dropped; each item keeps `sourceDate`, the date search gave its page | [CHANGELOG](../../CHANGELOG.md) 2026-10-30 | Live |
 | REQ-46 | Each sweep's model use and cost are logged privately, per category, and can be summarised by model | T29; `scripts/llm-logs.mjs`, `scripts/cost-per-run.mjs` | Live |
 | REQ-47 | Each category call also asks for up to 2 items about India, only where real, recent ones exist, with region "India", and may run 4 searches. India is its own area on the board, in `/manage/` and in Pro email; an Asia choice saved before then includes India. India's share of items can be read from the logs (KPI-20) | [T42](../../docs/subscriptions/tasks/T42-india-focus.md) | Live 2026-10-30 (#132, `525ea4b`) |
+| REQ-48 | Pro members can ask the board a question. The answer is built by AI only from items the radar saved, each claim citing one; a citation to an item not sent is never shown, and links come from the store. Off unless `ASK_ENABLED=1`; `ASK_PER_DAY` questions a day (default 20); the question is not stored. Pro members can mark items Useful or Not useful, and `scripts/item-votes.mjs` gives the share useful (KPI-21) | [T43](../../docs/subscriptions/tasks/T43-ask-the-board.md) | Built, not live |
 
 ## Non-functional requirements
 

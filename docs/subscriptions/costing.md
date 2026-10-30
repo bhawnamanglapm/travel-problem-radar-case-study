@@ -42,6 +42,14 @@ what the Pro price has to cover. **The price itself is the owner's decision**; t
 - **Not known yet**: tax treatment, the UPI AutoPay fee, chargeback fees, the domain cost, and how many sweeps
   actually run each day.
 
+## Ask the board (T43)
+
+Each question is one Haiku call with no web search, and only when an item matches. Output is capped at 800
+tokens: at Haiku 5.5's $0.50 per million output tokens ([haiku-test.md](haiku-test.md)) that is at most $0.0004 a
+question. Input (the rules and up to 25 items) is **not measured**; it is read from the `usage` in the `ask` log
+lines during the owner's Preview test, at $0.10 per million input tokens. A member can ask at most `ASK_PER_DAY`
+(default 20) a day. The cost per question is recorded here once measured.
+
 ## Prices used
 
 | Provider | What | Price | Source |
@@ -75,7 +83,7 @@ what the Pro price has to cover. **The price itself is the owner's decision**; t
 - `max_tokens: 16000`;
 - web search with `max_uses: 4` (3 until T42 on 2026-10-30; every run measured below used 3).
 
-The model is `claude-haiku-5-5` unless the `RADAR_MODEL` variable names another (`api/_lib/handlers.js`). The runs
+The model is `claude-haiku-5-5` unless the `RADAR_MODEL` variable names another (`DEFAULT_MODEL` in `api/_lib/radar.js`). The runs
 measured below were on `claude-sonnet-5-5`; Haiku's measured usage is in [haiku-test.md](haiku-test.md). In the
 side-by-side test on 30 Oct 2026 ([model-test-2026-10-30.md](model-test-2026-10-30.md)), on the same news, a Haiku
 sweep cost **$0.1215** and a Sonnet sweep **$0.2440**. Searches were $0.107 of Haiku's cost.

@@ -8,7 +8,8 @@ import { OAUTH_COOKIE, OAUTH_MINUTES, clearOAuthCookie, googleConfigured, google
 import { cancelSubscription, createSubscription, fetchSubscription, keyMismatch, razorpayConfigured, verifyCheckout, verifyWebhook } from "./razorpay.js";
 import { DEFAULT_SWEEPS_PER_DAY, normaliseSweepsPerDay, sweepLimits, sweepsPerDayOf } from "./schedule.js";
 import { periodsOf, priceOf, priceTable, razorpayPlans } from "./plan.js";
-import { sweepKey } from "./radar.js";
+import { CATS, DEFAULT_MODEL, KEY_SEARCH, sweepKey } from "./radar.js";
+import { ASK_MAX, ASK_MIN, DEFAULT_ASK_PER_DAY, answerQuestion } from "./ask.js";
 import { hashPassword, passwordProblem, storedHash, verifyPassword } from "./password.js";
 import { clearCookie, originOk, parseCookies, readSession, sessionCookie, sessionSecret, signSession } from "./session.js";
 import {
@@ -575,6 +576,19 @@ const savedItem = (p, sweepAt) => ({
   sweepAt: typeof sweepAt === "string" ? sweepAt : null,
 });
 
+// Ask the board (T43): on only with ASK_ENABLED=1, Pro only, ASK_PER_DAY questions a member a UTC day (default 20),
+// counted on the record as `ask: { day, n }`. The question and the answer are not stored.
+export const askOn = (env) => env.ASK_ENABLED === "1";
+export const askPerDay = (env) => {
+  const n = Number(String(env.ASK_PER_DAY ?? "").trim());
+  return Number.isInteger(n) && n >= 1 && n <= 200 ? n : DEFAULT_ASK_PER_DAY;
+};
+const askedToday = (record, day) => (record.ask && record.ask.day === day && Number.isInteger(record.ask.n) ? record.ask.n : 0);
+// Useful / Not useful (T43): `votes: [{ id, v: 1 | -1, at }]`, newest first, at most MAX_VOTES (the oldest dropped).
+export const MAX_VOTES = 500;
+const votesOf = (record) => (Array.isArray(record.votes) ? record.votes : []);
+const voteMap = (record) => Object.fromEntries(votesOf(record).map((x) => [x.id, x.v]));
+
 const accountView = (record, t, env) => ({
   status: record.status,
   plan: record.plan === "pro" ? "pro" : "free",
@@ -606,6 +620,9 @@ const accountView = (record, t, env) => ({
   paymentPending: rzpOf(record).status === "authenticated" && effectivePlan(record, t) !== "pro",
   cancelAtPeriodEnd: paidPro(record, t) && rzpOf(record).cancelAtPeriodEnd === true,
   billing: RZP_BILLING.has(rzpOf(record).status) ? rzpOf(record).status : null,
+  // Ask the board (T43): whether the box shows, and the questions left today.
+  ask: askOn(env) && effectivePlan(record, t) === "pro",
+  askLeft: Math.max(0, askPerDay(env) - askedToday(record, utcDay(t))),
 });
 
 // GET ?id&t: the plan. With no id and no token, the login cookie (T16) says whose plan; a POST
@@ -620,6 +637,10 @@ const accountView = (record, t, env) => ({
 // POST {action: "set-password", password} or {action: "remove-password"}, signed in only (2026-10-27).
 // Saved problems (T39), signed in only: GET ?action=saved lists them (Pro), POST {action: "save", sweepId, itemId}
 // copies one from its sweep (Pro; 409 saved_full at MAX_SAVED) and POST {action: "unsave", itemId} removes one.
+// The saved GET also returns the member's votes, { itemId: 1 | -1 }, and whether they can ask (T43).
+// Ask the board and votes (T43), signed in only: POST {action: "ask", question, cat?} answers from the search file
+// (Pro, ASK_ENABLED; 429 ask_limit after ASK_PER_DAY); POST {action: "vote", sweepId, itemId, vote: 1 | -1 | 0}
+// marks an item useful or not (Pro; 0 removes the vote).
 // With payments on (T20): "checkout" starts a Razorpay subscription and returns what Checkout
 // needs, "checkout-return" records Checkout's signed reply (only the webhook, T21, grants Pro),
 // and "cancel" stops a paid Pro renewing at the end of the period.
@@ -636,10 +657,13 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
     let password;
     let sweepId;
     let itemId;
+    let question;
+    let cat;
+    let vote;
     try {
       params = await linkParams(req, { queryOnly: false });
       if (params.fields && typeof params.fields.action === "string") action = params.fields.action;
-      if (params.fields) ({ cats, areas, sweepsPerDay, months, password, sweepId, itemId } = params.fields);
+      if (params.fields) ({ cats, areas, sweepsPerDay, months, password, sweepId, itemId, question, cat, vote } = params.fields);
     } catch (e) {
       if (e instanceof BodyTooLargeError) return sendJson(res, 413, { error: "request too large" });
       throw e;
@@ -670,7 +694,7 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
         if (!session || session.id !== record.id) return sendJson(res, 403, { error: "sign_in_first" });
         if (req.method === "POST" && !originOk(req)) return sendJson(res, 403, { error: "wrong_origin" });
         const pro = effectivePlan(record, t) === "pro";
-        if (getAction === "saved") return pro ? sendJson(res, 200, { saved: savedOf(record) }) : sendJson(res, 402, { error: "pro_only" });
+        if (getAction === "saved") return pro ? sendJson(res, 200, { saved: savedOf(record), votes: voteMap(record), ask: askOn(env), askLeft: Math.max(0, askPerDay(env) - askedToday(record, utcDay(t))) }) : sendJson(res, 402, { error: "pro_only" });
         const ids = (r) => savedOf(r).map((s) => s.id);
         if (typeof itemId !== "string" || !itemId || itemId.length > 200) return sendJson(res, 400, { error: "bad_item" });
         if (action === "unsave") {
@@ -696,6 +720,67 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
         if (full) return sendJson(res, 409, { error: "saved_full", max: MAX_SAVED });
         const kept = savedOf(updated).find((s) => s.id === itemId);
         return kept ? sendJson(res, 200, { ok: true, ids: ids(updated), entry: kept }) : sendJson(res, 402, { error: "pro_only" });
+      }
+      if (action === "ask" || action === "vote") {
+        if (!session || session.id !== record.id) return sendJson(res, 403, { error: "sign_in_first" });
+        if (req.method !== "POST") return sendJson(res, 405, { error: "post_only" });
+        if (!originOk(req)) return sendJson(res, 403, { error: "wrong_origin" });
+        const pro = effectivePlan(record, t) === "pro";
+        if (action === "vote") {
+          if (typeof itemId !== "string" || !itemId || itemId.length > 200) return sendJson(res, 400, { error: "bad_item" });
+          if (vote !== 1 && vote !== -1 && vote !== 0) return sendJson(res, 400, { error: "bad_vote" });
+          if (vote === 0) {
+            const { record: updated } = await save((r) => (votesOf(r).some((x) => x.id === itemId) ? { ...r, votes: votesOf(r).filter((x) => x.id !== itemId) } : null));
+            return updated ? sendJson(res, 200, { ok: true, votes: voteMap(updated) }) : gone();
+          }
+          if (!pro) return sendJson(res, 402, { error: "pro_only" });
+          if (typeof sweepId !== "string" || !SWEEP_ID_RE.test(sweepId)) return sendJson(res, 400, { error: "bad_sweep" });
+          // Only an item the radar saved can be voted on, so the list holds no ids made up by the browser.
+          let sweep = null;
+          try { sweep = JSON.parse(await storage.get(sweepKey(sweepId))); } catch (e) { /* missing or unreadable */ }
+          if (!(sweep && Array.isArray(sweep.problems) && sweep.problems.some((p) => p && p.id === itemId))) return sendJson(res, 404, { error: "not_found" });
+          const entry = { id: itemId, v: vote, at: new Date(t).toISOString() };
+          const { record: updated } = await save((r) => {
+            if (effectivePlan(r, t) !== "pro") return null;
+            const rest = votesOf(r).filter((x) => x.id !== itemId);
+            return { ...r, votes: [entry, ...rest].slice(0, MAX_VOTES) };
+          });
+          if (!updated) return gone();
+          return votesOf(updated).some((x) => x.id === itemId && x.at === entry.at)
+            ? sendJson(res, 200, { ok: true, votes: voteMap(updated) }) : sendJson(res, 402, { error: "pro_only" });
+        }
+        if (!askOn(env)) return sendJson(res, 503, { error: "ask_off" });
+        if (!pro) return sendJson(res, 402, { error: "pro_only" });
+        const q = typeof question === "string" ? question.replace(/\s+/g, " ").trim() : "";
+        if (q.length < ASK_MIN || q.length > ASK_MAX) return sendJson(res, 400, { error: "bad_question", min: ASK_MIN, max: ASK_MAX });
+        const pickCat = cat === undefined || cat === null || cat === "" ? null : cat;
+        if (pickCat !== null && !CATS.some((c) => c.key === pickCat)) return sendJson(res, 400, { error: "bad_cat" });
+        if (!env.ANTHROPIC_API_KEY) return sendJson(res, 503, { error: "ask_off" });
+        // The day's count goes up before the model is called, so failed or slow calls can't be retried past the limit.
+        const day = utcDay(t);
+        const limit = askPerDay(env);
+        let over = false;
+        const { record: counted } = await save((r) => {
+          const n = askedToday(r, day);
+          if (n >= limit) { over = true; return null; }
+          return { ...r, ask: { day, n: n + 1 } };
+        });
+        if (over) return sendJson(res, 429, { error: "ask_limit", perDay: limit });
+        if (!counted) return gone();
+        const left = Math.max(0, limit - askedToday(counted, day));
+        let file = null;
+        try { file = JSON.parse(await storage.get(KEY_SEARCH)); } catch (e) { /* none yet */ }
+        let result;
+        try {
+          result = await answerQuestion(file, q, { cat: pickCat, fetchFn, apiKey: env.ANTHROPIC_API_KEY, model: env.RADAR_MODEL || DEFAULT_MODEL });
+        } catch (e) {
+          log(JSON.stringify({ ask: "model_error", error: String(e && e.message).slice(0, 200) }));
+          return sendJson(res, 502, { error: "model_error", left });
+        }
+        await recordEvent(storage, "asked", { now: t, randomBytes, plan: "pro" });
+        // The question is not logged: only what came back, the area searched and the tokens used (cost, R-18).
+        log(JSON.stringify({ ask: result.status, area: result.area, cat: pickCat, items: result.items.length, called: result.called, usage: result.usage }));
+        return sendJson(res, 200, { status: result.status, answer: result.answer, items: result.items, left });
       }
       if (req.method === "GET") return sendJson(res, 200, view(record));
 

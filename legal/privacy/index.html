@@ -67,7 +67,7 @@
 <main id="main">
   <p class="nav"><a href="../../">&larr; Home</a> &middot; <a href="../../signup/">Create account</a> &middot; <a id="acct" href="../../signin/">Sign in</a></p>
   <h1>Privacy policy</h1>
-  <p class="small">Last updated: 29 October 2026</p>
+  <p class="small">Last updated: 31 October 2026</p>
 
   <p>This page covers the Travel Problem Radar website and email digest, run by <span data-fill>{{LEGAL_NAME}}</span>. Questions or requests: <a href="mailto:pehchanthetraveller19@gmail.com">pehchanthetraveller19@gmail.com</a>.</p>
 
@@ -77,6 +77,8 @@
     <li>your email address;</li>
     <li>whether it is confirmed, your plan (Free or Pro), and the categories and areas you chose;</li>
     <li>if you save problems on the board (Pro): a copy of each one, at most 100 (its title, summary, source, link, region, date, severity and product angle, which sweep it came from and when you saved it). It stays until you remove it or delete your account, and is kept if your Pro ends, for when you renew;</li>
+    <li>if you mark problems Useful or Not useful (Pro): which problem, which button and when, at most 500 (the oldest dropped first). They stay until you press the button again to remove them or delete your account;</li>
+    <li>if you ask the board a question (Pro): only how many questions you asked today, so we can apply the daily limit. We don&rsquo;t store or log the question or the answer;</li>
     <li>the dates you signed up, were sent a confirmation, confirmed, were sent an &ldquo;already subscribed&rdquo; email, and asked for Pro;</li>
     <li>a random code that makes the links in your emails work;</li>
     <li>if you continue with Google: only the email address Google gives us, which it says it has verified. We don&rsquo;t keep your Google account id, name, photo or any Google token;</li>
@@ -89,13 +91,14 @@
   <p>When you confirm your address or sign in, we set one cookie, <code>tpr_session</code>, so the site knows it&rsquo;s you. It holds your record&rsquo;s id (a one-way hash of your address, not the address itself), an expiry date and a signature. It lasts until you close the browser or sign out, and 12 hours at most. If you continue with Google, a second cookie, <code>tpr_oauth</code>, holds random values that check the reply comes from the sign-in you started. If your address has no account yet, it then holds that address while you decide whether to create one. It lasts 10 minutes at most and is deleted when you sign in or create the account. We set no advertising or tracking cookies.</p>
 
   <h2>What we use it for</h2>
-  <p>Only to send the digest you asked for, to let you sign in and manage or end it, and to count sign-ups and unsubscribes. We don&rsquo;t sell it, share it for advertising, or add you to any other list.</p>
+  <p>Only to send the digest you asked for, to let you sign in and manage or end it, to answer questions you ask the board, and to count sign-ups and unsubscribes. Votes are added up across members, without addresses, to see which problems readers find useful. We don&rsquo;t sell it, share it for advertising, or add you to any other list.</p>
 
   <h2>Who handles it for us</h2>
   <ul>
     <li><b>Vercel</b> hosts the site and stores the records in a private store.</li>
     <li><b>Resend</b> sends the emails and tells us when an address bounces or marks an email as spam.</li>
     <li><b>Google</b>, only if you choose &ldquo;Continue with Google&rdquo;: it confirms who you are and tells us your email address.</li>
+    <li><b>Anthropic</b>, only if you ask the board a question: its AI model receives your question and the saved problems that match it, and writes the answer. It doesn&rsquo;t receive your address. Don&rsquo;t put personal details in a question.</li>
   </ul>
   <p>Each keeps its own logs under its own policy. They may store and process data outside India, including in the United States, where the site&rsquo;s server code runs.</p>
 

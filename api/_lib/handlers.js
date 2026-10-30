@@ -1,6 +1,6 @@
 // HTTP handlers, built from injected dependencies so the offline tests can call
 // them directly. api/sweep.js and api/data.js wire in the real ones.
-import { CATS, runDailySweep, scanCategory, sweepKey } from "./radar.js";
+import { CATS, DEFAULT_MODEL, runDailySweep, scanCategory, sweepKey } from "./radar.js";
 import { buildDigest, buildFailureNotice, postToSlack } from "./slack.js";
 import { buildDigestEmail, buildFailureEmail, sendEmail } from "./email.js";
 import { randomBytes as cryptoRandomBytes } from "node:crypto";
@@ -12,7 +12,6 @@ import { siteUrl } from "./subscription-handlers.js";
 import { countEvents, effectivePlan, recordEvent, utcDay } from "./subscribers.js";
 import { SLOTS_BY_FREQ, dueSlot, siteSweepsPerDay } from "./schedule.js";
 
-const DEFAULT_MODEL = "claude-haiku-5-5";
 // Manual runs a UTC day (MAX_MANUAL_SWEEPS_PER_DAY; "0" turns them off). Each costs a full sweep,
 // so a leaked CRON_SECRET can't run up the Anthropic bill. Scheduled calls have the 2-hour gap instead.
 export const DEFAULT_MAX_MANUAL_SWEEPS_PER_DAY = 3;

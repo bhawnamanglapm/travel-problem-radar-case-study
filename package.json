@@ -9,7 +9,7 @@
     "sync:brand": "node scripts/sync-brand.mjs",
     "build:site": "rm -rf public && mkdir public && cp -r index.html brand.css og.png about demo live pricing subscribe manage signin signup admin public/ && rm -rf public/demo/src public/live/src && mkdir -p public/legal && cp -r legal/privacy legal/terms legal/contact legal/refunds public/legal/ && node scripts/fill-plan.mjs public && node scripts/fill-legal.mjs public",
     "check": "node scripts/check.mjs",
-    "test": "node scripts/test-sweep.mjs && node scripts/test-subscriptions.mjs && node scripts/test-compare.mjs && node scripts/test-score.mjs && node scripts/test-cost.mjs && node scripts/test-plan.mjs && node scripts/test-admin.mjs && node scripts/test-password.mjs"
+    "test": "node scripts/test-sweep.mjs && node scripts/test-subscriptions.mjs && node scripts/test-compare.mjs && node scripts/test-score.mjs && node scripts/test-cost.mjs && node scripts/test-plan.mjs && node scripts/test-admin.mjs && node scripts/test-password.mjs && node scripts/test-ask.mjs"
   },
   "devDependencies": {
     "esbuild": "0.23.1",

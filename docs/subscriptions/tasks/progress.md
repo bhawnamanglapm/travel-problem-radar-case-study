@@ -56,8 +56,18 @@ working in a real inbox; that is T12's staged launch.
 | [T40](T40-share-a-problem.md) Share one problem | built 2026-10-30 on `feat/t40-share-a-problem`, merged to main (#104, `8613844`) and live | 11c660d, dac9282, 8a009d4 | 1,383 pass | Added 2026-10-29, Phase 5. See T40 notes below |
 | [T41](T41-email-areas.md) Areas in Pro email | built 2026-10-30 on `feat/t41-email-areas`, merged to main (#105, `be97bd7`) and live | 577fb4e, bbd9259 | 1,417 pass | Added 2026-10-29, Phase 5. See T41 notes below |
 | [T42](T42-india-focus.md) India focus | built 2026-10-30 on `feat/india-focus`, merged to main (#132, `525ea4b`) and live | 7ae46aa, 52ef57f | 1,590 pass | Added 2026-10-30. See T42 notes below |
+| [T43](T43-ask-the-board.md) Ask the board and votes | built 2026-10-31 on `feat/ask-the-board`; not merged; off until `ASK_ENABLED=1`. The owner's Preview test is open | 2033224, 5594b64, 19040ab, and the stage 4 commit | 1,670 pass (76 in the new test-ask); 249 checks | Added 2026-10-31. See T43 notes below |
 
 ## Notes per task
+
+### T43
+- Built at the owner's request for more AI on the site and a RAG feature; plan approved 2026-10-31.
+- No live model call was made. The model is a stubbed fetch in `test-ask.mjs`. The first real questions are the
+  owner's Preview test, with the cost per question read from the `ask` log lines' usage (R-18).
+- Changes from the plan: a vote checks its own sweep file, not the whole search file; votes are a list so the
+  oldest can be dropped at 500; the saved list's GET carries the `ask` flag, so the board makes no extra request.
+- Checked in headless Chrome against a local stand-in server with made-up items, at 1280 and 390 px. Not checked
+  on a real deployment.
 
 ### T42
 - Built at the owner's request ("I want that India specific things are also focused much"). The owner chose to
