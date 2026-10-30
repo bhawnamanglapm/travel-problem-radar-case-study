@@ -42,8 +42,8 @@ access to the findings themselves. That only works if the free paths don't give 
 sample, and the free email shows headlines without detail or sources (built in T18, on since 2026-10-23). Whether people pay for AI-gathered, unverified
 findings is still unmeasured; no real sweep has been scored yet.
 
-The free daily email goes out after the first saved sweep of the UTC day. The scheduled run is at 00:17 UTC (about 05:47
-IST), though GitHub can start scheduled runs late.
+The free daily email goes out after the first saved sweep of the UTC day. That is normally Vercel's backstop at 00:05 UTC
+(about 05:30 to 06:30 IST), because GitHub starts its 00:17 UTC run hours late (BUG-008).
 
 ## Final Pro plan (2026-10-24)
 

@@ -159,13 +159,14 @@
     </fieldset>
     <p class="small" id="areaNote">Worldwide problems always come.</p>
     <h3>Emails a day</h3>
-    <fieldset class="cats" id="freq" aria-label="Emails a day">
-      <label><input type="radio" name="freq" value="1" /><span>1 a day: about 05:47 IST</span></label>
-      <label><input type="radio" name="freq" value="2" /><span>2 a day: about 05:47 and 15:47 IST</span></label>
-      <label><input type="radio" name="freq" value="3" /><span>3 a day: about 05:47, 15:47 and 20:47 IST</span></label>
-      <label><input type="radio" name="freq" value="4" /><span>4 a day: about 05:47, 10:47, 15:47 and 20:47 IST</span></label>
-      <label><input type="radio" name="freq" value="5" /><span>5 a day: about 01:47, 05:47, 10:47, 15:47 and 20:47 IST</span></label>
+    <fieldset class="cats" id="freq" aria-label="Emails a day" aria-describedby="freqNote">
+      <label><input type="radio" name="freq" value="1" /><span>1 a day: about 05:30 to 06:30 IST</span></label>
+      <label><input type="radio" name="freq" value="2" /><span>2 a day: about 05:30 to 06:30, then from 15:47 IST</span></label>
+      <label><input type="radio" name="freq" value="3" /><span>3 a day: about 05:30 to 06:30, then from 15:47 and 20:47 IST</span></label>
+      <label><input type="radio" name="freq" value="4" /><span>4 a day: about 05:30 to 06:30, then from 10:47, 15:47 and 20:47 IST</span></label>
+      <label><input type="radio" name="freq" value="5" /><span>5 a day: about 05:30 to 06:30, then from 10:47, 15:47, 20:47 and 01:47 IST</span></label>
     </fieldset>
+    <p class="small" id="freqNote">The first email of the day comes at about the time shown. The others are sent from the time shown and often arrive a few hours later.</p>
     <div id="periodRow" hidden>
       <h3>Billing period</h3>
       <fieldset class="cats" id="periods" aria-label="Billing period"></fieldset>
@@ -462,7 +463,7 @@
     } else if (a.payments && (a.payPeriods || []).length) {
       setPlan("Free", a.billing === "halted"
         ? "Razorpay stopped trying to take your renewal payment, so you’re on Free: one email a day. You can start Pro again below."
-        : "One email a day, after the first sweep of the UTC day (about 05:47 IST).");
+        : "One email a day, after the first sweep of the UTC day (about 05:30 to 06:30 IST).");
       buy.hidden = !!cardMode;
       choose.textContent = a.lastPlan ? "Renew Pro" : choose.getAttribute("data-label") || choose.textContent;
     } else if (a.proRequestedAt) {
@@ -470,7 +471,7 @@
         + (a.proRequest ? " (" + choiceWords(a.proRequest.cats, a.proRequest.perDay, a.proRequest.months) + ")" : "") + "; it will be switched on shortly.");
       if (req) { ask.hidden = !!cardMode; req.textContent = "Change my request"; }
     } else {
-      setPlan("Free", "One email a day, after the first sweep of the UTC day (about 05:47 IST).");
+      setPlan("Free", "One email a day, after the first sweep of the UTC day (about 05:30 to 06:30 IST).");
       ask.hidden = !!cardMode;
     }
   }

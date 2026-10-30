@@ -129,6 +129,14 @@ check(/>Request Pro</.test(manPage) && />Upgrade to Pro</.test(manPage) && /a\.p
   "manage/index.html keeps Request Pro for when payments are off, holds no Razorpay key and sends Checkout no address");
 // The switch is set in Vercel's settings when T22 turns it on, never in the repo.
 check(!JSON.stringify(vercelJson).includes("BOARD_PAYWALL"), "vercel.json does not set BOARD_PAYWALL");
+// BUG-008: GitHub starts scheduled runs hours late, so the Vercel backstop sweeps slot 00 and the pages promise its
+// time. Hobby fires it within the hour, so at "M 0 * * *" it lands 00:00 to 00:59 UTC (05:30 to 06:30 IST), and
+// "about 05:47 IST", the old GitHub time, is promised nowhere.
+const backstop = ((vercelJson.crons || []).find((c) => c.path === "/api/sweep") || {}).schedule || "";
+const promisePages = ["index.html", "pricing/index.html", "subscribe/index.html", "manage/index.html", "api/_lib/subscription-handlers.js"];
+check(/^([0-9]|[1-2][0-9]) 0 \* \* \*$/.test(backstop) && promisePages.every((f) => !readFileSync(f, "utf8").includes("05:47 IST") && readFileSync(f, "utf8").includes("05:30 to 06:30"))
+  && /id="freqNote"[^>]*>[^<]*a few hours later/.test(manPage),
+  `the Vercel backstop sweeps slot 00 before 00:30 UTC (${backstop}), the first email is promised for 05:30 to 06:30 IST, and /manage/ says later ones can be hours late (BUG-008)`);
 
 // 4c2. Sign-in page (T16): self-contained, posts to /api/session, and is copied into the deployment.
 const inPage = existsSync("signin/index.html") ? readFileSync("signin/index.html", "utf8") : "";

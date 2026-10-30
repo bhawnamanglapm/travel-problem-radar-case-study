@@ -5,6 +5,10 @@ grouped by date.
 
 ## 2026-10-30
 
+- BUG-008 fixed: GitHub starts scheduled sweeps 3.5 to 5.5 hours late, so the Vercel backstop moves from 01:30 to
+  00:05 UTC and sweeps slot 00. The first email of the day is now promised for about 05:30 to 06:30 IST (home,
+  pricing, subscribe, manage, the confirm page), and `/manage/` says later emails often arrive a few hours after
+  their time. Docs and a `check.mjs` rule updated.
 - BUG-004 proposed closed as not a bug: every sign-up path already proves the inbox (the emailed Confirm link, a
   password only through that link's key, Google only for a verified address), each covered by a test. Docs only.
 - BUG-001 fixed: after paying, `/manage/` now goes on to the live board when Pro starts by Razorpay's webhook

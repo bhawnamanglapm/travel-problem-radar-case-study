@@ -611,7 +611,7 @@ const iso = (ms) => new Date(ms).toISOString();
 
   r = await c.call("POST");
   const after = c.stored();
-  check(r.code === 200 && r.body.includes("You&#39;re subscribed") && r.body.includes("05:47 IST") && r.body.includes('href="/live/"'), "confirm POST: the success page with the first-digest time and a link to /live/");
+  check(r.code === 200 && r.body.includes("You&#39;re subscribed") && r.body.includes("05:30 to 06:30 IST") && r.body.includes('href="/live/"'), "confirm POST: the success page with the first-digest time and a link to /live/");
   check(after.status === "active" && after.confirmedAt === iso(T0) && after.token === c.rec.token && after.email === c.rec.email, "confirm POST: active, confirmedAt set, token not rotated");
   check(evCount(c.st, "confirmed") === 1 && !r.body.includes("@"), "confirm POST: a confirmed event written; the page holds no address");
   const eventsBefore = c.st.m.size;

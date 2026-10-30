@@ -3,7 +3,7 @@
   "framework": null,
   "buildCommand": "npm run build:site",
   "outputDirectory": "public",
-  "crons": [{ "path": "/api/sweep", "schedule": "30 1 * * *" }],
+  "crons": [{ "path": "/api/sweep", "schedule": "5 0 * * *" }],
   "functions": {
     "api/sweep.js": { "maxDuration": 300 }
   },

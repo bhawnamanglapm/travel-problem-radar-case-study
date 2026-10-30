@@ -46,7 +46,7 @@ The 5-hour schedule runs on **GitHub Actions**, because Vercel's Hobby plan allo
 GitHub Actions: every    │                                                          │
 5 h from 00:17 UTC       │                                                          │
 Vercel Cron: daily,      │                                                          │
-01:30 UTC (backstop)  ──▶│  /api/sweep  (api/sweep.js, up to 300 s)                 │
+00:05 UTC (backstop)  ──▶│  /api/sweep  (api/sweep.js, up to 300 s)                 │
   Authorization:         │     checks CRON_SECRET; a scheduled call skips if a      │
   Bearer $CRON_SECRET    │     scheduled sweep ran < 2 h ago                        │
                          │     4 × Anthropic Messages API + web search ─────────────┼──▶ api.anthropic.com
@@ -120,8 +120,8 @@ If `git diff` shows changes, commit the rebuilt bundles before deploying.
 
 | Limit | Hobby | What it means here |
 |---|---|---|
-| Cron frequency | Once per day at most | The backstop `30 1 * * *` is allowed. A Vercel schedule that runs more often fails the deploy, which is why the 5-hour schedule runs on GitHub Actions |
-| Cron timing | Within the hour (±59 min) | The 01:30 UTC backstop can fire any time from **01:00 to 01:59 UTC** (06:30–07:29 IST) |
+| Cron frequency | Once per day at most | The backstop `5 0 * * *` is allowed. A Vercel schedule that runs more often fails the deploy, which is why the 5-hour schedule runs on GitHub Actions |
+| Cron timing | Within the hour (±59 min) | The 00:05 UTC backstop can fire any time from **00:00 to 00:59 UTC** (05:30–06:29 IST). Seen in practice: the old `30 1` backstop fired at about 02:27 UTC, so allow for up to an hour more |
 | Function duration | 300 s default and maximum (Fluid compute, on by default) | `vercel.json` sets `maxDuration: 300` for the sweep. Pro allows up to 800 s |
 | Cron retries | None | A failed sweep is not retried. The next attempt is the next scheduled run |
 | Blob storage | Included on all plans, within usage limits. Hobby includes 2,000 advanced operations a month (uploads and lists; deletes are free) and 10,000 simple operations. Going over locks Blob for 30 days | A few small JSON files per sweep, plus one per subscriber and event. Each sign-up that reaches the storage code costs a few advanced operations, which is why the Vercel Firewall rule in [Limiting sign-ups](#subscriber-email-optional) stops floods first. Usage: **Usage** tab in the dashboard (not measured here) |
@@ -285,7 +285,7 @@ What the `/api/data?key=radar:history` answer tells you:
 | `200 {"value":"[…]"}` | Storage is connected and at least one sweep is saved |
 | `502 {"error":"storage unavailable"}` | The Blob store is not connected to this environment, or the deploy predates the connection. Fix this **before** running a sweep (see the note in 5.1) |
 
-Finally, open **Settings → Cron Jobs** and confirm one job is listed: `/api/sweep`, schedule `30 1 * * *`. That is
+Finally, open **Settings → Cron Jobs** and confirm one job is listed: `/api/sweep`, schedule `5 0 * * *`. That is
 the daily backstop; the 5-hour schedule is set up next.
 
 ### 4.7 Turn on the 5-hour schedule (GitHub Actions)
@@ -293,10 +293,13 @@ the daily backstop; the 5-hour schedule is set up next.
 Vercel's Hobby plan runs a cron job at most once a day, so the 5-hour schedule runs from GitHub instead.
 `.github/workflows/sweep.yml` calls `/api/sweep` with the same secret at **00:17, 05:17, 10:17, 15:17 and 20:17 UTC**
 (05:47, 10:47, 15:47, 20:47 and 01:47 IST). The gap over midnight is 4 hours, because 24 isn't divisible by 5.
+GitHub starts these runs late: 3.5 to 5.5 hours in October 2026 (BUG-008; the 00:17 line started at 05:58 UTC),
+so `/manage/` says the later emails are sent from those times and often arrive a few hours later.
 
-Vercel's daily cron stays as a backstop. It fires at 01:30 UTC, in slot 00, and each slot sweeps once (5.5): if
-the 00:17 run already swept, the backstop answers `skipped` and costs nothing; if that run was missed, the backstop
-sweeps instead, and a late GitHub run for slot 00 is then skipped.
+Vercel's daily cron stays as a backstop, and in practice it sweeps slot 00. It fires at 00:05 UTC (within the hour on
+Hobby), and each slot sweeps once (5.5). Because GitHub's 00:17 run usually starts hours late, the backstop normally
+sweeps first and that run is skipped; so the first email of the day is promised for about 05:30 to 06:30 IST
+(BUG-008, 2026-10-30; it was `30 1 * * *` before).
 
 1. On GitHub, open the repository's **Settings → Secrets and variables → Actions**.
 2. Choose **New repository secret**. Name: `CRON_SECRET`. Value: the same value as `CRON_SECRET` in Vercel.
@@ -471,7 +474,7 @@ Do not commit the `.vercel/` folder that `vercel link` creates. It is already in
   "framework": null,
   "buildCommand": "npm run build:site",
   "outputDirectory": "public",
-  "crons": [{ "path": "/api/sweep", "schedule": "30 1 * * *" }],
+  "crons": [{ "path": "/api/sweep", "schedule": "5 0 * * *" }],
   "functions": {
     "api/sweep.js": { "maxDuration": 300 }
   },
@@ -497,7 +500,7 @@ Do not commit the `.vercel/` folder that `vercel link` creates. It is already in
 | `framework: null` | No framework preset; Vercel treats this as a plain static site plus functions |
 | `buildCommand` | Runs `npm run build:site` from `package.json`. The steps live there because Vercel allows `buildCommand` only 256 characters (the deploy fails before building if it's longer). `build:site` copies `index.html`, `og.png` (the link-preview image, T40), `about/`, `demo/`, `live/`, `pricing/`, `subscribe/`, `manage/`, `signin/`, `signup/` and the policy pages that are ready (`legal/privacy`, `legal/contact` and `legal/refunds` today; terms waits for its liability clause) into `public/`, then removes the JSX sources. Then `scripts/fill-plan.mjs` fills Pro's price and the rest from `plan.json` (below), and `scripts/fill-legal.mjs` fills the owner's details into the policy pages. It does **not** run `npm run build`. A new page folder must be added to `build:site`, or Vercel won't serve it (`npm run check` tests for `subscribe`, `manage`, `signin` and `signup`). `npm run check` fails if `pricing/` ships without every `plan.json` value it uses, or if `about/` has a gap left. Adding a page also changes the footer on every shipped page (Home · About · Pricing · Contact · Terms · Privacy · Refunds, only the pages that ship; `npm run check` prints the links each page should have). To build locally on Windows, run `npm run build:site --script-shell=bash` |
 | `outputDirectory` | Serves `public/` as the static site |
-| `crons` | The daily backstop: calls `/api/sweep` at 01:30 UTC (07:00 IST), within the hour on Hobby |
+| `crons` | The daily backstop: calls `/api/sweep` at 00:05 UTC (05:35 IST), within the hour on Hobby; it sweeps slot 00 |
 | `functions["api/sweep.js"].maxDuration` | Lets the sweep run for up to 300 s, the Hobby maximum |
 | `redirects` | `/subscribe` goes to `/pricing/`, and every page on travel-problem-radar.vercel.app (but not `/api/`) goes to radar.pehchanthetraveller.com |
 | `rewrites` | `/p/<sweepId>/<itemId>`, one shared problem (T40), is served by `/api/data?page=item&sweep=…&item=…`, so the page needs no function of its own. The address bar keeps `/p/…`. On the vercel.app address the redirect runs first, so a shared link always ends on the main domain, which link previews use |
@@ -812,7 +815,7 @@ unchanged. Code: `api/subscribe.js`, `api/confirm.js`, `api/unsubscribe.js`, `ap
    days is deleted by the next sweep. A second sign-up for the same pending address within 10 minutes sends nothing
    and says to ask again after 10 minutes; after that the same link is sent again. One pending address gets at most
    5 confirmation emails, then the reply says a link was already sent several times.
-3. **Free:** one email a day, after the first saved sweep of the UTC day (normally 00:17 UTC, about 05:47 IST),
+3. **Free:** one email a day, after the first saved sweep of the UTC day (normally the 00:05 UTC backstop, about 05:30 to 06:30 IST),
    holding everything saved in the last 24 hours. With `BOARD_PAYWALL=1` it is a **summary** instead: per category
    the count and the headlines, and a Sign in button; no detail or source links (T18). **Pro:** an email after every saved **scheduled** sweep (about 5 a
    day); manual runs send Pro nothing. Pro is switched on by hand for now: see "Handling Pro requests" below.
@@ -1563,7 +1566,7 @@ all five slots, 00, 05, 10, 15 and 20 UTC, but a scheduled call only sweeps when
 - A slot that isn't needed answers `200 {"status":"skipped","reason":"slot 05 not needed: 2 a day"}` before any
   Anthropic call. Nothing is saved and nothing is sent.
 - If the subscriber list can't be read, the slot runs as if the number were `SWEEPS_PER_DAY_MAX`, and the log says why.
-- Slot 00 always runs. The Vercel backstop at 01:30 UTC falls in it.
+- Slot 00 always runs. The Vercel backstop at 00:05 UTC falls in it.
 - Manual runs are not affected.
 - Each Pro member gets one email at each of their slots, with every scheduled sweep since their previous slot.
 

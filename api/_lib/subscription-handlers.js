@@ -425,7 +425,7 @@ export function makeConfirmHandler({ env, storage, fetchFn = fetch, now, randomB
             title: "You're subscribed",
             body: (secret ? `<p>Your account is ready, and you're signed in on this browser.</p>` : "")
               + (rec.pw ? `<p>Next time, sign in with your email address and the password you chose.</p>` : "")
-              + `<p>You'll get the daily digest after the first sweep of the UTC day (about 05:47 IST).</p>`
+              + `<p>You'll get the daily digest after the first sweep of the UTC day (about 05:30 to 06:30 IST).</p>`
               + (effectivePlan(rec, t) === "pro" ? ""
                 // Payments on: one step left, paying, on the manage page with the plan card open (?pay=1).
                 : paymentsReady(env) ? `<p>Want the live board and 1 to 5 emails a day? <a href="${esc(managePath(params.id, params.t) + "&pay=1")}">Upgrade to Pro</a></p>`
