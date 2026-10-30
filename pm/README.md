@@ -86,7 +86,7 @@ The IDs link the stages, as in a larger programme:
 | `DSC-` | Discovery assumption | [discovery-log.md](01-discovery/discovery-log.md) |
 | `ALT-` | Alternative a user has today | [alternatives.md](01-discovery/alternatives.md) |
 | `REQ-` | Requirement. `REQ-01` to `REQ-11` are R1 to R11 of the [v1 PRD](../docs/PRD.md) | [prd.md](02-product-definition/prd.md) |
-| `EP-` | Epic, grouping the build tasks `T00` to `T27` | [backlog.md](02-product-definition/backlog.md) |
+| `EP-` | Epic, grouping the build tasks `T00` to `T41` | [backlog.md](02-product-definition/backlog.md) |
 | `KPI-` | Measure of success | [kpis.md](02-product-definition/kpis.md) |
 | `R-` `A-` `I-` `D-` | Risk, assumption, issue, dependency | [raid-log.md](04-planning-and-governance/raid-log.md) |
 | `CR-` | Change request: a decision later revised | [change-log.md](04-planning-and-governance/change-log.md) |
