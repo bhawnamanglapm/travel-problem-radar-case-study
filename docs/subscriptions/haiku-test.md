@@ -1,28 +1,33 @@
 # Haiku 5.5 vs Sonnet 5.5: sweep test plan
 
-**Status:** the script is ready. Nothing has run and nothing in production has changed.
+**Status:** production already runs Haiku. The code's default model is `claude-haiku-5-5` (`api/_lib/handlers.js`),
+and all 10 logged sweeps from 26 to 30 Oct 2026 used it. The switch from Sonnet was never tested for quality. This
+test checks whether to keep Haiku. The script is ready; nothing has run yet.
 
 ## Why
 
-The sweep runs on `claude-sonnet-5-5` and is most of the monthly costs (`F`). Haiku 5.5 is $0.10 per million input
-tokens and $0.50 per million output tokens (for prompts up to 100K tokens). Sonnet 5.5 is $2 and $10. Web searches
-cost $0.01 each on both.
+Haiku 5.5 is $0.10 per million input tokens and $0.50 per million output tokens (for prompts up to 100K tokens).
+Sonnet 5.5 is $2 and $10. Web searches cost $0.01 each on both.
 
-Applying those prices to the average measured sweep (60,229 input tokens, 4,355 output tokens, 4.6 searches; see
-[costing.md](costing.md)):
+Measured usage per sweep:
+- **Haiku:** the LLM logs (`node --env-file=.env.local scripts/llm-logs.mjs models`), 10 sweeps from 26 to 30 Oct 2026:
+  101,740 input tokens, 7,824 output tokens and 9.8 searches.
+- **Sonnet:** the earlier average in [costing.md](costing.md): 60,229 input tokens, 4,355 output tokens and 4.6
+  searches.
 
-| | Sonnet 5.5 (measured) | Haiku 5.5 (estimate) |
-|---|---|---|
-| Input | $0.120 | $0.006 |
-| Output | $0.044 | $0.002 |
-| Searches | $0.046 | $0.046 |
-| **Sweep** | **$0.210** | **≈ $0.054** |
-| `F` at 5 sweeps a day | ₹6,797 | ≈ ₹4,559 |
-| Members needed at ₹199 (GST on top) | 36 | ≈ 24 |
+| | Haiku 5.5 (measured) | Sonnet 5.5 (its own measured usage) | Sonnet 5.5 (at Haiku's usage) |
+|---|---|---|---|
+| Input | $0.010 | $0.120 | $0.203 |
+| Output | $0.004 | $0.044 | $0.078 |
+| Searches | $0.098 | $0.046 | $0.098 |
+| **Sweep** | **$0.112** | **$0.210** | **$0.380** |
 
-The Haiku column assumes Haiku uses the same tokens and searches as Sonnet. **That is the first thing this test
-checks.** Three other things are also unknown:
-- whether its results are as good;
+Haiku used more tokens and more than twice the searches of the Sonnet sweeps measured earlier. Searches are now most
+of Haiku's cost, and they cost the same on both models. So the saving is smaller than the price list suggests. Only
+running both models on the same news shows the real difference.
+
+The test also checks:
+- whether Haiku's results are as good;
 - whether it works with the web search tool the code uses (`web_search_20250305`);
 - whether it works with `effort: "low"` (Haiku 5.5 supports `low` through `max`).
 
@@ -50,22 +55,23 @@ A local script, [`scripts/compare-models.mjs`](../../scripts/compare-models.mjs)
 - No emails and no Slack messages.
 - No production settings change.
 
-**API key.** The key goes in the shell for that session only. Nothing is saved to a file and nothing is committed.
+**API key.** The script reads `ANTHROPIC_API_KEY` from `.env.local` through Node's `--env-file`. The key is never
+printed, saved elsewhere or committed.
 
-**Running it** (PowerShell, from the repo folder):
+**Running it** (from the repo folder):
 
 ```powershell
-node scripts/compare-models.mjs                 # prints the plan and its cost; sends nothing
-$env:ANTHROPIC_API_KEY = "sk-ant-..."           # this window only
-node scripts/compare-models.mjs --yes           # runs the test; takes a few minutes
-Remove-Item Env:ANTHROPIC_API_KEY
+node scripts/compare-models.mjs                                 # prints the plan and its cost; sends nothing
+node --env-file=.env.local scripts/compare-models.mjs --yes     # runs the test; takes a few minutes
 ```
 
 **Cost of the test** (6 sweeps; the script prints it before running):
-- Expected: about **$0.79**. That's 3 × $0.210 for Sonnet and 3 × $0.054 for Haiku.
+- Expected: about **$1.48**. That's 3 × $0.380 for Sonnet and 3 × $0.112 for Haiku, both at Haiku's measured usage.
+  If Sonnet uses what it used before, the total is nearer **$0.97** (3 × $0.210 + 3 × $0.112).
 - Worst case: about **$3.73**. That's 3 × $1.074 for Sonnet at the high-cost scenario, plus about 3 × $0.17 for Haiku
   at the code's caps.
 - At the end the script prints what the test actually cost.
+- `--rounds 1` costs about a third, with about a third of the items to review, but the result is weaker.
 
 ## What to compare
 
@@ -77,7 +83,11 @@ Remove-Item Env:ANTHROPIC_API_KEY
 | Stop reasons | No `refusal` or `max_tokens` |
 | Items per category | At least 3 on average (up to 5 allowed) |
 | Links | Every item has an `https://` link and none is broken. Sites that refuse scripts (401, 403, 429) are listed for you to open by hand |
-| Cost per sweep | At most $0.08, which still saves over 60% |
+| Cost per sweep | At most 40% of Sonnet's in the same test, a saving of over 60% |
+
+The cost mark used to be a fixed $0.08 a sweep, based on Sonnet's earlier usage. Haiku's measured $0.112 is already
+over it, mostly because of searches. It now compares the two models on the same news. It was changed before the
+test ran.
 
 **You judge.** Open `review.csv` in Excel. The items are shuffled, each model's item appears once, and the file
 doesn't say which model found what. In the `keep` column, put one of:
@@ -98,16 +108,17 @@ These thresholds are suggestions. Change them before the test runs, not after.
 
 ## If Haiku passes
 
-1. Set `RADAR_MODEL=claude-haiku-5-5` in Vercel Production, then redeploy, because env changes apply only to new
-   deployments.
-2. Watch the logged `usage` and `perCat` from the next 2 days of sweeps (about 10).
-3. To undo, delete the variable and redeploy. The code falls back to Sonnet.
-4. Update [costing.md](costing.md) with the measured Haiku cost. Then revisit the price.
+1. Keep Haiku. Nothing to change.
+2. Update [costing.md](costing.md) with the measured Haiku cost. Then revisit the price.
 
 ## If it fails
 
-- Keep Sonnet.
-- Look at the other levers: Pro gets one email a day, fewer sweeps a day, and the GST case.
+- **On quality** (an invented item, a low keep rate, missing categories or broken links): switch back to Sonnet.
+  1. Set `RADAR_MODEL=claude-sonnet-5-5` in Vercel Production.
+  2. Redeploy, because env changes apply only to new deployments.
+  3. Check the next day's sweeps with `scripts/llm-logs.mjs models`.
+- **On cost only:** Haiku still costs less than Sonnet. Decide on the two measured costs; quality is what matters.
+- Look at the other cost levers too: Pro gets one email a day, fewer sweeps a day, and the GST case.
 
 ## Not in this plan
 
