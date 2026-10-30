@@ -5,6 +5,8 @@ grouped by date.
 
 ## 2026-10-30
 
+- BUG-004 proposed closed as not a bug: every sign-up path already proves the inbox (the emailed Confirm link, a
+  password only through that link's key, Google only for a verified address), each covered by a test. Docs only.
 - BUG-001 fixed: after paying, `/manage/` now goes on to the live board when Pro starts by Razorpay's webhook
   while the page waits, not only when it starts at checkout-return. A `check.mjs` rule covers both ways. Retest
   due with one payment.
