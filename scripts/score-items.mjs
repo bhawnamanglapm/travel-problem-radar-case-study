@@ -2,12 +2,12 @@
 // only reads: nothing is written there and no email or Slack is sent. Results go to a folder outside the repo.
 //   node --env-file=.env.local scripts/score-items.mjs     picks the items, checks links and dates, writes review.csv
 //   node scripts/score-items.mjs --score DIR               after you fill in the y/n columns of DIR/review.csv
-// Options: --count N (default 20), --out DIR.
+// Options: --count N (default 20), --out DIR, --area NAME (only items the board places in that area, e.g. India: T42, KPI-20).
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { CATS, KEY_INDEX, SOURCE_MAX_DAYS, sweepKey } from "../api/_lib/radar.js";
+import { AREAS, CATS, KEY_INDEX, SOURCE_MAX_DAYS, areaOf, sweepKey } from "../api/_lib/radar.js";
 import { checkLink, mapLimit, parseCsv, toCsv } from "./compare-models.mjs";
 
 const DAY = 86400000;
@@ -28,16 +28,18 @@ const FAIL_V = new Set(["n", "no", "broken", "none"]);
 const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
 
 function parseArgs(argv) {
-  const a = { count: 20, out: null, score: null };
+  const a = { count: 20, out: null, score: null, area: null };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
     const val = () => { if (i + 1 >= argv.length) throw new Error(k + " needs a value"); return argv[++i]; };
     if (k === "--count") a.count = Number(val());
     else if (k === "--out") a.out = val();
     else if (k === "--score") a.score = val();
+    else if (k === "--area") a.area = val();
     else throw new Error("unknown option " + k);
   }
   if (!Number.isInteger(a.count) || a.count < 1 || a.count > 200) throw new Error("--count must be a whole number from 1 to 200");
+  if (a.area !== null && !AREAS.includes(a.area)) throw new Error("--area must be one of: " + AREAS.join(", "));
   return a;
 }
 
@@ -59,12 +61,14 @@ export async function readSweeps(storage) {
 
 // Each item once (by id, as its newest sweep has it), then taken a category at a time in CATS order, so 20
 // items is 5 from each when every category has 5. A category that runs out leaves its turns to the others.
-export function pickItems(sweeps, count) {
+// With an area, only items the board places there (areaOf, as the board and the emails do).
+export function pickItems(sweeps, count, area = null) {
   const seen = new Set();
   const byCat = Object.fromEntries(CATS.map((c) => [c.key, []]));
   for (const s of sweeps) {
     for (const p of s.problems) {
       if (!p || !p.id || seen.has(p.id) || !byCat[p.cat]) continue;
+      if (area && areaOf(p.region || "Global") !== area) continue;
       seen.add(p.id);
       byCat[p.cat].push({ ...p, found: p.firstAt || s.at });
     }
@@ -153,8 +157,8 @@ export async function main(argv = process.argv.slice(2), { storage, env = proces
   const reader = { get: (k) => storage.get(k) }; // reads only: no set, del or update reaches the store
 
   const { sweeps, missing } = await readSweeps(reader);
-  const { items, unique, byCat } = pickItems(sweeps, args.count);
-  log(`Read ${sweeps.length} saved sweeps${missing ? ` (${missing} listed but missing, skipped)` : ""}: ${unique} unique items.`);
+  const { items, unique, byCat } = pickItems(sweeps, args.count, args.area);
+  log(`Read ${sweeps.length} saved sweeps${missing ? ` (${missing} listed but missing, skipped)` : ""}: ${unique} unique items${args.area ? ` in ${args.area}` : ""}.`);
   if (items.length < args.count) log(`Only ${items.length} items to score, fewer than the ${args.count} asked for.`);
   log(`Picked ${items.length}: ${CATS.map((c) => `${c.key} ${byCat[c.key]}`).join(", ")}.`);
 

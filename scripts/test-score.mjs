@@ -60,6 +60,13 @@ const item = (cat, n, over = {}) => ({
   check(four.items.length === 4 && four.byCat[A] === 2 && four.byCat[B] === 1 && four.byCat[C] === 1, "score: --count stops the pick, spread across categories");
   check(pickItems([], 20).items.length === 0, "score: no sweeps, no items");
 
+  // T42: --area India scores only the items the board places in India.
+  const ind = [{ id: "4000", at: "2026-11-01T00:00:00.000Z", problems: [item(A, 7, { region: "Mumbai, India" }), item(B, 7, { region: "Japan" }),
+    item(C, 7, { region: "India" }), item(D, 7, { region: "India and Nepal" }), item(D, 8, { region: "Bengaluru" })] }];
+  const pi = pickItems(ind, 20, "India");
+  check(pi.items.map((x) => x.id).join() === [`${A}:p7`, `${C}:p7`, `${D}:p8`].join() && pi.unique === 3,
+    "score: with an area, only the items the board places there (India and Nepal is Asia)");
+
   let threw = "";
   try { await readSweeps(memStorage()); } catch (e) { threw = e.message; }
   check(/no sweep index/.test(threw), "score: a store with no index says so");
@@ -123,6 +130,8 @@ const item = (cat, n, over = {}) => ({
   const out = mkdtempSync(join(tmpdir(), "radar-score-test-"));
   const logs = [];
   try {
+    const ra = await main(["--out", out, "--area", "India"], { storage: st, env: {}, baseFetch, clock: () => Date.parse("2026-10-30T00:00:00Z"), log: () => {} });
+    check(ra.items.length === 0 && writes.length === 0, "score: --area India with no India items picks none and writes nothing to the store");
     const r = await main(["--out", out, "--count", "20"], { storage: st, env: {}, baseFetch, clock: () => Date.parse("2026-10-30T00:00:00Z"), log: (s) => logs.push(s) });
     check(writes.length === 0, "score: main writes nothing to the store");
     check(fetched.filter((f) => f.endsWith(shared)).length === 1 && fetched.length === 3, "score: a link two items share is checked once");
@@ -139,7 +148,7 @@ const item = (cat, n, over = {}) => ({
   let threw = "";
   try { await main([], { env: {}, log: () => {} }); } catch (e) { threw = e.message; }
   check(/BLOB_READ_WRITE_TOKEN is not set/.test(threw) && !/[A-Za-z0-9_]{24,}/.test(threw), "score: no token, nothing read, and the error holds no secret");
-  for (const bad of [["--count", "0"], ["--count", "x"], ["--nope"], ["--out"]]) {
+  for (const bad of [["--count", "0"], ["--count", "x"], ["--nope"], ["--out"], ["--area", "Mars"], ["--area", "india"]]) {
     let e = "";
     try { await main(bad, { env: {}, log: () => {} }); } catch (err) { e = err.message; }
     check(e !== "", "score: refuses " + bad.join(" "));
