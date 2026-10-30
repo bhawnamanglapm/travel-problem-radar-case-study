@@ -1095,8 +1095,8 @@ can sign in. It is set on Production only, so a Preview with the switch on shows
 
 **Off in production**: none of the `RAZORPAY_*` variables are set there, so `/manage/` shows Request Pro as before.
 Payments count as on only when `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`,
-`RAZORPAY_PLANS` (at least one plan) and `RAZORPAY_TOTAL_COUNT` are all set (`paymentsReady` in
-`api/_lib/subscription-handlers.js`).
+`RAZORPAY_PLANS` (at least one plan) and `RAZORPAY_TOTAL_COUNT` are all set, and the key suits the deployment
+(`paymentsReady` in `api/_lib/subscription-handlers.js`; the key rule is in [Razorpay ↔ Vercel](#razorpay--vercel)).
 No new function: the actions below are on `/api/account`.
 
 With payments on:
@@ -1140,7 +1140,7 @@ With payments on:
 
 | Reply | When |
 |---|---|
-| `503 payments_off` | Any of the three actions while payments are off |
+| `503 payments_off` | Any of the three actions while payments are off, including a key in the wrong environment (T22) |
 | `409 not_confirmed`, `already_pro`, `payment_pending` | Checkout for a pending record, a Pro, or one that has paid and is waiting for the webhook |
 | `409 not_paid_pro` | Cancel on anything but a Razorpay Pro |
 | `409 already_renewed` | Checkout from a cancelled Pro that has already approved a renewal (T34) |
@@ -1160,6 +1160,20 @@ before sees **Renew Pro** with their last plan filled in (`lastPlan`). A Pro tha
 renewal, its last billing cycle, or owner-granted with an end date) gets one email 7 days before it ends, from
 the sweep's delivery step; `endWarning` in the sweep reply counts them, and `endWarnedFor` on the record stops a
 repeat. **Verify** on the first test run that Razorpay accepts `start_at` from Checkout and charges then.
+
+**Grace and the tidy step (T22).** A renewal's `charged` event can arrive after the period ends, so a paid Pro whose
+subscription Razorpay last called `active`, not set to end and not in its last billing cycle stays Pro for 48 hours
+past `proUntil` (`PRO_GRACE_HOURS` in `api/_lib/subscribers.js`). Owner-granted Pro, and a paid plan cancelled,
+completed, halted or only `authenticated`, get no grace. The date members see is still `proUntil`. If a webhook is
+missed, each saved sweep's delivery step catches the record once its end (grace included) has passed:
+
+| Stored `rzp.status` | What the sweep does | In the reply, under `subscribers` |
+|---|---|---|
+| `cancelled`, `completed`, `halted`, `expired` | Free: `proSource` and `proUntil` cleared, `rzp` kept, a `prorevoked` event | `proLapsed` |
+| `active` | Nothing; delivery already treats it as Free. Check it with `show <email> --check` | `rzpMismatch` |
+| anything else | Nothing | — |
+
+The stored record is read again before the write, so a webhook that lands at the same moment wins.
 
 **Known gap:** an account that paid, whose Checkout return didn't start Pro (Razorpay's answer named another
 account or a stopped state, or the page was closed before it returned) and whose webhook never arrives, stays
@@ -1359,16 +1373,25 @@ endpoint answers `503`.
 1. Razorpay dashboard → **Webhooks** → the webhook → its delivery log. No attempts: the event isn't ticked, or the
    webhook is disabled (re-enable it). Attempts with `401` from Vercel's login page: the bypass parameter is wrong
    or was regenerated. `401` `invalid signature`: the webhook's secret and `RAZORPAY_WEBHOOK_SECRET` differ.
-   `503`: `RAZORPAY_WEBHOOK_SECRET` isn't set on that deployment. To tell the two `401`s apart from the CLI:
+   `503`: `RAZORPAY_WEBHOOK_SECRET` isn't set on that deployment, or (`key mismatch`) the key doesn't suit it (below). To tell the two `401`s apart from the CLI:
    `vercel logs requests --since 1h --json --query 'requestPath:"/api/razorpay-webhook"'`. A request that reached
    the function has `pathType: streaming_func`; one stopped by Vercel Authentication has none.
 2. The function's logs in Vercel: `rzp-webhook activated: plan free -> pro` is a success. `unknown subscription`
    means no record has that subscription as its own (for example, a second checkout replaced it). `stale` means a
    newer event was already applied.
-3. `show <address>` with the admin script: `rzp.status`, `rzp.lastEventAt` and `proUntil`.
+3. `show <address>` with the admin script: `rzp.status`, `rzp.lastEventAt` and `proUntil`. Add `--check` to see
+   Razorpay's own status next to them.
 
 **Going live (T22).** Live keys, a live plan and a live webhook secret go on **Production only**. The production
 domain isn't behind Vercel Authentication, so the live webhook URL needs no bypass parameter.
+
+**The key rule (T22, since 2026-10-30).** Production takes live keys only (`rzp_live_…`), and Preview and Development
+take test keys only (`rzp_test_…`), going by Vercel's `VERCEL_ENV`. A key in the wrong place turns payments off on
+that deployment: checkout, checkout-return and cancel answer `503 payments_off`, pages show Request Pro, the webhook
+answers `503 {"error":"key mismatch"}` (Razorpay retries it, so fix it within a day or the webhook is disabled), the
+admin page lists "RAZORPAY_KEY_ID is a test key on Production" (or "a live key on a Preview"), and each sweep's
+reply in the Actions log has `"razorpay": "key mismatch"`. None of these shows the key. Fix the variable and
+redeploy. With `VERCEL_ENV` unset, as on your own machine, there is no rule.
 
 [rzp-cards]: https://razorpay.com/docs/payments/payments/test-card-details/
 [vercel-bypass]: https://vercel.com/docs/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation
@@ -1456,7 +1479,7 @@ usable credentials the script prints the `@vercel/blob` error and exits 1.
 ```
 node --env-file=.env.local scripts/subscribers.mjs stats [--days 30]
 node --env-file=.env.local scripts/subscribers.mjs list [--plan pro|free|pending|requested]
-node --env-file=.env.local scripts/subscribers.mjs show <email>
+node --env-file=.env.local scripts/subscribers.mjs show <email> [--check]
 node --env-file=.env.local scripts/subscribers.mjs grant-pro <email> [--until 2027-01-31] [--yes]
 node --env-file=.env.local scripts/subscribers.mjs revoke-pro <email> [--paid] [--yes]
 node --env-file=.env.local scripts/subscribers.mjs delete <email> [--yes]
@@ -1468,7 +1491,7 @@ node --env-file=.env.local scripts/subscribers.mjs recount [--yes]
 |---|---|
 | `stats` | Counts now (pending, Free, Pro, Pro ending within 7 days, waiting for Pro) and per UTC day: sign-ups, confirmation emails, already-subscribed notices, confirmations, unsubscribes (Free deleted; Pro only turns emails off), expired, bounced and complained (from the Resend webhook), Pro requests, Free digests sent. Ends with the confirm rate, `confirmed / subscribed`. No addresses |
 | `list` | Address, status, plan, `proUntil`, confirmed date, the date they asked for Pro, and `emailOff` (why a Pro's emails are off, or `-`). `--plan requested` lists the active Free subscribers who asked for Pro (the waiting list). A Pro record past its end date shows as `pro (lapsed)`: the sweep treats it as Free |
-| `show` | One record without its token |
+| `show` | One record without its token. `--check` (T22) also asks Razorpay, read-only and with the keys from the shell, about the record's subscription and any renewal: status (next to the stored one), period end, `paidCount` and `remainingCount`, or the error code (`config` with no keys in the shell). Use it for a member the sweep counts as `rzpMismatch` |
 | `grant-pro` | Only for an active (confirmed) subscriber. Pro with `proSource: owner`, and the Pro request is cleared (the `prorequested` event keeps the history). `--until 2027-01-31` makes Pro run through the end of that UTC day; leave it out for no end date. A past date is accepted and acts as Free. Refuses a paid Razorpay record |
 | `revoke-pro` | Back to Free, clearing the end date. Refuses a Razorpay record unless `--paid` is given (since 2026-10-29, for a refund: [refunds-and-chargebacks.md](docs/subscriptions/refunds-and-chargebacks.md)). With `--paid` it first cancels the record's Razorpay subscriptions at once, as `delete` does, with the keys from the shell; refused, with nothing changed, if Razorpay won't cancel one that could still charge |
 | `delete` | Deletes the record, the `radar:rzpsub:` index files pointing at it, and its id in the `radar:deliveries:` files (since 2026-10-27; before, the id stayed there until the sweep deleted the file after 7 days). This is the answer to a deletion request. Event records hold no address or id. Cancels the account's Razorpay subscriptions at once first, with `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` from the shell (`--env-file`); refused, with nothing deleted, if Razorpay won't cancel one that could still charge |

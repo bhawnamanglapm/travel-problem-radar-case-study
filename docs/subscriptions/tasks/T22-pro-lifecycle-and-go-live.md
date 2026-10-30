@@ -17,6 +17,24 @@
 The pieces now exist; this task closes the gaps between them. The test-mode run and the switch to live keys are
 T27.
 
+## Built (2026-10-30)
+
+- **Grace:** `effectivePlan` keeps a paid Pro on for `PRO_GRACE_HOURS` (48, the owner's choice) past `proUntil`
+  while Razorpay's last word is `active`, it isn't set to end (`cancelAtPeriodEnd`) and it isn't the last billing
+  cycle (`remaining: 0`). Owner Pro, cancelled, completed, halted and `authenticated` get none. The date members see
+  doesn't change.
+- **Tidy step:** step 2 of `deliverToSubscribers` moves a paid Pro past its end (grace included) whose Razorpay status
+  is `cancelled`, `completed`, `halted` or `expired` to Free (`proSource` and `proUntil` cleared, `rzp` kept), records
+  `prorevoked`, and counts it as `subscribers.proLapsed` in the sweep reply. It re-reads the stored record first, so a
+  webhook landing at the same moment wins. One still `active` is counted as `subscribers.rzpMismatch` and left alone.
+- **Key safety:** `keyMismatch(env)` in `razorpay.js`. A test key on Production, or a live key on a Preview or
+  Development deployment, turns payments off (`503 payments_off` on checkout, checkout-return and cancel; pages show
+  Request Pro), the webhook answers `503 key mismatch`, the admin page lists the problem, and the sweep reply adds
+  `razorpay: "key mismatch"`. With `VERCEL_ENV` unset (tests, the owner's scripts) there is no rule.
+- **Admin:** `subscribers.mjs show <email> --check` prints Razorpay's status, period end, `paidCount` and
+  `remainingCount` for the plan and any renewal, next to the stored status, or the error code. Read-only.
+- **Paid unsubscribe:** built earlier (`deleteAccount` cancels in Razorpay first and keeps the record if that fails).
+
 ## What to build
 
 ### 1. Expiry
@@ -62,8 +80,9 @@ the policy pages and the new Pro wording (T23 to T26). The unsubscribe wording i
 
 ## Acceptance criteria
 
-- [ ] Unsubscribing a paid record cancels billing before deleting; a failed cancel keeps the record
-- [ ] Test keys can't work on Production, live keys can't work on Preview
+- [x] Unsubscribing a paid record cancels billing before deleting; a failed cancel keeps the record
+- [x] Test keys can't work on Production, live keys can't work on Preview (2026-10-30)
+- [x] Grace period and tidy step, with the `rzpMismatch` count (2026-10-30)
 - [ ] Docs updated: DEPLOYMENT.md (Razorpay section, roll back), TECHNICAL.md, README.md "What's next",
   pricing.md, decisions.md (refund rule, grace period), CHANGELOG.md
 
