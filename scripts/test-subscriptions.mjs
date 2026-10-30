@@ -5,7 +5,7 @@ import { createHash, createHmac, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { blobStorage } from "../api/_lib/storage.js";
 import {
-  CONFIRM_RESEND_MINUTES, MAX_CONFIRMS_PER_ADDRESS, PENDING_TTL_DAYS, countEvents, deleteSubscriber, effectivePlan, getSubscriber, listSubscribers,
+  CONFIRM_RESEND_MINUTES, MAX_CONFIRMS_PER_ADDRESS, PENDING_TTL_DAYS, PRO_GRACE_HOURS, countEvents, deleteSubscriber, effectivePlan, getSubscriber, listSubscribers,
   newPending, newToken, normaliseAreas, normaliseCats, normaliseEmail, putSubscriber, recordEvent, subscriberId, tokenOk, utcDay,
 } from "../api/_lib/subscribers.js";
 import { BodyTooLargeError, allowMethods, bearerOk, esc, parseForm, readBody, readFields, sendJson, sendPage } from "../api/_lib/http.js";
@@ -136,6 +136,17 @@ const iso = (ms) => new Date(ms).toISOString();
   check(effectivePlan(act({ status: "pending" }), T0) === "free" && effectivePlan(act({ plan: "free" }), T0) === "free"
     && effectivePlan(act({ plan: "gold" }), T0) === "free" && effectivePlan(act({ proUntil: "garbage" }), T0) === "free" && effectivePlan(null, T0) === "free",
     "effectivePlan: pending, free, unknown plan, unreadable date and no record are all free");
+  // T22: a paid Pro due to renew keeps PRO_GRACE_HOURS past its end; nothing else does.
+  const G = PRO_GRACE_HOURS * 3600_000;
+  const paid = (rzp = {}, extra = {}) => act({ proSource: "razorpay", proUntil: iso(T0), rzp: { status: "active", remaining: 3, ...rzp }, ...extra });
+  check(effectivePlan(paid(), T0 + G - 1000) === "pro" && effectivePlan(paid(), T0 + G + 1000) === "free", "effectivePlan: a paid Pro due to renew stays Pro for 48 h past its end, then is free");
+  check(effectivePlan(paid({ remaining: undefined }), T0 + G - 1000) === "pro", "effectivePlan: the grace applies when Razorpay hasn't said how many cycles are left");
+  check(effectivePlan(act({ proSource: "owner", proUntil: iso(T0) }), T0 + 1000) === "free", "effectivePlan: owner-granted Pro gets no grace");
+  for (const [rzp, why] of [[{ status: "cancelled" }, "a cancelled plan"], [{ cancelAtPeriodEnd: true }, "a plan set to end"], [{ remaining: 0 }, "the last cycle"],
+    [{ status: "authenticated" }, "Pro started on Checkout's signature"], [{ status: "halted" }, "a halted plan"]]) {
+    check(effectivePlan(paid(rzp), T0 + 1000) === "free", `effectivePlan: no grace for ${why}`);
+  }
+  check(effectivePlan(paid({}, { proUntil: "garbage" }), T0) === "free", "effectivePlan: an unreadable end date is free, grace or not");
 
   const p = newPending("  Reader@Example.com ", { now: T0, randomBytes: seeded() });
   check(p.v === 1 && p.email === "reader@example.com" && p.id === subscriberId("reader@example.com") && p.status === "pending" && p.plan === "free"
@@ -3862,7 +3873,7 @@ const iso = (ms) => new Date(ms).toISOString();
     w.tick((END - S + 60) * 1000);
     r = await w.send(ev("completed", late, { at: END + 30 }));
     s = await w.stored(late);
-    check(s.plan === "free" && s.proUntil === null && w.evs("prorevoked").length === 0, "completed with current_end past: Free now; no prorevoked, as the plan had already lapsed");
+    check(s.plan === "free" && s.proUntil === null && w.evs("prorevoked").length === 1, "completed with current_end past: Free now, and prorevoked, as the renewal grace held Pro until this event (T22)");
     done(w);
   }
 
