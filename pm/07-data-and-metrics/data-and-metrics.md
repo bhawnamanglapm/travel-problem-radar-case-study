@@ -154,5 +154,5 @@ this table is now history; none of it is recorded as done except what `node scri
 | Start and end of the month | `stats --days 30`; Razorpay active subscriptions | KPI-12, KPI-14, KPI-16 |
 | End of the month | Razorpay: new, cancelled, refunded; `checkoutstarted` and `progranted` counts | KPI-17 to KPI-19 |
 | End of the month | Anthropic Console spend; provider invoices | KPI-06, KPI-07 |
-| A week after T42 is live | `llm-logs.mjs areas --days 7` and `llm-logs.mjs models` (RM-38) | KPI-20, KPI-06 |
+| On or after 2026-11-06, a week after T42 went live | `llm-logs.mjs areas --days 7` and `llm-logs.mjs models` (RM-38) | KPI-20, KPI-06 |
 | End of the month | Fill the [benefits tracker](../05-business-case-and-launch/post-launch-plan.md#benefits-tracker) | G9 |

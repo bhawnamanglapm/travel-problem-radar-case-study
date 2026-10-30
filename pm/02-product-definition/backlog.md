@@ -19,7 +19,7 @@
 | EP-08 Payments | Razorpay checkout, webhook, Pro lifecycle | T15, T19 to T22 | REQ-26 to REQ-28 | Live since 2026-10-28; T22 built 2026-10-30 (was: built and tested on staging, T22 to do) |
 | EP-09 Showing Pro and going live | Honest pricing pages and a go-live run | T23 to T27, T30 | REQ-29 to REQ-31 | Live with `paid: true` at ₹1 since 2026-10-28 (was: pages live with `paid: false`). Open: T23's owner inputs, Vercel Pro, T27's test-run record, T30's owner steps |
 | EP-10 The Pro plan | Pro chooses emails a day, one plan monthly or yearly, renewing, slots on time | T28, T32 to T35 | REQ-33 to REQ-36 | Live; T28 replaced by T32; T32's owner email check open |
-| EP-11 Board features | Details and history, areas, search all sweeps, saved problems, sharing, areas in email, India | T36 to T42 | REQ-37 to REQ-42, REQ-47 | T36 to T41 live (29 and 30 Oct); T42 built 2026-10-30, not yet live |
+| EP-11 Board features | Details and history, areas, search all sweeps, saved problems, sharing, areas in email, India | T36 to T42 | REQ-37 to REQ-42, REQ-47 | Live (29 and 30 Oct; T42 on 30 Oct) |
 | EP-12 Measure | Cost per category, then decide on tiers | T29, T31 | REQ-46 | T29 done; T31 to do |
 
 EP-10 to EP-12 were added on 2026-10-30 for the tasks written after 2026-10-23. Changes outside a task file (the
@@ -86,7 +86,7 @@ flowchart LR
 | [T39](../../docs/subscriptions/tasks/T39-saved-problems.md) | EP-11 | Saved problems | M | Live 2026-10-29 | #103 |
 | [T40](../../docs/subscriptions/tasks/T40-share-a-problem.md) | EP-11 | Share one problem | M | Live 2026-10-30; the WhatsApp and LinkedIn previews are an owner check | #104 |
 | [T41](../../docs/subscriptions/tasks/T41-email-areas.md) | EP-11 | Areas in Pro email | M | Live 2026-10-30 | #105 |
-| [T42](../../docs/subscriptions/tasks/T42-india-focus.md) | EP-11 | India focus: India items in each call, India as an area | M | Built 2026-10-30 on `feat/india-focus`; not yet live | `7ae46aa`, `52ef57f` |
+| [T42](../../docs/subscriptions/tasks/T42-india-focus.md) | EP-11 | India focus: India items in each call, India as an area | M | Live 2026-10-30 (#132, `525ea4b`) | `7ae46aa`, `52ef57f` |
 
 ## Done in EP-01, before the task list
 

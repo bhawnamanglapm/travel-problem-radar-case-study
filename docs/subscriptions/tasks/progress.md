@@ -55,15 +55,15 @@ working in a real inbox; that is T12's staged launch.
 | [T39](T39-saved-problems.md) Saved problems | built 2026-10-29 on `feat/t39-saved-problems`, merged to main (#103, `76a2d17`) and live | bc2c4cc, 9d7a9ac, 48957ef, 54fd29b | 1,358 pass | Added 2026-10-29, Phase 5. See T39 notes below |
 | [T40](T40-share-a-problem.md) Share one problem | built 2026-10-30 on `feat/t40-share-a-problem`, merged to main (#104, `8613844`) and live | 11c660d, dac9282, 8a009d4 | 1,383 pass | Added 2026-10-29, Phase 5. See T40 notes below |
 | [T41](T41-email-areas.md) Areas in Pro email | built 2026-10-30 on `feat/t41-email-areas`, merged to main (#105, `be97bd7`) and live | 577fb4e, bbd9259 | 1,417 pass | Added 2026-10-29, Phase 5. See T41 notes below |
-| [T42](T42-india-focus.md) India focus | built 2026-10-30 on `feat/india-focus`; not yet merged | 7ae46aa, 52ef57f | 1,590 pass | Added 2026-10-30. See T42 notes below |
+| [T42](T42-india-focus.md) India focus | built 2026-10-30 on `feat/india-focus`, merged to main (#132, `525ea4b`) and live | 7ae46aa, 52ef57f | 1,590 pass | Added 2026-10-30. See T42 notes below |
 
 ## Notes per task
 
 ### T42
 - Built at the owner's request ("I want that India specific things are also focused much"). The owner chose to
   cover the findings and the audience, and more India in each call over a separate India call.
-- No sweep was run. The prompt change is checked offline (test-sweep); its effect is read a week after it's live
-  (RM-38).
+- No sweep was run. The prompt change is checked offline (test-sweep); its effect is read a week after it went live
+  on 2026-10-30, so on or after 2026-11-06 (RM-38).
 - No stored record is rewritten. `readAreas` reads a list without `areasV` that has Asia as Asia and India, so a
   member who chose Asia keeps getting Indian items; the next save stores India as a choice of its own.
 - KPI-20's baseline from `llm-logs.mjs areas --days 7`: 2 of 190 items (1.1%) in India, 0.2 a sweep. A looser
