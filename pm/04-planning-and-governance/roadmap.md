@@ -1,7 +1,7 @@
 # Roadmap: Now, Next, Later
 
 > **Stage 4 of 8.** What comes after the build recorded in the [backlog](../02-product-definition/backlog.md).
-> Updated 2026-10-30 (first written 2026-10-24); task states are from [progress.md](../../docs/subscriptions/tasks/progress.md). Items are grouped by what blocks them, not by date: **target dates are OWNER INPUT NEEDED**, and none
+> Updated 2026-10-31 (first written 2026-10-24); task states are from [progress.md](../../docs/subscriptions/tasks/progress.md). Items are grouped by what blocks them, not by date: **target dates are OWNER INPUT NEEDED**, and none
 > is promised here. Each item names its source. "Owner" means a step only the owner can take (an account, a payment,
 > a legal choice).
 
@@ -43,6 +43,8 @@
 | RM-15 | Run the interview plan | No one but the owner has been asked anything | [discovery-log.md](../01-discovery/discovery-log.md#interview-plan-proposed-not-done) |
 | RM-16 | Move to the owner's own domain | **Done** 2026-10-28: radar.pehchanthetraveller.com (CR-21). Whether the Chrome warning and the Junk filing improve isn't recorded | [account-flows.md](../../docs/subscriptions/account-flows.md#what-should-change) #1; [CHANGELOG](../../CHANGELOG.md) 2026-10-28 |
 | RM-38 | On or after 2026-11-06, a week after T42 went live, read `llm-logs.mjs areas` and `models`, then decide whether a 5th, India-only call is needed | India's share was 1.1% before T42 (KPI-20). Whether one more search a call lifts it, how good the India items are, and what it costs aren't known (R-15, R-16) | [T42](../../docs/subscriptions/tasks/T42-india-focus.md); [kpis.md](../02-product-definition/kpis.md) |
+| RM-39 | After RM-38 shows India items are good: a free, public, monthly "India travel problems" report, the top problems by category, each linking its source | Something to put in front of an official; tests DSC-10 | The owner: "I want to take this till govt of india" (2026-10-31); [go-to-market.md](../05-business-case-and-launch/go-to-market.md#the-path-to-the-government-of-india-proposed-not-done) |
+| RM-40 | Take the report to government: state tourism departments first, then the central ministries; the data law check first (R-17) | The owner's aim. No official has been contacted | The same |
 
 ## Later: only if users ask for it
 
@@ -74,6 +76,7 @@ flowchart LR
   RM07 --> RM32["RM-32 Measure, then tiers"]
   RM07 --> RM35["RM-35 Staging, IT and UAT-3"]
   RM07 --> RM36["RM-36 Target price"]
+  RM38["RM-38 Read India share"] --> RM39["RM-39 India report"] --> RM40["RM-40 Government"]
 ```
 
 pricing.md's rule not to charge before a real sweep is scored ([decisions.md](../../docs/decisions.md), 2026-10-22)

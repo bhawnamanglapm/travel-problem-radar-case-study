@@ -3,6 +3,12 @@
 Built from the git history. Dates are commit dates. The project has no version numbers or releases, so entries are
 grouped by date.
 
+## 2026-10-31
+
+- PM docs: KPI-20's target set by the owner (20% of items in India, 4 or more a sweep; floor 10%, stretch 25%).
+  Indian communities to try, all to verify, and a proposed path to the Government of India: DSC-10, R-17, CR-24,
+  RM-39 (a monthly India report) and RM-40 (government, state tourism departments first).
+
 ## 2026-10-30
 
 - T42, India focus (#132, merged and live): each category call now also asks for up to 2 items about India,
