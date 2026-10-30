@@ -33,7 +33,7 @@ The radar itself began as ALT-07's kind of tool: a scheduled task in Claude's ap
 | Adds a one-line product opportunity to each item | None found | None. Goal G3, "opportunities are useful", is **Not measured** |
 | Needs no keyword or source list from the reader | ALT-06 and ALT-07, in part | None |
 | Keeps a history and flags New | ALT-01 sends only results new since the last email; ALT-06 has a daily roll-up | None |
-| Costs ₹299 a month for Pro, with a Free teaser | Prices of others not verified here | No one has paid yet |
+| Costs ₹1 a month or ₹1 a year for Pro since 2026-10-28, with a Free teaser (₹299 a month when this was written) | Prices of others not verified here | 3 live ₹1 payments by 2026-10-29 (T27, [progress.md](../../docs/subscriptions/tasks/progress.md)); none at a price that covers cost |
 
 "None found" means none was found in this search. It doesn't mean none exists.
 
