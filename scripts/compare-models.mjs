@@ -79,7 +79,7 @@ export async function checkLink(url, { baseFetch = fetch, timeoutMs = 10_000 } =
   } catch (e) { return { status: null, result: "broken" }; }
 }
 
-async function mapLimit(list, n, fn) {
+export async function mapLimit(list, n, fn) {
   const out = new Array(list.length);
   let next = 0;
   await Promise.all(Array.from({ length: Math.min(n, list.length) }, async () => {
