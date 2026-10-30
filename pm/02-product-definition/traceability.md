@@ -14,7 +14,7 @@
 | [`scripts/test-plan.mjs`](../../scripts/test-plan.mjs) | 73 | 56 | `plan.json` and the pages filled from it |
 | [`scripts/test-admin.mjs`](../../scripts/test-admin.mjs) | 49 | — | The `/admin/` dashboard |
 | [`scripts/test-cost.mjs`](../../scripts/test-cost.mjs) | 25 | — | Pricing a sweep from the LLM log (`cost-per-run.mjs`) |
-| [`scripts/test-score.mjs`](../../scripts/test-score.mjs) | 42 | — | The scoring script (`score-items.mjs`); not a product requirement |
+| [`scripts/test-score.mjs`](../../scripts/test-score.mjs) | 46 | — | The scoring script (`score-items.mjs`); not a product requirement |
 | [`scripts/test-compare.mjs`](../../scripts/test-compare.mjs) | 40 | 39 | The model-comparison script; not a product requirement |
 | [`scripts/check.mjs`](../../scripts/check.mjs) | 249 checks | 199 checks | Pages, bundles, links, the prompt copy, brand contrast, skip links, no secrets |
 

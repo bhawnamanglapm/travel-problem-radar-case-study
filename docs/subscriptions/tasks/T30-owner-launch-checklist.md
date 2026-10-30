@@ -31,7 +31,7 @@ is finished.
 | 6 | Resend Pro. Costing's P0 list has it before the first payment; at 2 a day the free plan's 100 a day lasts longer, so the owner may choose to wait, and records that choice in decisions.md | LR-15, RM-08 | todo |
 | 7 | Read the values of `MAX_SUBSCRIBERS` and `MAX_CONFIRMS_PER_DAY` in Vercel | LR-19 | **Done** 2026-10-29: `MAX_SUBSCRIBERS` 5000; `MAX_CONFIRMS_PER_DAY` was 500, lowered to 50 so sign-ups can't use up Resend's free 100 a day; Production redeployed |
 | 8 | A written manual step for refunds and chargebacks | LR-20 | **Done** 2026-10-29: [refunds-and-chargebacks.md](../refunds-and-chargebacks.md); `revoke-pro --paid` ends a refunded Pro at once. Razorpay's menu names are still to verify |
-| 9 | The GST case confirmed by a CA; advice on India's DPDP Act for stored addresses | LR-13; pricing.md checklist | todo |
+| 9 | The GST case confirmed by a CA; advice on India's DPDP Act for stored addresses | LR-13; pricing.md checklist | todo. A checklist for the adviser: [dpdp-check.md](../dpdp-check.md) (2026-10-31) |
 | 10 | Score 20 or more live items with the README rubric, **if** the owner keeps the rule not to charge first | LR-03, RM-13 | **Script ready** 2026-10-30: `node --env-file=.env.local scripts/score-items.mjs` picks 20 items from the saved sweeps (read-only), checks the links and the 30 days itself, and writes `review.csv` for the four judged lines; `--score DIR` reports the shares. Not scored yet |
 | 11 | Production checks: emailed sign-in, a Pro email after choosing categories, Gmail's one-click unsubscribe | LR-04 | todo |
 | 12 | Answer T23 input 5: international cards. Input 8 (yearly plan) is settled as monthly only by the final Pro plan | [T23](T23-pro-display-standards.md), RM-09 | todo |
