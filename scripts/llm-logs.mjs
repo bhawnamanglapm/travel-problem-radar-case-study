@@ -7,7 +7,7 @@
 //   node --env-file=.env.local scripts/llm-logs.mjs show <id|latest>
 //
 // `list`: one line per sweep that ran, newest first, with its tokens, searches and pages.
-// `summary`: one sweep's totals, per-call outcomes and the links of the pages search found.
+// `summary`: one sweep's totals, per-call outcomes, the pages search found (link, title, age) and what was quoted.
 // `show`: the whole log as JSON (requests, responses, thinking, links).
 // Exit codes: 0 done, 1 not found or error, 2 bad usage.
 import { pathToFileURL } from "node:url";
@@ -63,7 +63,20 @@ export function formatSummary(lg) {
     const how = c.error ? `failed: ${c.error}` : `${c.items} items`;
     out.push(`${String(c.cat).padEnd(14)} ${how}; in ${n(u.input)}, out ${n(u.output)}, searches ${n(u.searches)}, pages ${n(u.pages)}${c.ms != null ? `, ${(c.ms / 1000).toFixed(1)} s` : ""}`);
   }
-  out.push("", "Pages:", ...(s.links || []).map((l) => "  " + l));
+  // Each page's title and age, from the calls' search results. Older logs kept links only.
+  const blocks = (lg.calls || []).flatMap((c) => (c.response && c.response.content) || []);
+  const about = {};
+  for (const p of blocks.flatMap((b) => (Array.isArray(b.pages) ? b.pages : []))) {
+    if (p && p.url && p.title && !about[p.url]) about[p.url] = `${p.title}${p.age ? ` (${p.age})` : ""}`;
+  }
+  out.push("", "Pages:", ...(s.links || []).map((l) => "  " + l + (about[l] ? `  — ${about[l]}` : "")));
+  const quoted = [];
+  for (const c of lg.calls || []) {
+    const qs = ((c.response && c.response.content) || []).flatMap((b) => (Array.isArray(b.citations) ? b.citations : []))
+      .filter((q) => q && q.quote);
+    if (qs.length) quoted.push(`  ${c.cat}:`, ...qs.map((q) => `    "${q.quote}"  ${q.url}`));
+  }
+  if (quoted.length) out.push("", "Quoted:", ...quoted);
   return out.join("\n");
 }
 

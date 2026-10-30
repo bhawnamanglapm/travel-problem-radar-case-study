@@ -297,6 +297,19 @@ const sweepOpts = (storage, byCat, now) => ({
   const sum = await run(["summary", "latest"]);
   check(sum.code === 0 && sum.out.includes(`Sweep ${t2}`) && /gov_policy +failed: http 529/.test(sum.out) && /Tokens: 300 input, 150 output/.test(sum.out),
     "llm-logs summary: totals and each call's outcome");
+  const withPages = (pages, citations) => ({
+    id: "1", at: "x", status: "saved", summary: { calls: 1, failed: 0, links: ["https://a.example/1", "https://b.example/2"] },
+    calls: [{ cat: "traveler_pain", items: 1, usage: {}, response: { content: [
+      { type: "web_search_tool_result", pages }, { type: "text", text: "t", ...(citations ? { citations } : {}) },
+    ] } }],
+  });
+  const fresh = tool.formatSummary(withPages([{ url: "https://a.example/1", title: "Refund rules", age: "2 days" }, { url: "https://b.example/2" }],
+    [{ url: "https://a.example/1", title: "Refund rules", quote: "airlines must refund" }]));
+  check(/^ {2}https:\/\/a\.example\/1 {2}— Refund rules \(2 days\)$/m.test(fresh) && /^ {2}https:\/\/b\.example\/2$/m.test(fresh),
+    "llm-logs summary: a page's title and age next to its link, where the log has them");
+  check(/Quoted:\n {2}traveler_pain:\n {4}"airlines must refund" {2}https:\/\/a\.example\/1/.test(fresh), "llm-logs summary: the passages each category quoted");
+  const old = tool.formatSummary(withPages(["https://a.example/1", "https://b.example/2"], ["https://a.example/1"]));
+  check(/^ {2}https:\/\/a\.example\/1$/m.test(old) && !/Quoted:/.test(old), "llm-logs summary: an older log (links only) prints as before");
   const show = await run(["show", String(t1)]);
   check(show.code === 0 && JSON.parse(show.out).calls.length === 4, "llm-logs show: the whole log as JSON");
   check((await run(["show", "1700000000000"])).code === 1, "llm-logs show: unknown id is not found (exit 1)");
