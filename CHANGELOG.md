@@ -5,6 +5,9 @@ grouped by date.
 
 ## 2026-10-30
 
+- PM docs brought up to date: every stage of `pm/`, the README and `docs/decisions.md` now record go-live on
+  2026-10-28, the ₹1 price (₹299 kept as the break-even analysis), the custom domain, Haiku, T22 and T29 to T41,
+  and the first test run. Counts recounted at `e339d32`: `npm test` 1,582, `npm run check` 249. Docs only.
 - TS19 log: the owner closed BUG-001 and BUG-003 to BUG-011. The fixed ones are marked as not retested; BUG-002
   stays open until its cause is found.
 - BUG-011 fixed: every page now starts with a skip link to its main content (it was the home page only). The style

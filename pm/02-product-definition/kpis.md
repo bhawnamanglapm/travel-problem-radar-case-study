@@ -1,6 +1,6 @@
 # KPI catalogue
 
-> **Stage 2 of 7.** How success would be measured. **Targets are OWNER INPUT NEEDED.** The current value is
+> **Stage 2 of 8.** How success would be measured. Updated 2026-10-30 with the values the repository now gives. **Targets are OWNER INPUT NEEDED.** The current value is
 > **Not measured** unless a source in this repository gives one. Stage 7 will describe how each KPI is computed
 > from the stored data.
 
@@ -11,9 +11,9 @@ Scored by hand on a sample of 20 or more live items, using the draft rubric in t
 
 | ID | KPI | Formula | Data source | Target | Current |
 |---|---|---|---|---|---|
-| KPI-01 | Source links load | items whose link loads ÷ items scored | Manual check of saved sweeps | **OWNER INPUT NEEDED** | Not measured on live data. July sample: 7 of 8 |
+| KPI-01 | Source links load | items whose link loads ÷ items scored | Manual check of saved sweeps | **OWNER INPUT NEEDED** | Not measured on live data. July sample: 7 of 8. Related, not the same: 1 of 190 live items (26 to 30 Oct) had a link web search never returned, the `searched` flag (`node scripts/llm-logs.mjs models`, read on 2026-10-30) |
 | KPI-02 | Source supports the summary | items whose source supports the summary ÷ items scored | Manual scoring | **OWNER INPUT NEEDED** | Not measured |
-| KPI-03 | Findings are current | items dated within 30 days of the sweep ÷ items scored | Item `date` field | **OWNER INPUT NEEDED** | Not measured |
+| KPI-03 | Findings are current | items dated within 30 days of the sweep ÷ items scored | Item `date` field; `sourceDate` since 2026-10-30 | **OWNER INPUT NEEDED** | Not scored by hand. Of the 18 items with a `sourceDate` (26 to 30 Oct), the median source age was 8.5 days (`node scripts/llm-logs.mjs models`, read on 2026-10-30). Since 2026-10-30, sources over 60 days old are dropped |
 | KPI-04 | Opportunities are useful | items a PM would act on ÷ items shown | PM interviews ([plan](../01-discovery/discovery-log.md#interview-plan-proposed-not-done)) | **OWNER INPUT NEEDED** | Not measured |
 | KPI-05 | New means new | items flagged New that are new events ÷ items flagged New | Manual scoring | **OWNER INPUT NEEDED** | Not measured; known gap |
 
@@ -21,14 +21,15 @@ Scored by hand on a sample of 20 or more live items, using the draft rubric in t
 
 | ID | KPI | Formula | Data source | Target | Current |
 |---|---|---|---|---|---|
-| KPI-06 | Cost per sweep | Anthropic spend ÷ sweeps | Run logs (`usage`); Anthropic Console | **OWNER INPUT NEEDED** | $0.21 average, measured over 5 production runs ([costing.md](../../docs/subscriptions/costing.md#summary)) |
-| KPI-07 | Fixed monthly running cost | Anthropic + Vercel + Resend, a month | Provider invoices | **OWNER INPUT NEEDED** | About ₹6,797 estimated with Vercel Pro and Resend Pro. Not yet from invoices |
-| KPI-08 | Sweeps a day | saved sweeps per UTC day | Sweep history (`radar:sweep:` records) | About 5 a day, by design | Not counted over a week ([measurement checklist](../../docs/subscriptions/costing.md#measurement-checklist), row 1) |
-| KPI-09 | Complete sweeps | sweeps that saved all 4 categories ÷ sweeps | Sweep history | **OWNER INPUT NEEDED** | Not measured. The first production sweep saved 1 of 4; fixed since |
+| KPI-06 | Cost per sweep | Anthropic spend ÷ sweeps | Run logs (`usage`); the LLM logs; Anthropic Console | **OWNER INPUT NEEDED** | $0.1121 average over 10 sweeps, 26 to 30 Oct, all on Haiku (`node scripts/llm-logs.mjs models`, read on 2026-10-30). Was $0.21 over 5 Sonnet runs ([costing.md](../../docs/subscriptions/costing.md#summary)) |
+| KPI-07 | Fixed monthly running cost | Anthropic + Vercel + Resend, a month | Provider invoices | **OWNER INPUT NEEDED** | About ₹6,797 estimated with Vercel Pro and Resend Pro, at Sonnet's $0.21 a sweep; not recomputed for Haiku. Not yet from invoices |
+| KPI-08 | Sweeps a day | saved sweeps per UTC day | Sweep history (`radar:sweep:` records) | 1 to 5 a day, as the highest Pro choice needs (T32) | 10 sweeps logged 26 to 30 Oct (`node scripts/llm-logs.mjs models`, read on 2026-10-30). The 2026-10-26 to 29 slots were all swept or skipped as designed, 228 to 418 minutes late (T35) |
+| KPI-09 | Complete sweeps | sweeps that saved all 4 categories ÷ sweeps | Sweep history | **OWNER INPUT NEEDED** | Not measured as a ratio. The first production sweep saved 1 of 4; fixed since. 26 to 30 Oct: 19.0 items a sweep on average, of 20 possible (`node scripts/llm-logs.mjs models`, read on 2026-10-30) |
 
 ## Growth and engagement (goals G7 and G8)
 
-These counts come from `node scripts/subscribers.mjs stats`, which reads event records holding no addresses (T11).
+These counts come from `node scripts/subscribers.mjs stats`, which reads event records holding no addresses (T11),
+and since 2026-10-26 from the owner's `/admin/` dashboard.
 
 | ID | KPI | Formula | Data source | Target | Current |
 |---|---|---|---|---|---|
@@ -46,12 +47,20 @@ the owner's step, and this document prints counts only, never addresses.
 
 | ID | KPI | Formula | Data source | Target | Current |
 |---|---|---|---|---|---|
-| KPI-16 | Paying members | active paid Pro subscriptions | Razorpay dashboard; Pro records | 24 to 28 to cover running costs at ₹299 ([costing.md](../../docs/subscriptions/costing.md#break-even)) | 0. Payments not open |
+| KPI-16 | Paying members | active paid Pro subscriptions | Razorpay dashboard; Pro records | Was 24 to 28 to cover running costs at ₹299 ([costing.md](../../docs/subscriptions/costing.md#break-even)). At ₹1 no number covers them; the target is **OWNER INPUT NEEDED** | 3 live ₹1 payments captured by 2026-10-29. `/admin/` showed 5 paid Pro; the 2 extra are test-mode subscriptions that end on Nov 25 and 26 (T27, [progress.md](../../docs/subscriptions/tasks/progress.md)) |
 | KPI-17 | Free to paid conversion | new paid Pro ÷ new Free, a month | `checkoutstarted` events; Razorpay | **OWNER INPUT NEEDED** | Not measured |
-| KPI-18 | Paid retention | paid members still active after a month ÷ paid members at its start | Razorpay | **OWNER INPUT NEEDED** | Not measured |
+| KPI-18 | Paid retention | paid members still active after a month ÷ paid members at its start | Razorpay | **OWNER INPUT NEEDED** | Not measured; payments opened 2026-10-28 |
 | KPI-19 | Refunds and chargebacks | refunds ÷ payments | Razorpay | **OWNER INPUT NEEDED** | Not measured |
 
+## What ₹1 means for these KPIs
+
+Since 2026-10-29, ₹1 a month and ₹1 a year is Pro's real price for now ([decisions.md](../../docs/decisions.md)).
+KPI-16 to KPI-19 can still show whether people pay, stay and ask for refunds, but not whether Pro covers its running
+cost: at ₹1, revenue can't cover about ₹6,797 a month. The break-even target in KPI-16 needs the owner's target price.
+
 ## The first 30 days after payments open
+
+Payments opened on 2026-10-28 (T27).
 
 The [pricing recommendation](../../docs/cost%20audit/pro_pricing_recommendation.md#what-to-measure-in-the-first-30-days)
 lists what to watch once payments open: conversion, activation, weekly active readers, cancellations and their

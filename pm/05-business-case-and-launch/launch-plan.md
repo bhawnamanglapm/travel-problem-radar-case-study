@@ -1,12 +1,15 @@
 # Launch plan: opening payments
 
-> **Stage 5 of 7.** "Launch" here means **taking real payments for Pro**. The free product is already live. This page
+> **Stage 5 of 8.** "Launch" here means **taking real payments for Pro**. The free product is already live. This page
 > gathers what must be true first from [T27](../../docs/subscriptions/tasks/T27-razorpay-test-run-and-go-live.md),
 > costing's [P0 checklist](../../docs/subscriptions/costing.md#pre-launch-checklist),
 > [payments-razorpay.md](../../docs/subscriptions/payments-razorpay.md#prerequisites) and the
 > [roadmap](../04-planning-and-governance/roadmap.md), and gives each item an `LR-` ID. **Target dates are OWNER INPUT
 > NEEDED.** State on 2026-10-29: **launched**. Razorpay has been in live mode since 2026-10-28, at ₹1 a month or ₹1 a
 > year, and the first live payments came the same day. The rows still open below are what's left after launch.
+> Updated 2026-10-30: T22 is built (LR-06), and the first full test run ended **not ready to sign off**, with
+> IT-1 to IT-8 blocked because `staging` is 121 commits behind `main`
+> ([results](../08-testing/results/README.md); R-14, I-11 in the [RAID log](../04-planning-and-governance/raid-log.md)).
 
 ## Launch readiness checklist
 
@@ -26,7 +29,7 @@
 | ID | Item | Who | Status | Blocks | Links |
 |---|---|---|---|---|---|
 | LR-05 | Move to Vercel Pro | Owner | Open: a decision to spend | LR-06; go-live (Hobby is non-commercial, **verify** the terms) | RM-05, R-08 |
-| LR-06 | T22 built: Pro expiry with a grace period, unsubscribing on paid Pro, key safety | Dev | Partly built: unsubscribing on paid Pro cancels in Razorpay first; an approved renewal has a 6-hour grace. Not built: Production refusing test keys (and Preview live keys), and the sweep step that ends lapsed paid Pro (delivery already treats it as Free) | LR-07 | RM-06, [T22](../../docs/subscriptions/tasks/T22-pro-lifecycle-and-go-live.md) |
+| LR-06 | T22 built: Pro expiry with a grace period, unsubscribing on paid Pro, key safety | Dev | **Built** 2026-10-30: a 48-hour grace for paid Pro due to renew (`PRO_GRACE_HOURS`), the sweep's tidy step, and Production taking live keys only, Preview test keys only. Was: partly built, with a 6-hour grace | LR-07 | RM-06, [T22](../../docs/subscriptions/tasks/T22-pro-lifecycle-and-go-live.md) |
 | LR-07 | Test-mode run on a Preview: every row of T27's table passes, with the date in the pull request | Owner and dev | Not recorded: go-live went ahead on 2026-10-28; T27's acceptance box is still open | Go-live | RM-07 |
 | LR-08 | Razorpay live activation, which includes a review of the website | Owner | **Done**: live mode since 2026-10-28 | LR-09, LR-10 | RM-03, D-05 |
 | LR-09 | Live ₹1 Razorpay plans, one per billing period, made by `check-plan.mjs --create` with the live keys and set as `RAZORPAY_PLANS` on Production; `plan.json`'s `monthly` and `yearly` set to the real prices (₹1 while testing, T33) | Owner | **Done** 2026-10-28: `RAZORPAY_PLANS` is set on Production and live ₹1 payments went through. The real price is still to set | Merging `paid: true` | T27 go-live steps 2–3 |
@@ -39,7 +42,7 @@
 | LR-11 | The terms page, with an adviser's liability clause | Owner, with an adviser | Shipped 2026-10-29 (#94) with the owner's plain liability draft; the adviser's check is still open | LR-08, if Razorpay requires terms (**verify**) | RM-04, I-05, R-10 |
 | LR-12 | Privacy, Contact, Refunds and Pricing pages live | — | **Done** (2026-10-22 and 2026-10-23), not reviewed by a lawyer | — | [decisions.md](../../docs/decisions.md); R-10 |
 | LR-13 | The GST case confirmed by a CA. Today: not registered, so no GST is charged | Owner, with a CA | Open: the owner answered; no CA is engaged | P0: "the GST question answered by a CA" | CR-13, D-08 |
-| LR-14 | The open inputs: international cards, a yearly plan | Owner | Open | What `/pricing/` and the payment methods say | RM-09 |
+| LR-14 | The open inputs: international cards, a yearly plan | Owner | Yearly answered 2026-10-26 (monthly or yearly, CR-17); international cards still open | What `/pricing/` and the payment methods say | RM-09 |
 
 ### Email
 
@@ -62,7 +65,7 @@
 |---|---|---|---|---|---|
 | LR-20 | A written manual step for refunds and chargebacks: refund in Razorpay, then revoke Pro with the admin script, telling a first payment from a renewal | Owner, with the dev | Done 2026-10-29: [refunds-and-chargebacks.md](../../docs/subscriptions/refunds-and-chargebacks.md), with `revoke-pro --paid` to end a refunded Pro at once. Its Razorpay menu names are still to verify | The first live payment (P0) | R-07, [refund rule](../../docs/decisions.md) 2026-10-23 |
 | LR-21 | A weekly check: Razorpay's active subscriptions against Pro records | Owner | Planned for the first month (P1) | — | R-06 |
-| LR-22 | Docs after go-live: DEPLOYMENT.md, pricing.md, decisions.md, CHANGELOG.md | Dev | To do | T27's acceptance | [T27](../../docs/subscriptions/tasks/T27-razorpay-test-run-and-go-live.md#acceptance-criteria) |
+| LR-22 | Docs after go-live: DEPLOYMENT.md, pricing.md, decisions.md, CHANGELOG.md | Dev | Partly done: pricing.md, DEPLOYMENT.md (the ₹1 plans), decisions.md (2026-10-29) and CHANGELOG.md (2026-10-28) record go-live and the price; the PM docs were brought up to date on 2026-10-30. T27's acceptance box is still open | T27's acceptance | [T27](../../docs/subscriptions/tasks/T27-razorpay-test-run-and-go-live.md#acceptance-criteria) |
 
 ## Order
 

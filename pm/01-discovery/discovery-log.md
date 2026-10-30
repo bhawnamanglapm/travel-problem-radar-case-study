@@ -1,8 +1,9 @@
 # Discovery log
 
-> **Stage 1 of 7.** What was believed, what evidence backs it, and what building the product taught. **No user
+> **Stage 1 of 8.** What was believed, what evidence backs it, and what building the product taught. **No user
 > research has been done.** Every assumption below is open unless evidence in this repository says otherwise, and the
-> interview plan at the end is a proposal, not a record.
+> interview plan at the end is a proposal, not a record. Updated 2026-10-30: DSC-02, DSC-06 and DSC-08 have new
+> evidence; no interviews have been run.
 
 ## Problem framing
 
@@ -19,13 +20,13 @@
 | ID | Assumption | Evidence so far | Status |
 |---|---|---|---|
 | DSC-01 | PMs don't have time to scan problem signals across sources every day | The owner's own experience, from the original case study. No other PM was asked | **Untested** beyond the owner |
-| DSC-02 | A model with web search finds real, current travel problems | July 2026 sample: 7 of 8 source links load, but their contents were not re-checked ([README](../../README.md#how-i-measured-quality)). The first production sweep saved 1 of 4 categories; the cause, an output token limit, was fixed in `f200a79` ([TECHNICAL.md](../../docs/TECHNICAL.md)) | **Partly supported.** Link checks only; no real sweep scored |
+| DSC-02 | A model with web search finds real, current travel problems | July 2026 sample: 7 of 8 source links load, but their contents were not re-checked ([README](../../README.md#how-i-measured-quality)). The first production sweep saved 1 of 4 categories; the cause, an output token limit, was fixed in `f200a79` ([TECHNICAL.md](../../docs/TECHNICAL.md)) | **Partly supported.** Link checks only; no real sweep scored by a person. Since then, of 190 live items (26 to 30 Oct), 1 had a link web search never returned, and the 18 with a source date had a median age of 8.5 days (`node scripts/llm-logs.mjs models`, 2026-10-30) |
 | DSC-03 | The one-line product opportunity is useful to a PM | None. Goal G3 in the [v1 PRD](../../docs/PRD.md#goals) is "Not measured" | **Untested** |
 | DSC-04 | "New" by headline is close enough to "new event" | Known gap: a reworded headline about the same event shows as New ([decisions.md](../../docs/decisions.md), 2026-08-01) | **Known to be weak.** Accepted for now |
 | DSC-05 | People other than the owner want the findings by email | Sign-up is live. The repo records no users besides the owner | **Untested** |
-| DSC-06 | Someone will pay for the live board | No one has paid. Checkout passed only a test-mode run on staging ([progress.md](../../docs/subscriptions/tasks/progress.md)) | **Untested** |
-| DSC-07 | The running cost is almost all fixed, so a flat monthly price fits it | No user can trigger the AI. A sweep costs $0.21, measured over 5 production runs ([costing.md](../../docs/subscriptions/costing.md#summary)) | **Supported** by code and measurement |
-| DSC-08 | A cheaper model could do the sweep as well | Haiku 5.5 is estimated at about $0.054 a sweep against Sonnet 5.5's $0.21. The comparison script is written and tested offline, but has not been run ([haiku-test.md](../../docs/subscriptions/haiku-test.md)) | **Untested** |
+| DSC-06 | Someone will pay for the live board | As written 2026-10-24: no one had paid. Payments opened on 2026-10-28 at ₹1 a month or a year, and Razorpay had captured 3 live ₹1 payments by 2026-10-29 (T27, [progress.md](../../docs/subscriptions/tasks/progress.md)). Who paid isn't recorded here | **Partly tested.** People pay ₹1; whether anyone pays a price that covers the cost is untested (R-12) |
+| DSC-07 | The running cost is almost all fixed, so a flat monthly price fits it | No user can trigger the AI. A sweep cost $0.21 on Sonnet, measured over 5 production runs ([costing.md](../../docs/subscriptions/costing.md#summary)); on Haiku, $0.1121 over 10 sweeps (26 to 30 Oct). Since T32 the number of sweeps a day follows the most frequent Pro member's choice, 1 to 5 | **Supported** by code and measurement |
+| DSC-08 | A cheaper model could do the sweep as well | Haiku has been the default since 2026-10-25 (CR-19). The 2026-10-30 [model test](../../docs/subscriptions/model-test-2026-10-30.md) kept it: in a blind review marked by ChatGPT, 28 of 55 Haiku items were kept against 15 of 52 Sonnet items; Haiku failed the test's cost and link checks. Measured cost: $0.1121 a sweep over 10 sweeps. Was: estimated, not run ([haiku-test.md](../../docs/subscriptions/haiku-test.md)) | **Partly tested.** No person has scored either model's items |
 
 ## What building taught
 
@@ -39,14 +40,17 @@ The build itself produced evidence. Each of these changed the product:
 | 2026-10-22 | Outlook.com filed the confirmation, the Free digests and the already-subscribed notice in Junk. Gmail delivered them to the inbox | Recorded as open. Delivery to Outlook is still to fix | [progress.md](../../docs/subscriptions/tasks/progress.md) |
 | 2026-10-22 | The same inbox could subscribe twice under different spellings (Gmail dots, `+tags`) | One subscription per inbox, keyed on the canonical address (PR #19) | [progress.md](../../docs/subscriptions/tasks/progress.md) |
 | 2026-10-23 | Three audits of the cost model changed its figures | The revised [costing.md](../../docs/subscriptions/costing.md#what-the-audits-changed) became the source for the price | [cost audit](../../docs/cost%20audit/) |
+| 2026-10-28 | Signing in on `travel-problem-radar.vercel.app` and opening the custom domain looked signed out; a Google sign-in from the custom domain came back without its cookie | The site moved to radar.pehchanthetraveller.com and the old address redirects (CR-21) | [CHANGELOG](../../CHANGELOG.md) 2026-10-28 |
+| 2026-10-30 | The 26 to 29 Oct scheduled runs started 228 to 418 minutes late (BUG-008) | Vercel's backstop moved from 01:30 to 00:05 UTC; `/manage/` says later emails often arrive a few hours late (CR-22) | [CHANGELOG](../../CHANGELOG.md) 2026-10-30 |
+| 2026-10-30 | The first full test run ended not ready to sign off | BUG-001 and BUG-008 to BUG-011 fixed; BUG-002 open (I-10) | [test results](../08-testing/results/README.md) |
 
 ## Research gaps
 
 | Gap | Why it matters | Planned evidence |
 |---|---|---|
 | Nobody besides the owner has been asked about the problem | DSC-01 and DSC-05 rest on one person | Interviews (below) |
-| No real sweep has been scored | Quality (DSC-02, DSC-03) is the product | Score 20 or more live items with the draft rubric in the [README](../../README.md#how-i-measured-quality) |
-| No willingness-to-pay data | ₹299 is a cost-based test price, not a demand-based one | The first 30 days after payments open ([pricing recommendation](../../docs/cost%20audit/pro_pricing_recommendation.md#what-to-measure-in-the-first-30-days)) |
+| No real sweep has been scored by a person | Quality (DSC-02, DSC-03) is the product | Score 20 or more live items with `scripts/score-items.mjs` and the draft rubric in the [README](../../README.md#how-i-measured-quality) |
+| No willingness-to-pay data | Pro costs ₹1 a month or a year since 2026-10-28, below the running cost; ₹299 was the cost-based break-even analysis. The target price is **OWNER INPUT NEEDED** (R-12) | The first 30 days after payments open ([pricing recommendation](../../docs/cost%20audit/pro_pricing_recommendation.md#what-to-measure-in-the-first-30-days)) |
 | No head-to-head with alternatives | Positioning is unproven | Ask interviewees what they use today; compare one week of findings side by side |
 
 ## Interview plan (proposed, not done)
@@ -64,5 +68,5 @@ The build itself produced evidence. Each of these changed the product:
   5. How would you want this: email, a board, Slack, something else? How often?
   6. What do you pay for today to stay informed? Who pays: you or your company?
 - **What would change the plan:** if fewer than half would act on any item, work on quality before growth. If the
-  company would pay rather than the person, consider a team plan rather than ₹299 for an individual.
+  company would pay rather than the person, consider a team plan rather than a price for an individual.
 - **Output:** a synthesis added to this file, with each DSC row's status updated and the source noted.

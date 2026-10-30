@@ -1,7 +1,8 @@
 # Travel Problem Radar: the product management case study
 
 > **A real, live product, not a simulation.** Travel Problem Radar runs at
-> https://travel-problem-radar.vercel.app/. One product owner, Bhawna Mangla, built it and runs it with AI (Claude).
+> https://radar.pehchanthetraveller.com/ (the old travel-problem-radar.vercel.app address redirects there since
+> 2026-10-28). One product owner, Bhawna Mangla, built it and runs it with AI (Claude).
 > Each figure in this section comes from a file in this repository, and the file is named next to it. Where no
 > source exists, the gap is marked **OWNER INPUT NEEDED** or **Not measured**. No figures were made up to fill a
 > template.
@@ -16,11 +17,11 @@ documents in [`docs/`](../docs/) and links to them, so every fact keeps one home
 |---|---|
 | **Role** | Product owner. Built with AI (Claude): the first version in Claude's app, everything since October 2026 with Claude Code ([README](../README.md#how-i-built-it)) |
 | **Domain** | Travel industry: traveler pain, government and policy changes, website and app failures, industry disruption |
-| **Timeline** | First built in July 2026 in Claude's app. Repository started 2026-08-01. Public demo, live page, subscriptions and payments built from 18 to 23 Oct 2026 ([CHANGELOG](../CHANGELOG.md)) |
-| **Status (2026-10-24)** | Live MVP, not yet charging. Free email digest and Pro live board; Pro is granted by hand for now. Checkout is built and passed a test-mode run on staging. Taking real payments waits on the [launch checklist](05-business-case-and-launch/launch-plan.md), starting with sweeps, which have failed since 2026-10-23 (I-01) ([progress](../docs/subscriptions/tasks/progress.md)) |
-| **Build record** | 256 commits and 74 merged pull requests. 952 offline tests and 199 offline checks pass (`npm test`, `npm run check`), counted on `main` at `662bded` on 2026-10-23 |
-| **Users** | **None recorded besides the owner.** No interviews, surveys or usage data exist yet ([README](../README.md#problem)) |
-| **Price** | ₹299 a month for Pro, no GST charged. Chosen as a price to test, not a proven one ([decisions](../docs/decisions.md), [costing](../docs/subscriptions/costing.md)) |
+| **Timeline** | First built in July 2026 in Claude's app. Repository started 2026-08-01. Public demo, live page, subscriptions and payments built from 18 to 23 Oct 2026; payments live on 2026-10-28; board features (details, areas, search, saved, share) on 29 and 30 Oct; first full test run on 2026-10-30 ([CHANGELOG](../CHANGELOG.md)) |
+| **Status (2026-10-30)** | Live and charging. Razorpay has been in live mode since 2026-10-28, and Pro is paid monthly or yearly at ₹1. Sweeps run again since 2026-10-25 (I-01 closed), on `claude-haiku-5-5`. The first test run (TS01 to TS20, 2026-10-30) ended **not ready to sign off**. After it, BUG-001 and BUG-008 to BUG-011 were fixed and the owner closed every bug but BUG-002 (an account that can't see the board), which is open. Still open on the [launch checklist](05-business-case-and-launch/launch-plan.md): Vercel Pro, the test-mode run's record, an adviser's check of the terms ([progress](../docs/subscriptions/tasks/progress.md), [TS19](08-testing/TS19-bug-reporting-and-retesting.md)) |
+| **Build record** | 473 commits and 129 merged pull requests. 1,582 offline tests and 249 offline checks pass (`npm test`, `npm run check`), counted on `main` at `e339d32` on 2026-10-30. On 2026-10-23 it was 256 commits, 74 PRs, 952 tests and 199 checks |
+| **Users** | **None recorded in the repo besides the owner.** 3 live ₹1 payments were captured by 2026-10-29 ([progress](../docs/subscriptions/tasks/progress.md), T27); the repo doesn't record who made them. No interviews, surveys or usage data exist yet ([README](../README.md#problem)) |
+| **Price** | ₹1 a month or ₹1 a year for Pro, no GST charged: the owner's real price for now (2026-10-29). It was ₹299 a month until 2026-10-25, and the [business case](05-business-case-and-launch/business-case.md) still uses ₹299 for break-even. The target price is **OWNER INPUT NEEDED** ([decisions](../docs/decisions.md), [costing](../docs/subscriptions/costing.md)) |
 
 ## The problem
 
@@ -33,14 +34,19 @@ The user is a product manager looking for travel problems worth solving, startin
 
 ## The solution
 
-About 5 times a day, a server job asks Claude, with web search, for recent problems in four categories. It saves
-up to 5 items per category, each with a source link, severity and a one-line product opportunity. Items not seen in
-an earlier sweep are flagged New. Readers get the results in three ways:
+1 to 5 times a day (as often as the Pro member who asked for the most emails a day; once a day with no Pro), a
+server job asks Claude, with web search, for recent problems in four categories. It saves up to 5 items per
+category, each with a source link, severity, region and a one-line product opportunity, and drops an item whose
+source is over 60 days old. Items not seen in an earlier sweep are flagged New. Readers get the results in three
+ways:
 - **a public demo** that replays a saved July 2026 sample;
-- **a live board** for Pro members;
-- **email digests**: a daily teaser for Free, and the full digest after every sweep for Pro.
+- **a live board** for Pro members, with a details panel and history for each problem, area filters, search across
+  every saved sweep, saved problems and a share link for one problem;
+- **email digests**: a daily teaser for Free, and for Pro 1 to 5 digests a day, for the categories and areas they
+  choose.
 
-Source: [TECHNICAL.md](../docs/TECHNICAL.md), [paid-website.md](../docs/subscriptions/paid-website.md).
+Source: [TECHNICAL.md](../docs/TECHNICAL.md), [paid-website.md](../docs/subscriptions/paid-website.md),
+[CHANGELOG](../CHANGELOG.md) 2026-10-29 and 2026-10-30.
 
 ## How I approached it
 
@@ -53,14 +59,14 @@ Source: [TECHNICAL.md](../docs/TECHNICAL.md), [paid-website.md](../docs/subscrip
 | 5. Business case and launch | **Plans, not results:** cost-floor business case, go-to-market with gates, launch readiness with go/no-go and rollback, post-launch plan | [business-case.md](05-business-case-and-launch/business-case.md), [go-to-market.md](05-business-case-and-launch/go-to-market.md), [launch-plan.md](05-business-case-and-launch/launch-plan.md), [post-launch-plan.md](05-business-case-and-launch/post-launch-plan.md) |
 | 6. Executive communication | One-page review that ends in the owner's decisions | [executive-review.md](06-executive-communication/executive-review.md) |
 | 7. Data and metrics | The stored data, how each KPI is computed, what isn't measured | [data-and-metrics.md](07-data-and-metrics/data-and-metrics.md) |
-| 8. Testing | A test plan (environments, roles, status, order, entry and exit criteria, bug severity) and one task for each of 20 testing components, from requirements validation to production validation; the owner's 7 bug notes logged | [README.md](08-testing/README.md), TS01 to TS20 in [08-testing/](08-testing/) |
+| 8. Testing | A test plan (environments, roles, status, order, entry and exit criteria, bug severity) and one task for each of 20 testing components, from requirements validation to production validation; the owner's 7 bug notes logged. The first run (2026-10-30) found 4 more bugs; its verdict was not ready to sign off. 5 bugs were then fixed, 10 closed by the owner, and BUG-002 is open | [README.md](08-testing/README.md), TS01 to TS20 in [08-testing/](08-testing/), [results/](08-testing/results/README.md) |
 
 The portfolio summary of all eight stages is [CASE_STUDY.md](CASE_STUDY.md).
 
 ## Decisions worth discussing
 
 > **OWNER INPUT NEEDED:** confirm these six, or swap any of them for others from the
-> [decision log](../docs/decisions.md) (52 dated rows).
+> [decision log](../docs/decisions.md) (65 dated rows on 2026-10-30).
 
 | # | Decision | Why | What it gave up | Source |
 |---|---|---|---|---|
@@ -69,7 +75,7 @@ The portfolio summary of all eight stages is [CASE_STUDY.md](CASE_STUDY.md).
 | 3 | **Visitors never trigger an AI call** | Keeps the cost fixed at about 5 sweeps a day, whatever the traffic, and keeps the API key on the server | Results are up to 5 hours old | [README](../README.md#key-decisions-and-tradeoffs); [costing.md](../docs/subscriptions/costing.md#summary) |
 | 4 | **Plan payments in documents first, and charge only if sign-ups show demand.** The owner later chose to start payment work before that gate | No users were recorded, and charging needs a paid hosting plan | Payment work started before demand was measured. No thresholds or measuring period were set | [decisions.md](../docs/decisions.md) 2026-10-21, 2026-10-22 (T15) |
 | 5 | **Sell access to the live board, not extra email** | Owner's choice | Reversed the earlier design, in which the board was public and Pro could not sell access. Needed accounts, a locked data feed, and a Pro account that survives unsubscribing | [decisions.md](../docs/decisions.md) 2026-10-22; [paid-website.md](../docs/subscriptions/paid-website.md) |
-| 6 | **Price Pro at ₹299 a month, from the cost floor** | 24 to 28 members cover the running costs (about ₹6,797 a month) | Demand is untested at ₹199, ₹299 and ₹499 alike | [decisions.md](../docs/decisions.md) 2026-10-23; [costing.md](../docs/subscriptions/costing.md#break-even) |
+| 6 | **Price Pro at ₹299 a month, from the cost floor.** Revised: one ₹1 price, monthly or yearly, is the real price for now (2026-10-29) | 24 to 28 members at ₹299 cover the running costs (about ₹6,797 a month). The reason for ₹1 isn't recorded beyond the owner's decision | At ₹1, no number of members covers the running cost. Demand is untested at any price | [decisions.md](../docs/decisions.md) 2026-10-23, 2026-10-26, 2026-10-29; [costing.md](../docs/subscriptions/costing.md#break-even); CR rows in [change-log.md](04-planning-and-governance/change-log.md) |
 
 ## Traceability IDs
 
@@ -80,7 +86,7 @@ The IDs link the stages, as in a larger programme:
 | `DSC-` | Discovery assumption | [discovery-log.md](01-discovery/discovery-log.md) |
 | `ALT-` | Alternative a user has today | [alternatives.md](01-discovery/alternatives.md) |
 | `REQ-` | Requirement. `REQ-01` to `REQ-11` are R1 to R11 of the [v1 PRD](../docs/PRD.md) | [prd.md](02-product-definition/prd.md) |
-| `EP-` | Epic, grouping the build tasks `T00` to `T27` | [backlog.md](02-product-definition/backlog.md) |
+| `EP-` | Epic, grouping the build tasks `T00` to `T41` | [backlog.md](02-product-definition/backlog.md) |
 | `KPI-` | Measure of success | [kpis.md](02-product-definition/kpis.md) |
 | `R-` `A-` `I-` `D-` | Risk, assumption, issue, dependency | [raid-log.md](04-planning-and-governance/raid-log.md) |
 | `CR-` | Change request: a decision later revised | [change-log.md](04-planning-and-governance/change-log.md) |
@@ -92,16 +98,20 @@ The IDs link the stages, as in a larger programme:
 These are stated plainly rather than filled in:
 - **No user research.** No interviews, surveys or usability tests. [discovery-log.md](01-discovery/discovery-log.md)
   has a plan for them, marked as not done.
-- **No measured product quality.** No real sweep has been scored against the draft rubric
-  ([README](../README.md#how-i-measured-quality)).
-- **No usage or revenue data.** No one has paid. KPI targets are **OWNER INPUT NEEDED** and current values are
-  **Not measured**.
+- **Product quality not scored by a person.** The 30 Oct model test's blind review was marked by ChatGPT, not a
+  person, and no live sweep has been scored against the rubric; `scripts/score-items.mjs` is built for it
+  ([README](../README.md#how-i-measured-quality), [model test](../docs/subscriptions/model-test-2026-10-30.md)).
+- **No usage or revenue data worth the name.** 3 live ₹1 payments were captured by 2026-10-29. KPI targets are
+  **OWNER INPUT NEEDED** and most current values are **Not measured**.
+- **No release sign-off.** The test run's verdict was not ready to sign off; UAT sign-off (UAT-3) isn't done and
+  BUG-002 is open ([results](08-testing/results/README.md)).
 - **No head-to-head comparison with alternatives.** [alternatives.md](01-discovery/alternatives.md) compares
   published descriptions only.
 
 ## How this section was built
 
-Written on 2026-10-23 (stages 1 to 4) and 2026-10-24 (stages 5 to 7), and stage 8 on 2026-10-30, with Claude Code, from this repository's
+Written on 2026-10-23 (stages 1 to 4) and 2026-10-24 (stages 5 to 7), and stage 8 on 2026-10-30; every stage
+brought up to date on 2026-10-30. Written with Claude Code, from this repository's
 documents, code, tests and git history. The web
 research in [alternatives.md](01-discovery/alternatives.md) names its sources and the date they were read. The
 layout follows the owner's earlier case study,
