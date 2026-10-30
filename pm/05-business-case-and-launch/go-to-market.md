@@ -112,7 +112,7 @@ before counting on them to pay.
 
 | Blocker | Effect on go-to-market | ID |
 |---|---|---|
-| Sweeps failing since 2026-10-23 | Nothing new to show or send | I-01, RM-01 |
+| Sweeps failing (2026-10-23 to 2026-10-25; I-01 closed, sweeps run again) | Nothing new to show or send while it lasts | I-01, RM-01 |
 | Emails land in Junk at Outlook.com | New members miss the confirm link and the teaser | I-03, R-05 |
 | Chrome's "Dangerous site" warning on the confirm link | New visitors may stop there | I-04, RM-16 |
 | The sign-up popup on every signed-out visit | Google counts covering popups against pages on mobile | CR-09 |
