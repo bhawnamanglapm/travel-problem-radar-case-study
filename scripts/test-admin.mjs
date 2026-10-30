@@ -32,13 +32,13 @@ async function world(env = ENV) {
   await add("pending@example.com", {});
   await add("free@example.com", { status: "active", confirmedAt: iso(T0 - 9 * DAY), proRequestedAt: iso(T0 - DAY) });
   await add("monthly@example.com", { status: "active", confirmedAt: iso(T0 - 9 * DAY), plan: "pro", proSource: "razorpay", proUntil: iso(T0 + 20 * DAY),
-    cats: ["gov_policy", "industry"], sweepsPerDay: 3, paidFor: { sub: "sub_A", months: 1, price: 150 },
+    cats: ["gov_policy", "industry"], areas: ["Asia", "Other"], sweepsPerDay: 3, paidFor: { sub: "sub_A", months: 1, price: 150 },
     rzp: { subscriptionId: "sub_A", status: "active", cancelAtPeriodEnd: false, choice: { cats: ["gov_policy", "industry"], perDay: 3, months: 1, price: 150 } },
     signin: { hash: "f".repeat(64), exp: iso(T0 + 600_000) } });
   await add("yearly@example.com", { status: "active", confirmedAt: iso(T0 - 9 * DAY), plan: "pro", proSource: "razorpay", proUntil: iso(T0 + 300 * DAY),
     paidFor: { sub: "sub_B", months: 12, price: 1500 }, rzp: { subscriptionId: "sub_B", status: "active", cancelAtPeriodEnd: true } });
-  await add("owner@example.com", { status: "active", confirmedAt: iso(T0 - 9 * DAY), plan: "pro", proSource: "owner", proUntil: null, cats: ["industry"] });
-  await add("lapsed@example.com", { status: "active", confirmedAt: iso(T0 - 9 * DAY), plan: "pro", proSource: "razorpay", proUntil: iso(T0 - DAY), emailOff: "unsubscribed" });
+  await add("owner@example.com", { status: "active", confirmedAt: iso(T0 - 9 * DAY), plan: "pro", proSource: "owner", proUntil: null, cats: ["industry"], areas: ["Asia"] });
+  await add("lapsed@example.com", { status: "active", confirmedAt: iso(T0 - 9 * DAY), plan: "pro", proSource: "razorpay", proUntil: iso(T0 - DAY), emailOff: "unsubscribed", areas: ["Europe"] });
   await recordEvent(st, "subscribed", { now: T0 - DAY, randomBytes: seeded(1) });
   await recordEvent(st, "confirmed", { now: T0 - DAY, randomBytes: seeded(2) });
   w.handler = makeAdminHandler({ env, storage: st, now: () => w.clock, randomBytes: seeded(9), log: (...a) => w.logs.push(a.join(" ")), sleep: async (ms) => { w.slept.push(ms); } });
@@ -153,6 +153,21 @@ async function world(env = ENV) {
   const w = await world({ ...ENV, ...PAY });
   const d = (await w.call({ cookie: w.cookieOf(await w.login()) })).json();
   check(d.payments && d.payments.on === true && d.payments.mode === "test", "admin: the dashboard data says whether payments are on");
+}
+
+// ---- areas (T41 follow-up): rows show them as delivery reads them, and the summary counts Pro members only
+{
+  const w = await world(ENV);
+  const d = (await w.call({ cookie: w.cookieOf(await w.login()) })).json();
+  const by = Object.fromEntries(d.subscribers.map((r) => [r.email, r]));
+  check(by["monthly@example.com"].areas.join() === "Asia,Other" && by["owner@example.com"].areas.join() === "Asia" && by["yearly@example.com"].areas === null,
+    "admin: a row has the areas chosen, or null for all");
+  const s = d.summary;
+  check(s.areas.Asia === 2 && s.areas.Other === 1 && s.areas.Europe === 0 && s.allAreas === 1 && Object.keys(s.areas).length === 7 && !("Global" in s.areas),
+    "admin: the summary counts Pro members' areas (a lapsed Pro's are not counted), with no Global");
+  const all7 = ["Asia", "Europe", "North America", "Latin America", "Middle East & Africa", "Oceania", "Other"];
+  check(adminRow({ areas: ["Mars"] }, T0).areas === null && adminRow({ areas: "Asia" }, T0).areas === null && adminRow({ areas: all7 }, T0).areas === null
+    && adminRow({ areas: ["Other", "Asia"] }, T0).areas.join() === "Asia,Other", "admin: stored areas that aren't valid read as all; a valid list is put in order");
 }
 
 // ---- rows from odd records

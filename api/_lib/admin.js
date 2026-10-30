@@ -7,7 +7,7 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { allowMethods, BodyTooLargeError, readFields, sendJson } from "./http.js";
 import { CATS } from "./radar.js";
 import { originOk, parseCookies } from "./session.js";
-import { KEY_EVENT_PREFIX, effectivePlan, listSubscribers, utcDay } from "./subscribers.js";
+import { KEY_EVENT_PREFIX, areaChoices, effectivePlan, listSubscribers, normaliseAreas, utcDay } from "./subscribers.js";
 import { KEY_IPHIT_PREFIX, clientIp, paymentsCheck, utcHour } from "./subscription-handlers.js";
 
 const DAY_MS = 24 * 3600 * 1000;
@@ -81,6 +81,7 @@ export function adminRow(r, t) {
   const next = obj(rzp.next);
   const pro = effectivePlan(r, t) === "pro";
   const months = (paid && paid.months) || (choice && choice.months) || null;
+  const areas = normaliseAreas(r.areas); // as delivery reads it: a stored value that isn't valid means all areas
   return {
     email: typeof r.email === "string" ? r.email : "",
     status: r.status === "active" || r.status === "pending" ? r.status : "unknown",
@@ -90,6 +91,7 @@ export function adminRow(r, t) {
     period: r.proSource === "razorpay" ? PERIODS[months] || null : null,
     price: r.proSource === "razorpay" && paid && Number.isFinite(paid.price) ? paid.price : null,
     cats: Array.isArray(r.cats) ? r.cats : null,
+    areas: areas.ok ? areas.areas : null,
     sweepsPerDay: Number.isInteger(r.sweepsPerDay) ? r.sweepsPerDay : null,
     createdAt: r.createdAt || null,
     confirmedAt: r.confirmedAt || null,
@@ -102,12 +104,14 @@ export function adminRow(r, t) {
   };
 }
 
-// Totals over the rows. Categories and emails a day count Pro members only (Free gets every category, twice a day).
+// Totals over the rows. Categories, areas and emails a day count Pro members only (Free gets every category and
+// area, once a day).
 export function summarize(rows) {
   const s = {
     total: rows.length, pending: 0, free: 0, pro: 0, lapsed: 0, waitingForPro: 0, emailOff: 0,
     proBySource: { razorpay: 0, owner: 0 }, proByPeriod: { monthly: 0, yearly: 0 }, billing: { renews: 0, cancelled: 0, pending: 0, halted: 0 },
     cats: Object.fromEntries(CATS.map((c) => [c.key, 0])), allCats: 0, perDay: {},
+    areas: Object.fromEntries(areaChoices().map((a) => [a, 0])), allAreas: 0,
     paid: { monthly: 0, yearly: 0 }, monthlyValue: 0,
   };
   for (const r of rows) {
@@ -125,6 +129,7 @@ export function summarize(rows) {
     if (r.period) s.proByPeriod[r.period]++;
     if (r.billing) s.billing[r.billing]++;
     if (r.cats) for (const k of r.cats) { if (k in s.cats) s.cats[k]++; } else s.allCats++;
+    if (r.areas) for (const a of r.areas) { if (a in s.areas) s.areas[a]++; } else s.allAreas++;
     const d = r.sweepsPerDay || "default";
     s.perDay[d] = (s.perDay[d] || 0) + 1;
     if (r.period && r.price) { s.paid[r.period] += r.price; s.monthlyValue += r.period === "yearly" ? r.price / 12 : r.price; }
