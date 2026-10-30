@@ -1,10 +1,11 @@
 # Go-to-market plan
 
-> **Stage 5 of 7. Proposed, not done.** Nothing on this page has been run. No one besides the owner is recorded as a
+> **Stage 5 of 8. Proposed, not done.** None of the channels or gates on this page has been run. No one besides the owner is recorded as a
 > user, so the segments are hypotheses, the channels are ones the owner already has, and every threshold is
 > **OWNER INPUT NEEDED**. The page follows T23's rules for honest content: no member counts, testimonials, ratings
 > or urgency without a source ([T23](../../docs/subscriptions/tasks/T23-pro-display-standards.md) B3, B4).
-> State on 2026-10-24.
+> Written 2026-10-24. Updated 2026-10-30: payments opened on 2026-10-28 at ₹1 a month or a year, before the
+> gates below (see "Where the stages stand").
 
 ## Who it's for
 
@@ -70,25 +71,33 @@ flowchart LR
   S0["Now: Free open, Pro by hand"] --> G1{"Gate 1: quality"}
   G1 --> S1["Pilot: invited travel PMs"]
   S1 --> G2{"Gate 2: interest"}
-  G2 --> S2["Payments open at ₹299"]
+  G2 --> S2["Payments open (₹1 since 2026-10-28)"]
   S2 --> G3{"Gate 3: paying"}
   G3 --> S3["Wider sharing"]
 ```
 
 | Step | What happens | Gate to the next step | KPIs | Threshold |
 |---|---|---|---|---|
-| **Now** | Free sign-up open; Pro given by hand; sweeps failing since 2026-10-23 (I-01) | **Gate 1:** sweeps running again (RM-01), and 20 or more live items scored (RM-13) | KPI-01 to KPI-03, KPI-09 | **OWNER INPUT NEEDED** |
+| **Now** (as written 2026-10-24) | Free sign-up open; Pro given by hand; sweeps failing since 2026-10-23 (I-01, closed 2026-10-25) | **Gate 1:** sweeps running again (RM-01), and 20 or more live items scored (RM-13) | KPI-01 to KPI-03, KPI-09 | **OWNER INPUT NEEDED** |
 | **Pilot** | Invite a small group of travel PMs, given Pro by hand; run the interview plan with some of them | **Gate 2:** enough of them confirm, keep reading and say they'd pay | KPI-10, KPI-11, KPI-12, KPI-13, KPI-15; interview answers | **OWNER INPUT NEEDED**: group size, period, pass marks |
-| **Payments open** | Go-live from the [launch plan](launch-plan.md) | **Gate 3:** paying members, retention and refunds hold for a month | KPI-16 to KPI-19 | Break-even is 24 to 28 at ₹299; the rest **OWNER INPUT NEEDED** |
+| **Payments open** | Go-live from the [launch plan](launch-plan.md) | **Gate 3:** paying members, retention and refunds hold for a month | KPI-16 to KPI-19 | Break-even was 24 to 28 at ₹299; at ₹1 no number of members covers the cost, so the target price comes first. The rest **OWNER INPUT NEEDED** |
 | **Wider sharing** | The channels above, more often | — | KPI-10, KPI-17 | — |
 
 Gate 1 is pricing.md's rule not to charge before a real sweep is scored. The owner skipped the original Phase 1 gate
 (CR-03), so this plan puts a gate back in front of payments; whether to keep it is a decision in the
 [executive review](../06-executive-communication/executive-review.md#decisions-for-the-owner).
 
+### Where the stages stand on 2026-10-30
+
+Payments opened on 2026-10-28, at ₹1 a month or ₹1 a year, without Gate 1 or Gate 2: no live items have been scored
+by a person and no pilot group was invited ([launch plan](launch-plan.md); R-01). Sweeps run again since
+2026-10-25. Razorpay had captured 3 live ₹1 payments by 2026-10-29; who paid isn't recorded here, and none is
+recorded as coming from a channel above. Whether to run the pilot and the gates now, at ₹1, is the owner's call.
+
 ## The first 24 to 28 paying members
 
-Break-even at ₹299 is 24 to 28 members ([business case](business-case.md#break-even)). How many sign-ups that takes
+Break-even at ₹299 is 24 to 28 members ([business case](business-case.md#break-even)); this section is the method for
+whatever price the owner sets (R-12), since at ₹1 there is no break-even. How many sign-ups that takes
 depends on numbers nobody has yet:
 
 ```

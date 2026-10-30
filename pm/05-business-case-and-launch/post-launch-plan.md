@@ -1,21 +1,23 @@
 # Post-launch plan
 
-> **Stage 5 of 7. A plan for after payments open; none of it has run.** It covers the first 30 days (hypercare),
+> **Stage 5 of 8. A plan for after payments open.** Payments opened on 2026-10-28, so hypercare runs from that day;
+> none of the checks below is recorded as done yet. It covers the first 30 days (hypercare),
 > support and incidents, the triggers that call for action, tracking the benefit against break-even, what to build
 > next, and the reviews. Thresholds marked **Proposed** are suggestions for the owner to confirm or replace; the rest
-> are **OWNER INPUT NEEDED**. State on 2026-10-24.
+> are **OWNER INPUT NEEDED**. Written 2026-10-24; updated 2026-10-30.
 
 ## Hypercare: the first 30 days
 
-From the day `paid: true` goes live ([launch plan](launch-plan.md#go-live-steps)).
+From the day `paid: true` goes live ([launch plan](launch-plan.md#go-live-steps)): 2026-10-28, so day 30 is
+2026-11-27. The two test-mode subscriptions that `/admin/` counts as paid Pro end on Nov 25 and 26 (R-13).
 
 | How often | Check | Where | Source |
 |---|---|---|---|
-| Daily | The last sweep is under about 5 hours old and saved all four categories | `/api/data?key=radar:history`; the failure email and Slack | [DEPLOYMENT.md](../../DEPLOYMENT.md#watching-runs) |
+| Daily | The last sweep is as recent as the slots in use allow (1 to 5 a day since T32; GitHub starts runs hours late) and saved all four categories | `/api/data?key=radar:history`; the failure email and Slack | [DEPLOYMENT.md](../../DEPLOYMENT.md#watching-runs) |
 | Daily | Every payment turned an account Pro; no webhook failures | Razorpay's webhook log; `/manage/` | R-06 |
 | Daily | Bounces, complaints, quota stops | Resend's logs; `stats` | [DEPLOYMENT.md](../../DEPLOYMENT.md#managing-subscribers) |
-| Daily | Anthropic spend against about $0.21 a sweep | Anthropic Console | KPI-06; [costing.md](../../docs/subscriptions/costing.md#measurement-checklist) row 2 |
-| Weekly | Razorpay's active subscriptions match the Pro records | Razorpay dashboard; `list --plan pro` | LR-21 |
+| Daily | Anthropic spend against about $0.21 a sweep (Haiku measured $0.1121 over 10 sweeps, 26 to 30 Oct) | Anthropic Console; `node scripts/llm-logs.mjs models` | KPI-06; [costing.md](../../docs/subscriptions/costing.md#measurement-checklist) row 2 |
+| Weekly | Razorpay's active subscriptions match the Pro records | Razorpay dashboard; `list --plan pro`; `/admin/` (counts test-mode subscriptions as paid until Nov 25 and 26) | LR-21 |
 | Weekly | Sweeps a day, emails a day | Live board history; Resend dashboard | KPI-08; costing measurement rows 1 and 4 |
 
 **Exit hypercare** when all of these hold, **Proposed**, for the owner to confirm:
@@ -80,7 +82,9 @@ Each KPI is defined in the [KPI catalogue](../02-product-definition/kpis.md) and
 
 ## Benefits tracker
 
-The benefit to track is whether Pro covers its running costs (goal G9). Actuals are empty until payments open.
+The benefit to track is whether Pro covers its running costs (goal G9). At ₹1 a month or a year it can't: the
+tracker below shows the ₹299 break-even until the owner sets a target price (R-12). Payments opened on 2026-10-28;
+month 1's actuals are read at the 30-day review.
 
 | Month after go-live | Paying members (KPI-16) | Break-even at ₹299 | Real running cost | Net revenue | Surplus against the real cost |
 |---|---|---|---|---|---|
