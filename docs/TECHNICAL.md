@@ -30,7 +30,8 @@ GitHub Actions, every 5 hours (00:17, 05:17, 10:17, 15:17, 20:17 UTC); a slot no
                    GitHub run was due for even when it starts late (T35); a manual call always runs)
        4 Claude calls with web search, one per category, same prompts as the component
        merge, de-duplicate, flag "New", keep the last 60 sweeps -> private Vercel Blob store
-       then post the digest (or a failure notice) to Slack and by email, for each one that is set up
+       then post the digest (or a failure notice) to Slack and by email, for each one that is set up;
+       a category that failed is flagged FAILED there, with its error, and never shown to subscribers
        then, if subscriptions are on, email subscribers: Pro at the slots of their 1 to 5 a day, Free once a UTC day
 Visitor -> /live/ -> /api/data (read-only, cached) -> same dashboard, no sweep button
 Visitor -> /subscribe/ -> /api/subscribe -> confirmation email -> /api/confirm (Confirm button) -> active

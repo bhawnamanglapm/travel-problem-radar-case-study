@@ -5,6 +5,9 @@ grouped by date.
 
 ## 2026-10-30
 
+- When some categories fail in a sweep, subscribers no longer see it: Pro emails dropped their "Failed this run"
+  line, as Free already had. The owner gets a clearer alert instead: the email subject starts `FAILED: <categories>`,
+  and the email and Slack digest list each failed category with its error (cut to 300 characters).
 - `scripts/score-items.mjs` scores saved live items with the README's rubric (T30 step 10): it picks 20 across the
   four categories from the saved sweeps without writing to them, checks each link and whether the item's date is within
   30 days of when it was found, and writes a CSV for the four lines a person judges. `--score` reports the shares.
