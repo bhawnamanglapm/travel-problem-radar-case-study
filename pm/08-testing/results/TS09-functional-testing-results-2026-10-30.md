@@ -8,7 +8,7 @@
 | Environment | Offline (tests, code) and production, read-only |
 | Run by | Claude Code, read-only |
 
-"Auto" means the offline suites cover it (all pass, [TS04](TS04-test-cases-results.md)); "Live" names a read-only check on
+"Auto" means the offline suites cover it (all pass, [TS04](TS04-test-cases-results-2026-10-30.md)); "Live" names a read-only check on
 production this run. "Not tested" means it needs the owner.
 
 ## Results
@@ -23,7 +23,7 @@ production this run. "Not tested" means it needs the owner.
 | REQ-06 | Partial and total failure | Pass | Auto; Live: 3 runs on 24 and 25 Oct failed in all 4 categories (Anthropic credit too low), saved nothing and showed as failed |
 | REQ-07 | Demo makes no AI calls | Pass (code reading) | `demo/src/main.jsx` passes `sample`; the board replays it (`demo ? replayCategory : scanCategory`). No test asserts it (SC-V-2 gap) |
 | REQ-08 | Scheduled sweep, secret | Pass, with BUG-008 | Live: API-2 401 without the secret; 27 of 30 Actions runs succeeded. Sweeps start 155 to 418 minutes after their slot, later than `/manage/` says: BUG-008 |
-| REQ-09 | Key only on the server | Pass | History scan: no Anthropic key pattern in any commit ([TS15](TS15-security-testing-results.md)). Both bundles contain the shared component's direct Anthropic call (from the Claude artifact version), but no key, no `x-api-key` header, and neither board reaches it: the demo replays, and the live board hides the sweep button (`{!live && ...}`) |
+| REQ-09 | Key only on the server | Pass | History scan: no Anthropic key pattern in any commit ([TS15](TS15-security-testing-results-2026-10-30.md)). Both bundles contain the shared component's direct Anthropic call (from the Claude artifact version), but no key, no `x-api-key` header, and neither board reaches it: the demo replays, and the live board hides the sweep button (`{!live && ...}`) |
 | REQ-10 | Check-the-source notice | Not tested | Needs the board in a browser |
 | REQ-11 | Slack digest | Pass | Live: 29 Oct sweep reply `slack: "sent"` |
 | REQ-12 | Double opt-in, Confirm button | Pass | Auto ("confirm GET: a page with a form that POSTs"); Live: 15 subscribed, 15 confirmed in 30 days |
@@ -47,15 +47,15 @@ production this run. "Not tested" means it needs the owner.
 | REQ-30 | Footer; policy pages | Pass | Live: all 4 legal pages 200; footer present |
 | REQ-31 | Summary before checkout | Not tested | Needs the checkout in a browser |
 | REQ-32 | Manual sweeps capped at 3 a day | Pass (auto) | Auto: "the 4th that day gets 429" |
-| NFR | Accessibility: skip link on every page | Fail | 1 of 14 pages: BUG-011 ([TS17](TS17-accessibility-testing-results.md)) |
-| NFR | Security headers | Fail | BUG-010 ([TS15](TS15-security-testing-results.md)) |
+| NFR | Accessibility: skip link on every page | Fail | 1 of 14 pages: BUG-011 ([TS17](TS17-accessibility-testing-results-2026-10-30.md)) |
+| NFR | Security headers | Fail | BUG-010 ([TS15](TS15-security-testing-results-2026-10-30.md)) |
 
 **Totals:** 32 REQs: 28 Pass (some on offline tests or code reading only), 4 Not tested (REQ-05, 10, 26, 31).
 REQ-08 passes with a bug (BUG-008). 2 NFRs fail.
 
 ## Bugs found
 
-BUG-008 (REQ-08 timing), BUG-010 (headers), BUG-011 (skip link). See [TS19 results](TS19-bug-reporting-and-retesting-results.md).
+BUG-008 (REQ-08 timing), BUG-010 (headers), BUG-011 (skip link). See [TS19 results](TS19-bug-reporting-and-retesting-results-2026-10-30.md).
 
 ## Left to do
 

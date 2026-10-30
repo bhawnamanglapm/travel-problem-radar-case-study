@@ -26,7 +26,7 @@
 
 | ID | Check | Result | Evidence |
 |---|---|---|---|
-| TD-1 | Offline fakes and samples exist and are free of real data | Pass | `memStorage()` and fake fetches in `test-helpers.mjs`; `sampleData.json` 8 sample items; Razorpay key-like strings in tests are short placeholders (see [TS15](TS15-security-testing-results.md)) |
+| TD-1 | Offline fakes and samples exist and are free of real data | Pass | `memStorage()` and fake fetches in `test-helpers.mjs`; `sampleData.json` 8 sample items; Razorpay key-like strings in tests are short placeholders (see [TS15](TS15-security-testing-results-2026-10-30.md)) |
 | TD-2 | Each test state has a named inbox, recorded privately | Needs owner | No private record seen; it lives outside the repo by design |
 | TD-3 | The staging clean-up step is written and run once | Blocked | Staging is about 121 commits behind and its Blob store isn't reachable from here |
 | TD-4 | The two test-mode subscriptions are gone from production's paid count | Fail (not yet) | All 5 Pro records are still active to 25 to 28 Nov. Which 2 are test mode can't be told from the list; it needs `subscribers.mjs show <address> --check` on the accounts the owner names |

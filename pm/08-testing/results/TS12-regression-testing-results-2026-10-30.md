@@ -12,13 +12,13 @@
 
 | ID | Check | Result | Evidence |
 |---|---|---|---|
-| RG-auto-1 | `npm test` | Pass | 8 suites, 1,582 checks, 0 failed ([TS04 results](TS04-test-cases-results.md) has the count per suite) |
+| RG-auto-1 | `npm test` | Pass | 8 suites, 1,582 checks, 0 failed ([TS04 results](TS04-test-cases-results-2026-10-30.md) has the count per suite) |
 | RG-auto-2 | `npm run check` | Pass | 244 checks, 0 failed |
 | RG-auto-3 | CI on recent PRs and pushes | Pass | `gh run list --workflow check.yml --limit 20`: 20 of 20 succeeded, 30 Oct 02:19 to 08:44 UTC |
 | RG-0 | The rule: each bug fix adds a failing-first test | Not run | A rule for future PRs; nothing to run today |
-| RG-1 | Home and demo | Needs owner | Pages load (200, [TS10](TS10-ui-ux-testing-results.md)); the demo board, report and detail panel need a browser |
+| RG-1 | Home and demo | Needs owner | Pages load (200, [TS10](TS10-ui-ux-testing-results-2026-10-30.md)); the demo board, report and detail panel need a browser |
 | RG-2 | Live board as Pro | Needs owner | Needs a Pro sign-in in a browser |
-| RG-3 | Locked board | Needs owner | API-1 gives 401 `not_signed_in` ([TS11](TS11-api-testing-results.md)), which is what the lock reads; seeing the lock needs a browser |
+| RG-3 | Locked board | Needs owner | API-1 gives 401 `not_signed_in` ([TS11](TS11-api-testing-results-2026-10-30.md)), which is what the lock reads; seeing the lock needs a browser |
 | RG-4 | Sign-in: link, Google, password | Needs owner | Needs an inbox and a browser |
 | RG-5 | `/manage/` for Free and Pro | Needs owner | Needs both sign-ins |
 | RG-6 | Checkout (staging only) | Blocked | Staging is about 121 commits behind `main` |

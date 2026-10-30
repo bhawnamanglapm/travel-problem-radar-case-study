@@ -26,4 +26,4 @@ None. These are missing documents, not product faults.
 |---|---|
 | Approve or edit the five drafts (REQ-05, 13, 21, 23, 28) | Owner |
 | Write Given/When/Then lines for the other 23 REQs, from the T-files | Claude Code, after the drafts are approved |
-| Mark each line auto or manual using the [TS03 results](TS03-test-scenarios-results.md) | Claude Code |
+| Mark each line auto or manual using the [TS03 results](TS03-test-scenarios-results-2026-10-30.md) | Claude Code |

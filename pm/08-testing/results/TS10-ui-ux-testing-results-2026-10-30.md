@@ -24,7 +24,7 @@
 
 ## Bugs found
 
-None new. Retests of BUG-005, 006 and 007 are recorded in [TS19 results](TS19-bug-reporting-and-retesting-results.md).
+None new. Retests of BUG-005, 006 and 007 are recorded in [TS19 results](TS19-bug-reporting-and-retesting-results-2026-10-30.md).
 
 ## Left to do
 

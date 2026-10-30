@@ -24,9 +24,9 @@
 |---|---|---|---|
 | BUG-001 | Google sign-in, pay, no redirect | Not retested: needs staging | New |
 | BUG-002 | One account sees the live page, the other doesn't | Not retested: the owner hasn't named the accounts | New |
-| BUG-003 | Which accounts get email | Answered by counts: all 8 confirmed members get email as chosen ([TS08](TS08-system-testing-results.md)) | New: answered, owner to close |
+| BUG-003 | Which accounts get email | Answered by counts: all 8 confirmed members get email as chosen ([TS08](TS08-system-testing-results-2026-10-30.md)) | New: answered, owner to close |
 | BUG-004 | Each sign-up path proves the inbox | Not retested: needs a test inbox | New |
-| BUG-005 | Sign in shown when signed in | Fixed in `ebc4daf`; 10 pages swap to Account ([TS10](TS10-ui-ux-testing-results.md)) | Fixed: retest due |
+| BUG-005 | Sign in shown when signed in | Fixed in `ebc4daf`; 10 pages swap to Account ([TS10](TS10-ui-ux-testing-results-2026-10-30.md)) | Fixed: retest due |
 | BUG-006 | Spelling in the demo | Mechanical check passed; a person reads it | Open: partly retested |
 | BUG-007 | `/subscribe/` and `/manage/` | `/subscribe/` gives 307 to `/pricing/` | Open: redirect confirmed |
 
@@ -34,10 +34,10 @@
 
 | ID | What | Severity (proposed) | Found by |
 |---|---|---|---|
-| BUG-008 | Scheduled sweeps run 155 to 418 minutes after their slot, later than `/manage/` promises | S3 | [TS14](TS14-performance-testing-results.md) PF-3; also TS09 REQ-08, TS13 SM-9, TS20 PV-1 |
-| BUG-009 | `npm audit`: 4 high, 1 moderate | S3 | [TS15](TS15-security-testing-results.md) |
-| BUG-010 | No security headers beyond HSTS | S3 | [TS15](TS15-security-testing-results.md) |
-| BUG-011 | No skip link on 13 of 14 pages | S3 | [TS17](TS17-accessibility-testing-results.md) |
+| BUG-008 | Scheduled sweeps run 155 to 418 minutes after their slot, later than `/manage/` promises | S3 | [TS14](TS14-performance-testing-results-2026-10-30.md) PF-3; also TS09 REQ-08, TS13 SM-9, TS20 PV-1 |
+| BUG-009 | `npm audit`: 4 high, 1 moderate | S3 | [TS15](TS15-security-testing-results-2026-10-30.md) |
+| BUG-010 | No security headers beyond HSTS | S3 | [TS15](TS15-security-testing-results-2026-10-30.md) |
+| BUG-011 | No skip link on 13 of 14 pages | S3 | [TS17](TS17-accessibility-testing-results-2026-10-30.md) |
 
 **Open by proposed severity:** S1: 1 (BUG-002). S2: 2 (BUG-001, and BUG-004 if a path skips the inbox check).
 S3: 6 (BUG-005 retest due, BUG-007, BUG-008 to BUG-011). S4: 1 (BUG-006). Question: 1 (BUG-003).

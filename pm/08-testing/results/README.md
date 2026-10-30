@@ -11,26 +11,26 @@ need a browser, an inbox, a phone, a sign-in or a decision only the owner has.
 
 | Task | Environment | Pass | Fail | Blocked | Needs owner | Other | Results |
 |---|---|---|---|---|---|---|---|
-| TS01 Requirements validation | Offline, production read-only | 7 | 0 | 0 | 1 | | [TS01](TS01-requirements-validation-results.md) |
-| TS02 Acceptance criteria | Offline | 0 | 2 | 0 | 1 | | [TS02](TS02-acceptance-criteria-results.md) |
-| TS03 Test scenarios | Offline | 55 marked | 3 gaps | 0 | 0 | 43 auto, 9 manual only | [TS03](TS03-test-scenarios-results.md) |
-| TS04 Test cases | Offline | 2 | 1 | 0 | 14 cases | | [TS04](TS04-test-cases-results.md) |
-| TS05 Test data | Offline, production read-only | 2 | 1 | 1 | 1 | | [TS05](TS05-test-data-results.md) |
-| TS06 Unit testing | Offline | 2 | 1 | 0 | 0 | 1 not run | [TS06](TS06-unit-testing-results.md) |
-| TS07 Integration testing | Offline, production logs | 3 | 1 | 8 | 0 | | [TS07](TS07-integration-testing-results.md) |
-| TS08 System testing | Production read-only | 1 | 0 | 0 | 13 | | [TS08](TS08-system-testing-results.md) |
-| TS09 Functional testing | Both | 28 REQs | 2 NFRs | 0 | 0 | 4 REQs not tested | [TS09](TS09-functional-testing-results.md) |
-| TS10 UI and UX testing | Production by curl, offline | 5 | 0 | 0 | 2 | | [TS10](TS10-ui-ux-testing-results.md) |
-| TS11 API testing | Production read-only | 6 (+6 probes) | 0 | 0 | 0 | | [TS11](TS11-api-testing-results.md) |
-| TS12 Regression testing | Offline, GitHub Actions | 3 | 0 | 1 | 6 | 1 not run | [TS12](TS12-regression-testing-results.md) |
-| TS13 Smoke testing | Production read-only | 9 | 0 | 0 | 1 | | [TS13](TS13-smoke-testing-results.md) |
-| TS14 Performance testing | Production read-only | 2 | 1 | 1 | 1 | 2 recorded, 1 not run | [TS14](TS14-performance-testing-results.md) |
-| TS15 Security testing | Both | 9 | 2 | 0 | 2 | 2 not run | [TS15](TS15-security-testing-results.md) |
-| TS16 User acceptance | Production read-only | 2 | 0 | 1 | 3 | sign-off not done | [TS16](TS16-user-acceptance-testing-results.md) |
-| TS17 Accessibility testing | Offline | 1 | 1 | 0 | 5 | | [TS17](TS17-accessibility-testing-results.md) |
-| TS18 Cross-browser and device | None run | 0 | 0 | 2 | 7 | | [TS18](TS18-cross-browser-and-device-testing-results.md) |
-| TS19 Bug reporting and retesting | The log | 2 | 0 | 0 | 1 | 2 not yet | [TS19](TS19-bug-reporting-and-retesting-results.md) |
-| TS20 Production validation | Production read-only | 2 | 0 | 0 | 7 | | [TS20](TS20-production-validation-results.md) |
+| TS01 Requirements validation | Offline, production read-only | 7 | 0 | 0 | 1 | | [TS01](TS01-requirements-validation-results-2026-10-30.md) |
+| TS02 Acceptance criteria | Offline | 0 | 2 | 0 | 1 | | [TS02](TS02-acceptance-criteria-results-2026-10-30.md) |
+| TS03 Test scenarios | Offline | 55 marked | 3 gaps | 0 | 0 | 43 auto, 9 manual only | [TS03](TS03-test-scenarios-results-2026-10-30.md) |
+| TS04 Test cases | Offline | 2 | 1 | 0 | 14 cases | | [TS04](TS04-test-cases-results-2026-10-30.md) |
+| TS05 Test data | Offline, production read-only | 2 | 1 | 1 | 1 | | [TS05](TS05-test-data-results-2026-10-30.md) |
+| TS06 Unit testing | Offline | 2 | 1 | 0 | 0 | 1 not run | [TS06](TS06-unit-testing-results-2026-10-30.md) |
+| TS07 Integration testing | Offline, production logs | 3 | 1 | 8 | 0 | | [TS07](TS07-integration-testing-results-2026-10-30.md) |
+| TS08 System testing | Production read-only | 1 | 0 | 0 | 13 | | [TS08](TS08-system-testing-results-2026-10-30.md) |
+| TS09 Functional testing | Both | 28 REQs | 2 NFRs | 0 | 0 | 4 REQs not tested | [TS09](TS09-functional-testing-results-2026-10-30.md) |
+| TS10 UI and UX testing | Production by curl, offline | 5 | 0 | 0 | 2 | | [TS10](TS10-ui-ux-testing-results-2026-10-30.md) |
+| TS11 API testing | Production read-only | 6 (+6 probes) | 0 | 0 | 0 | | [TS11](TS11-api-testing-results-2026-10-30.md) |
+| TS12 Regression testing | Offline, GitHub Actions | 3 | 0 | 1 | 6 | 1 not run | [TS12](TS12-regression-testing-results-2026-10-30.md) |
+| TS13 Smoke testing | Production read-only | 9 | 0 | 0 | 1 | | [TS13](TS13-smoke-testing-results-2026-10-30.md) |
+| TS14 Performance testing | Production read-only | 2 | 1 | 1 | 1 | 2 recorded, 1 not run | [TS14](TS14-performance-testing-results-2026-10-30.md) |
+| TS15 Security testing | Both | 9 | 2 | 0 | 2 | 2 not run | [TS15](TS15-security-testing-results-2026-10-30.md) |
+| TS16 User acceptance | Production read-only | 2 | 0 | 1 | 3 | sign-off not done | [TS16](TS16-user-acceptance-testing-results-2026-10-30.md) |
+| TS17 Accessibility testing | Offline | 1 | 1 | 0 | 5 | | [TS17](TS17-accessibility-testing-results-2026-10-30.md) |
+| TS18 Cross-browser and device | None run | 0 | 0 | 2 | 7 | | [TS18](TS18-cross-browser-and-device-testing-results-2026-10-30.md) |
+| TS19 Bug reporting and retesting | The log | 2 | 0 | 0 | 1 | 2 not yet | [TS19](TS19-bug-reporting-and-retesting-results-2026-10-30.md) |
+| TS20 Production validation | Production read-only | 2 | 0 | 0 | 7 | | [TS20](TS20-production-validation-results-2026-10-30.md) |
 
 ## Bugs
 

@@ -40,7 +40,7 @@ are drawn by React, so their headings and landmarks can't be judged this way.
 
 ## Bugs found
 
-BUG-011: no skip link on 13 of 14 pages. Proposed S3. See [TS19 results](TS19-bug-reporting-and-retesting-results.md).
+BUG-011: no skip link on 13 of 14 pages. Proposed S3. See [TS19 results](TS19-bug-reporting-and-retesting-results-2026-10-30.md).
 
 ## Left to do
 

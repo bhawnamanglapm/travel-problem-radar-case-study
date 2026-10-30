@@ -23,7 +23,7 @@
 | Email: Gmail web, Gmail app, Outlook, Apple Mail | Test inboxes on staging | — | Blocked | Staging, as above |
 
 What every row runs: the TS13 smoke list, then read the demo, sign in, open `/live/` as Pro, filter, search and save,
-and open a shared problem link (for example the `/p/...` link checked in API-5, [TS11](TS11-api-testing-results.md)).
+and open a shared problem link (for example the `/p/...` link checked in API-5, [TS11](TS11-api-testing-results-2026-10-30.md)).
 
 **Totals:** 7 Needs owner, 2 Blocked. The 3 priority-1 browser rows must pass before a release.
 

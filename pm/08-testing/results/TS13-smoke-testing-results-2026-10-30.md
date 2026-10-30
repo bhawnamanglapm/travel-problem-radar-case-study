@@ -19,8 +19,8 @@
 | SM-5 | Open `/pricing/` | Pass | 200; shows "₹1 a month or ₹1 a year", the same as `plan.json` |
 | SM-6 | `/signup/`, `/signin/`, `/manage/`; `/subscribe/` | Pass | 200, 200, 200; `/subscribe/` gives 307 to `/pricing/` |
 | SM-7 | One legal page | Pass | All 4 give 200 with the footer (`npm run check` checks the footer on every page) |
-| SM-8 | API-1 and API-2 | Pass | 401 and 401 ([TS11](TS11-api-testing-results.md)) |
-| SM-9 | The last sweep is within the last chosen slot | Pass, late (BUG-008) | From the logs, not the board: the newest sweep saved 30 Oct 02:27 UTC (slot 0); GitHub's slot 0 run at about 05:58 UTC then skipped it as "already swept". Slot 10 hadn't come yet. The sweep is in the right slot but hours after it: see [TS14](TS14-performance-testing-results.md) and BUG-008. The time shown on the board needs SM-4 |
+| SM-8 | API-1 and API-2 | Pass | 401 and 401 ([TS11](TS11-api-testing-results-2026-10-30.md)) |
+| SM-9 | The last sweep is within the last chosen slot | Pass, late (BUG-008) | From the logs, not the board: the newest sweep saved 30 Oct 02:27 UTC (slot 0); GitHub's slot 0 run at about 05:58 UTC then skipped it as "already swept". Slot 10 hadn't come yet. The sweep is in the right slot but hours after it: see [TS14](TS14-performance-testing-results-2026-10-30.md) and BUG-008. The time shown on the board needs SM-4 |
 | SM-10 | `travel-problem-radar.vercel.app` | Pass | The root gives 307 to radar.pehchanthetraveller.com; API paths there are not redirected (API-6) |
 
 **Totals:** 9 Pass (SM-9 with BUG-008; SM-1 to SM-3 with a browser part left), 1 Needs owner (SM-4).
@@ -33,7 +33,7 @@
 
 ## Bugs found
 
-BUG-008 (sweeps run hours after their slot). See [TS19 results](TS19-bug-reporting-and-retesting-results.md).
+BUG-008 (sweeps run hours after their slot). See [TS19 results](TS19-bug-reporting-and-retesting-results-2026-10-30.md).
 
 ## Left to do
 
