@@ -5,6 +5,9 @@ grouped by date.
 
 ## 2026-10-30
 
+- `scripts/score-items.mjs` scores saved live items with the README's rubric (T30 step 10): it picks 20 across the
+  four categories from the saved sweeps without writing to them, checks each link and whether the item's date is within
+  30 days of when it was found, and writes a CSV for the four lines a person judges. `--score` reports the shares.
 - The admin page shows Pro members' areas: a Pro areas card with a count per area, an Areas column in the list, and an
   `areas` field in the CSV (T41 follow-up).
 - Pro members can choose areas for their email as well as categories: All areas, or any of Asia, Europe, North
