@@ -11,7 +11,8 @@
 > Added 2026-10-31 at the owner's request: "wat all ai things shld be there tto make this website more interactive"
 > and "also any RAG process thing tht can be added". The plan was approved the same day.
 >
-> **Built, not live.** Asking is off until `ASK_ENABLED=1` is set in Vercel. No live model call has been made: the
+> **Merged 2026-10-31** (#136, `41f1e09`). The Useful / Not useful buttons are live for Pro members. Asking is off
+> until `ASK_ENABLED=1` is set in Vercel. No live model call has been made: the
 > first ones are the owner's test in Preview (below).
 
 ## Why

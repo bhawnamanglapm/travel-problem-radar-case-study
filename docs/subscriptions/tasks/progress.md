@@ -56,7 +56,7 @@ working in a real inbox; that is T12's staged launch.
 | [T40](T40-share-a-problem.md) Share one problem | built 2026-10-30 on `feat/t40-share-a-problem`, merged to main (#104, `8613844`) and live | 11c660d, dac9282, 8a009d4 | 1,383 pass | Added 2026-10-29, Phase 5. See T40 notes below |
 | [T41](T41-email-areas.md) Areas in Pro email | built 2026-10-30 on `feat/t41-email-areas`, merged to main (#105, `be97bd7`) and live | 577fb4e, bbd9259 | 1,417 pass | Added 2026-10-29, Phase 5. See T41 notes below |
 | [T42](T42-india-focus.md) India focus | built 2026-10-30 on `feat/india-focus`, merged to main (#132, `525ea4b`) and live | 7ae46aa, 52ef57f | 1,590 pass | Added 2026-10-30. See T42 notes below |
-| [T43](T43-ask-the-board.md) Ask the board and votes | built 2026-10-31 on `feat/ask-the-board`; not merged; off until `ASK_ENABLED=1`. The owner's Preview test is open | 2033224, 5594b64, 19040ab, and the stage 4 commit | 1,670 pass (76 in the new test-ask); 249 checks | Added 2026-10-31. See T43 notes below |
+| [T43](T43-ask-the-board.md) Ask the board and votes | built 2026-10-31 on `feat/ask-the-board`, merged to main (#136, `41f1e09`). Votes are live for Pro; Ask is off until `ASK_ENABLED=1`. The owner's Preview test is open | 2033224, 5594b64, 19040ab, 8e8c268 | 1,670 pass (76 in the new test-ask); 249 checks | Added 2026-10-31. See T43 notes below |
 
 ## Notes per task
 

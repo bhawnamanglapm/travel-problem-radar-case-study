@@ -5,7 +5,7 @@ grouped by date.
 
 ## 2026-10-31
 
-- T43, Ask the board and votes (`feat/ask-the-board`, not merged): Pro members can ask a question, answered by AI
+- T43, Ask the board and votes (#136, merged; votes live, Ask off until `ASK_ENABLED=1`): Pro members can ask a question, answered by AI
   only from items in the search file, each claim citing one. Keyword retrieval in plain JavaScript (no embeddings),
   filtered to the area a question names ("Indian" is India); a citation to an item not sent, or none at all, means
   no answer is shown; links come from the store. Off unless `ASK_ENABLED=1`; `ASK_PER_DAY` (default 20), counted
