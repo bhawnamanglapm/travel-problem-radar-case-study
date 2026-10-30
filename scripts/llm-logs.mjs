@@ -9,10 +9,12 @@
 //
 // `list`: one line per sweep that ran, newest first, with its tokens, searches, pages, model and cost.
 // `summary`: one sweep's model, cost and totals, per-call outcomes, the pages search found (link, title, age) and
-// what was quoted, and any item dropped because its source was over 60 days old.
+// what was quoted, any item dropped because its source was over 60 days old, and any item whose link search never
+// returned.
 // `show`: the whole log as JSON (requests, responses, thinking, links).
 // `models`: the logs grouped by model, with averages per sweep: items, pages, searches, tokens, cost, failed calls,
-// quotes, how old the search pages were, and how old the items' sources were. Volume, freshness and cost, not quality.
+// quotes, how old the search pages were, how old the items' sources were, and how many item links search never
+// returned. Volume, freshness and cost, not quality.
 // Costs are list prices (scripts/compare-models.mjs) applied to the usage the API reported, as cost-per-run.mjs does.
 // Exit codes: 0 done, 1 not found or error, 2 bad usage.
 import { pathToFileURL } from "node:url";
@@ -117,33 +119,46 @@ export function formatSummary(lg) {
   if (quoted.length) out.push("", "Quoted:", ...quoted);
   const dropped = (lg.calls || []).flatMap((c) => (Array.isArray(c.dropped) ? c.dropped.map((d) => `  ${c.cat}: ${d.title} (${d.age})  ${d.link}`) : []));
   if (dropped.length) out.push("", `Dropped, source over ${SOURCE_MAX_DAYS} days old:`, ...dropped);
+  const unsearched = itemSources(lg).unsearched.map((u) => `  ${u.cat}: ${u.title || "(no title)"}  ${u.link || "(no link)"}`);
+  if (unsearched.length) out.push("", "Links search didn't return (from the model's memory, so check them):", ...unsearched);
   return out.join("\n");
 }
 
 // A page's age in days, from search's text ("34 days ago") or a date; null when there's none or it reads otherwise.
 export const ageDays = (age, at) => pageAgeDays(age, at);
 
-// The ages in days of a sweep's item sources (null when not dated), and how many items were dropped as too old.
-// Logs since the sweep dated sources carry them per call. For older ones the answer is matched to the logged pages
-// the same way, and an item that would now be dropped counts as an old source, since it was shown.
+// The ages in days of a sweep's item sources (null when not dated), how many items were dropped as too old, and the
+// shown items whose link search never returned (`unsearched`, of `checked`). Logs since the sweep dated sources carry
+// ages per call, and later ones whether each link was searched. Otherwise the answer is matched to the logged pages
+// the same way (older logs kept pages as links only), and an item that would now be dropped counts as an old source,
+// since it was shown.
 export function itemSources(lg) {
   const at = Date.parse(lg.at);
-  const days = [];
-  let dropped = 0;
+  const days = [], unsearched = [];
+  let dropped = 0, checked = 0;
   for (const c of lg.calls || []) {
     if (!c || c.error) continue;
-    if (Array.isArray(c.sources)) {
+    const own = Array.isArray(c.sources);
+    let items = [];
+    try {
+      items = extractProblems({ content: blocksOf(c).filter((b) => b.type === "text") }).filter((p) => p && p.title)
+        .map((p) => ({ title: p.title, link: String(p.link || "").trim() }));
+    } catch (e) { if (!own) continue; }
+    const pages = pagesOf(c).map((p) => (typeof p === "string" ? { url: p } : p && p.url ? { url: p.url, page_age: p.age } : null)).filter(Boolean);
+    const r = dateSources(items, [{ type: "web_search_tool_result", content: pages }], at);
+    if (own) {
       days.push(...c.sources.map((x) => (x && Number.isFinite(x.days) ? x.days : null)));
       dropped += Array.isArray(c.dropped) ? c.dropped.length : 0;
-      continue;
+    } else {
+      days.push(...r.sources.map((x) => x.days), ...r.dropped.map((d) => pageAgeDays(d.age, at)));
     }
-    let items;
-    try { items = extractProblems({ content: blocksOf(c).filter((b) => b.type === "text") }).filter((p) => p && p.title); } catch (e) { continue; }
-    const pages = pagesOf(c).filter((p) => p && typeof p === "object" && p.url).map((p) => ({ url: p.url, page_age: p.age }));
-    const r = dateSources(items.map((p) => ({ title: p.title, link: String(p.link || "").trim() })), [{ type: "web_search_tool_result", content: pages }], at);
-    days.push(...r.sources.map((x) => x.days), ...r.dropped.map((d) => pageAgeDays(d.age, at)));
+    const marked = own && c.sources.every((x) => x && typeof x.searched === "boolean");
+    const checks = marked ? c.sources : own ? r.sources : [...r.sources, ...r.dropped.map((d) => ({ link: d.link, searched: true }))];
+    const titleOf = new Map(items.map((p) => [p.link, p.title]));
+    checked += checks.length;
+    for (const x of checks) if (!x.searched) unsearched.push({ cat: c.cat, title: titleOf.get(x.link) || "", link: x.link || "" });
   }
-  return { days, dropped };
+  return { days, dropped, checked, unsearched };
 }
 const median = (xs) => {
   const s = [...xs].sort((a, b) => a - b), m = s.length >> 1;
@@ -187,6 +202,7 @@ export function modelStats(logs) {
     aged, old, noAge,
     srcItems: srcDays.length, srcMedian: median(dated), srcOld: dated.filter((d) => d > OLD_PAGE_DAYS).length,
     srcUndated: srcDays.length - dated.length, srcDropped: src.reduce((a, x) => a + x.dropped, 0),
+    srcChecked: src.reduce((a, x) => a + x.checked, 0), srcUnsearched: src.reduce((a, x) => a + x.unsearched.length, 0),
   };
 }
 
@@ -206,6 +222,7 @@ export function formatModels(logs, days) {
       `  Calls that quoted a passage: ${m.quotedCalls} of ${m.calls}`,
       `  Item sources: ${plural(m.srcItems, "item")}, median ${m.srcMedian != null ? dayText(m.srcMedian) + " days" : "-"} old; `
         + `${m.srcOld} over ${OLD_PAGE_DAYS} days, ${m.srcUndated} not dated; ${m.srcDropped} dropped (over ${SOURCE_MAX_DAYS} days)`,
+      `  Links search didn't return: ${m.srcUnsearched} of ${plural(m.srcChecked, "item")} (${pct(m.srcUnsearched, m.srcChecked)})`,
       `  Search pages older than ${OLD_PAGE_DAYS} days: ${m.old} of ${m.aged} with an age (${pct(m.old, m.aged)}); ${m.noAge} with no age`);
   }
   if (models.length === 1) out.push("", "Only one model in these logs, so there's nothing to compare yet.");

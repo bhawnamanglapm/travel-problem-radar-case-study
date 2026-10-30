@@ -19,11 +19,14 @@ export const PRICES = {
 };
 export const SEARCH_PRICE = 0.01;
 const DEFAULT_MODELS = ["claude-sonnet-5-5", "claude-haiku-5-5"];
-// The measured Sonnet average and the high-cost scenario, per sweep (docs/subscriptions/costing.md).
-const AVG_SWEEP = { input: 60229, output: 4355, searches: 4.6 };
+// Per sweep: the measured Haiku average (LLM logs, 10 sweeps, 26 to 30 Oct 2026) and the high-cost scenario
+// (docs/subscriptions/costing.md). The estimate prices both models at that usage; Sonnet's one measured sweep used
+// fewer tokens and searches (60,229 input, 4,355 output, 4.6 searches), so its share may come in lower.
+const AVG_SWEEP = { input: 101740, output: 7824, searches: 9.8 };
 const HIGH_SWEEP = { input: 157000, output: 64000, searches: 12 };
 // Pass marks for the candidate, the second model (docs/subscriptions/haiku-test.md).
-export const PASS = { minItemsPerCat: 3, maxCostPerSweep: 0.08, minKeepRatio: 0.8 };
+// Cost is measured against the baseline in the same test: at most 40% of its cost is a saving of over 60%.
+export const PASS = { minItemsPerCat: 3, maxCostRatio: 0.4, minKeepRatio: 0.8 };
 const BAD_STOPS = ["refusal", "max_tokens"];
 const BLOCKED = new Set([401, 403, 429]);
 const REVIEW_COLS = ["id", "category", "title", "summary", "source", "link", "region", "date", "severity", "opportunity", "keep"];
@@ -136,7 +139,8 @@ export function summarize(models, sweeps, links) {
     [c.badStops.length === 0, "no refusal or max_tokens"],
     [c.itemsPerCat >= PASS.minItemsPerCat, `at least ${PASS.minItemsPerCat} items per category on average`],
     [c.missing === 0 && c.broken.length === 0, "every item has a link and none is broken (blocked ones: check by hand)"],
-    [c.cost <= PASS.maxCostPerSweep, `at most $${PASS.maxCostPerSweep} a sweep`],
+    [c.cost <= PASS.maxCostRatio * stats[base].cost,
+      `at most ${PASS.maxCostRatio * 100}% of ${base}'s cost a sweep (${$(c.cost)} against ${$(stats[base].cost)})`],
   ];
   lines.push(`\nAutomatic checks for ${cand}:`);
   for (const [ok, label] of checks) lines.push(`  ${ok ? "PASS" : "FAIL"} ${label}`);

@@ -72,7 +72,12 @@ check(near(callCost(HAIKU, { input: 200_000, output: 0, searches: 0 }), 0.1), "H
   const good = summarize([SONNET, HAIKU], [sweep(SONNET, items, 0.21), sweep(HAIKU, items, 0.05)], links);
   check(good.pass, "a cheap candidate with 3 items per category and working links passes");
   check(/Items both models found \(same title\): 12/.test(good.text), "counts the items both models found");
-  check(!summarize([SONNET, HAIKU], [sweep(SONNET, items, 0.21), sweep(HAIKU, items, 0.09)], links).pass, "over $0.08 a sweep fails");
+  const dear = summarize([SONNET, HAIKU], [sweep(SONNET, items, 0.21), sweep(HAIKU, items, 0.09)], links);
+  check(!dear.pass && /FAIL at most 40% of claude-sonnet-5-5's cost a sweep \(\$0\.0900 against \$0\.2100\)/.test(dear.text),
+    "over 40% of the baseline's cost in the same test fails, with both costs");
+  check(summarize([SONNET, HAIKU], [sweep(SONNET, items, 0.21), sweep(HAIKU, items, 0.084)], links).pass
+    && !summarize([SONNET, HAIKU], [sweep(SONNET, items, 0.1), sweep(HAIKU, items, 0.05)], links).pass,
+    "the cost mark moves with the baseline: 40% of $0.21 passes, $0.05 against $0.10 fails");
   check(!summarize([SONNET, HAIKU], [sweep(SONNET, items, 0.21), sweep(HAIKU, (i) => [item(i)], 0.05)], links).pass, "under 3 items a category fails");
   const broken = { ...links, "https://example.com/1": "broken" };
   check(!summarize([SONNET, HAIKU], [sweep(SONNET, items, 0.21), sweep(HAIKU, items, 0.05)], broken).pass, "a broken link fails");
@@ -109,7 +114,7 @@ check(near(callCost(HAIKU, { input: 200_000, output: 0, searches: 0 }), 0.1), "H
   const calls = [], logs = [];
   const r = await main([], { env: { ANTHROPIC_API_KEY: "k" }, baseFetch: fakeApi({}, calls), log: (s) => logs.push(s) });
   check(!r.ran && calls.length === 0, "without --yes nothing is sent");
-  check(logs.some((l) => /Expected cost about \$0\.79; high-cost scenario about \$3\.73/.test(l)), "it prints the cost: $0.79 expected, $3.73 high-cost");
+  check(logs.some((l) => /Expected cost about \$1\.48; high-cost scenario about \$3\.73/.test(l)), "it prints the cost: $1.48 expected (at Haiku's measured usage), $3.73 high-cost");
   let err = "";
   try { await main(["--yes"], { env: {}, baseFetch: fakeApi({}, calls), log: () => {} }); } catch (e) { err = e.message; }
   check(/ANTHROPIC_API_KEY is not set/.test(err) && calls.length === 0, "no key: refuses before any call");

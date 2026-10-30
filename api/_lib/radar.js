@@ -245,15 +245,19 @@ const linkKey = (u) => {
 // Dates each item's source from the age search gave its page (`sourceDate`, the UTC day of `at` less the age), and
 // drops items whose source is over SOURCE_MAX_DAYS old. An item whose link wasn't searched, or whose page has no
 // age, is kept undated: an unknown age is never taken as old. Returns the kept items, the dropped ones (for the
-// log) and each kept item's age in days (null when unknown).
+// log) and, per kept item, its age in days (null when unknown) and whether search returned its link at all. With
+// web search the only tool, a link search never returned came from the model's memory: a warning sign, logged only.
 export function dateSources(items, blocks = [], at = Date.now()) {
-  const exact = new Map(), loose = new Map();
+  const exact = new Map(), loose = new Map(), searched = new Set();
   for (const b of blocks) {
     if (b.type !== "web_search_tool_result" || !Array.isArray(b.content)) continue;
     for (const r of b.content) {
-      if (!r || !r.url || !r.page_age) continue;
-      if (!exact.has(r.url)) exact.set(r.url, r.page_age);
+      if (!r || !r.url) continue;
       const k = linkKey(r.url);
+      searched.add(r.url);
+      if (k) searched.add(k);
+      if (!r.page_age) continue;
+      if (!exact.has(r.url)) exact.set(r.url, r.page_age);
       if (k && !loose.has(k)) loose.set(k, r.page_age);
     }
   }
@@ -266,7 +270,8 @@ export function dateSources(items, blocks = [], at = Date.now()) {
       continue;
     }
     kept.push(days == null ? it : { ...it, sourceDate: new Date(at - days * DAY).toISOString().slice(0, 10) });
-    sources.push({ link: it.link, days: days == null ? null : Math.round(days * 10) / 10 });
+    sources.push({ link: it.link, days: days == null ? null : Math.round(days * 10) / 10,
+      searched: !!it.link && (searched.has(it.link) || searched.has(linkKey(it.link))) });
   }
   return { items: kept, dropped, sources };
 }

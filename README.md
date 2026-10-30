@@ -90,7 +90,7 @@ is no set of real results to score yet.
 **Proposed scoring (draft, not run):** once the live page has saved 20 or more items, score each one on:
 - the source link loads;
 - the source supports the summary;
-- the item is recent (within the last 30 days);
+- the item is recent (its source published within the last 60 days, the window the site promises);
 - the category is right;
 - the severity is reasonable;
 - the opportunity names a user and something buildable.

@@ -56,6 +56,9 @@ Subscriber -> links in each email -> /manage/ (/api/account: plan, Request Pro o
   An item with no age, or a link search didn't return, is kept undated. The card, the home page list, the email
   and the board's text export show "Source 22 Oct", and the Details panel "Source dated 22 Oct 2026, 8 days ago".
   Without `sourceDate` they show the model's own `date`, as before. Saved problems keep `sourceDate`.
+  Each `sources` entry in the log also says whether search returned the item's link at all (`searched`). With web
+  search the only tool, a link it never returned came from the model's memory. This is logged only, to measure
+  first; nothing is shown or dropped for it.
 - **Areas (T37).** The board filters by a fixed list of areas (Global, Asia, Europe, North America, Latin America,
   Middle East & Africa, Oceania, Other). `areaOf` places the AI's free-text `region` in one from a name table;
   text that names two or more areas counts as Global, and text it can't place as Other. The area is worked out

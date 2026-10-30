@@ -7,21 +7,22 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { CATS, KEY_INDEX, sweepKey } from "../api/_lib/radar.js";
+import { CATS, KEY_INDEX, SOURCE_MAX_DAYS, sweepKey } from "../api/_lib/radar.js";
 import { checkLink, mapLimit, parseCsv, toCsv } from "./compare-models.mjs";
 
 const DAY = 86400000;
-export const RECENT_DAYS = 30;
+// The window the site promises: sources published in about the last 60 days.
+export const RECENT_DAYS = SOURCE_MAX_DAYS;
 // The README's rubric, in its order. The script fills link_loads and recent; you fill the other four.
 export const RUBRIC = [
   { col: "link_loads", label: "The source link loads" },
   { col: "supports_summary", label: "The source supports the summary" },
-  { col: "recent", label: `Recent (within ${RECENT_DAYS} days of being found)` },
+  { col: "recent", label: `Recent (the source within ${RECENT_DAYS} days of being found)` },
   { col: "category_right", label: "The category is right" },
   { col: "severity_ok", label: "The severity is reasonable" },
   { col: "user_and_build", label: "The opportunity names a user and something buildable" },
 ];
-const ITEM_COLS = ["id", "category", "title", "summary", "source", "link", "region", "date", "severity", "opportunity", "found"];
+const ITEM_COLS = ["id", "category", "title", "summary", "source", "link", "region", "date", "source_date", "severity", "opportunity", "found"];
 const PASS_V = new Set(["y", "yes", "ok"]);
 const FAIL_V = new Set(["n", "no", "broken", "none"]);
 const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
@@ -106,10 +107,11 @@ export function recent(dateText, foundAt, days = RECENT_DAYS) {
   return "unknown";
 }
 
+// recent is judged on the source's date when the sweep dated it (an exact day, from search), else on the model's own date.
 export function buildReview(items, links) {
   const rows = items.map((p) => {
-    const auto = { link_loads: p.link ? links[p.link] || "broken" : "none", recent: recent(p.date, p.found) };
-    return [p.id, p.cat, p.title, p.summary, p.source, p.link, p.region, p.date, p.severity, p.opportunity, p.found,
+    const auto = { link_loads: p.link ? links[p.link] || "broken" : "none", recent: recent(p.sourceDate || p.date, p.found) };
+    return [p.id, p.cat, p.title, p.summary, p.source, p.link, p.region, p.date, p.sourceDate || "", p.severity, p.opportunity, p.found,
       ...RUBRIC.map((r) => auto[r.col] || "")];
   });
   return toCsv([[...ITEM_COLS, ...RUBRIC.map((r) => r.col)], ...rows]);
