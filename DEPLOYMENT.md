@@ -523,7 +523,11 @@ Do not commit the `.vercel/` folder that `vercel link` creates. It is already in
 
 The functions are found automatically: every `.js` file in `api/` becomes a route, except files in folders that start
 with `_` (so `api/_lib/` is shared code, not a route). `package.json` sets `"type": "module"`, so the functions are ES
-modules. `@vercel/blob` is the only runtime dependency.
+modules. `@vercel/blob` is the only runtime dependency. `package.json`'s `overrides` lifts `zod`, which it pulls in
+through `@vercel/oidc` and `@vercel/cli-config`, to 4.6.6: `cli-config` pins 4.1.11, which `npm audit` rates high
+(BUG-009). Drop the override once `cli-config` stops pinning an old `zod`. `npm audit` still lists one moderate,
+`esbuild` (a dev tool): it's about `esbuild --serve`, which this project never runs, so it's accepted and not bumped,
+since a new `esbuild` changes the built bundles.
 
 ### `.github/workflows/sweep.yml`
 

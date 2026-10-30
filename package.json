@@ -19,5 +19,8 @@
   "dependencies": {
     "@vercel/blob": "2.8.2"
   },
-  "type": "module"
+  "type": "module",
+  "overrides": {
+    "zod": "4.6.6"
+  }
 }
