@@ -9,14 +9,14 @@
 //
 // `list`: one line per sweep that ran, newest first, with its tokens, searches, pages, model and cost.
 // `summary`: one sweep's model, cost and totals, per-call outcomes, the pages search found (link, title, age) and
-// what was quoted.
+// what was quoted, and any item dropped because its source was over 60 days old.
 // `show`: the whole log as JSON (requests, responses, thinking, links).
 // `models`: the logs grouped by model, with averages per sweep: items, pages, searches, tokens, cost, failed calls,
-// quotes and how old the pages were. Volume, freshness and cost, not quality.
+// quotes, how old the search pages were, and how old the items' sources were. Volume, freshness and cost, not quality.
 // Costs are list prices (scripts/compare-models.mjs) applied to the usage the API reported, as cost-per-run.mjs does.
 // Exit codes: 0 done, 1 not found or error, 2 bad usage.
 import { pathToFileURL } from "node:url";
-import { KEY_LLMLOG_PREFIX, LLM_LOG_KEEP_DAYS, llmLogKey } from "../api/_lib/radar.js";
+import { KEY_LLMLOG_PREFIX, LLM_LOG_KEEP_DAYS, SOURCE_MAX_DAYS, dateSources, extractProblems, llmLogKey, pageAgeDays } from "../api/_lib/radar.js";
 import { costLog, priceCall } from "./cost-per-run.mjs";
 
 const DAY_MS = 24 * 3600 * 1000;
@@ -97,7 +97,8 @@ export function formatSummary(lg) {
   ];
   for (const c of lg.calls || []) {
     const u = c.usage || {};
-    const how = c.error ? `failed: ${c.error}` : `${c.items} items`;
+    const dropped = Array.isArray(c.dropped) ? c.dropped.length : 0;
+    const how = c.error ? `failed: ${c.error}` : `${c.items} items${dropped ? `, ${dropped} dropped` : ""}`;
     const p = priceCall(c);
     out.push(`${String(c.cat).padEnd(14)} ${how}; in ${n(u.input)}, out ${n(u.output)}, searches ${n(u.searches)}, pages ${n(u.pages)}`
       + `${c.ms != null ? `, ${(c.ms / 1000).toFixed(1)} s` : ""}, ${p.cost != null ? usd(p.cost) : "not priced"}`);
@@ -114,15 +115,41 @@ export function formatSummary(lg) {
     if (qs.length) quoted.push(`  ${c.cat}:`, ...qs.map((q) => `    "${q.quote}"  ${q.url}`));
   }
   if (quoted.length) out.push("", "Quoted:", ...quoted);
+  const dropped = (lg.calls || []).flatMap((c) => (Array.isArray(c.dropped) ? c.dropped.map((d) => `  ${c.cat}: ${d.title} (${d.age})  ${d.link}`) : []));
+  if (dropped.length) out.push("", `Dropped, source over ${SOURCE_MAX_DAYS} days old:`, ...dropped);
   return out.join("\n");
 }
 
-// A page's age in days, from search's text ("34 days ago"); null when there's none or it reads otherwise.
-const UNIT_DAYS = { hour: 1 / 24, day: 1, week: 7, month: 30, year: 365 };
-export function ageDays(age) {
-  const m = /^(\d+)\s+(hour|day|week|month|year)s?\s+ago$/i.exec(String(age || "").trim());
-  return m ? Number(m[1]) * UNIT_DAYS[m[2].toLowerCase()] : null;
+// A page's age in days, from search's text ("34 days ago") or a date; null when there's none or it reads otherwise.
+export const ageDays = (age, at) => pageAgeDays(age, at);
+
+// The ages in days of a sweep's item sources (null when not dated), and how many items were dropped as too old.
+// Logs since the sweep dated sources carry them per call. For older ones the answer is matched to the logged pages
+// the same way, and an item that would now be dropped counts as an old source, since it was shown.
+export function itemSources(lg) {
+  const at = Date.parse(lg.at);
+  const days = [];
+  let dropped = 0;
+  for (const c of lg.calls || []) {
+    if (!c || c.error) continue;
+    if (Array.isArray(c.sources)) {
+      days.push(...c.sources.map((x) => (x && Number.isFinite(x.days) ? x.days : null)));
+      dropped += Array.isArray(c.dropped) ? c.dropped.length : 0;
+      continue;
+    }
+    let items;
+    try { items = extractProblems({ content: blocksOf(c).filter((b) => b.type === "text") }).filter((p) => p && p.title); } catch (e) { continue; }
+    const pages = pagesOf(c).filter((p) => p && typeof p === "object" && p.url).map((p) => ({ url: p.url, page_age: p.age }));
+    const r = dateSources(items.map((p) => ({ title: p.title, link: String(p.link || "").trim() })), [{ type: "web_search_tool_result", content: pages }], at);
+    days.push(...r.sources.map((x) => x.days), ...r.dropped.map((d) => pageAgeDays(d.age, at)));
+  }
+  return { days, dropped };
 }
+const median = (xs) => {
+  const s = [...xs].sort((a, b) => a - b), m = s.length >> 1;
+  return s.length ? (s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2) : null;
+};
+const dayText = (d) => String(Math.round(d * 10) / 10);
 
 // One model's numbers, from its sweeps' logs. Items from failed calls were lost, so they aren't counted.
 export function modelStats(logs) {
@@ -140,11 +167,14 @@ export function modelStats(logs) {
       const url = typeof p === "string" ? p : p && p.url;
       if (!url || seen.has(url)) continue;
       seen.add(url);
-      const d = typeof p === "string" ? null : ageDays(p.age);
+      const d = typeof p === "string" ? null : pageAgeDays(p.age, Date.parse(lg.at));
       if (d == null) noAge++;
       else { aged++; if (d > OLD_PAGE_DAYS) old++; }
     }
   }
+  const src = logs.map(itemSources);
+  const srcDays = src.flatMap((x) => x.days);
+  const dated = srcDays.filter((d) => d != null);
   const dates = logs.map((lg) => String(lg.at).slice(0, 10)).sort();
   return {
     sweeps, first: dates[0], last: dates[dates.length - 1],
@@ -155,6 +185,8 @@ export function modelStats(logs) {
     unpriced: costs.reduce((a, r) => a + r.unpriced.length, 0),
     quotedCalls: calls.filter((c) => quotesOf(c).length).length,
     aged, old, noAge,
+    srcItems: srcDays.length, srcMedian: median(dated), srcOld: dated.filter((d) => d > OLD_PAGE_DAYS).length,
+    srcUndated: srcDays.length - dated.length, srcDropped: src.reduce((a, x) => a + x.dropped, 0),
   };
 }
 
@@ -172,7 +204,9 @@ export function formatModels(logs, days) {
       `  Cost: ${usd(m.avgCost)} a sweep, ${m.costPerItem != null ? usd(m.costPerItem) : "-"} an item`
         + `${m.unpriced ? ` (${plural(m.unpriced, "call")} not priced, left out)` : ""}`,
       `  Calls that quoted a passage: ${m.quotedCalls} of ${m.calls}`,
-      `  Pages older than ${OLD_PAGE_DAYS} days: ${m.old} of ${m.aged} with an age (${pct(m.old, m.aged)}); ${m.noAge} with no age`);
+      `  Item sources: ${plural(m.srcItems, "item")}, median ${m.srcMedian != null ? dayText(m.srcMedian) + " days" : "-"} old; `
+        + `${m.srcOld} over ${OLD_PAGE_DAYS} days, ${m.srcUndated} not dated; ${m.srcDropped} dropped (over ${SOURCE_MAX_DAYS} days)`,
+      `  Search pages older than ${OLD_PAGE_DAYS} days: ${m.old} of ${m.aged} with an age (${pct(m.old, m.aged)}); ${m.noAge} with no age`);
   }
   if (models.length === 1) out.push("", "Only one model in these logs, so there's nothing to compare yet.");
   out.push("", "These measure volume, freshness and cost, not quality. For quality, review the items: the blind test in",

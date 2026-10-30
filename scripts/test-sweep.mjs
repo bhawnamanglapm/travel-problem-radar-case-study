@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { buildDigestEmail } from "../api/_lib/email.js";
 import { makeDataHandler, makeSweepHandler } from "../api/_lib/handlers.js";
 import { buildDigest } from "../api/_lib/slack.js";
-import { AREAS, CATS, KEY_ITEMS, KEY_LLMLOG_PREFIX, KEY_SEARCH, LOG_QUOTE_MAX, LOG_TITLE_MAX, areaOf, extractProblems, llmLogKey, logContent, mergeSearch, runDailySweep, scanCategory, sweepKey, trackItems, trimSeen } from "../api/_lib/radar.js";
+import { AREAS, CATS, KEY_ITEMS, KEY_LLMLOG_PREFIX, KEY_SEARCH, LOG_QUOTE_MAX, LOG_TITLE_MAX, areaOf, extractProblems, llmLogKey, logContent, mergeSearch, pageAgeDays, runDailySweep, sourceLabel, scanCategory, sweepKey, trackItems, trimSeen } from "../api/_lib/radar.js";
 import { SLOTS_BY_FREQ, dueSlot, normaliseSweepsPerDay, previousSlotAt, siteSweepsPerDay, slotOf, sweepLimits, sweepsPerDayOf } from "../api/_lib/schedule.js";
 import { check, finish, memStorage, mockRes } from "./test-helpers.mjs";
 
@@ -351,7 +351,22 @@ const sweepOpts = (storage, byCat, now) => ({
     + "  Per sweep: 3.0 items, 3.0 pages, 2.0 searches, 50,000 input and 10,000 output tokens\n"
     + "  Cost: $0.0300 a sweep, $0.0100 an item (2 calls not priced, left out)\n"
     + "  Calls that quoted a passage: 2 of 4\n"
-    + "  Pages older than 30 days: 2 of 4 with an age (50%); 2 with no age"), "llm-logs models: a model's averages, cost per item, quotes and page age");
+    + "  Item sources: 0 items, median - old; 0 over 30 days, 0 not dated; 0 dropped (over 60 days)\n"
+    + "  Search pages older than 30 days: 2 of 4 with an age (50%); 2 with no age"), "llm-logs models: a model's averages, cost per item, quotes and page age");
+  // Item source freshness: from the ages the sweep logged, or for an older log from its answer and logged pages.
+  const dated = logOf(6, 29, "claude-haiku-5-5", [{ cat: "traveler_pain", items: 3, usage: U,
+    sources: [{ link: "https://a.example/1", days: 8 }, { link: "https://b.example/2", days: 40 }, { link: "https://c.example/3", days: null }],
+    dropped: [{ title: "Old news", link: "https://o.example/9", age: "70 days ago" }] }]);
+  check(tool.formatModels([dated], 30).includes("  Item sources: 3 items, median 24 days old; 1 over 30 days, 1 not dated; 1 dropped (over 60 days)\n"),
+    "llm-logs models: item source ages and drops, from the ages the sweep logged");
+  const answer = JSON.stringify(["https://a.example/1", "https://b.example/2/", "https://c.example/3", "https://d.example/4"].map((link, i) => item(i, { link })));
+  const before = logOf(7, 29, "claude-haiku-5-5", [{ cat: "traveler_pain", items: 4, usage: U, response: { content: [
+    { type: "web_search_tool_result", pages: [...pages, { url: "https://d.example/4", age: "70 days ago" }] }, { type: "text", text: answer }] } }]);
+  check(tool.formatModels([before], 30).includes("  Item sources: 4 items, median 40 days old; 2 over 30 days, 1 not dated; 0 dropped (over 60 days)\n"),
+    "llm-logs models: an older log's item sources, matched from its answer and pages; one that would now be dropped counts as old");
+  const ds = tool.formatSummary(dated);
+  check(/^traveler_pain +3 items, 1 dropped;/m.test(ds) && ds.includes("Dropped, source over 60 days old:\n  traveler_pain: Old news (70 days ago)  https://o.example/9"),
+    "llm-logs summary: a category's dropped count, and each dropped item with its age");
   check(mv.includes("claude-sonnet-5-5: 1 sweep, 2026-10-28 to 2026-10-28\n  Failed calls: 0 of 1 (0%)\n")
     && mv.includes("  Cost: $0.2200 a sweep, $0.0550 an item\n") && !mv.includes("nothing to compare") && /not quality/.test(mv),
     "llm-logs models: the second model, and the note that this isn't quality");
@@ -360,6 +375,61 @@ const sweepOpts = (storage, byCat, now) => ({
   check(mr.code === 0 && mr.out.includes("m: 2 sweeps") && mr.out.includes("(8 calls not priced, left out)"), "llm-logs models: reads the store's logs");
   check((await run(["models", "--days", "31"])).code === 2 && (await run(["models", "x"])).code === 2 && (await run(["models", "--days", "1"])).out.includes("1 sweep,"),
     "llm-logs models: --days is 1 to 30; no other arguments");
+}
+
+// ---- source freshness: each item's source dated from search's page age, sources over 60 days dropped
+{
+  const T = Date.UTC(2026, 9, 30, 6, 0);
+  check(pageAgeDays("2 hours ago", T) === 2 / 24 && pageAgeDays("8 days ago", T) === 8 && pageAgeDays("3 weeks ago", T) === 21
+    && pageAgeDays("2 months ago", T) === 60 && pageAgeDays("1 year ago", T) === 365, "pageAgeDays: hours, days, weeks, months and years ago");
+  const abs = pageAgeDays("October 20, 2026", T);
+  check(abs > 9.5 && abs < 11, `pageAgeDays: a date with a year (${abs})`);
+  check(["yesterday", "5", "", undefined, "December 1, 2026"].every((a) => pageAgeDays(a, T) === null),
+    "pageAgeDays: no age, text it can't read, a bare number or a future date gives null");
+
+  const page = (url, age) => ({ type: "web_search_result", url, title: "T", encrypted_content: "ENC", ...(age ? { page_age: age } : {}) });
+  const fetchFn = async () => ({
+    ok: true, status: 200,
+    json: async () => ({
+      content: [
+        { type: "web_search_tool_result", tool_use_id: "s", content: [
+          page("https://a.example/fresh", "8 days ago"), page("https://a.example/today", "2 hours ago"), page("https://a.example/old", "70 days ago"),
+          page("https://a.example/undated"), page("https://A.example/slash/", "5 days ago"), page("https://a.example/edge", "2 months ago"),
+        ] },
+        { type: "text", text: JSON.stringify([
+          item(1, { link: "https://a.example/fresh" }), item(2, { link: "https://a.example/today" }), item(3, { link: "https://a.example/old" }),
+          item(4, { link: "https://a.example/undated" }), item(5, { link: "https://elsewhere.example/x" }), item(6, { link: "https://a.example/slash#top" }),
+          item(7, { link: "https://a.example/edge" }),
+        ]) },
+      ],
+      usage: { input_tokens: 10, output_tokens: 10, server_tool_use: { web_search_requests: 1 } },
+    }),
+  });
+  const scan = (cat) => scanCategory(cat, { fetchFn, apiKey: "k", model: "m", clock: () => T });
+  const r = await scan(CATS[0]);
+  const by = Object.fromEntries(r.items.map((p) => [p.title, p]));
+  check(by["Problem 1"].sourceDate === "2026-10-22" && by["Problem 2"].sourceDate === "2026-10-30",
+    "scanCategory: an item's source date is the sweep's day less its page's age");
+  check(!by["Problem 3"] && r.call.dropped.length === 1 && r.call.dropped[0].title === "Problem 3" && r.call.dropped[0].age === "70 days ago"
+    && r.call.items === 6, "scanCategory: an item whose source is over 60 days old is dropped and listed in the log");
+  check(by["Problem 7"].sourceDate === "2026-08-31", "scanCategory: a source exactly 60 days old is kept");
+  check(by["Problem 4"] && !("sourceDate" in by["Problem 4"]) && by["Problem 5"] && !("sourceDate" in by["Problem 5"]),
+    "scanCategory: a page with no age, or a link search didn't return, is kept undated");
+  check(by["Problem 6"].sourceDate === "2026-10-25", "scanCategory: links match without the fragment, trailing slash or host case");
+  const days = Object.fromEntries(r.call.sources.map((s) => [s.link, s.days]));
+  check(r.call.sources.length === 6 && days["https://a.example/fresh"] === 8 && days["https://a.example/undated"] === null,
+    "scanCategory: the log keeps each kept item's source age in days");
+
+  const st = memStorage();
+  const none = (cat) => Promise.resolve({ items: [], usage: { input: 0, output: 0, searches: 0 }, call: { cat: cat.key } });
+  const out = await runDailySweep({ storage: st, now: () => T, scan: (cat) => (cat.key === "traveler_pain" ? scan(cat) : none(cat)) });
+  check(out.perCat.traveler_pain === "6 items, 1 dropped (source over 60 days)" && out.perCat.gov_policy === "0 items",
+    `the sweep says how many items it dropped (${out.perCat.traveler_pain})`);
+  const saved = JSON.parse(st.m.get(sweepKey(out.id))).problems;
+  check(saved.find((p) => p.title === "Problem 1").sourceDate === "2026-10-22" && !saved.some((p) => p.title === "Problem 3"),
+    "the saved sweep carries the source dates, without the dropped item");
+  const lg = JSON.parse(st.m.get(llmLogKey(out.id)));
+  check(lg.calls.find((c) => c.cat === "traveler_pain").dropped.length === 1, "the LLM log keeps the dropped item");
 }
 
 // ---- 60-sweep cap
@@ -842,6 +912,18 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
     "no failed category: no FAILED subject and no alert");
   const bare = buildDigestEmail({ at, problems, perCat: { industry: "failed" } });
   check(bare.text.includes("  Industry: no reason given"), "a failure with no reason still says so");
+}
+
+// ---- the source date readers see: "Source 22 Oct" when the sweep dated the source, the model's date when not
+{
+  const at = "2026-10-30T06:00:00.000Z", t = Date.parse(at);
+  check(sourceLabel({ sourceDate: "2026-10-22" }, t) === "Source 22 Oct" && sourceLabel({ sourceDate: "2025-12-28" }, t) === "Source 28 Dec 2025",
+    "sourceLabel: the day and month, and the year when it isn't this year's");
+  check([{}, { sourceDate: "" }, { sourceDate: "22 Oct" }, { sourceDate: "2026-13-45" }].every((p) => sourceLabel(p, t) === null), "sourceLabel: no date, or one it can't read, gives null");
+  const p = (n, over) => ({ id: "traveler_pain:" + n, cat: "traveler_pain", title: "T" + n, summary: "", source: "Skift", link: "", region: "Europe", date: "Oct 2026", severity: "Medium", opportunity: "", ...over });
+  const m = buildDigestEmail({ at, problems: [p(1, { sourceDate: "2026-10-22" }), p(2)], perCat: {} });
+  check(m.text.includes("  Skift · Europe · Source 22 Oct\n") && m.text.includes("  Skift · Europe · Oct 2026\n") && m.html.includes("Skift · Europe · Source 22 Oct"),
+    "email: an item's line shows the source date when known, the model's date when not");
 }
 
 // ---- T32: sweeps a day. Slots, the site's number, and the handler skipping unneeded slots

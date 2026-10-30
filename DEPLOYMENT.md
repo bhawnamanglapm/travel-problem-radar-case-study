@@ -1418,13 +1418,20 @@ node --env-file=.env.local scripts/llm-logs.mjs models [--days 30]
 | Command | What it does |
 |---|---|
 | `list` | One line per sweep that ran, newest first: id, time, outcome, calls that worked, input and output tokens, searches, pages, model, cost |
-| `summary` | One sweep's model and cost, its totals, each category's outcome, tokens, pages, time and cost, then every page search found (link, and title and age where the log has them) and the passages each category quoted |
+| `summary` | One sweep's model and cost, its totals, each category's outcome (with any items dropped for an old source), tokens, pages, time and cost, then every page search found (link, and title and age where the log has them), the passages each category quoted, and each dropped item with its age |
 | `show` | The whole log as JSON: every request and response |
-| `models` | The logs grouped by model (`--days` 1 to 30, default 30), with averages per sweep: items, pages, searches, tokens, cost and cost per item, then failed calls, calls that quoted a passage, and pages older than 30 days (of those search gave an age for). Volume, freshness and cost, not quality: for quality, review the items ([haiku-test.md](docs/subscriptions/haiku-test.md) or `scripts/score-items.mjs`) |
+| `models` | The logs grouped by model (`--days` 1 to 30, default 30), with averages per sweep: items, pages, searches, tokens, cost and cost per item, then failed calls, calls that quoted a passage, the items' sources (median age, how many over 30 days, not dated, and dropped), and search pages older than 30 days (of those search gave an age for). Volume, freshness and cost, not quality: for quality, review the items ([haiku-test.md](docs/subscriptions/haiku-test.md) or `scripts/score-items.mjs`) |
 
 The model is the one each call asked for (`request.model`). Costs are the list prices in `scripts/compare-models.mjs`
 applied to the usage the API reported, as `cost-per-run.mjs` does; a call with no usage (it failed before a reply)
 or a model with no price is shown as not priced, never guessed.
+
+**Item sources.** Each sweep dates an item's source from the age web search gave its page, and drops an item whose
+source is over 60 days old (the prompt's window). The call's log keeps each kept item's age (`sources`) and the
+dropped items (`dropped`). Logs from before 30 Oct 2026 have neither, so `models` matches their answers to their
+logged pages instead. Logs before about 29 Oct kept page links without ages, so most of their items count as not
+dated. The page-age line counts every page search returned, most of which the model never used; the item line is
+the one that measures what readers see.
 
 `scripts/cost-per-run.mjs` turns the same logs into dollars. It is also read-only and not deployed:
 

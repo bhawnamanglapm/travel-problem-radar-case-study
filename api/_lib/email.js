@@ -2,7 +2,7 @@
 // a saved sweep, or a short notice when nothing could be saved. Optional; it runs only when
 // RESEND_API_KEY and EMAIL_TO are set. Each message has an HTML and a plain-text part.
 import { esc } from "./http.js";
-import { CATS, ERR_MAX, failedCats, failedLine } from "./radar.js";
+import { CATS, ERR_MAX, failedCats, failedLine, sourceLabel } from "./radar.js";
 
 // Resend's shared sender, so no domain of our own is needed. Resend delivers mail from it only
 // to the address the Resend account was created with; EMAIL_FROM on a verified domain lifts that.
@@ -87,7 +87,7 @@ export function buildDigestEmail({ at, problems, perCat = {}, manual = false }, 
       return;
     }
     items.forEach((p) => {
-      const meta = [p.source, p.region, p.date].filter(Boolean).join(" · ");
+      const meta = [p.source, p.region, sourceLabel(p, Date.parse(at)) || p.date].filter(Boolean).join(" · ");
       text.push(`- [${p.severity}]${p.isNew ? " NEW" : ""} ${p.title}`);
       if (p.summary) text.push(`  ${p.summary}`);
       text.push(`  ${meta}`);
@@ -162,7 +162,7 @@ export function withSubscriberFooter(mail, { unsubscribeUrl, manageUrl = "", pla
 export function buildConfirmEmail({ confirmUrl, siteUrl = "", withPassword = false }) {
   if (!LINK_OK.test(confirmUrl || "")) throw new Error("buildConfirmEmail: bad confirm link");
   const subject = "Confirm your Travel Problem Radar subscription";
-  const intro = "You asked to get the Travel Problem Radar digest by email: one email a day about the travel problems an AI model found in the last 24 hours."
+  const intro = "You asked to get the Travel Problem Radar digest by email: one email a day about the travel problems an AI model found in the last 24 hours, from sources published in about the last 60 days."
     + (withPassword ? " Confirming also turns on the password you chose." : "");
   const ignore = withPassword
     ? "If you didn't ask for this, ignore this email: nothing more will be sent, and no account or password is made."

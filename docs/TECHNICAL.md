@@ -49,6 +49,13 @@ Subscriber -> links in each email -> /manage/ (/api/account: plan, Request Pro o
   count, latest sweep ids) and saves each item with `firstAt`, `seen` and `prev`, so the board's Details panel shows
   "First seen … · in N sweeps" from the sweep it already loaded. `trackItems` is the same text in the server and the
   component, and `npm run check` fails if they differ. A failed read or write of the index never fails the sweep.
+- **Source dates.** `scanCategory` matches each item's link to the pages web search returned in the same call
+  (exact, then without the fragment, trailing slash or host case) and reads the page's age (`pageAgeDays`).
+  A known age gives the item `sourceDate` (`YYYY-MM-DD`, the sweep's UTC day less the age). A source over 60 days
+  old (`SOURCE_MAX_DAYS`, the prompt's window) is dropped, and the LLM log keeps it under the call's `dropped`.
+  An item with no age, or a link search didn't return, is kept undated. The card, the home page list, the email
+  and the board's text export show "Source 22 Oct", and the Details panel "Source dated 22 Oct 2026, 8 days ago".
+  Without `sourceDate` they show the model's own `date`, as before. Saved problems keep `sourceDate`.
 - **Areas (T37).** The board filters by a fixed list of areas (Global, Asia, Europe, North America, Latin America,
   Middle East & Africa, Oceania, Other). `areaOf` places the AI's free-text `region` in one from a name table;
   text that names two or more areas counts as Global, and text it can't place as Other. The area is worked out
@@ -135,7 +142,7 @@ Email has been sent through a real Resend account since 21 Oct 2026, from the ve
 | `sampleData.json` | 8 saved items, two per category, each with a source link |
 | `scripts/check.mjs` | Offline checks: sample data, page links, bundles, the subscribe and manage pages, prompt drift, secrets (Razorpay key secrets too), Hobby's 12-function limit |
 | `scripts/subscribers.mjs` | Owner admin tool, run on your own machine: `stats`, `list`, `show`, `grant-pro`, `revoke-pro`, `delete`, `prune-events`, `recount`. Not deployed |
-| `scripts/llm-logs.mjs` | Owner tool, run on your own machine: `list`, `summary`, `show` for the LLM logs each sweep saves in the Blob store (requests, responses, tokens, page links; kept 30 days), with each sweep's model and list-price cost, and `models` for averages per model. Read-only, not deployed |
+| `scripts/llm-logs.mjs` | Owner tool, run on your own machine: `list`, `summary`, `show` for the LLM logs each sweep saves in the Blob store (requests, responses, tokens, page links; kept 30 days), with each sweep's model and list-price cost, and `models` for averages per model and how old the items' sources were. Read-only, not deployed |
 | `.github/workflows/sweep.yml` | Calls `/api/sweep` every 5 hours (the sweep skips slots nobody needs), and on demand from the Actions tab |
 | `scripts/test-sweep.mjs` | Offline tests for the sweep, the Slack post, the email and the data feed (no network, no key) |
 | `scripts/test-subscriptions.mjs` | Offline tests for the subscriber features: storage, records, emails, every endpoint (the Resend webhook's signature check too), the per-IP limit, delivery, the sweep wiring and the admin script (fake Resend, no network) |

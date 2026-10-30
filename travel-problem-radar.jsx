@@ -579,7 +579,7 @@ async function buildSearchFile(hist, keepIds) {
 // Saved problems (T39): at most MAX_SAVED, newest first, each { id, sweepId, at, item }. The live board asks the
 // account API, signed in (the server copies the item from its sweep); the demo keeps the same shape in this browser.
 const MAX_SAVED = 100;
-const SAVED_FIELDS = ["id", "cat", "title", "summary", "source", "link", "region", "date", "severity", "opportunity"];
+const SAVED_FIELDS = ["id", "cat", "title", "summary", "source", "link", "region", "date", "sourceDate", "severity", "opportunity"];
 const savedCopy = (p, sweepAt) => ({
   ...Object.fromEntries(SAVED_FIELDS.map((k) => [k, typeof p[k] === "string" ? p[k] : ""])),
   sweepAt: typeof sweepAt === "string" ? sweepAt : null,
@@ -601,6 +601,22 @@ const SAVE_NOTES = {
 };
 
 const sweepDay = (at) => new Date(at).toLocaleDateString([], { day: "numeric", month: "short" });
+
+// The date web search gave an item's source page ("22 Oct", with the year when it isn't this year's or `withYear`),
+// from the sweep's `sourceDate`. Null when the sweep couldn't date it: the item then shows the model's own `date`.
+const SOURCE_TIP = "The date web search gave the source page";
+const sourceDay = (p, withYear = false) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(p.sourceDate || "")) return null;
+  const d = new Date(p.sourceDate + "T00:00:00Z");
+  if (isNaN(d)) return null;
+  const year = withYear || d.getUTCFullYear() !== new Date().getUTCFullYear() ? { year: "numeric" } : {};
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC", ...year });
+};
+const sourceAgo = (p) => {
+  const n = Math.max(0, Math.floor((Date.now() - Date.parse(p.sourceDate + "T00:00:00Z")) / 864e5));
+  return n === 0 ? "today" : n === 1 ? "1 day ago" : n + " days ago";
+};
+const dateText = (p) => (sourceDay(p) ? "Source " + sourceDay(p) : p.date);
 
 function groupByDay(entries) {
   const map = new Map();
@@ -1047,7 +1063,7 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
       problems.filter((p) => p.isNew).forEach((p) => {
         lines.push(`• [${p.severity}] ${p.title}`);
         lines.push(`  ${p.summary}`);
-        lines.push(`  ${p.source} · ${p.region} · ${p.date}`);
+        lines.push(`  ${p.source} · ${p.region} · ${dateText(p)}`);
         if (p.link) lines.push(`  ${p.link}`);
         lines.push(`  OPPORTUNITY: ${p.opportunity}`);
         lines.push("");
@@ -1060,7 +1076,7 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
       items.forEach((p) => {
         lines.push(`• [${p.severity}]${p.isNew ? " (NEW)" : ""} ${p.title}`);
         lines.push(`  ${p.summary}`);
-        lines.push(`  ${p.source} · ${p.region} · ${p.date}`);
+        lines.push(`  ${p.source} · ${p.region} · ${dateText(p)}`);
         if (p.link) lines.push(`  ${p.link}`);
         lines.push(`  OPPORTUNITY: ${p.opportunity}`);
         lines.push("");
@@ -1089,7 +1105,9 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
           ? <a className="tpr-tag tpr-src" href={p.link} target="_blank" rel="noopener noreferrer">{p.source} ↗</a>
           : <span className="tpr-tag">{p.source}</span>}
         <span className="tpr-tag">{p.region}</span>
-        {p.date && <span className="tpr-tag">{p.date}</span>}
+        {sourceDay(p)
+          ? <span className="tpr-tag" title={SOURCE_TIP}>Source {sourceDay(p)}</span>
+          : p.date && <span className="tpr-tag">{p.date}</span>}
         <span className={"tpr-tag tpr-sev " + p.severity}>{p.severity}</span>
         {p.seen > 1 && <span className="tpr-tag tpr-seen">Seen in {p.seen}{p.firstEarlier ? "+" : ""} sweeps</span>}
       </div>
@@ -1448,7 +1466,9 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
                 ? <a className="tpr-tag tpr-src" href={detail.link} target="_blank" rel="noopener noreferrer">{detail.source} ↗</a>
                 : <span className="tpr-tag">{detail.source}</span>}
               <span className="tpr-tag">{detail.region}</span>
-              {detail.date && <span className="tpr-tag">{detail.date}</span>}
+              {sourceDay(detail)
+                ? <span className="tpr-tag" title={SOURCE_TIP}>Source dated {sourceDay(detail, true)}, {sourceAgo(detail)}</span>
+                : detail.date && <span className="tpr-tag">{detail.date}</span>}
               <span className={"tpr-tag tpr-sev " + detail.severity}>{detail.severity}</span>
             </div>
             {detail.opportunity && (

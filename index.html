@@ -495,7 +495,10 @@ dialog::backdrop{background:rgba(0,0,0,.65);}
         a.href = p.link; a.target = "_blank"; a.rel = "noopener noreferrer";
         src.appendChild(a);
       } else src.appendChild(document.createTextNode(p.source || ""));
-      var where = [p.region, p.date].filter(Boolean).join(" · ");
+      // The date web search gave the source page, when the sweep has it; otherwise the model's own date.
+      var dated = /^\d{4}-\d{2}-\d{2}$/.test(p.sourceDate || "") && new Date(p.sourceDate + "T00:00:00Z");
+      var when = dated && !isNaN(dated) ? "Source " + dated.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }) : p.date;
+      var where = [p.region, when].filter(Boolean).join(" · ");
       if (where) src.appendChild(document.createTextNode(" · " + where));
       card.appendChild(src);
       box.appendChild(card);

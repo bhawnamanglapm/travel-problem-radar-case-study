@@ -5,6 +5,13 @@ grouped by date.
 
 ## 2026-10-30
 
+- Source freshness. Each sweep matches an item's link to the page web search returned and saves `sourceDate`, the
+  date search gave that page. An item whose source is over 60 days old (the prompt's window) is dropped and kept in
+  the LLM log; one with no age is kept undated. Cards, the home page list, the email and the text export show
+  "Source 22 Oct", and the Details panel "Source dated 22 Oct 2026, 8 days ago". Without a date the model's own
+  `date` shows, as before. The sign-up, subscribe and pricing pages and the email intro now say the findings come
+  from sources published in about the last 60 days (the terms page is unchanged). `llm-logs.mjs models` adds item
+  source ages; on the existing logs, the 18 dated sources have a median age of 8.5 days and 2 are over 30 days.
 - `scripts/llm-logs.mjs` shows each sweep's model and cost: `summary` per sweep and per call, and `list` per line.
   Costs are list prices applied to the reported usage, as `cost-per-run.mjs` does; a call it can't price is named,
   not guessed. A new `models [--days 30]` command groups the logs by model, with averages per sweep: items, pages,
