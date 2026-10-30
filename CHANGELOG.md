@@ -5,6 +5,14 @@ grouped by date.
 
 ## 2026-10-31
 
+- T43, Ask the board and votes (`feat/ask-the-board`, not merged): Pro members can ask a question, answered by AI
+  only from items in the search file, each claim citing one. Keyword retrieval in plain JavaScript (no embeddings),
+  filtered to the area a question names ("Indian" is India); a citation to an item not sent, or none at all, means
+  no answer is shown; links come from the store. Off unless `ASK_ENABLED=1`; `ASK_PER_DAY` (default 20), counted
+  before the call; the question is never stored or logged. Useful / Not useful buttons under each card (Pro, at
+  most 500 votes, deleted with the account), and `scripts/item-votes.mjs` (read-only) for the share useful,
+  overall and in India. Privacy page and DPDP checklist updated; Anthropic named as the provider a question goes
+  to. REQ-48, KPI-21, R-18. `npm test` 1,670, `npm run check` 249. No live model call made.
 - PM docs: KPI-20's target set by the owner (20% of items in India, 4 or more a sweep; floor 10%, stretch 25%).
   Indian communities to try, all to verify, and a proposed path to the Government of India: DSC-10, R-17, CR-24,
   RM-39 (a monthly India report) and RM-40 (government, state tourism departments first).

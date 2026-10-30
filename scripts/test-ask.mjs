@@ -246,4 +246,58 @@ check(checkAnswer(null, 2).ok === false && checkAnswer({ answer: "" }, 2).ok ===
   check(w.logs.every((l) => !l.includes("@")), "ask and vote: no address is logged");
 }
 
+// ---- scripts/item-votes.mjs (T43): the totals, read only
+{
+  const { main, parseArgs, shares, tally } = await import("./item-votes.mjs");
+  const { KEY_SEARCH } = await import("../api/_lib/radar.js");
+  const { newPending, putSubscriber } = await import("../api/_lib/subscribers.js");
+  const { memStorage } = await import("./test-helpers.mjs");
+  const file = { sweeps: ["s1"], items: [
+    item(1, { id: "traveler_pain:rail", cat: "traveler_pain", title: "Rail refunds stuck", region: "India" }),
+    item(2, { id: "traveler_pain:goa", cat: "traveler_pain", title: "Goa hotels overbook", region: "Goa, India" }),
+    item(3, { id: "gov_policy:visa", cat: "gov_policy", title: "Schengen visa delays", region: "Europe" }),
+  ] };
+  const at = "2026-10-31T00:00:00.000Z";
+  const recs = [
+    { id: "a", votes: [{ id: "traveler_pain:rail", v: 1, at }, { id: "traveler_pain:goa", v: -1, at }, { id: "gov_policy:visa", v: 1, at }] },
+    { id: "b", votes: [{ id: "traveler_pain:rail", v: 1, at }, { id: "traveler_pain:goa", v: 1, at }, { id: "web_app:gone", v: -1, at }] },
+    { id: "c", votes: [{ id: "x", v: 5, at }, null] },
+    { id: "d" },
+  ];
+  const t = tally(recs, file);
+  const rail = t.items.find((x) => x.id === "traveler_pain:rail");
+  const gone = t.items.find((x) => x.id === "web_app:gone");
+  check(t.members === 2 && t.up === 4 && t.down === 2 && t.items.length === 4, "votes: totals count only real votes, from members who voted");
+  check(rail.up === 2 && rail.area === "India" && rail.title === "Rail refunds stuck" && t.items[0].id === "traveler_pain:rail",
+    "votes: joined to the search file, most voted first");
+  check(gone.area === null && gone.title === null && gone.cat === "web_app", "votes: an item gone from the search file keeps its votes, area unknown");
+  const s = shares(t.items);
+  const india = shares(t.items.filter((x) => x.area === "India"));
+  check(s.useful === 2 && s.split === 1 && s.notUseful === 1 && s.share === 0.5, "votes: useful means more Useful than Not useful; a tie is split");
+  check(india.items === 2 && india.useful === 1 && india.split === 1, "votes: India counted on its own");
+  check(shares([]).share === null, "votes: no items gives no share, not 0%");
+  check(parseArgs(["--top", "5", "--area", "europe"]).top === 5 && parseArgs(["--area", "europe"]).area === "Europe", "votes: --top and --area read");
+  let bad = 0;
+  for (const a of [["--top", "-1"], ["--area", "Mars"], ["--yes"]]) { try { parseArgs(a); } catch (e) { bad++; } }
+  check(bad === 3, "votes: a bad option is refused");
+
+  let refused = false;
+  try { await main([], { env: {}, log: () => {} }); } catch (e) { refused = /BLOB_READ_WRITE_TOKEN/.test(e.message) && /Nothing was read/.test(e.message); }
+  check(refused, "votes: refuses to run without the Blob token");
+  const st = memStorage();
+  st.m.set(KEY_SEARCH, JSON.stringify(file));
+  let n = 1;
+  const rb = (len) => Buffer.alloc(len, n++ % 256);
+  await putSubscriber(st, { ...newPending("v1@example.com", { now: Date.UTC(2026, 9, 1), randomBytes: rb }), votes: recs[0].votes });
+  await putSubscriber(st, { ...newPending("v2@example.com", { now: Date.UTC(2026, 9, 1), randomBytes: rb }), votes: recs[1].votes });
+  const before = JSON.stringify([...st.m.entries()]);
+  const writes = [];
+  for (const k of ["set", "del", "update"]) { const f = st[k]; st[k] = async (...a) => { writes.push(k); return f(...a); }; }
+  const out = [];
+  const r = await main(["--top", "2"], { storage: st, log: (x) => out.push(x) });
+  const text = out.join("\n");
+  check(r.members === 2 && r.india.useful === 1 && writes.length === 0 && JSON.stringify([...st.m.entries()]) === before, "votes: main reads the store and writes nothing");
+  check(/India: 1 of 2 useful \(50%\)/.test(text) && /top 2 of 4/.test(text) && !text.includes("@"), "votes: the report shows India's share and no address");
+}
+
 finish("ask tests");

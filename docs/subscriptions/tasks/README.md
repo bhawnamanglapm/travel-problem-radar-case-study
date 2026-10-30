@@ -37,7 +37,9 @@ late. T33 brings forward the tier decision T31 had left until after launch. Phas
 improves the board itself: a detail panel, areas, search across sweeps, saved problems, share links and areas in Pro
 email. Its ideas came from a comparison with Mindtrip (mindtrip.ai), read from public write-ups because its site
 didn't render in a headless browser. Each one is built only when the owner says go. T42 (added 2026-10-30, at the owner's request) asks every
-category call for up to 2 items about India and makes India its own area.
+category call for up to 2 items about India and makes India its own area. T43 (added 2026-10-31, at the owner's
+request) lets Pro members ask the board a question, answered by AI only from saved items, and mark items Useful or
+Not useful.
 
 ```mermaid
 flowchart TD
@@ -100,6 +102,7 @@ flowchart TD
     T40["T40 Share one problem"]
     T41["T41 Areas in Pro email"]
     T42["T42 India focus"]
+    T43["T43 Ask the board + votes"]
   end
   T00 --> T04
   T01 --> T02
@@ -127,6 +130,7 @@ flowchart TD
   T36 --> T39 & T40
   T37 --> T38 & T41
   T41 --> T42
+  T38 & T39 & T42 --> T43
 ```
 
 **Pro before payments.** Phase 1 builds both plans. Until Phase 2, the owner grants Pro by hand with the admin
@@ -180,6 +184,7 @@ themselves. It is built only if the Phase 1 numbers pass the owner's gate ([pric
 | [T40](T40-share-a-problem.md) | Share one problem: `/p/<sweep>/<item>` with a preview card; headline-level fields for non-Pro | Dev | M | T36 |
 | [T41](T41-email-areas.md) | Pro email: choose areas as well as categories | Dev | M | T37 |
 | [T42](T42-india-focus.md) | India focus: up to 2 India items in each category call, 4 searches, India as its own area, India's share from the logs | Dev | M | T37, T41 |
+| [T43](T43-ask-the-board.md) | Ask the board (RAG, Pro, off unless `ASK_ENABLED=1`): an answer only from saved items, each claim citing one; Useful / Not useful votes; `item-votes.mjs` | Dev | L | T38, T39, T42 |
 
 ## Decisions to settle before or during the build (OWNER INPUT NEEDED)
 

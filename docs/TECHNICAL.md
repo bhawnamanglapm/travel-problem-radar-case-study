@@ -142,6 +142,7 @@ Email has been sent through a real Resend account since 21 Oct 2026, from the ve
 | `api/_lib/http.js` | Shared request helpers: allowed methods, body reading with a size limit, JSON and HTML replies |
 | `api/_lib/subscribers.js` | Subscriber records, tokens, plans and event records |
 | `api/_lib/subscription-handlers.js` | The four subscriber endpoints, the per-IP sign-up limit and the Resend webhook |
+| `api/_lib/ask.js` | Ask the board (T43): keyword retrieval over the search file, filtered by the area a question names; the prompt; the Haiku call; the citation check. Used by `/api/account`'s `ask` action |
 | `api/_lib/subscriber-delivery.js` | After a saved sweep: Pro and Free sends, the 24-hour roll-up, resuming a cut-off send |
 | `api/_lib/plan.js` | Pro's price from `plan.json` (T33): one plan, a `monthly` and a `yearly` price; the periods on sale; and `RAZORPAY_PLANS` (one ₹1 Razorpay plan per period; a subscription's quantity is the price). Used by `/api/account`, `fill-plan` and `check-plan` |
 | `api/_lib/razorpay.js` | Razorpay for paid Pro (T19): create, cancel and fetch a subscription, and the webhook and Checkout signature checks. Used by `/api/account`'s checkout, checkout-return and cancel (T20) |
@@ -152,9 +153,11 @@ Email has been sent through a real Resend account since 21 Oct 2026, from the ve
 | `scripts/check.mjs` | Offline checks: sample data, page links, bundles, the subscribe and manage pages, prompt drift, secrets (Razorpay key secrets too), Hobby's 12-function limit |
 | `scripts/subscribers.mjs` | Owner admin tool, run on your own machine: `stats`, `list`, `show`, `grant-pro`, `revoke-pro`, `delete`, `prune-events`, `recount`. Not deployed |
 | `scripts/llm-logs.mjs` | Owner tool, run on your own machine: `list`, `summary`, `show` for the LLM logs each sweep saves in the Blob store (requests, responses, tokens, page links; kept 30 days), with each sweep's model and list-price cost, and `models` for averages per model and how old the items' sources were. Read-only, not deployed |
+| `scripts/item-votes.mjs` | Owner tool, read-only (T43): adds up members' Useful / Not useful votes and prints the share useful, overall and in India (KPI-21). Not deployed |
 | `.github/workflows/sweep.yml` | Calls `/api/sweep` every 5 hours (the sweep skips slots nobody needs), and on demand from the Actions tab |
 | `scripts/test-sweep.mjs` | Offline tests for the sweep, the Slack post, the email and the data feed (no network, no key) |
 | `scripts/test-subscriptions.mjs` | Offline tests for the subscriber features: storage, records, emails, every endpoint (the Resend webhook's signature check too), the per-IP limit, delivery, the sweep wiring and the admin script (fake Resend, no network) |
+| `scripts/test-ask.mjs` | Offline tests for Ask the board, the `ask` and `vote` actions and `item-votes.mjs` (the model is a stubbed fetch) |
 | `scripts/test-helpers.mjs` | Shared by both test files: PASS/FAIL printer, in-memory store, fake response |
 
 ## Rebuild the demo and live page

@@ -48,6 +48,7 @@ From [`api/_lib/subscribers.js`](../../api/_lib/subscribers.js) and the [privacy
 | Children | Verifiable consent of a parent | No age question, and the terms don't say members must be adults | Whether a line in the terms ("18 or over") is enough, or more is needed |
 | Transfers abroad | Allowed except to countries the government restricts (**to verify**) | The privacy page says data may be processed outside India, including the United States | Whether any processor's country is restricted once a list is published |
 | Processors | A business answers for its processors | Each provider's own standard terms | Whether those terms are enough, or a written agreement is needed |
+| Votes and questions (T43) | The same duties for the new data | Useful / Not useful votes (Pro): the item, the button and the time, at most 500, on the member's record, so **Delete my account** deletes them. Ask the board (Pro, off unless `ASK_ENABLED=1`): only a daily count is stored; the question and answer are never stored or logged. The question goes to **Anthropic**, named on the privacy page, without the address | A member may type personal details into a question, which then reaches Anthropic: is the privacy page's warning enough? Whether Anthropic's standard terms cover it as a processor: **to verify** |
 | Significant data fiduciary | Extra duties for businesses the government names | Small: no claim of member numbers is made here | Unlikely to apply; **to verify** what decides it |
 
 ## For government work (RM-40)
