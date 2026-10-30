@@ -16,7 +16,7 @@ import {
 } from "../api/_lib/subscription-handlers.js";
 import { deliverToSubscribers, proAreasKey, proCatsKey } from "../api/_lib/subscriber-delivery.js";
 import { makeDataHandler } from "../api/_lib/handlers.js";
-import { RAZORPAY_API, cancelSubscription, createSubscription, fetchSubscription, isTestKey, razorpayConfigured, verifyCheckout, verifyWebhook } from "../api/_lib/razorpay.js";
+import { RAZORPAY_API, cancelSubscription, createSubscription, fetchSubscription, isTestKey, keyMismatch, razorpayConfigured, verifyCheckout, verifyWebhook } from "../api/_lib/razorpay.js";
 import { check, finish, memStorage, mockRes } from "./test-helpers.mjs";
 
 // A repeatable random source: each call returns bytes that count up from a seed.
@@ -1068,6 +1068,25 @@ const iso = (ms) => new Date(ms).toISOString();
   await w.addSub(1, "pro");
   res = await w.call();
   check(res.code === 200 && res.json().subscribers === "not configured" && w.kinds().join() === "owner", "sweep: switch off gives subscribers: \"not configured\" and sends only the owner's email");
+
+  // 3b. T22: a Razorpay key in the wrong environment is named in the reply, never shown
+  {
+    const TEST_ID = "rzp_" + "test_" + "Fixture000003";
+    const LIVE_ID = "rzp_" + "live_" + "Fixture000003";
+    let ok = true;
+    for (const env of [{ RAZORPAY_KEY_ID: TEST_ID, VERCEL_ENV: "production" }, { RAZORPAY_KEY_ID: LIVE_ID, VERCEL_ENV: "preview" }]) {
+      const m = world({ env });
+      res = await m.call();
+      ok = ok && res.code === 200 && res.json().status === "saved" && res.json().razorpay === "key mismatch" && !res.body.includes("Fixture0");
+    }
+    check(ok, "sweep: a test key on Production or a live key on a Preview adds razorpay: \"key mismatch\" to the reply, without the key");
+    let none = true;
+    for (const env of [{ RAZORPAY_KEY_ID: LIVE_ID, VERCEL_ENV: "production" }, { RAZORPAY_KEY_ID: TEST_ID, VERCEL_ENV: "preview" }, { RAZORPAY_KEY_ID: TEST_ID }, {}]) {
+      res = await world({ env }).call();
+      none = none && res.code === 200 && !("razorpay" in res.json());
+    }
+    check(none, "sweep: the right key, VERCEL_ENV unset or no key leaves razorpay out of the reply");
+  }
 
   // 4. the owner's Resend call is out of quota: owner reply shows it, the subscriber send stops without looping
   w = world({ resend: { owner: { status: 429, body: { name: "daily_quota_exceeded" } }, batch: { status: 429, body: { name: "daily_quota_exceeded" } } } });
@@ -3216,6 +3235,14 @@ const iso = (ms) => new Date(ms).toISOString();
   const ENV = { RAZORPAY_KEY_ID: KEY_ID, RAZORPAY_KEY_SECRET: KEY_SECRET, RAZORPAY_WEBHOOK_SECRET: WH_SECRET, RAZORPAY_PLANS: JSON.stringify({ 1: "plan_00000000000001", 3: "plan_00000000000003", 6: "plan_00000000000006", 12: "plan_00000000000012" }) };
   check(razorpayConfigured(ENV) && Object.keys(ENV).every((k) => !razorpayConfigured({ ...ENV, [k]: " " })), "razorpay: configured only with the keys, the webhook secret and RAZORPAY_PLANS");
   check(isTestKey(ENV) && !isTestKey({ RAZORPAY_KEY_ID: "rzp_" + "live_" + "Fixture000001" }) && !isTestKey({}), "razorpay: isTestKey tells test keys from live keys");
+  {
+    const LIVE = { RAZORPAY_KEY_ID: "rzp_" + "live_" + "Fixture000001" };
+    check(keyMismatch({ ...ENV, VERCEL_ENV: "production" }) && keyMismatch({ ...LIVE, VERCEL_ENV: "preview" }) && keyMismatch({ ...LIVE, VERCEL_ENV: "development" }),
+      "razorpay: keyMismatch on a test key on Production and a live key on a Preview or Development");
+    check(!keyMismatch({ ...LIVE, VERCEL_ENV: "production" }) && !keyMismatch({ ...ENV, VERCEL_ENV: "preview" }) && !keyMismatch(ENV) && !keyMismatch(LIVE)
+      && !keyMismatch({ ...ENV, VERCEL_ENV: " " }) && !keyMismatch({ VERCEL_ENV: "production" }),
+      "razorpay: no keyMismatch for a live key on Production, a test key on a Preview, VERCEL_ENV unset, or no key");
+  }
 
   const SID = "a".repeat(64);
   const SUB = { id: "sub_00000000000001", entity: "subscription", plan_id: "plan_00000000000001", status: "created", short_url: "https://rzp.io/rzp/abc", notes: { sid: SID }, customer_email: "payer@example.com", current_start: null, current_end: 1792600000, charge_at: 1792600000, ended_at: null, paid_count: 0, remaining_count: 12, total_count: 12 };
@@ -3376,6 +3403,18 @@ const iso = (ms) => new Date(ms).toISOString();
     const f2 = await w2.add("count@example.com");
     r = await w2.act(f2, "checkout");
     check(r.code === 503 && r.json().error === "payments_off" && w2.rzpCalls.length === 0, "checkout: a RAZORPAY_TOTAL_COUNT of 0 keeps payments off");
+    // T22: a key in the wrong environment keeps payments off; the right one leaves them on
+    const LIVE_ID = "rzp_" + "live_" + "Fixture000002";
+    check(!paymentsReady({ ...RZP, VERCEL_ENV: "production" }) && !paymentsReady({ ...RZP, RAZORPAY_KEY_ID: LIVE_ID, VERCEL_ENV: "preview" })
+      && paymentsReady({ ...RZP, RAZORPAY_KEY_ID: LIVE_ID, VERCEL_ENV: "production" }) && paymentsReady({ ...RZP, VERCEL_ENV: "preview" }) && paymentsReady({ ...RZP, RAZORPAY_KEY_ID: LIVE_ID }),
+      "payments: off with a test key on Production or a live key on a Preview; on with the right key or VERCEL_ENV unset");
+    for (const [label, over] of [["a test key on Production", { VERCEL_ENV: "production" }], ["a live key on a Preview", { RAZORPAY_KEY_ID: LIVE_ID, VERCEL_ENV: "preview" }]]) {
+      const w3 = await world(over);
+      const f3 = await w3.add("mix" + label.length + "@example.com");
+      let ok = (await w3.get(f3)).json().payments === false;
+      for (const a of ["checkout", "checkout-return", "cancel"]) { r = await w3.act(f3, a); ok = ok && r.code === 503 && r.json().error === "payments_off"; }
+      check(ok && w3.rzpCalls.length === 0, `checkout, checkout-return and cancel: ${label} gives 503 payments_off with no Razorpay call`);
+    }
   }
 
   // checkout
@@ -3818,7 +3857,23 @@ const iso = (ms) => new Date(ms).toISOString();
     const off = world({ RAZORPAY_WEBHOOK_SECRET: " " });
     r = await off.send(ev("activated", rec));
     check(r.code === 503 && off.st.m.size === 0, "rzp webhook: no RAZORPAY_WEBHOOK_SECRET is 503");
-    done(w); done(off);
+    // T22: a key in the wrong environment: 503 before the body is read, so Razorpay retries once it is fixed
+    const LIVE_ID = "rzp_" + "live_" + "Fixture000021";
+    let mixOk = true;
+    for (const over of [{ RAZORPAY_KEY_ID: "rzp_" + "test_" + "Fixture000021", VERCEL_ENV: "production" }, { RAZORPAY_KEY_ID: LIVE_ID, VERCEL_ENV: "preview" }]) {
+      const mix = world(over);
+      const mrec = await mix.add("mix@example.com");
+      const snap = JSON.stringify([...mix.st.m]);
+      r = await mix.send(ev("activated", mrec));
+      mixOk = mixOk && r.code === 503 && r.json().error === "key mismatch" && mix.logs.includes("rzp-webhook key mismatch") && JSON.stringify([...mix.st.m]) === snap;
+      done(mix);
+    }
+    check(mixOk, "rzp webhook: a test key on Production or a live key on a Preview is 503 key mismatch, logged, and writes nothing");
+    const right = world({ RAZORPAY_KEY_ID: LIVE_ID, VERCEL_ENV: "production" });
+    const rrec = await right.add("right@example.com");
+    r = await right.send(ev("activated", rrec));
+    check(r.code === 200 && (await right.stored(rrec)).plan === "pro", "rzp webhook: a live key on Production works as before");
+    done(w); done(off); done(right);
   }
 
   // the event table
