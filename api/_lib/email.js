@@ -2,7 +2,7 @@
 // a saved sweep, or a short notice when nothing could be saved. Optional; it runs only when
 // RESEND_API_KEY and EMAIL_TO are set. Each message has an HTML and a plain-text part.
 import { esc } from "./http.js";
-import { CATS } from "./radar.js";
+import { CATS, ERR_MAX, failedCats, failedLine } from "./radar.js";
 
 // Resend's shared sender, so no domain of our own is needed. Resend delivers mail from it only
 // to the address the Resend account was created with; EMAIL_FROM on a verified domain lifts that.
@@ -19,13 +19,15 @@ const TEASER_INVITE = "Sign in to see everything: summaries, sources and product
 // The third argument is for the subscriber emails: `heading` replaces the title, and `subjectLead`
 // (for example "daily") makes the subject "Travel Problem Radar daily · <date> · ...". With no third
 // argument the output is exactly the owner's digest. `cats` (a Pro subscriber's choice, T14) limits
-// the sections and the "Failed this run" line to those categories; the caller filters `problems`.
+// the sections to those categories; the caller filters `problems`. A failed category in `perCat` puts
+// FAILED in the subject and its error in the body: that is the owner's alert, so subscriber callers pass
+// `perCat: {}`.
 // `teaser` (the Free email while the board is locked, T18) keeps the counts and the headlines only,
 // with no detail and no source link, and links to `signInUrl` instead of the board.
 export function buildDigestEmail({ at, problems, perCat = {}, manual = false }, liveUrl = "", { heading, subjectLead, cats = null, areas = null, teaser = false, signInUrl = "" } = {}) {
   if (teaser && !LINK_OK.test(signInUrl || "")) throw new Error("buildDigestEmail: bad sign-in link");
   const shown = cats ? CATS.filter((c) => cats.includes(c.key)) : CATS;
-  const failed = shown.filter((c) => /^failed/.test(perCat[c.key] || "")).map((c) => c.label);
+  const failed = failedCats(perCat, shown);
   const newCount = problems.filter((p) => p.isNew).length;
   const highCount = problems.filter((p) => p.severity === "High").length;
   const title = heading || (manual ? "Travel Problem Radar: digest (manual run)" : "Travel Problem Radar: digest");
@@ -33,7 +35,9 @@ export function buildDigestEmail({ at, problems, perCat = {}, manual = false }, 
   // The time keeps each subject unique, so mail apps don't thread five digests a day together.
   const lead = subjectLead ? `Travel Problem Radar ${subjectLead}` : "Travel Problem Radar";
   const stamp = subjectLead ? at.slice(0, 10) : when(at);
-  const subject = `${lead} · ${stamp} · ${problems.length} problems, ${newCount} new${manual ? " (manual run)" : ""}`;
+  // FAILED goes first, so a mail app that cuts the subject short still shows it.
+  const alert = failed.length ? ` · FAILED: ${failed.map((f) => f.label).join(", ")}` : "";
+  const subject = `${lead}${alert} · ${stamp} · ${problems.length} problems, ${newCount} new${manual ? " (manual run)" : ""}`;
 
   const text = [title, `Swept ${when(at)} · ${counts}`];
   const html = [
@@ -53,8 +57,12 @@ export function buildDigestEmail({ at, problems, perCat = {}, manual = false }, 
     html.push(`<p style="margin:0 0 12px">${esc(chosen)}</p>`);
   }
   if (failed.length) {
-    text.push(`Failed this run: ${failed.join(", ")}`);
-    html.push(`<p style="margin:0 0 12px">Failed this run: ${esc(failed.join(", "))}</p>`);
+    const line = `FAILED: ${failedLine(failed, shown.length)}`;
+    text.push(line, ...failed.map((f) => `  ${f.label}: ${f.error}`));
+    html.push(
+      `<p style="margin:0 0 4px;color:#b3261e;font-weight:600">${esc(line)}</p>`,
+      `<ul style="margin:0 0 12px;padding-left:20px">${failed.map((f) => `<li>${esc(f.label)}: ${esc(f.error)}</li>`).join("")}</ul>`,
+    );
   }
   if (teaser) {
     text.push(TEASER_INVITE, `Sign in: ${signInUrl}`);
@@ -105,7 +113,7 @@ export function buildDigestEmail({ at, problems, perCat = {}, manual = false }, 
 export function buildFailureEmail({ at, perCat = {}, error = "" }) {
   const lines = [`${when(at)}: nothing was saved, so the live board still shows the previous sweep.`];
   if (error) lines.push(`Error: ${error}`);
-  CATS.forEach((c) => { if (perCat[c.key]) lines.push(`${c.label}: ${perCat[c.key]}`); });
+  CATS.forEach((c) => { if (perCat[c.key]) lines.push(`${c.label}: ${String(perCat[c.key]).slice(0, ERR_MAX)}`); });
   return {
     subject: `Travel Problem Radar: sweep failed (${when(at)})`,
     text: ["Travel Problem Radar: sweep failed", ...lines].join("\n"),

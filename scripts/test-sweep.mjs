@@ -2,7 +2,9 @@
 // storage are stubbed, so this needs no network and no API key.
 //   node scripts/test-sweep.mjs
 import { readFileSync } from "node:fs";
+import { buildDigestEmail } from "../api/_lib/email.js";
 import { makeDataHandler, makeSweepHandler } from "../api/_lib/handlers.js";
+import { buildDigest } from "../api/_lib/slack.js";
 import { AREAS, CATS, KEY_ITEMS, KEY_LLMLOG_PREFIX, KEY_SEARCH, areaOf, extractProblems, llmLogKey, mergeSearch, runDailySweep, scanCategory, sweepKey, trackItems, trimSeen } from "../api/_lib/radar.js";
 import { SLOTS_BY_FREQ, dueSlot, normaliseSweepsPerDay, previousSlotAt, siteSweepsPerDay, slotOf, sweepLimits, sweepsPerDayOf } from "../api/_lib/schedule.js";
 import { check, finish, memStorage, mockRes } from "./test-helpers.mjs";
@@ -607,8 +609,9 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   check(ok.res.code === 200 && ok.res.json().slack === "sent" && ok.posts.length === 1, "saved sweep: digest posted to Slack once");
   check(text.includes("<https://example.com/1|Fees &lt;rise&gt; &amp; more>") && text.includes("*NEW*"),
     "digest links each title to its source, escapes Slack control characters, marks New");
-  check(text.includes("Failed this run: Gov &amp; policy") && text.includes("<https://radar.example.com/live/|Open the live board>"),
-    "digest names failed categories and links the live board");
+  check(text.includes("*FAILED: 1 of 4 categories failed this run; its problems are missing from this sweep.*")
+    && /\n• Gov &amp; policy: \S/.test(text) && text.includes("<https://radar.example.com/live/|Open the live board>"),
+    "digest flags failed categories with each one's error, and links the live board");
   check(ok.posts[0].unfurl_links === false && !ok.res.body.includes("not-a-real-secret") && !("problems" in ok.res.json()),
     "no link previews; response has neither the webhook URL nor the items");
 
@@ -672,13 +675,16 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   check(req.body.from === "Travel Problem Radar <onboarding@resend.dev>", "no EMAIL_FROM: sends from Resend's shared address, no domain needed");
   const own = await run({ e: { ...env, EMAIL_FROM: "Radar <radar@example.com>" } });
   check(own.sent[0].body.from === "Radar <radar@example.com>", "EMAIL_FROM, when set, is the sender");
-  check(req.body.subject === "Travel Problem Radar · 2027-01-15 08:00 UTC · 2 problems, 2 new (manual run)",
+  check(req.body.subject === "Travel Problem Radar · FAILED: Gov & policy · 2027-01-15 08:00 UTC · 2 problems, 2 new (manual run)",
     `subject has the time, the counts and the trigger (${req.body.subject})`);
   check(req.body.html.includes("<a href=\"https://example.com/a&quot;b\">Fees &lt;rise&gt; &amp; more</a>") && !/<rise>/.test(req.body.html),
     "HTML part escapes titles and links");
-  check(req.body.text.includes("Fees <rise> & more") && req.body.text.includes("Failed this run: Gov & policy")
+  check(req.body.text.includes("Fees <rise> & more") && req.body.text.includes("FAILED: 1 of 4 categories failed this run; its problems are missing from this sweep.")
+    && /\n  Gov & policy: \S/.test(req.body.text)
     && req.body.text.includes("Live board: https://radar.example.com/live/") && /not verified/.test(req.body.text),
-    "plain-text part has the items, failed categories, live board link and the not-verified note");
+    "plain-text part has the items, failed categories with their errors, live board link and the not-verified note");
+  check(req.body.html.includes("FAILED: 1 of 4 categories failed this run") && /<li>Gov &amp; policy: \S/.test(req.body.html),
+    "HTML part has the same alert and errors");
   check(!ok.res.body.includes("re_test_fake") && !ok.res.body.includes("a@example.com") && !ok.res.body.includes("b@example.com"),
     "reply has neither the key nor any address");
 
@@ -717,6 +723,32 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   const broken = { get: async () => null, set: async () => { throw new Error("Vercel Blob: No blob credentials found"); }, del: async () => {} };
   const err = await run({ st: broken, headers: cron });
   check(err.res.code === 500 && err.res.json().email === "sent" && /No blob credentials/.test(err.sent[0].body.text), "sweep error: failure email sent, still 500");
+}
+
+// ---- LLM-failure alert: the owner's digest names each failed category with its error
+{
+  const at = "2027-01-15T08:00:00.000Z";
+  const problems = [{ id: "a", cat: "traveler_pain", title: "T", summary: "", source: "S", link: "", region: "Europe", date: "Jan 2027", severity: "Medium", opportunity: "", isNew: true }];
+  const two = { traveler_pain: "1 item", gov_policy: "failed: <b>overloaded</b> & retry", web_app: "0 items", industry: "failed: timeout" };
+  const m = buildDigestEmail({ at, problems, perCat: two });
+  check(m.subject === "Travel Problem Radar · FAILED: Gov & policy, Industry · 2027-01-15 08:00 UTC · 1 problems, 1 new",
+    `two failed: both named in the subject, first (${m.subject})`);
+  check(m.text.includes("FAILED: 2 of 4 categories failed this run; their problems are missing from this sweep.")
+    && m.text.includes("  Gov & policy: <b>overloaded</b> & retry") && m.text.includes("  Industry: timeout") && !/failed: timeout/.test(m.text),
+    "email: each failed category with its error, without the failed: prefix");
+  check(m.html.includes("<li>Gov &amp; policy: &lt;b&gt;overloaded&lt;/b&gt; &amp; retry</li>") && !m.html.includes("<b>overloaded"), "email: the error is escaped in HTML");
+  const s = buildDigest({ at, problems, perCat: two });
+  check(s.includes("*FAILED: 2 of 4 categories failed this run; their problems are missing from this sweep.*")
+    && s.includes("• Gov &amp; policy: &lt;b&gt;overloaded&lt;/b&gt; &amp; retry") && s.includes("• Industry: timeout"), "slack: the same alert, escaped for Slack");
+  const long = buildDigestEmail({ at, problems, perCat: { industry: "failed: " + "x".repeat(1000) } });
+  const line = long.text.split("\n").find((l) => l.startsWith("  Industry: "));
+  check(line.length === "  Industry: ".length + 300 && buildDigest({ at, problems, perCat: { industry: "failed: " + "x".repeat(1000) } }).includes("x".repeat(300) + "\n"),
+    "a 1,000-character error is cut to 300 in email and Slack");
+  const ok = buildDigestEmail({ at, problems, perCat: { traveler_pain: "1 item", industry: "0 items" } });
+  check(!/FAILED|fail/i.test(ok.subject + ok.text + ok.html) && !/FAILED/.test(buildDigest({ at, problems, perCat: { industry: "0 items" } })),
+    "no failed category: no FAILED subject and no alert");
+  const bare = buildDigestEmail({ at, problems, perCat: { industry: "failed" } });
+  check(bare.text.includes("  Industry: no reason given"), "a failure with no reason still says so");
 }
 
 // ---- T32: sweeps a day. Slots, the site's number, and the handler skipping unneeded slots

@@ -374,7 +374,9 @@ automatically after every production deploy, call the same URL from a GitHub Act
 | 503 | `{"trigger":"manual","error":"couldn't record the manual run; …"}` | Storage didn't accept the manual run's record, so it didn't run | Check storage (see Troubleshooting) |
 
 If some categories fail and others succeed, the run still saves (status `saved`), and `perCat` marks the failed
-ones as `failed: …`.
+ones as `failed: …`. The owner hears about it: the Slack digest and the `EMAIL_TO` email flag it as FAILED, with
+each failed category's error. Subscribers don't: their emails carry the categories that saved and never mention a
+failure. When every category fails, nothing is saved and no subscriber is emailed.
 
 `trigger` says how the server classed the call: `scheduled` for the GitHub Actions schedule or Vercel's timer,
 `manual` for anything else, including **Run workflow**.
@@ -710,7 +712,7 @@ After each sweep, the server can post to one Slack channel through an incoming w
 
 | Sweep result | Slack message |
 |---|---|
-| Saved | The digest: counts, any failed categories, a link to the live board, then every item by category, with severity, a NEW tag, the title linked to its source, summary, source, region, date and opportunity |
+| Saved | The digest: counts; if some categories failed, a bold FAILED line saying how many, then each one with its error; a link to the live board, then every item by category, with severity, a NEW tag, the title linked to its source, summary, source, region, date and opportunity |
 | Every category failed, or an error stopped the run | A short notice that nothing was saved, with the reason for each category or the error |
 | Skipped (a slot already swept, or not needed) | Nothing |
 
@@ -745,7 +747,9 @@ The same messages can also go by email through [Resend](https://resend.com) (`ap
 every saved sweep, a short notice when nothing was saved, and nothing for a skipped call. Each email has an HTML part
 and a plain-text part. The subject carries the sweep time and counts, for example
 `Travel Problem Radar · 2026-10-21 05:17 UTC · 18 problems, 4 new`, so mail apps don't thread a day's digests
-together.
+together. If some categories failed, the subject starts with them, for example
+`Travel Problem Radar · FAILED: Industry · 2026-10-21 05:17 UTC · 14 problems, 3 new`, and the email lists each
+one with its error.
 
 **No domain is needed.** Mail is sent from Resend's shared address, `Travel Problem Radar <onboarding@resend.dev>`.
 The catch: Resend delivers mail from that address **only to the email the Resend account was created with**. Any
