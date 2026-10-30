@@ -81,14 +81,19 @@ GitHub Issues and labels: free. No new tools.
 
 ## The log
 
-The owner's 7 notes, as of 2026-10-30, with addresses left out. Severities are proposals for the owner.
+The owner's 7 notes, as of 2026-10-30, with addresses left out, then the bugs found by the first test run
+(BUG-008 onwards, [results](results/TS19-results.md)). Severities are proposals for the owner.
 
 | ID | What was seen | Severity (proposed) | Found in | Next step | Task | State |
 |---|---|---|---|---|---|---|
 | BUG-001 | After Google sign-in to an existing account, the payment page shows; after paying, there's no redirect to the live page | S2 | Not recorded | Reproduce on staging with TC-P-2; record the URL after paying | TS08 | New |
 | BUG-002 | One account sees the live page; another, the one used to test Razorpay, doesn't | S1 until the cause is known | Not recorded | Compare both records read-only with `subscribers.mjs show --check`; rule out the staging and production Blob stores being different, don't assume it | TS08 | New |
-| BUG-003 | Which accounts still get email? | Question, not yet a bug | Not recorded | Read-only: `subscribers.mjs list` and the admin counts. A bug only if someone gets email they shouldn't | TS08 | New |
+| BUG-003 | Which accounts still get email? | Question, not yet a bug | Production | Answered 2026-10-30 by counts: all 8 confirmed members (3 Free, 5 Pro, none with email off) get email as they chose; 29 Oct slot 10: Pro due 5, sent 4, 1 not this slot, failed 0. Owner to close as not a bug | TS08 | New: answered |
 | BUG-004 | Sign-up should verify the account | S2 if any path sends to an unproven inbox; otherwise closed | Not recorded | TC-F-3: record how each sign-up path proves the inbox | TS08 | New |
-| BUG-005 | A Sign in option shows on the pricing page when already signed in | S3 | Not recorded | List every page with Sign in and check each signed in | TS10 | New |
-| BUG-006 | Check the demo for spelling mistakes | S4 | Not recorded | Spell-check our own copy on every page | TS10 | New |
-| BUG-007 | `/subscribe/` and `/manage/`: what's the difference? | S3, or closed on retest | Not recorded | Retest: `/subscribe/` has redirected to `/pricing/` since 2026-10-28 (`aa080e2`); check pricing and manage each have one job | TS10 | New |
+| BUG-005 | A Sign in option shows on the pricing page when already signed in | S3 | Production | Fixed in `ebc4daf` (2026-10-28): 10 pages swap Sign in for Account when signed in. Owner retests signed in on each | TS10 | Fixed: retest due |
+| BUG-006 | Check the demo for spelling mistakes | S4 | Production | Mechanical check 2026-10-30 passed (sample data, board copy, 14 built pages). A person reads the demo once | TS10 | Open: partly retested |
+| BUG-007 | `/subscribe/` and `/manage/`: what's the difference? | S3, or closed on retest | Production | Retest 2026-10-30: `/subscribe/` gives 307 to `/pricing/`. Owner decides whether pricing and manage each have one job, and closes | TS10 | Open: redirect confirmed |
+| BUG-008 | Scheduled sweeps run 155 to 418 minutes (median 337) after their slot; `/manage/` promises about 05:47 and 15:47 IST, members get them about 07:57 and 21:25 to 22:28 IST | S3 | Production | Find what triggers the 02:27 UTC sweep, then fix the timing or the `/manage/` wording. Related: T35 in `progress.md` | TS14 | New |
+| BUG-009 | `npm audit`: 4 high (`zod` below 4.6.6 through `@vercel/blob`), 1 moderate (`esbuild`, dev only) | S3 | Local | Owner picks the fix (a newer `@vercel/blob`, or an `overrides` entry); ask before upgrading | TS15 | New |
+| BUG-010 | No security headers beyond HSTS: no CSP, `X-Content-Type-Options`, `frame-ancestors` or `Referrer-Policy` | S3 | Production | A `headers` block in `vercel.json`, tested on staging first (a wrong CSP breaks checkout), plus a `check.mjs` rule | TS15 | New |
+| BUG-011 | No skip link on 13 of 14 pages (only the home page has one) | S3 | Local | Add one to each page, plus a `check.mjs` rule | TS17 | New |
