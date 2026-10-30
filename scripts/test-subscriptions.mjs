@@ -968,6 +968,54 @@ const iso = (ms) => new Date(ms).toISOString();
   out = await w.run(await w.addSweep("1792570150123", T0, [prob("a")]));
   check(out.pro.due === 0 && out.free.sent === 1 && /daily digest/.test(w.mails[0].text), "delivery: a Pro whose proUntil has passed is in the Free group");
 
+  // 13. T22 tidy step: paid Pro past its end (grace included) whose webhook was missed
+  {
+    w = world();
+    const paid = async (n, status, proUntil, extra = {}) => {
+      const rec = { ...(await w.addSub(n, { plan: "pro", proSource: "razorpay", proUntil: iso(proUntil) })),
+        rzp: { subscriptionId: "sub_T22tidy" + n, status, currentEnd: Math.floor(proUntil / 1000), cancelAtPeriodEnd: false, lastEventAt: iso(T0 - 40 * DAY), ...extra } };
+      await putSubscriber(w.st, rec);
+      return rec;
+    };
+    const ended = [await paid(1, "cancelled", T0 - 1000), await paid(2, "completed", T0 - DAY), await paid(3, "halted", T0 - HOUR), await paid(4, "expired", T0 - 1000)];
+    const overdue = await paid(5, "active", T0 - (PRO_GRACE_HOURS + 1) * HOUR);
+    const inGrace = await paid(6, "active", T0 - (PRO_GRACE_HOURS - 2) * HOUR); // still inside after the 1-hour tick below
+    const authed = await paid(7, "authenticated", T0 - DAY);
+    const notYet = await paid(8, "cancelled", T0 + 10 * DAY, { cancelAtPeriodEnd: true }); // past the 7-day end warning
+    const owner = await w.addSub(9, { plan: "pro", proSource: "owner", proUntil: iso(T0 - DAY) });
+    const before = {};
+    for (const r of [overdue, inGrace, authed, notYet, owner]) before[r.id] = JSON.stringify(await getSubscriber(w.st, r.id));
+    out = await w.run(await w.addSweep("1792570150123", T0, [prob("a")]));
+    let allFree = true;
+    for (const r of ended) {
+      const s = await getSubscriber(w.st, r.id);
+      allFree = allFree && s.plan === "free" && s.proSource === null && s.proUntil === null && JSON.stringify(s.rzp) === JSON.stringify(r.rzp) && s.status === "active";
+    }
+    const revoked = () => [...w.st.m.keys()].filter((k) => k.startsWith("radar:event:") && k.includes("-prorevoked-"));
+    check(allFree && out.proLapsed === 4 && revoked().length === 4,
+      "delivery tidy: paid Pro past its end with Razorpay cancelled, completed, halted or expired turns Free, keeps rzp, and records prorevoked");
+    let untouched = true;
+    for (const r of [overdue, inGrace, authed, notYet, owner]) untouched = untouched && JSON.stringify(await getSubscriber(w.st, r.id)) === before[r.id];
+    check(untouched && out.rzpMismatch === 1, "delivery tidy: an active subscription past the grace is counted as rzpMismatch and left; inside the grace, authenticated, not yet ended and owner Pro are untouched");
+    check(out.pro.due === 2 && count(w, "s6@example.com") === 1 && count(w, "s8@example.com") === 1 && /daily digest/.test(w.mails.find((m) => m.to[0] === "s5@example.com").text),
+      "delivery tidy: inside the grace and before the end still get Pro; the overdue one gets the Free digest");
+    w.tick(HOUR);
+    out = await w.run(await w.addSweep("1792573750123", T0 + HOUR, [prob("b")]));
+    check(out.proLapsed === 0 && revoked().length === 4 && out.rzpMismatch === 1, "delivery tidy: the next sweep finds nothing more to move, and counts the mismatch again");
+    // a webhook that lands between the list and the write wins
+    w = world();
+    const raced = await paid(1, "cancelled", T0 - 1000);
+    let raceDone = false;
+    w.st.beforeWrite = async (key) => {
+      if (raceDone || key !== "radar:sub:" + raced.id) return;
+      raceDone = true;
+      await w.st.set(key, JSON.stringify({ ...raced, proUntil: iso(T0 + 30 * DAY), rzp: { ...raced.rzp, status: "active" } }));
+    };
+    out = await w.run(await w.addSweep("1792570150123", T0, [prob("a")]));
+    const s = await getSubscriber(w.st, raced.id);
+    check(out.proLapsed === 0 && s.plan === "pro" && s.proUntil === iso(T0 + 30 * DAY) && revoked().length === 0, "delivery tidy: a record renewed between the list and the write is left Pro");
+  }
+
   // old delivery files
   w = world();
   await w.addSub(1);
