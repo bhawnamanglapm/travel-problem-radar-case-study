@@ -25,7 +25,7 @@ from the browser without a key, which only works inside Claude's app. That is wh
 ```
 GitHub Actions, every 5 hours (00:17, 05:17, 10:17, 15:17, 20:17 UTC); a slot no Pro member needs is
   skipped before any Claude call (T32)
-  + Vercel cron, once a day (01:30 UTC), as a backstop
+  + Vercel cron, once a day (00:05 UTC), as a backstop; it sweeps slot 00, since GitHub runs late (BUG-008)
   -> /api/sweep   (refuses calls without the secret; each slot sweeps once, counted as the slot the
                    GitHub run was due for even when it starts late (T35); a manual call always runs)
        4 Claude calls with web search, one per category, same prompts as the component
@@ -139,7 +139,7 @@ Email has been sent through a real Resend account since 21 Oct 2026, from the ve
 | `api/_lib/subscriber-delivery.js` | After a saved sweep: Pro and Free sends, the 24-hour roll-up, resuming a cut-off send |
 | `api/_lib/plan.js` | Pro's price from `plan.json` (T33): one plan, a `monthly` and a `yearly` price; the periods on sale; and `RAZORPAY_PLANS` (one ₹1 Razorpay plan per period; a subscription's quantity is the price). Used by `/api/account`, `fill-plan` and `check-plan` |
 | `api/_lib/razorpay.js` | Razorpay for paid Pro (T19): create, cancel and fetch a subscription, and the webhook and Checkout signature checks. Used by `/api/account`'s checkout, checkout-return and cancel (T20) |
-| `vercel.json` | Daily backstop cron (01:30 UTC), 300 s limit, build that publishes `index.html`, `demo/`, `live/`, `subscribe/`, `manage/`; the `/p/<sweep>/<item>` rewrite to `/api/data` (T40) |
+| `vercel.json` | Daily backstop cron (00:05 UTC), 300 s limit, build that publishes `index.html`, `demo/`, `live/`, `subscribe/`, `manage/`; the `/p/<sweep>/<item>` rewrite to `/api/data` (T40) |
 | `og.png`, `scripts/og-card.html` | The link-preview image (1200×630) and the page it was rendered from (T40) |
 | `travel-problem-radar.jsx` | The dashboard component (live in Claude's app, demo on the web) |
 | `sampleData.json` | 8 saved items, two per category, each with a source link |

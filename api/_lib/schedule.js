@@ -13,7 +13,7 @@ const HOUR_MS = 3600 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 
 // The slot a time falls in: the UTC hour rounded down to a multiple of 5, and when that slot began.
-// A GitHub run at 05:40 is slot 05; the Vercel backstop at 01:30 is slot 00.
+// A GitHub run at 05:40 is slot 05; the Vercel backstop at 00:05 is slot 00.
 export function slotOf(t) {
   const d = new Date(t);
   const hour = Math.floor(d.getUTCHours() / 5) * 5;

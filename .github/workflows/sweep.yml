@@ -2,7 +2,8 @@ name: sweep
 
 # Runs the sweep every 5 hours: 00:17, 05:17, 10:17, 15:17 and 20:17 UTC (a 4-hour gap over
 # midnight, because 24 isn't divisible by 5). Vercel's Hobby plan only allows a daily cron, so
-# this calls the same endpoint with the same secret; the daily Vercel cron stays as a backstop.
+# this calls the same endpoint with the same secret; the daily Vercel cron (00:05 UTC) stays as a backstop and,
+# since these runs start hours late, normally sweeps slot 00 first (BUG-008).
 # Minute 17 avoids the top of the hour, when GitHub delays scheduled runs the most.
 # One line per slot, so each run can say which slot it was due for (X-Sweep-Slot, T35): GitHub has started runs
 # up to 4 h 35 m late, and the sweep would otherwise count a late run in the next slot.
