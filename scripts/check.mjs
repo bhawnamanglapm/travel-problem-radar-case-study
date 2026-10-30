@@ -85,10 +85,10 @@ check(/\bcp -r [^&]*\badmin\b[^&]* public\//.test(siteBuild) && /fetch\("\/api\/
   "admin/index.html ships, is self-contained and reads /api/admin");
 check(/<meta name="robots" content="noindex"/.test(adminPage) && /<meta name="referrer" content="no-referrer"/.test(adminPage) && !/@[a-z0-9-]+\.[a-z]{2,}/i.test(adminPage),
   "admin/index.html is not indexed, sends no Referer and holds no email address");
-// T41 follow-up: the admin page names the same seven areas the manage page offers, in order.
+// T41 follow-up: the admin page names the same areas the manage page offers, in order.
 const adminAreas = JSON.parse((adminPage.match(/var AREA_NAMES = (\[[^\]]*\]);/) || [, "[]"])[1]);
-check(JSON.stringify(adminAreas) === JSON.stringify(["Asia", "Europe", "North America", "Latin America", "Middle East & Africa", "Oceania", "Other"]) && /<th scope="col">Areas<\/th>/.test(adminPage) && /"areas", "emails_per_day"/.test(adminPage),
-  "admin/index.html shows Pro areas (the seven T41 areas, in order) as a card, a column and a CSV field");
+check(JSON.stringify(adminAreas) === JSON.stringify(["Asia", "India", "Europe", "North America", "Latin America", "Middle East & Africa", "Oceania", "Other"]) && /<th scope="col">Areas<\/th>/.test(adminPage) && /"areas", "emails_per_day"/.test(adminPage),
+  "admin/index.html shows Pro areas (the T41 areas with India, T42, in order) as a card, a column and a CSV field");
 
 // 4c. Manage page (Vercel): self-contained, talks to /api/account, never leaks its token link.
 const manPage = existsSync("manage/index.html") ? readFileSync("manage/index.html", "utf8") : "";
@@ -102,7 +102,7 @@ check(JSON.stringify(manBoxes) === JSON.stringify(CATS) && JSON.stringify(manOpt
 // T41: an Areas choice under Categories, one checkbox per area of T37's list except Global, saved with set-plan.
 const manAreaBox = (manPage.match(/<fieldset class="cats sub" id="areas"[\s\S]*?<\/fieldset>/) || [""])[0];
 const manAreas = [...manAreaBox.matchAll(/<input type="checkbox" value="([^"]+)"/g)].map((m) => m[1].replace(/&amp;/g, "&"));
-check(JSON.stringify(manAreas) === JSON.stringify(["Asia", "Europe", "North America", "Latin America", "Middle East & Africa", "Oceania", "Other"])
+check(JSON.stringify(manAreas) === JSON.stringify(["Asia", "India", "Europe", "North America", "Latin America", "Middle East & Africa", "Oceania", "Other"])
   && /name="areaMode" value="all"/.test(manPage) && /name="areaMode" value="some"/.test(manPage) && /action: "set-plan", cats: c\.cats, areas: c\.areas/.test(manPage),
   "manage/index.html offers all areas or a choice (one checkbox per area except Global, in order), saved with set-plan (T41)");
 check(!/\.innerHTML\s*=/.test(manPage), "manage/index.html writes server data with textContent only, never innerHTML");

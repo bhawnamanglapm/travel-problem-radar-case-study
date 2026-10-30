@@ -29,8 +29,8 @@ of it every day. The user is a product manager looking for travel problems worth
 ### The solution
 
 One to five times a day, as often as the most frequent Pro member chooses, a server job asks Claude (Haiku 5.5),
-with web search, for recent problems in four categories, and saves up to 5 per category with a source, severity and a
-one-line product opportunity. Sources over 60 days old are dropped, and new items are flagged. Readers get a public
+with web search, for recent problems in four categories, and saves up to 5 per category, plus up to 2 from India, with a
+source, severity and a one-line product opportunity. Sources over 60 days old are dropped, and new items are flagged. Readers get a public
 demo, a daily teaser email (Free), or the live board with details, areas, search across sweeps, saved problems and
 share pages, plus 1 to 5 emails a day (Pro, ₹1 a month or ₹1 a year since 2026-10-28; it was ₹299 a month in the
 plan). [PRD v2](02-product-definition/prd.md)

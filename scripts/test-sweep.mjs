@@ -393,6 +393,23 @@ const sweepOpts = (storage, byCat, now) => ({
   check(mr.code === 0 && mr.out.includes("m: 2 sweeps") && mr.out.includes("(8 calls not priced, left out)"), "llm-logs models: reads the store's logs");
   check((await run(["models", "--days", "31"])).code === 2 && (await run(["models", "x"])).code === 2 && (await run(["models", "--days", "1"])).out.includes("1 sweep,"),
     "llm-logs models: --days is 1 to 30; no other arguments");
+
+  // T42: items by area and India's share (KPI-20)
+  const said = (cat, list, more = {}) => ({ cat, items: list.length, ...more, response: { content: [{ type: "text", text: JSON.stringify(list) }] } });
+  const ar = logOf(6, 29, "m", [
+    said("traveler_pain", [item(1, { region: "Mumbai, India" }), item(2, { region: "Japan" }), item(3, { region: "India" })], { dropped: [{ title: "Problem 3" }] }),
+    said("gov_policy", [item(4, { region: "Bengaluru" }), item(5, { region: "United States" }), item(6, { region: "Worldwide" })]),
+    { ...said("web_app", [item(7, { region: "India" })]), error: "http 529" },
+  ]);
+  check(JSON.stringify(tool.shownItems(ar).map((x) => x.title)) === JSON.stringify(["Problem 1", "Problem 2", "Problem 4", "Problem 5", "Problem 6"]),
+    "llm-logs areas: the items shown, without a failed call's or a dropped one");
+  const at = tool.formatAreas([ar], 7);
+  check(/^Items by area, from 1 sweep in the last 7 days: 5 items shown.$/m.test(at) && /^ {2}India +2 {2}40.0%$/m.test(at) && /^ {2}Asia +1 {2}20.0%$/m.test(at)
+    && /^ {2}North America +1 {2}20.0%$/m.test(at) && /^ {2}Global +1 {2}20.0%$/m.test(at) && /^India: 2 of 5 \(40\.0%\), 2\.0 a sweep \(KPI-20\)\.$/m.test(at),
+    "llm-logs areas: each area's count and share, and India's share a sweep");
+  const ra = await run(["areas"]);
+  check(ra.code === 0 && /from 2 sweeps in the last 7 days: 2 items shown/.test(ra.out) && /^India: 0 of 2/m.test(ra.out) && (await run(["areas", "x"])).code === 2,
+    "llm-logs areas: reads the store's logs; no other arguments");
 }
 
 // ---- source freshness: each item's source dated from search's page age, sources over 60 days dropped
@@ -553,11 +570,15 @@ const sweepOpts = (storage, byCat, now) => ({
     "Global": "Global", "global": "Global", "Worldwide": "Global", "": "Global", "  ": "Global",
     "US and Europe": "Global", "India/Europe": "Global", "Spain / Global": "Global", "Global (mostly US)": "Global",
     "Narnia": "Other", "Antarctica": "Other", "???": "Global",
+    // T42: India is its own area; text naming India and elsewhere in Asia is Asia.
+    "India": "India", "Mumbai": "India", "Bengaluru, India": "India", "New Delhi": "India", "Goa": "India",
+    "Kerala, India": "India", "India (IndiGo flights)": "India", "India and Nepal": "Asia", "South Asia": "Asia",
   };
   const wrong = Object.entries(cases).filter(([r, a]) => areaOf(r) !== a).map(([r, a]) => `${JSON.stringify(r)} gave ${areaOf(r)}, not ${a}`);
   check(wrong.length === 0, "areaOf: countries, continents, short forms, mixed text, brackets, empty, Global and nonsense" + (wrong.length ? " (" + wrong.join("; ") + ")" : ""));
   check(areaOf(null) === "Global" && areaOf(undefined) === "Global" && areaOf(42) === "Other", "areaOf: a missing region is Global, and a non-string doesn't throw");
-  check(AREAS.length === 8 && AREAS[0] === "Global" && AREAS[7] === "Other", "AREAS: the 8 areas, Global first and Other last");
+  check(AREAS.length === 9 && AREAS[0] === "Global" && AREAS[8] === "Other" && AREAS.indexOf("India") === AREAS.indexOf("Asia") + 1,
+    "AREAS: the 9 areas, Global first, India after Asia (T42) and Other last");
   const sample = JSON.parse(readFileSync(new URL("../sampleData.json", import.meta.url), "utf8"));
   check(sample.every((p) => AREAS.includes(areaOf(p.region)) && areaOf(p.region) !== "Other"), "areaOf: every region in sampleData.json lands in a named area");
 }
@@ -655,10 +676,14 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
 // ---- request sent to Anthropic
 {
   const seen = [];
-  await scanCategory(CATS[0], { fetchFn: fakeFetch({ traveler_pain: [] }, { seenCats: seen }), apiKey: "sekret", model: "claude-test", maxSearches: 3 });
+  await scanCategory(CATS[0], { fetchFn: fakeFetch({ traveler_pain: [] }, { seenCats: seen }), apiKey: "sekret", model: "claude-test" });
   const b = seen[0].body;
-  check(b.model === "claude-test" && b.max_tokens === 16000 && b.output_config.effort === "low" && b.tools[0].max_uses === 3,
-    "request uses the configured model, 16000 max tokens, low effort, 3 searches");
+  check(b.model === "claude-test" && b.max_tokens === 16000 && b.output_config.effort === "low" && b.tools[0].max_uses === 4,
+    "request uses the configured model, 16000 max tokens, low effort, 4 searches (one more for India, T42)");
+  const ask = b.messages[0].content;
+  check(/up to 5 objects from anywhere, plus up to 2 more about India/.test(ask) && /return none rather than stretch/.test(ask)
+    && /"region" is "India"/.test(ask) && /DGCA/.test(ask) && /IRCTC/.test(ask),
+    "the prompt asks for up to 2 India items only where real ones exist, with region India (T42)");
   check(seen[0].headers["x-api-key"] === "sekret" && !JSON.stringify(b).includes("sekret"), "key goes in a header, never in the body");
 }
 

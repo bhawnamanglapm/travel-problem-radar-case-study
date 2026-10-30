@@ -24,7 +24,7 @@ Per-file counts are the `PASS` lines each file printed on 2026-10-30.
 
 | Req | Code | Verified by | Status |
 |---|---|---|---|
-| REQ-01 Four categories, one call each, up to 5 items | `api/_lib/radar.js` | test-sweep: "the sweep itself", "request sent to Anthropic". check §5: the server prompt matches the component | Live |
+| REQ-01 Four categories, one call each, up to 5 items, plus up to 2 from India | `api/_lib/radar.js` | test-sweep: "the sweep itself", "request sent to Anthropic". check §5: the server prompt matches the component | Live; the India part not yet live (REQ-47) |
 | REQ-02 Item fields and severity | `normalize()` in `api/_lib/radar.js` | test-sweep: "parser". check §1: sample data shape | Live |
 | REQ-03 New flags | `runDailySweep()` | test-sweep: "the sweep itself" | Live |
 | REQ-04 Keep 60 sweeps | `runDailySweep()` | test-sweep: "60-sweep cap" | Live |
@@ -80,6 +80,7 @@ Per-file counts are the `PASS` lines each file printed on 2026-10-30.
 | REQ-44 Delete account cancels Razorpay first | `deleteSubscriber()` | test-subscriptions: "T17: … Delete my account", "delete and Razorpay (2026-10-27)" | Live |
 | REQ-45 Sources over 60 days dropped | `api/_lib/radar.js` | test-sweep: "source freshness" | Live |
 | REQ-46 Cost per sweep and category | The LLM log, `scripts/cost-per-run.mjs` | test-sweep: the "LLM log" sections. test-cost (all sections) | Live |
+| REQ-47 India items and the India area | `buildPrompt` and `scanCategory` (4 searches), `AREAS` and `areaOf` in `api/_lib/radar.js`; `readAreas` in `api/_lib/subscribers.js`; `scripts/llm-logs.mjs areas` | test-sweep: "T37: areaOf" (the T42 cases), "request uses … 4 searches", "the prompt asks for up to 2 India items", "llm-logs areas". test-subscriptions: "readAreas", "set-areas … (T42)", the T42 "pro areas" cases. test-admin: the areas rows. check §5: both copies of the prompt and the areas block; the admin and manage area lists | Built on `feat/india-focus` at `52ef57f` (1,590 tests, 249 checks pass); not yet live |
 
 ## Gaps in coverage
 

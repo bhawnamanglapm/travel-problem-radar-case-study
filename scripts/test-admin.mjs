@@ -172,14 +172,15 @@ async function world(env = ENV) {
   const w = await world(ENV);
   const d = (await w.call({ cookie: w.cookieOf(await w.login()) })).json();
   const by = Object.fromEntries(d.subscribers.map((r) => [r.email, r]));
-  check(by["monthly@example.com"].areas.join() === "Asia,Other" && by["owner@example.com"].areas.join() === "Asia" && by["yearly@example.com"].areas === null,
-    "admin: a row has the areas chosen, or null for all");
+  check(by["monthly@example.com"].areas.join() === "Asia,India,Other" && by["owner@example.com"].areas.join() === "Asia,India" && by["yearly@example.com"].areas === null,
+    "admin: a row has the areas chosen, or null for all; an Asia list from before T42 reads with India");
   const s = d.summary;
-  check(s.areas.Asia === 2 && s.areas.Other === 1 && s.areas.Europe === 0 && s.allAreas === 1 && Object.keys(s.areas).length === 7 && !("Global" in s.areas),
+  check(s.areas.Asia === 2 && s.areas.India === 2 && s.areas.Other === 1 && s.areas.Europe === 0 && s.allAreas === 1 && Object.keys(s.areas).length === 8 && !("Global" in s.areas),
     "admin: the summary counts Pro members' areas (a lapsed Pro's are not counted), with no Global");
-  const all7 = ["Asia", "Europe", "North America", "Latin America", "Middle East & Africa", "Oceania", "Other"];
-  check(adminRow({ areas: ["Mars"] }, T0).areas === null && adminRow({ areas: "Asia" }, T0).areas === null && adminRow({ areas: all7 }, T0).areas === null
-    && adminRow({ areas: ["Other", "Asia"] }, T0).areas.join() === "Asia,Other", "admin: stored areas that aren't valid read as all; a valid list is put in order");
+  const old7 = ["Asia", "Europe", "North America", "Latin America", "Middle East & Africa", "Oceania", "Other"];
+  check(adminRow({ areas: ["Mars"] }, T0).areas === null && adminRow({ areas: "Asia" }, T0).areas === null && adminRow({ areas: old7 }, T0).areas === null
+    && adminRow({ areas: ["Other", "Asia"], areasV: 2 }, T0).areas.join() === "Asia,Other" && adminRow({ areas: ["Other", "Asia"] }, T0).areas.join() === "Asia,India,Other",
+    "admin: stored areas that aren't valid read as all; a valid list is put in order; the seven from before T42 read as all");
 }
 
 // ---- rows from odd records

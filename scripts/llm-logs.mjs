@@ -6,6 +6,7 @@
 //   node --env-file=.env.local scripts/llm-logs.mjs summary <id|latest>
 //   node --env-file=.env.local scripts/llm-logs.mjs show <id|latest>
 //   node --env-file=.env.local scripts/llm-logs.mjs models [--days 30]
+//   node --env-file=.env.local scripts/llm-logs.mjs areas [--days 7]
 //
 // `list`: one line per sweep that ran, newest first, with its tokens, searches, pages, model and cost.
 // `summary`: one sweep's model, cost and totals, per-call outcomes, the pages search found (link, title, age) and
@@ -15,14 +16,15 @@
 // `models`: the logs grouped by model, with averages per sweep: items, pages, searches, tokens, cost, failed calls,
 // quotes, how old the search pages were, how old the items' sources were, and how many item links search never
 // returned. Volume, freshness and cost, not quality.
+// `areas`: the items the sweeps showed, by area (areaOf, as the board places them), and India's share (KPI-20, T42).
 // Costs are list prices (scripts/compare-models.mjs) applied to the usage the API reported, as cost-per-run.mjs does.
 // Exit codes: 0 done, 1 not found or error, 2 bad usage.
 import { pathToFileURL } from "node:url";
-import { KEY_LLMLOG_PREFIX, LLM_LOG_KEEP_DAYS, SOURCE_MAX_DAYS, dateSources, extractProblems, llmLogKey, pageAgeDays } from "../api/_lib/radar.js";
+import { AREAS, KEY_LLMLOG_PREFIX, LLM_LOG_KEEP_DAYS, SOURCE_MAX_DAYS, areaOf, dateSources, extractProblems, llmLogKey, pageAgeDays } from "../api/_lib/radar.js";
 import { costLog, priceCall } from "./cost-per-run.mjs";
 
 const DAY_MS = 24 * 3600 * 1000;
-const COMMANDS = { list: 0, summary: 1, show: 1, models: 0 };
+const COMMANDS = { list: 0, summary: 1, show: 1, models: 0, areas: 0 };
 const OLD_PAGE_DAYS = 30;
 
 class UsageError extends Error {}
@@ -33,7 +35,7 @@ export function parseArgs(argv) {
   const args = [];
   let days = cmd === "models" ? LLM_LOG_KEEP_DAYS : 7;
   for (let i = 0; i < rest.length; i++) {
-    if (rest[i] === "--days" && (cmd === "list" || cmd === "models")) {
+    if (rest[i] === "--days" && (cmd === "list" || cmd === "models" || cmd === "areas")) {
       const d = rest[i + 1] || "";
       if (cmd === "models" && (!/^\d{1,2}$/.test(d) || Number(d) < 1 || Number(d) > LLM_LOG_KEEP_DAYS)) {
         throw new UsageError(`--days must be a whole number from 1 to ${LLM_LOG_KEEP_DAYS}`);
@@ -231,6 +233,48 @@ export function formatModels(logs, days) {
   return out.join("\n");
 }
 
+// The items a sweep showed, read back from its answers: a failed call lost its items, and one dropped as too old
+// wasn't shown.
+export function shownItems(lg) {
+  const out = [];
+  for (const c of lg.calls || []) {
+    if (!c || c.error) continue;
+    let items;
+    try { items = extractProblems({ content: blocksOf(c).filter((b) => b.type === "text") }).filter((p) => p && p.title); } catch (e) { continue; }
+    const gone = new Set((Array.isArray(c.dropped) ? c.dropped : []).map((d) => d.title));
+    for (const p of items) {
+      const title = String(p.title).trim();
+      if (!gone.has(title)) out.push({ cat: c.cat, title, region: String(p.region || "Global").trim() });
+    }
+  }
+  return out;
+}
+
+// Items by area over the logs, and India's share of them (KPI-20).
+export function formatAreas(logs, days) {
+  const items = logs.flatMap(shownItems);
+  const by = Object.fromEntries(AREAS.map((a) => [a, 0]));
+  for (const it of items) by[areaOf(it.region)]++;
+  const share = (k) => (items.length ? `${((100 * k) / items.length).toFixed(1)}%` : "-");
+  return [
+    `Items by area, from ${plural(logs.length, "sweep")} in the last ${plural(days, "day")}: ${plural(items.length, "item")} shown.`,
+    ...AREAS.map((a) => `  ${a.padEnd(22)}${String(by[a]).padStart(5)}  ${share(by[a])}`),
+    "",
+    `India: ${by.India} of ${items.length} (${share(by.India)}), ${(by.India / logs.length).toFixed(1)} a sweep (KPI-20).`,
+  ].join("\n");
+}
+
+const recentLogs = async (storage, now, days) => {
+  const logs = [];
+  for (const id of (await ids(storage)).filter((id) => Number(id) >= now - days * DAY_MS)) {
+    try {
+      const lg = JSON.parse(await storage.get(llmLogKey(id)));
+      if (lg && Array.isArray(lg.calls)) logs.push(lg);
+    } catch (e) { /* an unreadable log is left out */ }
+  }
+  return logs;
+};
+
 export async function main(argv, { storage, now = Date.now(), out = console.log, err = console.error } = {}) {
   let p;
   try { p = parseArgs(argv); } catch (e) {
@@ -239,15 +283,9 @@ export async function main(argv, { storage, now = Date.now(), out = console.log,
     return 2;
   }
   try {
-    if (p.cmd === "models") {
-      const logs = [];
-      for (const id of (await ids(storage)).filter((id) => Number(id) >= now - p.days * DAY_MS)) {
-        try {
-          const lg = JSON.parse(await storage.get(llmLogKey(id)));
-          if (lg && Array.isArray(lg.calls)) logs.push(lg);
-        } catch (e) { /* an unreadable log is left out */ }
-      }
-      out(logs.length ? formatModels(logs, p.days) : `no LLM logs in the last ${plural(p.days, "day")}`);
+    if (p.cmd === "models" || p.cmd === "areas") {
+      const logs = await recentLogs(storage, now, p.days);
+      out(!logs.length ? `no LLM logs in the last ${plural(p.days, "day")}` : p.cmd === "models" ? formatModels(logs, p.days) : formatAreas(logs, p.days));
       return 0;
     }
     if (p.cmd === "list") {

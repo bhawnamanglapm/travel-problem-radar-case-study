@@ -218,7 +218,7 @@ export function normaliseCats(input) {
 }
 
 // A Pro subscriber's chosen areas (T41), shaped like normaliseCats. Global isn't a choice: worldwide
-// problems always come (owner decision O2). Returns the areas in AREAS order, or null when all seven
+// problems always come (owner decision O2). Returns the areas in AREAS order, or null when all of them
 // are chosen. Anything else (not a list, empty, Global, an unknown name) is { ok: false }.
 // A function, not a constant: radar.js and this file import each other, so AREAS isn't set at load.
 export const areaChoices = () => AREAS.filter((a) => a !== "Global");
@@ -228,6 +228,13 @@ export function normaliseAreas(input) {
   if (!input.every((a) => typeof a === "string" && choices.includes(a))) return { ok: false };
   const areas = choices.filter((a) => input.includes(a));
   return { ok: true, areas: areas.length === choices.length ? null : areas };
+}
+// A record's stored areas as they're read now (T42). India was split out of Asia, so a list saved before then
+// (no areasV) that has Asia gets India too. A list saved since carries areasV: 2 and is read as it is.
+export const AREAS_V = 2;
+export function readAreas(record) {
+  const a = record && record.areas;
+  return Array.isArray(a) && record.areasV !== AREAS_V && a.includes("Asia") && !a.includes("India") ? [...a, "India"] : a;
 }
 
 export function newPending(email, { now, randomBytes }) {

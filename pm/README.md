@@ -36,7 +36,7 @@ The user is a product manager looking for travel problems worth solving, startin
 
 1 to 5 times a day (as often as the Pro member who asked for the most emails a day; once a day with no Pro), a
 server job asks Claude, with web search, for recent problems in four categories. It saves up to 5 items per
-category, each with a source link, severity, region and a one-line product opportunity, and drops an item whose
+category, plus up to 2 from India (T42), each with a source link, severity, region and a one-line product opportunity, and drops an item whose
 source is over 60 days old. Items not seen in an earlier sweep are flagged New. Readers get the results in three
 ways:
 - **a public demo** that replays a saved July 2026 sample;

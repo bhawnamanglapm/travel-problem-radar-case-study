@@ -5,19 +5,21 @@
 > **OWNER INPUT NEEDED**. The page follows T23's rules for honest content: no member counts, testimonials, ratings
 > or urgency without a source ([T23](../../docs/subscriptions/tasks/T23-pro-display-standards.md) B3, B4).
 > Written 2026-10-24. Updated 2026-10-30: payments opened on 2026-10-28 at ₹1 a month or a year, before the
-> gates below (see "Where the stages stand").
+> gates below (see "Where the stages stand"); PMs at Indian travel companies are the first segment to test (T42).
 
 ## Who it's for
 
 | Segment | Evidence | Status | Source |
 |---|---|---|---|
 | **The owner**, a PM scouting for travel problems | Uses it; reported the Slack digest on 1 Aug 2026 | The only user recorded | [PRD](../02-product-definition/prd.md#users) |
-| **PMs working in travel** (airlines, OTAs, hotels, travel tech) | None | **Hypothesis**: the first segment to test | DSC-01, DSC-05, DSC-06 in the [discovery log](../01-discovery/discovery-log.md#assumptions-and-their-evidence) |
+| **PMs at Indian travel companies** (online travel agencies, airlines, rail, travel fintech and payments) | None. The owner chose them on 2026-10-30, with India items in every sweep (T42) | **Hypothesis**: the first segment to test | DSC-09; DSC-01, DSC-05, DSC-06 in the [discovery log](../01-discovery/discovery-log.md#assumptions-and-their-evidence) |
+| **PMs working in travel elsewhere** (airlines, OTAs, hotels, travel tech) | None | **Hypothesis**: next, with the worldwide items | DSC-01, DSC-05, DSC-06 |
 | Founders and solo PMs looking for a problem to build on | None | Hypothesis | [pricing.md](../../docs/subscriptions/pricing.md#open-questions-owner-input-needed) open question 1 |
 | Recruiters and hiring managers reading the portfolio | Named in the v1 PRD | Readers of the demo and this case study, **not** buyers of Pro | [PRD](../02-product-definition/prd.md#users) |
 
 Which segment pays, and how much, is the first thing the [interview plan](../01-discovery/discovery-log.md#interview-plan-proposed-not-done)
-asks (RM-15). Until then the plan targets travel PMs only.
+asks (RM-15). Until then the plan targets travel PMs only, starting with those in India. Prices stay in ₹, as
+they are today (₹1 a month or a year since 2026-10-28).
 
 ## Positioning
 
@@ -41,7 +43,8 @@ Built from the live home page's own words, and from the differences in
 Source for the wording: [the home page](../../index.html).
 
 **Not to be said** until there is a source: how many members there are, how accurate the findings are, time saved,
-or that it beats any alternative. No sweep has been scored (R-01).
+or that it beats any alternative. No sweep has been scored (R-01). Nor that it covers India well, until KPI-20 is
+read a week after T42 is live (RM-38).
 
 ## Channels
 
@@ -56,6 +59,7 @@ and no marketing budget is recorded ([costing.md](../../docs/subscriptions/costi
 | The owner's LinkedIn profile | Linked from `/about/` | Posts about what the radar finds, each linking its source | KPI-10, by day of the post |
 | The Free teaser email | Yes | The daily headlines; the reason to upgrade | KPI-13 Pro requests; KPI-17 after payments open |
 | Direct invitations to travel PMs | No list exists | The pilot below; the interview plan | KPI-10, KPI-11, interviews |
+| Communities and groups of Indian travel PMs | **OWNER INPUT NEEDED**: which ones, and whether the owner is already in them | Posts about India items, each linking its source; the interview plan's India segment | KPI-10, interviews |
 
 No page-analytics script is in the site's code, so visits aren't counted; sign-ups are the first measured step
 ([data-and-metrics.md](../07-data-and-metrics/data-and-metrics.md#what-isnt-measured)).
