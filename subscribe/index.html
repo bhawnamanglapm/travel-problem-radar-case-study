@@ -38,6 +38,10 @@
     --cat-traveler: #f08a5d; --cat-gov: #5fbfa9; --cat-web: #7aa7ff; --cat-industry: #b79cff;
   }
 }
+
+/* The skip link every page starts with (BUG-011): hidden until it gets keyboard focus. */
+.skip{position:absolute;left:-9999px;top:8px;background:var(--primary);color:var(--on-primary);padding:8px 12px;border-radius:6px;font-weight:600;z-index:100;}
+.skip:focus{left:8px;}
 </style><!-- end brand tokens -->
 <style>
   * { box-sizing: border-box; }
@@ -63,7 +67,8 @@
 </style>
 </head>
 <body>
-<main>
+<a class="skip" href="#main">Skip to content</a>
+<main id="main">
   <p class="nav"><a href="../">&larr; Home</a> &middot; <a href="../live/">Live board (Pro)</a> &middot; <a id="acct" href="../signin/">Sign in</a></p>
   <h1>Get the Travel Problem Radar digest</h1>
   <p>An AI model with web search looks for travel-industry problems on a schedule. Get what it found by email, and with Pro, read the live board any time. The email comes with a free account: your address is the account, and a password is optional.</p>

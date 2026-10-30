@@ -320,6 +320,15 @@ for (const f of footPages) {
   const want = footWanted(!shipped).join(" · ");
   check(got === want && (f !== "index.html" || links.every(([, h]) => h.startsWith(SITE) || h === MAIL)), `${f}: one site footer linking ${shipped ? "the pages that ship" : "all eight pages (it's a draft)"}, in order (${want}${got === want ? "" : "; found: " + (got || "none")})`);
 }
+// BUG-011: every page starts with a skip link to its <main>, styled once in brand.css (so the self-contained pages
+// get it from npm run sync:brand). demo/ and live/ wrap their React root in that <main>.
+const noSkip = footPages.filter((f) => {
+  const s = readFileSync(f, "utf8"), m = s.match(/<body[^>]*>\s*<a class="skip" href="#([\w-]+)">Skip to content<\/a>/);
+  return !m || !new RegExp(`<main id="${m[1]}"`).test(s);
+});
+const skipCss = readFileSync("brand.css", "utf8");
+check(/\.skip\{[^}]*left:-9999px/.test(skipCss) && /\.skip:focus\{left:/.test(skipCss) && noSkip.length === 0,
+  `every page starts with a skip link to its <main>, styled in brand.css (${footPages.length} pages)${noSkip.length ? ": missing on " + noSkip.join(", ") : ""} (BUG-011)`);
 // No shipped page links a page the build doesn't ship, in the version the build makes from today's plan.json.
 const drafts = [...draftLegal.map((s) => `legal/${s}/`), ...(aboutShipped ? [] : ["about/"]), ...(pricingShipped ? [] : ["pricing/"])];
 const draftLinks = shippedPages.flatMap((f) => [...fillPlan.fill(readFileSync(f, "utf8"), plan).out.matchAll(/href="([^"]+)"/g)].map((m) => `${f} → ${target(f, m[1])}`).filter((s) => drafts.some((d) => s.endsWith("→ " + d))));
