@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { blobStorage } from "../api/_lib/storage.js";
 import {
   CONFIRM_RESEND_MINUTES, MAX_CONFIRMS_PER_ADDRESS, PENDING_TTL_DAYS, PRO_GRACE_HOURS, countEvents, deleteSubscriber, effectivePlan, getSubscriber, listSubscribers,
-  newPending, newToken, normaliseAreas, normaliseCats, normaliseEmail, putSubscriber, recordEvent, subscriberId, tokenOk, utcDay,
+  newPending, newToken, normaliseAreas, readAreas, normaliseCats, normaliseEmail, putSubscriber, recordEvent, subscriberId, tokenOk, utcDay,
 } from "../api/_lib/subscribers.js";
 import { BodyTooLargeError, allowMethods, bearerOk, esc, parseForm, readBody, readFields, sendJson, sendPage } from "../api/_lib/http.js";
 import { DEFAULT_FROM, buildConfirmEmail, buildDigestEmail, sendBatch, sendOne, withSubscriberFooter } from "../api/_lib/email.js";
@@ -1983,15 +1983,18 @@ const iso = (ms) => new Date(ms).toISOString();
   }
 
   // ---- T41: areas in the Pro email
-  const SEVEN = ["Asia", "Europe", "North America", "Latin America", "Middle East & Africa", "Oceania", "Other"];
+  const EIGHT = ["Asia", "India", "Europe", "North America", "Latin America", "Middle East & Africa", "Oceania", "Other"];
   const na = normaliseAreas(["Europe", "Asia", "Europe"]);
   check(na.ok && JSON.stringify(na.areas) === '["Asia","Europe"]', "normaliseAreas: keeps AREAS order and drops repeats");
-  check(normaliseAreas([...SEVEN].reverse()).ok && normaliseAreas([...SEVEN].reverse()).areas === null, "normaliseAreas: all seven is stored as null");
-  check([[], "Asia", null, undefined, ["Global"], ["Asia", "Global"], ["Mars"], ["asia"], ["Asia", 3], [...SEVEN, "Asia"], { 0: "Asia" }].every((x) => normaliseAreas(x).ok === false),
-    "normaliseAreas: refuses an empty list, a non-list, Global, an unknown name, a wrong case, a non-string and more than seven");
-  check(proAreasKey(null) === "all" && proAreasKey(["Middle East & Africa", "Asia"]) === "asia+middle-east-africa" && proAreasKey(["Global"]) === "all" && proAreasKey(SEVEN) === "all",
+  check(normaliseAreas([...EIGHT].reverse()).ok && normaliseAreas([...EIGHT].reverse()).areas === null, "normaliseAreas: all eight is stored as null");
+  check([[], "Asia", null, undefined, ["Global"], ["Asia", "Global"], ["Mars"], ["asia"], ["Asia", 3], [...EIGHT, "Asia"], { 0: "Asia" }].every((x) => normaliseAreas(x).ok === false),
+    "normaliseAreas: refuses an empty list, a non-list, Global, an unknown name, a wrong case, a non-string and more than eight");
+  check(proAreasKey(null) === "all" && proAreasKey(["Middle East & Africa", "Asia"]) === "asia+middle-east-africa" && proAreasKey(["Global"]) === "all" && proAreasKey(EIGHT) === "all",
     "proAreasKey: \"all\", or the chosen areas as slugs joined with +; a stored value that isn't valid counts as all");
   check(newPending("n@example.com", { now: T0, randomBytes: seeded(5) }).areas === null, "newPending: areas starts as null (all areas)");
+  check(JSON.stringify(readAreas({ areas: ["Europe", "Asia"] })) === '["Europe","Asia","India"]' && JSON.stringify(readAreas({ areas: ["Europe"] })) === '["Europe"]'
+    && JSON.stringify(readAreas({ areas: ["Asia"], areasV: 2 })) === '["Asia"]' && readAreas({ areas: null }) === null && readAreas({}) === undefined,
+    "readAreas: a list from before T42 that has Asia gains India; one saved since (areasV 2), one without Asia and null stay as they are");
 
   // POST /api/account action set-areas
   {
@@ -2002,7 +2005,8 @@ const iso = (ms) => new Date(ms).toISOString();
     const lapsedA = await add("lapsed-areas@example.com", { plan: "pro", proSource: "owner", proUntil: iso(T0 - 1000), areas: ["Oceania"] });
     let ra = await postAreas(pro, ["Europe", "Asia"]);
     areaReplies.push(ra.body);
-    check(ra.code === 200 && JSON.stringify(ra.json().areas) === '["Asia","Europe"]' && JSON.stringify(await storedAreas(pro)) === '["Asia","Europe"]', "set-areas: a Pro member saves [Asia, Europe] and it is stored");
+    check(ra.code === 200 && JSON.stringify(ra.json().areas) === '["Asia","Europe"]' && JSON.stringify(await storedAreas(pro)) === '["Asia","Europe"]' && (await getSubscriber(st, pro.id)).areasV === 2,
+      "set-areas: a Pro member saves [Asia, Europe] and it is stored, marked as saved since India was split out (T42)");
     ra = await call({ method: "GET", query: { id: pro.id, t: pro.token } });
     check(JSON.stringify(ra.json().areas) === '["Asia","Europe"]', "account GET: returns the chosen areas");
     ra = await call({ method: "GET", query: { id: free.id, t: free.token } });
@@ -2021,8 +2025,8 @@ const iso = (ms) => new Date(ms).toISOString();
     }
     ra = await postAreas(pro, ["Asia"], "wrong-token");
     check(ra.code === 404, "set-areas: a wrong token is 404");
-    ra = await postAreas(pro, SEVEN);
-    check(ra.code === 200 && ra.json().areas === null && (await storedAreas(pro)) === null, "set-areas: choosing all seven stores null");
+    ra = await postAreas(pro, EIGHT);
+    check(ra.code === 200 && ra.json().areas === null && (await storedAreas(pro)) === null, "set-areas: choosing all eight stores null");
     check(areaReplies.every((b) => !b.includes("@") && !b.includes(pro.token)), "set-areas: no address or token in any reply");
     check(sent.length === sentBefore, "set-areas: sends no email");
 
@@ -2046,10 +2050,10 @@ const iso = (ms) => new Date(ms).toISOString();
       aprob("o1", "web_app", "Atlantis"), aprob("n1", "industry", "Canada", { isNew: true }), aprob("x1", "gov_policy", "US and Europe"),
     ];
     const asweep = { id: "1792570150123", at: iso(AT10), problems: aproblems, perCat: { traveler_pain: "2 items", gov_policy: "2 items", web_app: "1 item", industry: "1 item" }, newCount: 2 };
-    const da = async (subs, { absent = false } = {}) => {
+    const da = async (subs, { absent = false, problems = aproblems } = {}) => {
       const ds = memStorage();
       for (const [i, s] of subs.entries()) {
-        const rec = { ...newPending(s.email, { now: T0 - 3600_000, randomBytes: seeded(300 + i) }), token: "tok" + i, status: "active", plan: s.plan || "pro", proSource: s.plan === "free" ? null : "owner", cats: s.cats || null, areas: s.areas || null };
+        const rec = { ...newPending(s.email, { now: T0 - 3600_000, randomBytes: seeded(300 + i) }), token: "tok" + i, status: "active", plan: s.plan || "pro", proSource: s.plan === "free" ? null : "owner", cats: s.cats || null, areas: s.areas || null, ...(s.legacy ? {} : { areasV: 2 }) };
         if (absent) delete rec.areas;
         await putSubscriber(ds, rec);
       }
@@ -2059,11 +2063,11 @@ const iso = (ms) => new Date(ms).toISOString();
         calls.push({ key: init.headers["idempotency-key"], body });
         return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ data: body.map((_, i) => ({ id: "m" + i })) }) };
       };
-      const out = await deliverToSubscribers({ env: DENV, storage: ds, fetchFn, now: () => AT10, randomBytes: seeded(9), sweep: asweep, scheduled: true, log: () => {} });
+      const out = await deliverToSubscribers({ env: DENV, storage: ds, fetchFn, now: () => AT10, randomBytes: seeded(9), sweep: { ...asweep, problems }, scheduled: true, log: () => {} });
       const mails = calls.flatMap((c) => c.body);
       return { out, calls, mails, to: (e) => mails.filter((m) => m.to[0] === e) };
     };
-    const items = (m) => aproblems.map((p) => p.id).filter((id) => new RegExp(`Item ${id}\\b`).test(m.text));
+    const items = (m, list = aproblems) => list.map((p) => p.id).filter((id) => new RegExp(`Item ${id}\\b`).test(m.text));
 
     const d1 = await da([
       { email: "asia1@example.com", areas: ["Asia"] },
@@ -2092,6 +2096,20 @@ const iso = (ms) => new Date(ms).toISOString();
     check(every && items(every).length === 6 && !/Your areas/.test(every.text), "pro areas: no choice (null) gets every area and no areas line");
     const fr = d1.to("free@example.com");
     check(fr.length === 1 && /daily digest/.test(fr[0].text) && !/Your areas/.test(fr[0].text) && items(fr[0]).length === 6, "pro areas: Free gets the daily digest of every area; areas is ignored");
+
+    // T42: India is its own area. An Asia list from before then gets India items; one saved since doesn't.
+    const withIndia = [...aproblems, aprob("i1", "traveler_pain", "Mumbai, India")];
+    const d2 = await da([
+      { email: "legacy@example.com", areas: ["Asia"], legacy: true },
+      { email: "india@example.com", areas: ["India"] },
+      { email: "asianow@example.com", areas: ["Asia"] },
+    ], { problems: withIndia });
+    const legacy = d2.to("legacy@example.com")[0];
+    check(legacy && JSON.stringify(items(legacy, withIndia)) === '["a1","g1","x1","i1"]' && /Your areas: Asia, India, plus worldwide problems/.test(legacy.text)
+      && d2.calls.some((c) => c.key === `${asweep.id}-pro-a-asia+india-0` && c.body.some((m) => m.to[0] === "legacy@example.com")),
+      "pro areas: an Asia choice from before T42 gets India items too, and is keyed as Asia and India");
+    check(JSON.stringify(items(d2.to("india@example.com")[0], withIndia)) === '["g1","x1","i1"]', "pro areas: India alone gets the Indian item and the worldwide ones");
+    check(JSON.stringify(items(d2.to("asianow@example.com")[0], withIndia)) === '["a1","g1","x1"]', "pro areas: Asia chosen since T42 doesn't get Indian items");
 
     // Unchanged for everyone without areas: the Pro emails and their keys hash to what main sent before T41
     // (computed from 8613844 with the same members and sweep), with areas null and with no areas field at all.

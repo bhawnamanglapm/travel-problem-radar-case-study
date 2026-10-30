@@ -32,10 +32,12 @@ export function failedLine(failed, of) {
 
 // Areas (T37): a fixed list the board filters by, and areaOf() to place the AI's free-text region in one.
 // The same text is in travel-problem-radar.jsx and api/_lib/radar.js; scripts/check.mjs fails if they differ.
-const AREAS = ["Global", "Asia", "Europe", "North America", "Latin America", "Middle East & Africa", "Oceania", "Other"];
+const AREAS = ["Global", "Asia", "India", "Europe", "North America", "Latin America", "Middle East & Africa", "Oceania", "Other"];
 const AREA_NAMES = {
   Global: "global|globally|worldwide|world|international|multinational|multiple|various|online|multiple countries|multiple regions|several countries|many countries",
-  Asia: "asia|south asia|southeast asia|south east asia|east asia|central asia|asia pacific|apac|asean|afghanistan|armenia|azerbaijan|bangladesh|bhutan|brunei|cambodia|china|mainland china|hong kong|macau|macao|india|indonesia|japan|kazakhstan|kyrgyzstan|laos|malaysia|maldives|mongolia|myanmar|burma|nepal|north korea|south korea|korea|pakistan|philippines|singapore|sri lanka|taiwan|tajikistan|thailand|timor leste|east timor|turkmenistan|uzbekistan|vietnam|viet nam|bali|tokyo|kyoto|osaka|seoul|beijing|shanghai|bangkok|phuket|delhi|new delhi|mumbai|goa|kathmandu|manila|jakarta|kuala lumpur|hanoi|ho chi minh city",
+  Asia: "asia|south asia|southeast asia|south east asia|east asia|central asia|asia pacific|apac|asean|afghanistan|armenia|azerbaijan|bangladesh|bhutan|brunei|cambodia|china|mainland china|hong kong|macau|macao|indonesia|japan|kazakhstan|kyrgyzstan|laos|malaysia|maldives|mongolia|myanmar|burma|nepal|north korea|south korea|korea|pakistan|philippines|singapore|sri lanka|taiwan|tajikistan|thailand|timor leste|east timor|turkmenistan|uzbekistan|vietnam|viet nam|bali|tokyo|kyoto|osaka|seoul|beijing|shanghai|bangkok|phuket|kathmandu|manila|jakarta|kuala lumpur|hanoi|ho chi minh city",
+  // India is its own area (T42), though it's in Asia: text naming both counts as Asia, not Global.
+  India: "india|bharat|delhi|new delhi|mumbai|bombay|bengaluru|bangalore|chennai|madras|kolkata|calcutta|hyderabad|pune|ahmedabad|jaipur|udaipur|agra|varanasi|amritsar|kochi|cochin|goa|kerala|rajasthan|maharashtra|karnataka|tamil nadu|gujarat|uttar pradesh|uttarakhand|himachal pradesh|ladakh|andaman|andaman and nicobar|lakshadweep|sikkim",
   Europe: "europe|eu|european union|schengen|schengen area|western europe|eastern europe|southern europe|northern europe|central europe|scandinavia|nordics|nordic countries|balkans|mediterranean|albania|andorra|austria|belarus|belgium|bosnia|herzegovina|bulgaria|croatia|cyprus|czech republic|czechia|denmark|estonia|finland|france|germany|greece|hungary|iceland|ireland|italy|kosovo|latvia|liechtenstein|lithuania|luxembourg|malta|moldova|monaco|montenegro|netherlands|holland|north macedonia|macedonia|norway|poland|portugal|romania|russia|san marino|serbia|slovakia|slovenia|spain|sweden|switzerland|turkey|turkiye|ukraine|united kingdom|uk|great britain|britain|england|scotland|wales|northern ireland|vatican|vatican city|london|paris|rome|venice|florence|milan|barcelona|madrid|lisbon|amsterdam|berlin|munich|vienna|prague|budapest|athens|santorini|istanbul|dublin|edinburgh|copenhagen|stockholm|oslo|reykjavik|zurich|geneva|brussels|mallorca|majorca|ibiza|canary islands|tenerife",
   "North America": "north america|america|united states|united states of america|us|usa|canada|greenland|bermuda|alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming|washington dc|nyc|los angeles|san francisco|las vegas|chicago|boston|miami|orlando|seattle|honolulu|ontario|quebec|british columbia|alberta|toronto|vancouver|montreal",
   "Latin America": "latin america|latam|south america|central america|caribbean|west indies|mexico|guatemala|belize|honduras|el salvador|nicaragua|costa rica|panama|cuba|jamaica|haiti|dominican republic|puerto rico|bahamas|barbados|trinidad|tobago|aruba|curacao|st lucia|saint lucia|colombia|venezuela|ecuador|galapagos|peru|bolivia|brazil|paraguay|uruguay|argentina|chile|guyana|suriname|patagonia|cancun|tulum|mexico city|rio de janeiro|sao paulo|buenos aires|cusco|machu picchu",
@@ -70,6 +72,7 @@ function areaOf(region) {
   // Text in brackets qualifies the rest ("Mali (US citizens affected)"), so it counts only when the rest names nothing.
   let found = scan(text.replace(/\([^)]*\)/g, " "));
   if (!found.size) found = scan(text);
+  if (found.has("India") && found.has("Asia")) found.delete("India");
   // Text that names two or more areas ("US and Europe") spans them, so it counts as Global.
   return found.size === 1 ? [...found][0] : found.size ? "Global" : "Other";
 }
@@ -171,8 +174,11 @@ export function buildPrompt(cat) {
     `You are a travel-industry problem scout. Using web search, find the most recent, real, notable ` +
     `problems, complaints, breakages, disruptions, or newly announced changes in this area: ` +
     `"${cat.label}" (${cat.desc}). Focus on roughly the last 60 days, from sources anywhere in the world. ` +
-    `Return ONLY a JSON array (no prose, no markdown fences) of up to 5 objects with EXACTLY these string ` +
-    `fields: "title" (short, specific), "summary" (max 22 words, what the problem is), "source" ` +
+    `Then use one search for India (sources such as DGCA, the Ministry of Civil Aviation, IRCTC and Indian ` +
+    `Railways, Indian airlines and online travel agencies, and Indian news and consumer forums). ` +
+    `Return ONLY a JSON array (no prose, no markdown fences) of up to 5 objects from anywhere, plus up to 2 more ` +
+    `about India only where real, recent ones exist (return none rather than stretch; their "region" is "India"). ` +
+    `Each object has EXACTLY these string fields: "title" (short, specific), "summary" (max 22 words, what the problem is), "source" ` +
     `(publication or site name), "link" (the direct source URL you found it at, starting with https://), ` +
     `"region" (country/region or "Global"), "date" (e.g. "Jul 2026"), ` +
     `"severity" (one of: Low, Medium, High), "opportunity" (max 18 words: a concrete product a PM ` +
@@ -325,7 +331,7 @@ export function pageLinks(blocks = []) {
 // Current models think by default and thinking counts toward max_tokens: with 1000 the
 // thinking could use it all and leave no answer. Low effort keeps thinking short, and the
 // larger cap leaves room for it (only tokens actually produced are billed).
-export async function scanCategory(cat, { fetchFn = fetch, apiKey, model, maxSearches = 3, clock = Date.now }) {
+export async function scanCategory(cat, { fetchFn = fetch, apiKey, model, maxSearches = 4, clock = Date.now }) {
   const request = {
     model,
     max_tokens: 16000,

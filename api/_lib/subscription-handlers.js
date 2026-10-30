@@ -12,7 +12,7 @@ import { sweepKey } from "./radar.js";
 import { hashPassword, passwordProblem, storedHash, verifyPassword } from "./password.js";
 import { clearCookie, originOk, parseCookies, readSession, sessionCookie, sessionSecret, signSession } from "./session.js";
 import {
-  CONFIRM_RESEND_MINUTES, KEY_RZPSUB_PREFIX, KEY_SUB_PREFIX, MAX_CONFIRMS_PER_ADDRESS, PENDING_TTL_DAYS, countEvents, deleteSubscriber, deleteSubscriberData, effectivePlan, findSubscriber, getSubscriber, newPending, normaliseAreas, normaliseCats, normaliseEmail, putSubscriber,
+  CONFIRM_RESEND_MINUTES, KEY_RZPSUB_PREFIX, KEY_SUB_PREFIX, MAX_CONFIRMS_PER_ADDRESS, PENDING_TTL_DAYS, countEvents, deleteSubscriber, deleteSubscriberData, effectivePlan, findSubscriber, getSubscriber, newPending, normaliseAreas, normaliseCats, readAreas, AREAS_V, normaliseEmail, putSubscriber,
   recordEvent, tokenOk, updateSubscriber, utcDay,
 } from "./subscribers.js";
 
@@ -583,7 +583,7 @@ const accountView = (record, t, env) => ({
   proSource: record.proSource || null,
   proRequestedAt: record.proRequestedAt || null,
   cats: record.cats || null,
-  areas: normaliseAreas(record.areas).ok ? normaliseAreas(record.areas).areas : null, // T41: null is all areas
+  areas: normaliseAreas(readAreas(record)).ok ? normaliseAreas(readAreas(record)).areas : null, // T41: null is all areas
   // Emails a day (T32): the stored choice, or null for the default; the page offers 1 to the max.
   sweepsPerDay: normaliseSweepsPerDay(record.sweepsPerDay, sweepLimits(env).max).ok ? record.sweepsPerDay : null,
   sweepsPerDayDefault: DEFAULT_SWEEPS_PER_DAY,
@@ -716,7 +716,7 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
         if (effectivePlan(record, t) !== "pro") return sendJson(res, 403, { error: "pro_only" });
         const chosen = normaliseAreas(areas);
         if (!chosen.ok) return sendJson(res, 400, { error: "unknown area" });
-        const { record: updated, changed } = await save((r) => (effectivePlan(r, t) === "pro" ? { ...r, areas: chosen.areas } : null));
+        const { record: updated, changed } = await save((r) => (effectivePlan(r, t) === "pro" ? { ...r, areas: chosen.areas, areasV: AREAS_V } : null));
         if (!updated) return gone();
         if (!changed) return sendJson(res, 403, { error: "pro_only" });
         return sendJson(res, 200, { ok: true, ...view(updated) });
@@ -745,7 +745,7 @@ export function makeAccountHandler({ env, storage, fetchFn = fetch, now, randomB
           if (!a.ok) return sendJson(res, 400, { error: "unknown area" });
         }
         const { record: updated, changed } = await save((r) => (effectivePlan(r, t) === "pro"
-          ? { ...r, cats: c.cats, sweepsPerDay: c.perDay, ...(a ? { areas: a.areas } : {}) } : null));
+          ? { ...r, cats: c.cats, sweepsPerDay: c.perDay, ...(a ? { areas: a.areas, areasV: AREAS_V } : {}) } : null));
         if (!updated) return gone();
         if (!changed) return sendJson(res, 403, { error: "pro_only" });
         return sendJson(res, 200, { ok: true, ...view(updated) });

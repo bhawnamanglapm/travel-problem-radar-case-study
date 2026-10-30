@@ -6,7 +6,7 @@ import { buildDigestEmail, buildPlanEndingEmail, sendBatch, withSubscriberFooter
 import { KEY_INDEX, areaOf, sweepKey } from "./radar.js";
 import { IPHIT_KEEP_HOURS, KEY_IPHIT_PREFIX, KEY_RZPEVENT_PREFIX, KEY_SUBSCRIBER_COUNT, RZP_EVENT_KEEP_DAYS, managePath, senderOk, siteUrl, utcHour } from "./subscription-handlers.js";
 import { DEFAULT_SWEEPS_PER_DAY, SLOTS_BY_FREQ, previousSlotAt, slotOf, sweepLimits, sweepsPerDayOf } from "./schedule.js";
-import { KEY_DELIVERIES_PREFIX, PENDING_TTL_DAYS, deleteSubscriber, effectivePlan, listSubscribers, normaliseAreas, normaliseCats, recordEvent, updateSubscriber, utcDay } from "./subscribers.js";
+import { KEY_DELIVERIES_PREFIX, PENDING_TTL_DAYS, deleteSubscriber, effectivePlan, listSubscribers, normaliseAreas, normaliseCats, readAreas, recordEvent, updateSubscriber, utcDay } from "./subscribers.js";
 
 export { KEY_DELIVERIES_PREFIX };
 const DAY_MS = 24 * 3600 * 1000;
@@ -165,9 +165,9 @@ export async function deliverToSubscribers({ env, storage, fetchFn, now, randomB
       for (const rec of pro) {
         const f = sweepsPerDayOf(rec, max);
         const key = proCatsKey(rec.cats);
-        const areaKey = proAreasKey(rec.areas);
+        const areaKey = proAreasKey(readAreas(rec));
         const g = `${key}|${areaKey}|${f}`;
-        if (!groups.has(g)) groups.set(g, { key, areaKey, f, areas: normaliseAreas(rec.areas).areas || null, recs: [] });
+        if (!groups.has(g)) groups.set(g, { key, areaKey, f, areas: normaliseAreas(readAreas(rec)).areas || null, recs: [] });
         groups.get(g).recs.push(rec);
       }
       const byKey = (a, b) => (a === b ? 0 : a === "all" ? -1 : b === "all" ? 1 : a < b ? -1 : 1);

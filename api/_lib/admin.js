@@ -7,7 +7,7 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { allowMethods, BodyTooLargeError, readFields, sendJson } from "./http.js";
 import { CATS } from "./radar.js";
 import { originOk, parseCookies } from "./session.js";
-import { KEY_EVENT_PREFIX, areaChoices, effectivePlan, listSubscribers, normaliseAreas, utcDay } from "./subscribers.js";
+import { KEY_EVENT_PREFIX, areaChoices, effectivePlan, listSubscribers, normaliseAreas, readAreas, utcDay } from "./subscribers.js";
 import { KEY_IPHIT_PREFIX, clientIp, paymentsCheck, utcHour } from "./subscription-handlers.js";
 
 const DAY_MS = 24 * 3600 * 1000;
@@ -81,7 +81,7 @@ export function adminRow(r, t) {
   const next = obj(rzp.next);
   const pro = effectivePlan(r, t) === "pro";
   const months = (paid && paid.months) || (choice && choice.months) || null;
-  const areas = normaliseAreas(r.areas); // as delivery reads it: a stored value that isn't valid means all areas
+  const areas = normaliseAreas(readAreas(r)); // as delivery reads it: a stored value that isn't valid means all areas
   return {
     email: typeof r.email === "string" ? r.email : "",
     status: r.status === "active" || r.status === "pending" ? r.status : "unknown",

@@ -40,8 +40,8 @@ check(near(callCost(HAIKU, { input: 200_000, output: 0, searches: 0 }), 0.1), "H
     baseFetch: fakeApi({ traveler_pain: three(0), gov_policy: three(10), web_app: "400", industry: "refusal" }, calls),
   });
   check(calls.length === 4 && calls.every((b) => b.model === HAIKU), "four calls, all with the model asked for");
-  check(calls.every((b) => b.max_tokens === 16000 && b.output_config.effort === "low" && b.tools[0].max_uses === 3),
-    "the production settings: max_tokens 16000, effort low, 3 searches");
+  check(calls.every((b) => b.max_tokens === 16000 && b.output_config.effort === "low" && b.tools[0].max_uses === 4),
+    "the production settings: max_tokens 16000, effort low, 4 searches");
   const web = s.cats.find((c) => c.cat === "web_app"), ind = s.cats.find((c) => c.cat === "industry");
   check(s.cats.filter((c) => c.ok).length === 2, "two categories succeed");
   check(!web.ok && /http 400: tool not supported/.test(web.error), "an API error keeps the API's message");
