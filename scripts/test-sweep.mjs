@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { buildDigestEmail } from "../api/_lib/email.js";
 import { makeDataHandler, makeSweepHandler } from "../api/_lib/handlers.js";
 import { buildDigest } from "../api/_lib/slack.js";
-import { AREAS, CATS, KEY_ITEMS, KEY_LLMLOG_PREFIX, KEY_SEARCH, LOG_QUOTE_MAX, LOG_TITLE_MAX, areaOf, extractProblems, llmLogKey, logContent, mergeSearch, pageAgeDays, runDailySweep, sourceLabel, scanCategory, sweepKey, trackItems, trimSeen } from "../api/_lib/radar.js";
+import { AREAS, CATS, KEY_ITEMS, KEY_LLMLOG_PREFIX, KEY_SEARCH, LOG_QUOTE_MAX, LOG_TITLE_MAX, areaOf, dateSources, extractProblems, llmLogKey, logContent, mergeSearch, pageAgeDays, runDailySweep, sourceLabel, scanCategory, sweepKey, trackItems, trimSeen } from "../api/_lib/radar.js";
 import { SLOTS_BY_FREQ, dueSlot, normaliseSweepsPerDay, previousSlotAt, siteSweepsPerDay, slotOf, sweepLimits, sweepsPerDayOf } from "../api/_lib/schedule.js";
 import { check, finish, memStorage, mockRes } from "./test-helpers.mjs";
 
@@ -419,6 +419,12 @@ const sweepOpts = (storage, byCat, now) => ({
   const days = Object.fromEntries(r.call.sources.map((s) => [s.link, s.days]));
   check(r.call.sources.length === 6 && days["https://a.example/fresh"] === 8 && days["https://a.example/undated"] === null,
     "scanCategory: the log keeps each kept item's source age in days");
+  const found = Object.fromEntries(r.call.sources.map((s) => [s.link, s.searched]));
+  check(found["https://a.example/fresh"] === true && found["https://a.example/undated"] === true && found["https://a.example/slash#top"] === true,
+    "scanCategory: a link search returned is marked searched, with or without a page age, matched loosely too");
+  check(found["https://elsewhere.example/x"] === false, "scanCategory: a link search never returned is marked not searched");
+  const bare = dateSources([{ title: "No link", link: "" }, { title: "Bad", link: "not a url" }], [], T);
+  check(bare.sources.every((s) => s.searched === false) && bare.items.length === 2, "dateSources: no link, or one that isn't a URL, is not searched and still kept");
 
   const st = memStorage();
   const none = (cat) => Promise.resolve({ items: [], usage: { input: 0, output: 0, searches: 0 }, call: { cat: cat.key } });
