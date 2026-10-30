@@ -7,7 +7,7 @@ business case → launch plan → data*
 > file in this repository, linked from the stage pages. Stages 5 to 7 are **plans**: payments haven't opened, so
 > there are no revenue, conversion or retention results to report. Written 2026-10-24.
 
-- 17 documents across 7 stages, each linking the engineering docs it summarises
+- 38 documents across 8 stages (stage 8, testing, added 2026-10-30), each linking the engineering docs it summarises
 - 32 requirements in 9 epics, each traced to its tests; 952 offline tests and 199 offline checks pass (at `662bded`)
 - A cost-floor business case: about ₹6,797 a month to run with payments; 24 to 28 members at ₹299 to cover it
 - No users recorded besides the owner, and no finding scored yet. Both are stated, not filled in
@@ -29,7 +29,7 @@ to 5 per category with a source, severity and a one-line product opportunity. Ne
 public demo, a daily teaser email (Free), or the live board and a digest after every sweep (Pro, ₹299 a month, given
 by hand until payments open). [PRD v2](02-product-definition/prd.md)
 
-### How I approached it: 7 stages
+### How I approached it: 8 stages
 
 | Stage | What I did |
 |---|---|
@@ -40,6 +40,7 @@ by hand until payments open). [PRD v2](02-product-definition/prd.md)
 | **5. Justify and launch** | Cost-floor business case with break-even and stress tests; go-to-market with gates; 22 launch-readiness checks, go/no-go and rollback; a post-launch plan with hypercare, playbooks and KPI triggers |
 | **6. Communicate** | One-page executive review ending in six decisions for the owner |
 | **7. Measure** | The stored data, how each KPI is computed from it, what isn't measured, and a measurement plan |
+| **8. Test** | A test plan and 20 testing tasks, from requirements validation to production validation, each with what's in place, the gaps and the steps; the owner's 7 bug notes logged, with no addresses |
 
 ### Decisions worth discussing
 
@@ -95,3 +96,4 @@ Source: [business case](05-business-case-and-launch/business-case.md), from
 | 5. Business case and launch | [Business case](05-business-case-and-launch/business-case.md) · [Go-to-market](05-business-case-and-launch/go-to-market.md) · [Launch plan](05-business-case-and-launch/launch-plan.md) · [Post-launch plan](05-business-case-and-launch/post-launch-plan.md) |
 | 6. Executive communication | [Executive review](06-executive-communication/executive-review.md) |
 | 7. Data and metrics | [Data and metrics](07-data-and-metrics/data-and-metrics.md) |
+| 8. Testing | [Test plan](08-testing/README.md) · TS01 to TS20 in [08-testing/](08-testing/) |
