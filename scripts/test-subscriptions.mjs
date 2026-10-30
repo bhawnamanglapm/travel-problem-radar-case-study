@@ -1370,6 +1370,35 @@ const iso = (ms) => new Date(ms).toISOString();
   check(r.code === 0 && r.out.includes("p2@example.com") && r.out.includes('"plan": "pro"') && !r.out.includes("token") && !r.out.includes("secret-token"), "show: the record, without the token");
   r = await run(st, ["show", "nobody@example.com"]);
   check(r.code === 1, "show an unknown address: exit 1");
+
+  // show --check (T22): Razorpay's view of the plan and the renewal, read-only
+  {
+    const cw = await world();
+    await cw.mk(2, { plan: "pro", proSource: "owner", proUntil: iso(T0 + 3 * DAY) });
+    const END_S = Math.floor((T0 + 2 * DAY) / 1000);
+    await cw.mk(5, { plan: "pro", proSource: "razorpay", proUntil: iso(T0 - DAY),
+      rzp: { subscriptionId: "sub_CHECK0000001", status: "active", currentEnd: Math.floor((T0 - DAY) / 1000), cancelAtPeriodEnd: false, next: { subscriptionId: "sub_CHECK0000002", status: "authenticated" } } });
+    adminRzp.length = 0;
+    rzpReply = (url) => (url.endsWith("sub_CHECK0000001")
+      ? { ok: true, status: 200, json: async () => ({ id: "sub_CHECK0000001", status: "active", current_end: END_S, paid_count: 2, remaining_count: 10, customer_email: "payer@example.com" }) }
+      : { ok: false, status: 404, json: async () => ({}) });
+    r = await run(cw.st, ["show", "p5@example.com", "--check"]);
+    rzpReply = null;
+    check(r.code === 0 && adminRzp.length === 2 && adminRzp.every((c) => !c.method || c.method === "GET") && adminRzp[0].url.endsWith("/subscriptions/sub_CHECK0000001") && adminRzp[1].url.endsWith("/subscriptions/sub_CHECK0000002"),
+      "show --check: one GET for the plan and one for the renewal, and nothing else");
+    check(r.out.includes(`razorpay plan sub_CHECK0000001: status active (stored: active), currentEnd ${iso(END_S * 1000)}, paidCount 2, remainingCount 10`)
+      && r.out.includes("razorpay renewal sub_CHECK0000002: error 404 (stored: authenticated)"),
+      "show --check: prints Razorpay's status, period end and counts next to the stored status, or the error code");
+    check(!/payer@example\.com|admin-secret|secret-token/.test(r.all), "show --check: no customer detail, key or token printed");
+    adminRzp.length = 0;
+    r = await run(cw.st, ["show", "p2@example.com", "--check"]);
+    check(r.code === 0 && adminRzp.length === 0 && r.out.includes("razorpay: no subscription on this record"), "show --check on an owner-granted Pro: no Razorpay call");
+    r = await run(cw.st, ["show", "p5@example.com", "--check"], { env: {} });
+    check(r.code === 0 && r.out.includes("razorpay plan sub_CHECK0000001: error config"), "show --check with no keys in the shell: says error config");
+    adminRzp.length = 0;
+    r = await run(cw.st, ["show", "p5@example.com"]);
+    check(r.code === 0 && adminRzp.length === 0 && !r.out.includes("razorpay plan"), "show without --check: no Razorpay call");
+  }
   r = await run(st, ["list", "--plan", "pro"]);
   check(r.code === 0 && r.out.includes("p2@example.com") && !r.out.includes("p3@example.com") && !r.out.includes("p1@example.com") && !r.out.includes("secret-token"), "list --plan pro: only effective Pro, no token");
   r = await run(st, ["list", "--plan", "free"]);

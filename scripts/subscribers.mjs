@@ -4,7 +4,7 @@
 //
 //   node --env-file=.env.local scripts/subscribers.mjs stats [--days 30]
 //   node --env-file=.env.local scripts/subscribers.mjs list [--plan pro|free|pending|requested]
-//   node --env-file=.env.local scripts/subscribers.mjs show <email>
+//   node --env-file=.env.local scripts/subscribers.mjs show <email> [--check]
 //   node --env-file=.env.local scripts/subscribers.mjs grant-pro <email> [--until 2027-01-31] [--yes]
 //   node --env-file=.env.local scripts/subscribers.mjs revoke-pro <email> [--paid] [--yes]
 //   node --env-file=.env.local scripts/subscribers.mjs delete <email> [--yes]
@@ -12,7 +12,8 @@
 //   node --env-file=.env.local scripts/subscribers.mjs recount [--yes]
 //
 // Addresses are printed only by `list` and `show`. A token is never printed. Every write changes
-// nothing until --yes is given. Exit codes: 0 done, 1 not found or refused, 2 bad usage.
+// nothing until --yes is given. `show --check` also asks Razorpay (read-only) about the record's subscriptions.
+// Exit codes: 0 done, 1 not found or refused, 2 bad usage.
 import { randomBytes } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import {
@@ -20,6 +21,7 @@ import {
   recordEvent, updateSubscriber, utcDay,
 } from "../api/_lib/subscribers.js";
 import { KEY_SUBSCRIBER_COUNT, stopRazorpay } from "../api/_lib/subscription-handlers.js";
+import { fetchSubscription } from "../api/_lib/razorpay.js";
 import { computeStats } from "../api/_lib/admin.js";
 
 const DAY_MS = 24 * 3600 * 1000;
@@ -27,11 +29,11 @@ const EVENT_RE = /^(\d{8})-\d{9}-([a-z]+)-[0-9a-f]{6}$/; // suffix after "radar:
 
 export class UsageError extends Error {}
 
-const FLAGS = { "--yes": false, "--paid": false, "--days": true, "--plan": true, "--until": true, "--older-than": true };
+const FLAGS = { "--yes": false, "--paid": false, "--check": false, "--days": true, "--plan": true, "--until": true, "--older-than": true };
 const COMMANDS = {
   stats: { args: 0, flags: ["--days"] },
   list: { args: 0, flags: ["--plan"] },
-  show: { args: 1, flags: [] },
+  show: { args: 1, flags: ["--check"] },
   "grant-pro": { args: 1, flags: ["--until", "--yes"] },
   "revoke-pro": { args: 1, flags: ["--paid", "--yes"] },
   delete: { args: 1, flags: ["--yes"] },
@@ -129,6 +131,23 @@ export async function showRecord(storage, email) {
   if (!r) return null;
   const { token, ...rest } = r; // never print the token
   return rest;
+}
+
+// show --check (T22): Razorpay's view of the plan and of any renewal set up after it, next to what the record has
+// stored, for a member the sweep counts as rzpMismatch. Read-only; fetchSubscription returns no customer details.
+export async function checkRazorpay(record, { env, fetchFn }) {
+  const rzp = record.rzp && typeof record.rzp === "object" ? record.rzp : {};
+  const next = rzp.next && typeof rzp.next === "object" ? rzp.next : {};
+  const subs = [["plan", rzp.subscriptionId, rzp.status], ["renewal", next.subscriptionId, next.status]].filter(([, id]) => id);
+  if (!subs.length) return ["razorpay: no subscription on this record"];
+  const lines = [];
+  for (const [label, id, stored] of subs) {
+    const s = await fetchSubscription({ env, fetchFn, subscriptionId: id });
+    const end = s.currentEnd ? new Date(s.currentEnd * 1000).toISOString() : "-";
+    lines.push(s.error ? `razorpay ${label} ${id}: error ${s.error} (stored: ${stored || "-"})`
+      : `razorpay ${label} ${id}: status ${s.status} (stored: ${stored || "-"}), currentEnd ${end}, paidCount ${s.paidCount ?? "-"}, remainingCount ${s.remainingCount ?? "-"}`);
+  }
+  return lines;
 }
 
 // ---- writes. Each returns { code: 0|1, message, changed } and writes only when apply is true.
@@ -253,6 +272,7 @@ export async function main(argv, { storage, now = Date.now(), rb = randomBytes, 
       const r = await showRecord(storage, email);
       if (!r) { err("not found: no subscriber with that address"); return 1; }
       out(JSON.stringify(r, null, 2));
+      if (flags.check) out((await checkRazorpay(r, { env, fetchFn })).join("\n"));
       return 0;
     }
     const res = cmd === "grant-pro" ? await grantPro(storage, email, { until: flags.until || null, apply, now, randomBytes: rb })
