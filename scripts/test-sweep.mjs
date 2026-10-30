@@ -352,6 +352,7 @@ const sweepOpts = (storage, byCat, now) => ({
     + "  Cost: $0.0300 a sweep, $0.0100 an item (2 calls not priced, left out)\n"
     + "  Calls that quoted a passage: 2 of 4\n"
     + "  Item sources: 0 items, median - old; 0 over 30 days, 0 not dated; 0 dropped (over 60 days)\n"
+    + "  Links search didn't return: 0 of 0 items (-)\n"
     + "  Search pages older than 30 days: 2 of 4 with an age (50%); 2 with no age"), "llm-logs models: a model's averages, cost per item, quotes and page age");
   // Item source freshness: from the ages the sweep logged, or for an older log from its answer and logged pages.
   const dated = logOf(6, 29, "claude-haiku-5-5", [{ cat: "traveler_pain", items: 3, usage: U,
@@ -364,6 +365,23 @@ const sweepOpts = (storage, byCat, now) => ({
     { type: "web_search_tool_result", pages: [...pages, { url: "https://d.example/4", age: "70 days ago" }] }, { type: "text", text: answer }] } }]);
   check(tool.formatModels([before], 30).includes("  Item sources: 4 items, median 40 days old; 2 over 30 days, 1 not dated; 0 dropped (over 60 days)\n"),
     "llm-logs models: an older log's item sources, matched from its answer and pages; one that would now be dropped counts as old");
+  // Links search never returned: as the sweep marked them, or for an older log matched to its pages (links only, or with ages).
+  check(tool.formatModels([before], 30).includes("  Links search didn't return: 0 of 4 items (0%)\n"),
+    "llm-logs models: an older log's links all among its pages, including one kept as a plain link and one now too old");
+  const memory = logOf(8, 29, "claude-haiku-5-5", [{ cat: "gov_policy", items: 2, usage: U, response: { content: [
+    { type: "web_search_tool_result", pages: ["https://c.example/3"] },
+    { type: "text", text: JSON.stringify([item(1, { link: "https://c.example/3" }), item(2, { link: "https://z.example/9" })]) }] } }]);
+  check(tool.formatModels([memory], 30).includes("  Links search didn't return: 1 of 2 items (50%)\n"),
+    "llm-logs models: an older log's link that isn't among its pages counts");
+  check(tool.formatSummary(memory).includes("Links search didn't return (from the model's memory, so check them):\n  gov_policy: Problem 2  https://z.example/9"),
+    "llm-logs summary: an older log's item whose link search never returned, with its title");
+  const marked = logOf(9, 30, "claude-haiku-5-5", [{ cat: "web_app", items: 2, usage: U,
+    sources: [{ link: "https://a.example/1", days: 8, searched: true }, { link: "https://m.example/7", days: null, searched: false }],
+    response: { content: [{ type: "text", text: JSON.stringify([item(1, { link: "https://a.example/1" }), item(7, { link: "https://m.example/7" })]) }] } }]);
+  check(tool.formatModels([marked, dated], 30).includes("  Links search didn't return: 1 of 2 items (50%)\n")
+    && tool.formatSummary(marked).includes("  web_app: Problem 7  https://m.example/7"),
+    "llm-logs: as the sweep marked each link; a log with ages but no marks, and no answer to match, isn't counted");
+  check(!tool.formatSummary(dated).includes("Links search didn't return"), "llm-logs summary: no list when every link was searched or none can be checked");
   const ds = tool.formatSummary(dated);
   check(/^traveler_pain +3 items, 1 dropped;/m.test(ds) && ds.includes("Dropped, source over 60 days old:\n  traveler_pain: Old news (70 days ago)  https://o.example/9"),
     "llm-logs summary: a category's dropped count, and each dropped item with its age");
