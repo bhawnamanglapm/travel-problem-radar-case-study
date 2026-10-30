@@ -59,8 +59,12 @@ followed by a punctual 05:17 run, has the second one skipped as "under 2 h old".
 
 - [x] A run due at 10:17 that starts at 15:05 sweeps as slot 10 (when 10 is needed) and slot 15's own run still sweeps
 - [x] The Vercel backstop and a late slot-00 GitHub run don't both sweep
-- [ ] A day of scheduled runs after deploy shows each slot swept or skipped as `SLOTS_BY_FREQ` says, with the delays
-  logged
+- [x] A day of scheduled runs after deploy shows each slot swept or skipped as `SLOTS_BY_FREQ` says, with the delays
+  logged (checked 2026-10-30 from the 20 runs of 2026-10-26 to 29; the table is under
+  "Checked 2026-10-30" in [T32](T32-sweeps-per-day.md). The runs were 228 to 418 minutes late from the slot's start. At
+  least 15 of the 20 started after the next slot had begun, so the old `slotOf(now)` would have counted them wrongly;
+  e.g. 10-27's 05 run started at 10:39 and was rightly skipped as slot 05, not swept as slot 10. Slot 00's GitHub run answered "already swept" each day,
+  after the Vercel backstop)
 - [x] Docs: [T32](T32-sweeps-per-day.md), DEPLOYMENT.md (the schedule), TECHNICAL.md, CHANGELOG.md
 
 ## Tests

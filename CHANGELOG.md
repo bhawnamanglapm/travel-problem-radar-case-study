@@ -5,6 +5,10 @@ grouped by date.
 
 ## 2026-10-30
 
+- T32 and T35 checks after deploy, from the 20 scheduled runs of 2026-10-26 to 29: every slot was swept or skipped as
+  the site's number (2, and 3 for part of 26 and 27 Oct) says, slot 00 swept once a day (by the Vercel backstop), and
+  runs were 228 to 418 minutes late, inside the 12-hour window. T35 is done; T32 waits only on the owner's test-Pro email
+  check. Docs only.
 - The LLM logs keep more of each search page: its title and age, and the passages the model quoted (with links),
   not just the link. Page text is still encrypted by the API and left out. Titles and quotes are cleaned of control
   characters and capped. `scripts/llm-logs.mjs summary` prints them; older logs print as before.

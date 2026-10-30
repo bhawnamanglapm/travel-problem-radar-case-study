@@ -51,6 +51,22 @@ designed. But GitHub started every run 2 h 15 m to 4 h 35 m late, and the slot i
 run over about 4 h 43 m late would be counted in the next slot. [T35](T35-sweep-slots-on-time.md) fixes that. Price
 per number of emails a day: [T33](T33-pro-plan-builder.md).
 
+**Checked 2026-10-30 from the 20 scheduled GitHub runs of 2026-10-26 to 29** (each run's reply in its Actions log;
+nothing triggered). Every slot was swept or skipped as `SLOTS_BY_FREQ` says for the site's number at the time:
+
+| Day | 00 | 05 | 10 | 15 | 20 | Site's number (from the skip reasons) |
+|---|---|---|---|---|---|---|
+| 10-26 | already swept | skipped | saved | saved | skipped | 2, then 3 from the 15 run |
+| 10-27 | already swept | skipped | saved | skipped | skipped | 3, then 2 from the 15 run |
+| 10-28 | already swept | skipped | saved | skipped | skipped | 2 |
+| 10-29 | already swept | skipped | saved | skipped | skipped | 2 |
+
+- Slot 00's GitHub run found the slot already swept each day by the Vercel 01:30 backstop (the LLM logs show a saved
+  sweep at about 02:27 UTC daily), so the slot swept once.
+- The site was at 2 or 3 a day, not 1, because a Pro member exists. The logs don't say why it moved between 2 and 3;
+  member records were not read to find out.
+- The runs were 228 to 418 minutes late from the slot's start, all inside T35's 12-hour window.
+
 ## PR 1: server (done, #88, 2026-10-24)
 
 - `api/_lib/schedule.js`: the slots, the two limits, a member's choice and the site's number.
@@ -98,9 +114,11 @@ per number of emails a day: [T33](T33-pro-plan-builder.md).
 - [x] `/manage/` shows the card, saves a choice and shows the saved choice after a reload (PR 2; checked in
   headless Chrome against a stub `/api/account`)
 - [x] No site page, built file or email says "5 times a day", "every 5 hours" or "about 5 a day" (PR 2; `check.mjs`)
-- [ ] After deploy, with no Pro choice set, one day of GitHub Actions logs shows slots 05 to 20 `skipped` and slot 00
-  saved (RM-01 done 2026-10-25; read from 2026-10-26's runs)
-- [ ] A test Pro set to 3 on `/manage/` gets 3 emails the next day, at 00, 10 and 15 UTC
+- [x] After deploy, a day of GitHub Actions logs shows each unneeded slot `skipped` and each needed slot saved
+  (checked 2026-10-30 from the 2026-10-26 to 29 runs. The site was at 2 and 3 a day, not 1 as first written, because a
+  Pro member exists; see "Checked 2026-10-30" above)
+- [ ] A test Pro set to 3 on `/manage/` gets 3 emails the next day, at 00, 10 and 15 UTC (owner: needs the inbox. The
+  sweeps for 3 a day, slots 00, 10 and 15, did run on 2026-10-26)
 
 ## Tests
 
