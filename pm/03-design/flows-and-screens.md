@@ -1,33 +1,42 @@
 # Design: screens, flows and display rules
 
-> **Stage 3 of 7.** There are no wireframes, because every screen below is live (or built and switched off). This
+> **Stage 3 of 8.** There are no wireframes, because every screen below is live. This
 > page lists the screens, summarises the user journeys and the rules every Pro page follows, and links the detailed
 > designs: [account-flows.md](../../docs/subscriptions/account-flows.md) (the flows as built, with a review),
 > [paid-website.md](../../docs/subscriptions/paid-website.md) (who sees what) and
-> [homepage-review.md](../../docs/site/homepage-review.md) (the home page audit). State on 2026-10-24.
+> [homepage-review.md](../../docs/site/homepage-review.md) (the home page audit). State on 2026-10-30 (first written
+> 2026-10-24).
 
 ## Screens
 
-Base address: `https://travel-problem-radar.vercel.app`. GitHub Pages serves the same files but has no `/api/`, so
-its copies of the account pages send people to the Vercel copy ([decisions.md](../../docs/decisions.md), 2026-10-22).
+Base address: `https://radar.pehchanthetraveller.com` since 2026-10-28; pages on the old
+`travel-problem-radar.vercel.app` address redirect there ([CHANGELOG](../../CHANGELOG.md) 2026-10-28). GitHub Pages
+serves the same files but has no `/api/`, so its copies of the account pages send people to the live site
+([decisions.md](../../docs/decisions.md), 2026-10-22).
+
+Every page takes the Pehchan brand (deep teal and amber), in light or dark to match the visitor's system, from
+`brand.css` (2026-10-29; it was dark only). Every page starts with a skip link to its main content (2026-10-30,
+BUG-011; it was the home page only).
 
 | Screen | Who it's for | What it does | Status |
 |---|---|---|---|
 | `/` Home | Visitors | Product page: what it finds, how it works, plans, FAQ. A sign-up / sign-in popup on every signed-out visit | Live since 2026-10-22 |
 | `/demo/` | Anyone | Replays the saved July 2026 sample, with no AI calls (REQ-07) | Live |
-| `/live/` Live board | Pro | Every sweep, history, New flags, Copy report. Others see a sign-in or upgrade panel (REQ-24) | Live; locked since 2026-10-23 |
-| `/subscribe/` Plans | Visitors | Free and Pro side by side; "Create your account" leads to `/signup/` | Live |
-| `/signup/` | Visitors | The one sign-up form, with an unticked "I'd also like Pro" box | Live |
-| `/signin/` | Members | Email me a link; Continue with Google once its keys are set | Live; Google hidden |
+| `/live/` Live board | Pro | Every sweep, New flags, Copy report. One card per category with its counts; area and category chips; search in this sweep or all saved sweeps; a Details panel with each problem's history; Save, and a fourth tab, Saved; Share. Others see a sign-in or upgrade panel (REQ-24) | Live; locked since 2026-10-23; board features 29 and 30 Oct (T36 to T40) |
+| `/p/<sweep>/<item>` Share page | Anyone with the link | One problem: headline, category, severity, source, region and date for everyone; the summary, opportunity and source link for Pro. Not indexed; a preview card with `og.png` | Live 2026-10-30 (T40) |
+| `/subscribe/` Plans | — | Redirects to `/pricing/` since 2026-10-28; the file is kept but no longer reachable | Retired |
+| `/signup/` | Visitors | The one sign-up form, with an unticked "I'd also like Pro" box and an optional password. With Pro ticked, confirming goes straight to payment (`/manage/?pay=1`) | Live |
+| `/signin/` | Members | Email me a link, email and password, or Continue with Google | Live; Google on (TS09, 2026-10-30) |
 | Confirm and sign-in pages | Members | Opened from an email link; a button must be pressed, so mail scanners can't confirm or sign anyone in | Live |
-| `/manage/` | Members | Plan, categories (Pro), Request Pro, Delete my account; Upgrade and Cancel in a paid build | Live; checkout behind `paid: false` |
-| `/pricing/` | Visitors | Price, GST wording, renewal, cancelling and the refund rule, filled from `plan.json` (REQ-29) | Live since 2026-10-23, says Pro is free while tested |
+| `/manage/` | Members | The plan card (monthly or yearly, categories, areas, emails a day) and Pay with Razorpay; Keep renewing or Renew Pro; Cancel; Password; Delete my account (cancels Razorpay first) | Live; paying since 2026-10-28 |
+| `/pricing/` | Visitors | Price, GST wording, renewal, cancelling and the refund rule, filled from `plan.json` (REQ-29) | Live; ₹1 a month or ₹1 a year since 2026-10-28 (was "free while tested") |
 | `/about/` | Visitors, Razorpay's review | Who runs it | Live since 2026-10-23 |
 | `/legal/privacy/`, `/legal/contact/`, `/legal/refunds/` | Everyone | Policy pages | Live; not reviewed by a lawyer |
-| `/legal/terms/` | Everyone | Terms of use | **Draft, not shipped**: waits for an adviser's liability clause |
+| `/legal/terms/` | Everyone | Terms of use | Live since 2026-10-29 with the owner's plain liability clause; an adviser's check is open (was a draft, not shipped) |
+| `/admin/` | The owner | Members, plans, areas, payment mode, behind its own user and password; linked from every footer | Live since 2026-10-26 |
 
 Status sources: [decisions.md](../../docs/decisions.md) 2026-10-22 and 2026-10-23;
-[progress.md](../../docs/subscriptions/tasks/progress.md).
+[progress.md](../../docs/subscriptions/tasks/progress.md); [CHANGELOG](../../CHANGELOG.md) 2026-10-26 to 2026-10-30.
 
 ## Who sees what
 
@@ -35,8 +44,10 @@ Status sources: [decisions.md](../../docs/decisions.md) 2026-10-22 and 2026-10-2
 |---|---|---|---|
 | Demo with the July 2026 sample | Yes | Yes | Yes |
 | Live board, history, Copy report | Sign-in panel | Upgrade panel | Yes |
-| Email | No | A daily teaser: counts and headlines for all four categories | The full digest after every saved scheduled sweep |
-| Choose categories | No | No | Yes |
+| Details, areas, search all sweeps, saved problems | On the demo's sample | On the demo's sample | Yes, on the live board |
+| A shared problem's page | Headline and facts | Headline and facts | In full |
+| Email | No | A daily teaser: counts and headlines for all four categories | 1 to 5 digests a day, as chosen |
+| Choose categories and areas | No | No | Yes |
 
 The lock is enforced by the data feed (`/api/data`), not by the page. The page's panel is a convenience
 ([paid-website.md](../../docs/subscriptions/paid-website.md#guardrails)).
@@ -45,7 +56,7 @@ The lock is enforced by the data feed (`/api/data`), not by the page. The page's
 
 The detailed flows, drawn from the code, are in [account-flows.md](../../docs/subscriptions/account-flows.md):
 create an account, sign in again, while signed in, and Continue with Google. This is the whole path from visitor to
-paying member. The payment steps are built and passed a test-mode run on staging; they are not live.
+paying member. Payments have been live since 2026-10-28 (was: built, test-mode run passed on staging).
 
 ```mermaid
 flowchart TD
@@ -53,6 +64,7 @@ flowchart TD
   P -- "Just look around" --> D["/demo/ with the July 2026 sample"]
   P -- "Create account" --> S["/signup/: email address"]
   S --> E["Confirmation email"]
+  S -- "Pro ticked" --> E2["Confirmation email"] --> M
   E --> C["Confirm page: press Confirm"]
   C --> F["Free account, signed in on this browser"]
   F --> T["Daily teaser email"]
@@ -60,12 +72,11 @@ flowchart TD
   L --> M["/manage/: summary of price, renewal,<br/>cancelling and refund rule"]
   M --> R["Razorpay Checkout"]
   R --> W["Signed webhook turns Pro on"]
-  W --> B["Live board and every-sweep email"]
-  M -. "today, while paid is false" .-> Q["Request Pro: the owner grants it by hand"]
-  Q --> B
+  W --> B["Live board and 1 to 5 emails a day"]
 ```
 
-Solid lines are the designed path. The dotted line is how Pro is reached today.
+This is the path since 2026-10-28. Until then Pro was reached by a dotted line: Request Pro, and the owner granted
+it by hand while `paid` was false.
 
 ## Display rules for anything about Pro
 
@@ -84,7 +95,9 @@ there.
 | Decision | Why | Trade-off | Source |
 |---|---|---|---|
 | A button after every email link | Mail scanners open links; only a person presses a button | One more click | [decisions.md](../../docs/decisions.md) D9 |
-| No passwords: an emailed link, or Google | Nothing to store, leak or reset | Every way in but Google waits for an email | [account-flows.md](../../docs/subscriptions/account-flows.md#what-is-right-and-should-stay) |
+| No passwords: an emailed link, or Google. **Revised 2026-10-27:** a password is optional | Was: nothing to store, leak or reset. A password needs no email to sign in | Passwords are stored (scrypt hashes) and rate-limited; one can be set only from its own confirmation link or a signed-in manage page | [account-flows.md](../../docs/subscriptions/account-flows.md#what-is-right-and-should-stay); [CHANGELOG](../../CHANGELOG.md) 2026-10-27 |
+| Light or dark from the visitor's system, in the Pehchan colors | The owner's brand, from pehchanthetraveller.com | The self-contained pages hold the colors inline and use system fonts, so `npm run sync:brand` must copy each change | [CHANGELOG](../../CHANGELOG.md) 2026-10-29 |
+| The board's history is copied onto each saved item | The board fetches nothing new for the Details panel | Each sweep writes a little more | [progress.md](../../docs/subscriptions/tasks/progress.md), T36 notes |
 | A sign-in lasts until the browser closes, 12 hours at most | The owner asked that the last login not be remembered | Members sign in more often, and each sign-in is an email | [decisions.md](../../docs/decisions.md) 2026-10-22 |
 | A popup on every signed-out visit | The owner asked for it; no further reason is recorded | Google counts covering popups against pages on mobile; returning visitors see it every time | [homepage-review.md](../../docs/site/homepage-review.md#the-popup) |
 | A new Google address confirms before an account is made | The owner wanted Google sign-up to go through sign-up steps | One more click for new people | [decisions.md](../../docs/decisions.md) 2026-10-22 |
@@ -95,9 +108,10 @@ there.
 
 | Gap | Effect | Next step | Source |
 |---|---|---|---|
-| Chrome showed a "Dangerous site" warning on the confirm link (2026-10-22) | New visitors may stop at the warning. The cause is unknown | Move to the owner's own domain, then ask Google for a review (parked by the owner) | [account-flows.md](../../docs/subscriptions/account-flows.md#what-should-change) #1; [progress.md](../../docs/subscriptions/tasks/progress.md) |
+| Chrome showed a "Dangerous site" warning on the confirm link (2026-10-22) | New visitors may stop at the warning. The cause is unknown | The site moved to the owner's own domain on 2026-10-28. Whether the warning is gone hasn't been recorded; ask Google for a review if it returns | [account-flows.md](../../docs/subscriptions/account-flows.md#what-should-change) #1; [progress.md](../../docs/subscriptions/tasks/progress.md) |
 | Outlook.com files the emails in Junk; Gmail filed the first confirmation as spam | Members may never see the confirm link | The sign-up reply says to check spam; recheck the domain's reputation as it ages | [progress.md](../../docs/subscriptions/tasks/progress.md) |
-| Sign-in always lands on `/live/` | People don't return to the page they started from | Remember the starting page | [account-flows.md](../../docs/subscriptions/account-flows.md#what-should-change) #6, Later |
+| Sign-in lands on `/live/` (or `/manage/?pay=1` straight after a Pro sign-up) | People don't return to the page they started from | Remember the starting page | [account-flows.md](../../docs/subscriptions/account-flows.md#what-should-change) #6, Later |
 | A link opened on a phone signs in the phone, not the laptop | Sign-in fails across devices | A short code in the sign-in email | #8, Later |
-| No Terms link in the footer; no Open Graph image | Razorpay's website review may need terms; shared links show no picture | Ship terms after the liability clause; make an image | [homepage-review.md](../../docs/site/homepage-review.md#still-to-come) |
+| ~~No Terms link in the footer; no Open Graph image~~ Closed: terms live 2026-10-29, `og.png` added 2026-10-30 (T40) | — | — | [homepage-review.md](../../docs/site/homepage-review.md#still-to-come); [CHANGELOG](../../CHANGELOG.md) |
+| One account, the one used to test Razorpay, doesn't see the live board while another does (BUG-002, S1, P1) | Cause unknown; a paying member could be locked out | Compare both records read-only; open in the TS19 log | [TS19](../08-testing/TS19-bug-reporting-and-retesting.md) |
 | No usability test with anyone but the owner | The flows are checked against common practice, not against users | Part of the [interview plan](../01-discovery/discovery-log.md#interview-plan-proposed-not-done) | This page |
