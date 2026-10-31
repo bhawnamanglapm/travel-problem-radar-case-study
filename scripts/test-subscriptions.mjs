@@ -280,6 +280,39 @@ const iso = (ms) => new Date(ms).toISOString();
   try { buildConfirmEmail({ confirmUrl: "ftp://x" }); } catch (e) { badC++; }
   check(badC === 1, "buildConfirmEmail: refuses a bad link");
 
+  // T45: every email has the brand header (the name on dark green, an amber rule), with no link in it.
+  {
+    const E = await import("../api/_lib/email.js");
+    const L = "https://site.example/x?id=a&t=b";
+    const built = {
+      owner: owner,
+      teaser: buildDigestEmail({ at, problems }, "", { heading: "Travel Problem Radar: daily summary", subjectLead: "daily summary", teaser: true, signInUrl: L }),
+      failure: E.buildFailureEmail({ at, perCat: { industry: "timeout" } }),
+      confirm: ce,
+      signIn: E.buildSignInEmail({ signInUrl: L }),
+      already: E.buildAlreadySubscribedEmail({ manageUrl: L, unsubscribeUrl: L }),
+      ending: E.buildPlanEndingEmail({ endsAt: "2026-11-07T00:00:00Z", manageUrl: L }),
+      proRequest: E.buildProRequestEmail({ at, source: "signup" }),
+    };
+    const banner = (html) => (html.match(/<div style="background:#1d4e45;[^"]*border-bottom:4px solid #f5a524">([\s\S]*?)<\/div>\n<div style="padding/) || [])[1];
+    const missing = Object.entries(built).filter(([, m]) => !banner(m.html) || !banner(m.html).includes(">Travel Problem Radar</div>")).map(([k]) => k);
+    check(missing.length === 0, `brand header: every email has the name on dark green and the amber rule${missing.length ? " (missing: " + missing.join(", ") + ")" : ""}`);
+    check(Object.values(built).every((m) => !/<a\b|https?:/.test(banner(m.html) || "<a")), "brand header: no link in the banner");
+    check(Object.values(built).every((m) => m.html.startsWith("<div") && m.html.trimEnd().endsWith("</div>") && (m.html.match(/<div\b/g) || []).length === (m.html.match(/<\/div>/g) || []).length),
+      "brand header: every email's divs are balanced");
+    check(banner(owner.html).includes(">21 October 2026</div>") && /<h1[^>]*>Digest<\/h1>/.test(owner.html) && /<h1[^>]*>Sweep failed<\/h1>/.test(built.failure.html),
+      "brand header: the kicker is the sweep's date, and headings drop the name the banner already shows");
+    check(owner.text.startsWith("Travel Problem Radar: digest") && sub.html.includes(">Your daily Travel Problem Radar</h1>"), "brand header: the plain text and a custom heading are unchanged");
+    const pre = (html) => (html.match(/<div style="display:none;[^"]*">([^<]*)<\/div>/) || [])[1];
+    check(pre(owner.html) === "2 problems, 1 new, 1 high severity" && pre(built.teaser.html) === "2 problems, 1 new, 1 high severity", "brand header: the digest's hidden preview line has counts only");
+    check(Object.values(built).every((m) => pre(m.html) && !/https?:|@/.test(pre(m.html))), "brand header: every email has a preview line, with no link or address");
+    const ff = withSubscriberFooter(built.teaser, { unsubscribeUrl: U, manageUrl: M });
+    const cardEnd = ff.html.lastIndexOf("<!--end-->");
+    check(cardEnd > ff.html.indexOf(">Unsubscribe</a>") && ff.html.indexOf(">Unsubscribe</a>") > ff.html.indexOf("solid #f5a524") && ff.html.split("<!--end-->").length === 2,
+      "brand header: the subscriber footer goes inside the card, once");
+    check(!/#1a1a1a|#b3261e|#5f6368/i.test(Object.values(built).map((m) => m.html).join("")), "brand header: none of the old near-black, red or grey colours is left");
+  }
+
   // A fake Resend. `script` is a list of replies, consumed one per request (the last repeats).
   const fakeResend = (script) => {
     const calls = [];
@@ -2115,8 +2148,15 @@ const iso = (ms) => new Date(ms).toISOString();
     // (computed from 8613844 with the same members and sweep), with areas null and with no areas field at all.
     const fp = (d) => createHash("sha256").update(JSON.stringify(d.calls.filter((c) => c.body.some((m) => /Pro update/.test(m.text))))).digest("hex");
     const before = [{ email: "all@example.com" }, { email: "gov@example.com", cats: ["gov_policy", "traveler_pain"] }];
-    const MAIN = "27b45fcb7f59e0d59d0a2f4a4a104722b687323a7384fd4aa0fcc3cdd3d4f7e5";
-    check(fp(await da(before)) === MAIN && fp(await da(before, { absent: true })) === MAIN, "pro areas: with no areas chosen, the Pro emails and idempotency keys are byte for byte what they were before T41");
+    // T45 changed the HTML frame only: MAIN is recomputed for it, and NO_HTML (everything but the HTML part) is the
+    // value 8613844 gave too, so the text, subjects, recipients and keys are as before T41.
+    const noHtml = (d) => createHash("sha256").update(JSON.stringify(d.calls.filter((c) => c.body.some((m) => /Pro update/.test(m.text)))
+      .map((c) => ({ ...c, body: c.body.map(({ html, ...m }) => m) })))).digest("hex");
+    const MAIN = "165120aa67016c4568bb13a5f98b34fbaf2f0c1c2c55a681c3df6f7d85ee4b41";
+    const NO_HTML = "ebe30e066149c0334f300048f06196c430ba3784127a3ee8494dd241554428a4";
+    const [withNull, withAbsent] = [await da(before), await da(before, { absent: true })];
+    check(fp(withNull) === MAIN && fp(withAbsent) === MAIN, "pro areas: with no areas chosen, the Pro emails and idempotency keys are byte for byte the same with areas null or absent");
+    check(noHtml(withNull) === NO_HTML, "pro areas: apart from the HTML frame (T45), the Pro emails and keys are what they were before T41");
   }
 
   // a stop in one group defers the groups after it

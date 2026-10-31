@@ -80,6 +80,11 @@ Subscriber -> links in each email -> /manage/ (/api/account: plan, Request Pro o
   per UTC day keyed `"category|Area"`, at most 400 days (`api/_lib/trends.js`). A file without one is seeded from
   its items' first-seen days, marked partial. `/api/data?key=radar:trends` returns `trendsView()`, counts only,
   before the paywall, cached for an hour; `/trends/` draws it as SVG built with DOM calls.
+- **Email look (T45).** Every builder in `api/_lib/email.js` wraps its HTML in `brandShell`: a white card on the
+  page colour, a dark-green banner with the name, a kicker line and an amber rule (no link), and a hidden preview
+  line. `EMAIL_COLORS` holds the colours; `npm run check` tests them for 4.5:1 and against their light-mode
+  tokens in `brand.css`. `withSubscriberFooter` puts the footer before the shell's `<!--end-->` marker, inside
+  the card. Only the HTML changed: plain text, subjects, links and headers are as before.
 - **Filters in the URL (T38).** The board reads `?q=`, `?cat=`, `?area=` and `?all=1` on load and writes them with
   `history.replaceState` on every change; unknown values are dropped and the hash (`#report`, `#p=`) is kept. On a
   locked screen the search is kept in `sessionStorage` for 30 minutes, so `/live/` puts it back after sign-in. The
@@ -142,7 +147,7 @@ Email has been sent through a real Resend account since 21 Oct 2026, from the ve
 | `api/razorpay-webhook.js` | Razorpay's signed subscription events (T21): activated or charged makes the account Pro until the paid period ends; halted makes a paid Pro Free; cancelled lets it run out. Duplicates and out-of-order events change nothing |
 | `api/_lib/radar.js`, `handlers.js` | Sweep logic and the sweep and data handlers |
 | `api/_lib/storage.js` | The private Blob store: `get`, `set`, `del`, `list`; reads skip Blob's CDN cache except for `/api/data` |
-| `api/_lib/slack.js`, `email.js` | The Slack post; every email (owner digest, subscriber digest, confirmation, Pro request) and Resend sending |
+| `api/_lib/slack.js`, `email.js` | The Slack post; every email (owner digest, subscriber digest, confirmation, Pro request), its brand header and colours (T45), and Resend sending |
 | `api/_lib/http.js` | Shared request helpers: allowed methods, body reading with a size limit, JSON and HTML replies |
 | `api/_lib/subscribers.js` | Subscriber records, tokens, plans and event records. A paid Pro that Razorpay says will renew stays Pro for `PRO_GRACE_HOURS` (48) past `proUntil`, because a renewal's charge can arrive late; owner-granted Pro has no grace (T22) |
 | `api/_lib/subscription-handlers.js` | The four subscriber endpoints, the per-IP sign-up limit and the Resend webhook |

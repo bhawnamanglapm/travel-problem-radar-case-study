@@ -889,7 +889,7 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   check(own.sent[0].body.from === "Radar <radar@example.com>", "EMAIL_FROM, when set, is the sender");
   check(req.body.subject === "Travel Problem Radar · FAILED: Gov & policy · 2027-01-15 08:00 UTC · 2 problems, 2 new (manual run)",
     `subject has the time, the counts and the trigger (${req.body.subject})`);
-  check(req.body.html.includes("<a href=\"https://example.com/a&quot;b\">Fees &lt;rise&gt; &amp; more</a>") && !/<rise>/.test(req.body.html),
+  check(req.body.html.includes("<a href=\"https://example.com/a&quot;b\" style=\"color:#1d4e45;font-weight:600\">Fees &lt;rise&gt; &amp; more</a>") && !/<rise>/.test(req.body.html),
     "HTML part escapes titles and links");
   check(req.body.text.includes("Fees <rise> & more") && req.body.text.includes("FAILED: 1 of 4 categories failed this run; its problems are missing from this sweep.")
     && /\n  Gov & policy: \S/.test(req.body.text)
