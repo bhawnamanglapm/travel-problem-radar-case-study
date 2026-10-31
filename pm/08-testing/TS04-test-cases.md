@@ -4,7 +4,7 @@
 |---|---|
 | Component | Test cases |
 | Who | Claude Code writes them; the owner (QA) runs the manual ones |
-| Status | Partial: 1,709 automated checks (2026-10-31); no manual cases written |
+| Status | Partial: 1,719 automated checks (2026-10-31); no manual cases written |
 | Depends on | TS03 |
 | Size | M |
 | Unblocks | TS08, TS09, TS12, TS16 |
@@ -17,13 +17,13 @@ need a browser, an inbox, a card or a Google account.
 
 ## In place today
 
-Automated cases, counted on `293d333` (2026-10-31), every one passing. At the first test run (`c848b94`,
+Automated cases, counted on `fa4f8e6` (2026-10-31), every one passing. At the first test run (`c848b94`,
 2026-10-30) there were 8 suites, 1,582 checks and 244 site checks:
 
 | Suite | Checks |
 |---|---|
 | [test-sweep.mjs](../../scripts/test-sweep.mjs) | 253 |
-| [test-subscriptions.mjs](../../scripts/test-subscriptions.mjs) | 1,052 |
+| [test-subscriptions.mjs](../../scripts/test-subscriptions.mjs) | 1,062 |
 | [test-compare.mjs](../../scripts/test-compare.mjs) | 40 |
 | [test-score.mjs](../../scripts/test-score.mjs) | 46 |
 | [test-cost.mjs](../../scripts/test-cost.mjs) | 25 |
@@ -32,8 +32,8 @@ Automated cases, counted on `293d333` (2026-10-31), every one passing. At the fi
 | [test-password.mjs](../../scripts/test-password.mjs) | 56 |
 | [test-ask.mjs](../../scripts/test-ask.mjs) (T43) | 76 |
 | [test-trends.mjs](../../scripts/test-trends.mjs) (T44) | 39 |
-| **Total (`npm test`)** | **1,709** |
-| [check.mjs](../../scripts/check.mjs) (`npm run check`) | 254 |
+| **Total (`npm test`)** | **1,719** |
+| [check.mjs](../../scripts/check.mjs) (`npm run check`) | 256 |
 
 Each check prints `PASS` and a sentence that says what it proves, so the output reads as a case list.
 

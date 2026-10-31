@@ -18,8 +18,8 @@ documents in [`docs/`](../docs/) and links to them, so every fact keeps one home
 | **Role** | Product owner. Built with AI (Claude): the first version in Claude's app, everything since October 2026 with Claude Code ([README](../README.md#how-i-built-it)) |
 | **Domain** | Travel industry: traveler pain, government and policy changes, website and app failures, industry disruption |
 | **Timeline** | First built in July 2026 in Claude's app. Repository started 2026-08-01. Public demo, live page, subscriptions and payments built from 18 to 23 Oct 2026; payments live on 2026-10-28; board features (details, areas, search, saved, share) on 29 and 30 Oct; first full test run on 2026-10-30 ([CHANGELOG](../CHANGELOG.md)) |
-| **Status (2026-10-31)** | Live and charging. Razorpay has been in live mode since 2026-10-28, and Pro is paid monthly or yearly at ₹1. Sweeps run again since 2026-10-25 (I-01 closed), on `claude-haiku-5-5`. Since 2026-10-30 the board and Pro email have India as an area (T42). On 2026-10-31 Useful / Not useful votes went live for Pro, Ask the board was built but stays off until the owner's Preview test (T43), and a public `/trends/` page with counts only went live (T44). The first test run (TS01 to TS20, 2026-10-30) ended **not ready to sign off**. After it, BUG-001 and BUG-008 to BUG-011 were fixed and the owner closed every bug but BUG-002 (an account that can't see the board), which is open. Still open on the [launch checklist](05-business-case-and-launch/launch-plan.md): Vercel Pro, the test-mode run's record, an adviser's check of the terms ([progress](../docs/subscriptions/tasks/progress.md), [TS19](08-testing/TS19-bug-reporting-and-retesting.md)) |
-| **Build record** | 514 commits and 140 merged pull requests. 1,709 offline tests and 254 offline checks pass (`npm test`, `npm run check`), counted on `main` at `293d333` on 2026-10-31. On 2026-10-30 it was 473 commits, 129 PRs, 1,582 tests and 249 checks; on 2026-10-23, 256 commits, 74 PRs, 952 tests and 199 checks |
+| **Status (2026-10-31)** | Live and charging. Razorpay has been in live mode since 2026-10-28, and Pro is paid monthly or yearly at ₹1. Sweeps run again since 2026-10-25 (I-01 closed), on `claude-haiku-5-5`. Since 2026-10-30 the board and Pro email have India as an area (T42). On 2026-10-31 Useful / Not useful votes went live for Pro, Ask the board was built but stays off until the owner's Preview test (T43), a public `/trends/` page with counts only went live (T44), and every email got the brand header (T45). The first test run (TS01 to TS20, 2026-10-30) ended **not ready to sign off**. After it, BUG-001 and BUG-008 to BUG-011 were fixed and the owner closed every bug but BUG-002 (an account that can't see the board), which is open. Still open on the [launch checklist](05-business-case-and-launch/launch-plan.md): Vercel Pro, the test-mode run's record, an adviser's check of the terms ([progress](../docs/subscriptions/tasks/progress.md), [TS19](08-testing/TS19-bug-reporting-and-retesting.md)) |
+| **Build record** | 525 commits and 144 merged pull requests. 1,719 offline tests and 256 offline checks pass (`npm test`, `npm run check`), counted on `main` at `fa4f8e6` on 2026-10-31. Earlier on 2026-10-31 (`293d333`) it was 514 commits, 140 PRs, 1,709 tests and 254 checks; on 2026-10-30 it was 473 commits, 129 PRs, 1,582 tests and 249 checks; on 2026-10-23, 256 commits, 74 PRs, 952 tests and 199 checks |
 | **Users** | **None recorded in the repo besides the owner.** 3 live ₹1 payments were captured by 2026-10-29 ([progress](../docs/subscriptions/tasks/progress.md), T27); the repo doesn't record who made them. No interviews, surveys or usage data exist yet ([README](../README.md#problem)) |
 | **Price** | ₹1 a month or ₹1 a year for Pro, no GST charged: the owner's real price for now (2026-10-29). It was ₹299 a month until 2026-10-25, and the [business case](05-business-case-and-launch/business-case.md) still uses ₹299 for break-even. The target price is **OWNER INPUT NEEDED** ([decisions](../docs/decisions.md), [costing](../docs/subscriptions/costing.md)) |
 
@@ -46,7 +46,7 @@ ways:
 - **a public trends page** with counts only: new problems each week and in the last 30 days by area (India first)
   and category, and what's rising (T44; the counts start with the next scheduled sweep);
 - **email digests**: a daily teaser for Free, and for Pro 1 to 5 digests a day, for the categories and areas they
-  choose.
+  choose. Every email carries the site's brand header (T45).
 
 Source: [TECHNICAL.md](../docs/TECHNICAL.md), [paid-website.md](../docs/subscriptions/paid-website.md),
 [CHANGELOG](../CHANGELOG.md) 2026-10-29 to 2026-10-31.
@@ -89,7 +89,7 @@ The IDs link the stages, as in a larger programme:
 | `DSC-` | Discovery assumption | [discovery-log.md](01-discovery/discovery-log.md) |
 | `ALT-` | Alternative a user has today | [alternatives.md](01-discovery/alternatives.md) |
 | `REQ-` | Requirement. `REQ-01` to `REQ-11` are R1 to R11 of the [v1 PRD](../docs/PRD.md) | [prd.md](02-product-definition/prd.md) |
-| `EP-` | Epic, grouping the build tasks `T00` to `T44` | [backlog.md](02-product-definition/backlog.md) |
+| `EP-` | Epic, grouping the build tasks `T00` to `T45` | [backlog.md](02-product-definition/backlog.md) |
 | `KPI-` | Measure of success | [kpis.md](02-product-definition/kpis.md) |
 | `R-` `A-` `I-` `D-` | Risk, assumption, issue, dependency | [raid-log.md](04-planning-and-governance/raid-log.md) |
 | `CR-` | Change request: a decision later revised | [change-log.md](04-planning-and-governance/change-log.md) |

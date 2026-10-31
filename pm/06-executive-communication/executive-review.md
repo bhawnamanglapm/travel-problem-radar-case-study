@@ -28,7 +28,7 @@ The next steps are a target price, the open launch items (Vercel Pro, Resend Pro
 | Users | 3 live ₹1 payments by 2026-10-29. `/admin/` showed 5 paid Pro, 2 of them test-mode subscriptions. No interviews run | T27 in [progress.md](../../docs/subscriptions/tasks/progress.md); [discovery log](../01-discovery/discovery-log.md) |
 | Payments | **Live** since 2026-10-28 (Razorpay live mode), ₹1 a month or ₹1 a year | [launch plan](../05-business-case-and-launch/launch-plan.md) |
 | Testing | First full run 2026-10-30: **not ready to sign off**. BUG-001 and BUG-008 to BUG-011 fixed; the owner closed 10 bugs without retests. BUG-002 (S1) open; IT-1 to IT-8 blocked by an old `staging`; UAT-3 not done | [test results](../08-testing/results/README.md); [TS19](../08-testing/TS19-bug-reporting-and-retesting.md) |
-| Engineering | 1,709 offline tests and 254 offline checks pass, at `293d333` on 2026-10-31 (1,582 and 249 on 2026-10-30; 952 and 199 on 2026-10-23) | `npm test`, `npm run check`; [traceability](../02-product-definition/traceability.md) |
+| Engineering | 1,719 offline tests and 256 offline checks pass, at `fa4f8e6` on 2026-10-31 (1,582 and 249 on 2026-10-30; 952 and 199 on 2026-10-23) | `npm test`, `npm run check`; [traceability](../02-product-definition/traceability.md) |
 
 ## The numbers that exist
 
