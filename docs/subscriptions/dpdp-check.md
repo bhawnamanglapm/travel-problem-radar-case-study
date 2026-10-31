@@ -38,7 +38,7 @@ From [`api/_lib/subscribers.js`](../../api/_lib/subscribers.js) and the [privacy
 
 | Duty | Asks | The radar today | Gap or question for the adviser |
 |---|---|---|---|
-| Notice | Tell people what is collected and why, and how to use their rights and complain | The privacy page lists the data, the use, the processors, how long it is kept and a contact; the sign-up page has a short version | The privacy page doesn't name **Razorpay** as a processor, though payments are live. It doesn't say people can complain to the Data Protection Board. Whether the notice must also be offered in Indian languages: **to verify** |
+| Notice | Tell people what is collected and why, and how to use their rights and complain | The privacy page lists the data, the use, the processors, how long it is kept and a contact; the sign-up page has a short version | **Razorpay** named on the privacy page 2026-10-31 (what it receives: the record id and the plan, not the address), with the payment fields the record keeps. It doesn't say people can complain to the Data Protection Board. Whether the notice must also be offered in Indian languages: **to verify** |
 | Consent | Consent that is free, specific and given by a clear act, and as easy to withdraw as to give | Double opt-in: nothing is sent until the address is confirmed from the email. Every email has Unsubscribe; for Free, that deletes the record | No tick box or "I agree" at sign-up: is confirming the address a clear enough act? |
 | Legitimate uses | Some uses need no consent | Payments are for a contract the member starts | Which of the radar's uses count: **to verify** |
 | Security safeguards | Reasonable safeguards against a breach | Private Blob store; scrypt password hashes; hashed sign-in codes; a signed session cookie, 12 hours at most; the address never logged; the IP address only as a short hash, deleted in 2 hours | The read-write Blob token sits on the owner's machine (`.env.local`). No written list of who has access. Whether the Rules require keeping access logs for a set time: **to verify** |
@@ -64,7 +64,7 @@ The radar's items come from public sources about travel problems, not from membe
 
 Nothing is changed by this document. Likely changes, each for the owner to decide after advice:
 
-- name Razorpay, and the Data Protection Board, on the privacy page;
+- name the Data Protection Board on the privacy page (Razorpay was named 2026-10-31);
 - a written breach plan;
 - an age line in the terms;
 - a time limit for Pro accounts with emails off.
