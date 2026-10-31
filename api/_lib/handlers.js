@@ -1,6 +1,7 @@
 // HTTP handlers, built from injected dependencies so the offline tests can call
 // them directly. api/sweep.js and api/data.js wire in the real ones.
-import { CATS, DEFAULT_MODEL, runDailySweep, scanCategory, sweepKey } from "./radar.js";
+import { CATS, DEFAULT_MODEL, KEY_SEARCH, runDailySweep, scanCategory, sweepKey } from "./radar.js";
+import { trendsView } from "./trends.js";
 import { buildDigest, buildFailureNotice, postToSlack } from "./slack.js";
 import { buildDigestEmail, buildFailureEmail, sendEmail } from "./email.js";
 import { randomBytes as cryptoRandomBytes } from "node:crypto";
@@ -113,6 +114,17 @@ export function makeSweepHandler({ env, storage, fetchFn, now, randomBytes = cry
 
 // Read-only, and only for the kinds of key the dashboard asks for: the index, a sweep, the search file (T38).
 const ALLOWED_KEY = /^radar:(history|search|sweep:\d{10,16})$/;
+// The trends page's counts (T44): read from the search file's tally and open to everyone, paywall or not, as the
+// reply holds no ids, titles or links. Cached an hour, since the tally changes only when a sweep runs.
+const TRENDS_KEY = "radar:trends";
+async function trendsReply(res, storage, now) {
+  let file;
+  try { file = await storage.get(KEY_SEARCH); } catch (e) { return sendJson(res, 502, { error: "storage unavailable" }); }
+  let view = null;
+  try { view = file == null ? null : trendsView(JSON.parse(file).trends, now()); } catch (e) { view = null; }
+  if (!view) return sendJson(res, 404, { error: "not found" });
+  return sendJson(res, 200, view, { "cache-control": "public, s-maxage=3600, stale-while-revalidate=3600" });
+}
 
 // One problem's share page, /p/<sweepId>/<itemId> (T40), rewritten to /api/data?page=item by vercel.json so
 // it needs no function of its own. Everyone sees the free teaser email's fields; a signed-in Pro also sees
@@ -179,6 +191,7 @@ export function makeDataHandler({ storage, accounts = storage, env = {}, now = D
     const u = new URL(req.url, "http://x");
     if (u.searchParams.get("page") === "item") return itemPage(req, res, u, { storage, accounts, env, now });
     const key = u.searchParams.get("key") || "";
+    if (key === TRENDS_KEY) return trendsReply(res, storage, now);
     if (!ALLOWED_KEY.test(key)) return reply(400, { error: "key not allowed" });
     if (paywall) {
       const t = now();
