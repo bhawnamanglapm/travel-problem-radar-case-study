@@ -10,8 +10,51 @@ export const DEFAULT_FROM = "Travel Problem Radar <onboarding@resend.dev>";
 
 const when = (at) => at.slice(0, 16).replace("T", " ") + " UTC";
 
-const FONT = "font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5;color:#1a1a1a";
-const MUTED = "color:#5f6368";
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const longDate = (at) => `${Number(at.slice(8, 10))} ${MONTHS[Number(at.slice(5, 7)) - 1] || ""} ${at.slice(0, 4)}`;
+
+// The site's light brand colours (brand.css), written out because email can't use CSS variables.
+// scripts/check.mjs checks every text colour against its background for 4.5:1 (T45).
+export const EMAIL_COLORS = {
+  page: "#f6f9f8", card: "#ffffff", line: "#d6e1df",
+  text: "#0f2924", muted: "#516763", link: "#1d4e45",
+  primary: "#1d4e45", onPrimary: "#f6f9f8", bannerSub: "#d6e1df",
+  accent: "#f5a524", onAccent: "#0f2924", high: "#b91c1c", medium: "#a15c07",
+};
+const C = EMAIL_COLORS;
+const FONT = `font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5;color:${C.text}`;
+const MUTED = `color:${C.muted}`;
+const LINK = `color:${C.link}`;
+const BUTTON = `display:inline-block;padding:10px 18px;background:${C.primary};color:${C.onPrimary};text-decoration:none;border-radius:6px;font-weight:600`;
+const H1 = "font-size:20px;line-height:1.3;margin:0 0 6px";
+const NEW_TAG = `<span style="display:inline-block;padding:0 6px;border-radius:4px;background:${C.accent};color:${C.onAccent};font-size:11px;font-weight:700;letter-spacing:.04em">NEW</span>`;
+const SEV_COLOR = { High: C.high, Medium: C.medium };
+// withSubscriberFooter puts the footer here, inside the card.
+const END = "<!--end-->";
+
+// Every email's frame (T45): a page-coloured background, a white card, and the brand header (the name on
+// dark green, a small kicker line, an amber rule). The header is text and colour, not an image, so it shows
+// when images are blocked, and it holds no link. `preheader` is the hidden line mail apps show as the preview.
+function brandShell({ kicker = "", preheader = "" }, body) {
+  return [
+    `<div style="${FONT};background:${C.page};padding:16px 8px">`,
+    preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all">${esc(preheader)}</div>` : "",
+    `<div style="max-width:640px;margin:0 auto;background:${C.card};border:1px solid ${C.line};border-radius:8px;overflow:hidden">`,
+    `<div style="background:${C.primary};padding:18px 24px;border-bottom:4px solid ${C.accent}">`,
+    `<div style="font-family:Georgia,'Times New Roman',serif;font-size:24px;line-height:1.2;letter-spacing:.02em;color:${C.onPrimary}">Travel Problem Radar</div>`,
+    kicker ? `<div style="margin-top:4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:${C.bannerSub}">${esc(kicker)}</div>` : "",
+    `</div>`,
+    `<div style="padding:20px 24px 24px">`,
+    ...body,
+    END,
+    `</div>`,
+    `</div>`,
+    `</div>`,
+  ].filter(Boolean).join("\n");
+}
+// The banner already names the radar, so headings drop a leading "Travel Problem Radar: ".
+const shortTitle = (t) => { const s = t.replace(/^Travel Problem Radar: /, ""); return s.charAt(0).toUpperCase() + s.slice(1); };
+
 const NOTE = "Gathered by an AI model with web search. Items are not verified; check each source link.";
 const TEASER_NOTE = "Gathered by an AI model with web search. Items are not verified.";
 const TEASER_INVITE = "Sign in to see everything: summaries, sources and product ideas are on the live board with Pro.";
@@ -41,8 +84,7 @@ export function buildDigestEmail({ at, problems, perCat = {}, manual = false }, 
 
   const text = [title, `Swept ${when(at)} · ${counts}`];
   const html = [
-    `<div style="${FONT};max-width:640px">`,
-    `<h1 style="font-size:18px;margin:0 0 4px">${esc(title)}</h1>`,
+    `<h1 style="${H1}">${esc(shortTitle(title))}</h1>`,
     `<p style="margin:0 0 12px;${MUTED}">Swept ${esc(when(at))} · ${esc(counts)}</p>`,
   ];
   if (cats) {
@@ -60,7 +102,7 @@ export function buildDigestEmail({ at, problems, perCat = {}, manual = false }, 
     const line = `FAILED: ${failedLine(failed, shown.length)}`;
     text.push(line, ...failed.map((f) => `  ${f.label}: ${f.error}`));
     html.push(
-      `<p style="margin:0 0 4px;color:#b3261e;font-weight:600">${esc(line)}</p>`,
+      `<p style="margin:0 0 4px;color:${C.high};font-weight:600">${esc(line)}</p>`,
       `<ul style="margin:0 0 12px;padding-left:20px">${failed.map((f) => `<li>${esc(f.label)}: ${esc(f.error)}</li>`).join("")}</ul>`,
     );
   }
@@ -68,21 +110,21 @@ export function buildDigestEmail({ at, problems, perCat = {}, manual = false }, 
     text.push(TEASER_INVITE, `Sign in: ${signInUrl}`);
     html.push(
       `<p style="margin:0 0 8px">${esc(TEASER_INVITE)}</p>`,
-      `<p style="margin:0 0 12px"><a href="${esc(signInUrl)}" style="display:inline-block;padding:8px 16px;background:#1a1a1a;color:#ffffff;text-decoration:none;border-radius:6px">Sign in</a></p>`,
+      `<p style="margin:0 0 12px"><a href="${esc(signInUrl)}" style="${BUTTON}">Sign in</a></p>`,
     );
   } else if (liveUrl) {
     text.push(`Live board: ${liveUrl}`);
-    html.push(`<p style="margin:0 0 12px"><a href="${esc(liveUrl)}">Open the live board</a></p>`);
+    html.push(`<p style="margin:0 0 12px"><a href="${esc(liveUrl)}" style="${BUTTON}">Open the live board</a></p>`);
   }
   shown.forEach((c) => {
     const items = problems.filter((p) => p.cat === c.key);
     if (!items.length) return;
     text.push("", `${c.label.toUpperCase()} (${items.length})`);
-    html.push(`<h2 style="font-size:13px;letter-spacing:.04em;text-transform:uppercase;margin:20px 0 8px;${MUTED}">${esc(c.label)} (${items.length})</h2>`);
+    html.push(`<h2 style="font-size:13px;letter-spacing:.04em;text-transform:uppercase;margin:24px 0 10px;padding-bottom:4px;border-bottom:1px solid ${C.line};${MUTED}">${esc(c.label)} (${items.length})</h2>`);
     if (teaser) {
       items.forEach((p) => {
         text.push(`- ${p.isNew ? "NEW " : ""}${p.title}`);
-        html.push(`<div style="margin:0 0 6px">${p.isNew ? `<strong style="color:#b3261e">NEW</strong> ` : ""}${esc(p.title)}</div>`);
+        html.push(`<div style="margin:0 0 6px">${p.isNew ? `${NEW_TAG} ` : ""}${esc(p.title)}</div>`);
       });
       return;
     }
@@ -93,10 +135,11 @@ export function buildDigestEmail({ at, problems, perCat = {}, manual = false }, 
       text.push(`  ${meta}`);
       if (p.link) text.push(`  ${p.link}`);
       if (p.opportunity) text.push(`  Opportunity: ${p.opportunity}`);
-      const head = p.link ? `<a href="${esc(p.link)}">${esc(p.title)}</a>` : esc(p.title);
+      const head = p.link ? `<a href="${esc(p.link)}" style="${LINK};font-weight:600">${esc(p.title)}</a>` : `<strong>${esc(p.title)}</strong>`;
+      const sev = SEV_COLOR[p.severity] ? ` style="color:${SEV_COLOR[p.severity]}"` : ` style="${MUTED}"`;
       html.push(
-        `<div style="margin:0 0 14px">`,
-        `<div><strong>[${esc(p.severity)}]</strong>${p.isNew ? ` <strong style="color:#b3261e">NEW</strong>` : ""} ${head}</div>`,
+        `<div style="margin:0 0 16px">`,
+        `<div><strong${sev}>[${esc(p.severity)}]</strong>${p.isNew ? ` ${NEW_TAG}` : ""} ${head}</div>`,
         p.summary ? `<div>${esc(p.summary)}</div>` : "",
         `<div style="font-size:12px;${MUTED}">${esc(meta)}</div>`,
         p.opportunity ? `<div>Opportunity: ${esc(p.opportunity)}</div>` : "",
@@ -106,8 +149,9 @@ export function buildDigestEmail({ at, problems, perCat = {}, manual = false }, 
   });
   const note = teaser ? TEASER_NOTE : NOTE;
   text.push("", note);
-  html.push(`<p style="margin:20px 0 0;font-size:12px;${MUTED}">${esc(note)}</p>`, `</div>`);
-  return { subject, text: text.join("\n"), html: html.filter(Boolean).join("\n") };
+  html.push(`<p style="margin:20px 0 0;font-size:12px;${MUTED}">${esc(note)}</p>`);
+  const preheader = `${problems.length} problems, ${newCount} new, ${highCount} high severity`;
+  return { subject, text: text.join("\n"), html: brandShell({ kicker: longDate(at), preheader }, html.filter(Boolean)) };
 }
 
 export function buildFailureEmail({ at, perCat = {}, error = "" }) {
@@ -117,12 +161,10 @@ export function buildFailureEmail({ at, perCat = {}, error = "" }) {
   return {
     subject: `Travel Problem Radar: sweep failed (${when(at)})`,
     text: ["Travel Problem Radar: sweep failed", ...lines].join("\n"),
-    html: [
-      `<div style="${FONT};max-width:640px">`,
-      `<h1 style="font-size:18px;margin:0 0 8px">Travel Problem Radar: sweep failed</h1>`,
+    html: brandShell({ kicker: "Sweep alert", preheader: "Nothing was saved; the live board still shows the previous sweep." }, [
+      `<h1 style="${H1};color:${C.high}">Sweep failed</h1>`,
       ...lines.map((l) => `<p style="margin:0 0 6px">${esc(l)}</p>`),
-      `</div>`,
-    ].join("\n"),
+    ]),
   };
 }
 
@@ -140,16 +182,19 @@ export function withSubscriberFooter(mail, { unsubscribeUrl, manageUrl = "", pla
   if (!LINK_OK.test(unsubscribeUrl || "")) throw new Error("withSubscriberFooter: bad unsubscribe link");
   const intro = PLAN_LINE[plan] || PLAN_LINE.free;
   const text = ["", "--", intro, `Unsubscribe: ${unsubscribeUrl}`];
-  const links = [`<a href="${esc(unsubscribeUrl)}">Unsubscribe</a>`];
+  const links = [`<a href="${esc(unsubscribeUrl)}" style="${LINK}">Unsubscribe</a>`];
   if (manageUrl) {
     text.push(`Manage subscription: ${manageUrl}`);
-    links.push(`<a href="${esc(manageUrl)}">Manage subscription</a>`);
+    links.push(`<a href="${esc(manageUrl)}" style="${LINK}">Manage subscription</a>`);
   }
-  const footer = `<p style="margin:20px 0 0;font-size:12px;${MUTED}">${esc(intro)} ${links.join(" · ")}</p>`;
+  const footer = `<p style="margin:24px 0 0;padding-top:12px;border-top:1px solid ${C.line};font-size:12px;${MUTED}">${esc(intro)} ${links.join(" · ")}</p>`;
+  // Inside the card when the shell marked its end (T45); otherwise before the last </div>, as before.
+  const html = mail.html.includes(END) ? mail.html.replace(END, () => footer + "\n" + END)
+    : /<\/div>\s*$/.test(mail.html) ? mail.html.replace(/<\/div>\s*$/, footer + "\n</div>") : mail.html + "\n" + footer;
   return {
     ...mail,
     text: mail.text + "\n" + text.join("\n"),
-    html: /<\/div>\s*$/.test(mail.html) ? mail.html.replace(/<\/div>\s*$/, footer + "\n</div>") : mail.html + "\n" + footer,
+    html,
     headers: {
       ...(mail.headers || {}),
       "List-Unsubscribe": `<${unsubscribeUrl}>`,
@@ -171,15 +216,13 @@ export function buildConfirmEmail({ confirmUrl, siteUrl = "", withPassword = fal
   return {
     subject,
     text: [subject, "", intro, "", `Confirm: ${confirmUrl}`, "", ignore, "", stored, ...(siteUrl ? ["", siteUrl] : [])].join("\n"),
-    html: [
-      `<div style="${FONT};max-width:640px">`,
-      `<h1 style="font-size:18px;margin:0 0 8px">${esc(subject)}</h1>`,
+    html: brandShell({ kicker: "Confirm your email", preheader: "Press the button inside to confirm your subscription." }, [
+      `<h1 style="${H1}">${esc(subject)}</h1>`,
       `<p style="margin:0 0 14px">${esc(intro)}</p>`,
-      `<p style="margin:0 0 14px"><a href="${esc(confirmUrl)}" style="display:inline-block;padding:10px 18px;background:#1a1a1a;color:#ffffff;text-decoration:none;border-radius:6px">Confirm subscription</a></p>`,
+      `<p style="margin:0 0 14px"><a href="${esc(confirmUrl)}" style="${BUTTON}">Confirm subscription</a></p>`,
       `<p style="margin:0 0 14px">${esc(ignore)}</p>`,
       `<p style="margin:0;font-size:12px;${MUTED}">${esc(stored)}</p>`,
-      `</div>`,
-    ].join("\n"),
+    ]),
   };
 }
 
@@ -195,14 +238,12 @@ export function buildSignInEmail({ signInUrl, siteUrl = "", already = false }) {
   return {
     subject,
     text: [subject, "", intro, "", `Sign in: ${signInUrl}`, "", ignore, ...(siteUrl ? ["", siteUrl] : [])].join("\n"),
-    html: [
-      `<div style="${FONT};max-width:640px">`,
-      `<h1 style="font-size:18px;margin:0 0 8px">${esc(subject)}</h1>`,
+    html: brandShell({ kicker: "Sign-in link", preheader: "The link works once and expires in 15 minutes." }, [
+      `<h1 style="${H1}">${esc(subject)}</h1>`,
       `<p style="margin:0 0 14px">${esc(intro)}</p>`,
-      `<p style="margin:0 0 14px"><a href="${esc(signInUrl)}" style="display:inline-block;padding:10px 18px;background:#1a1a1a;color:#ffffff;text-decoration:none;border-radius:6px">Sign in</a></p>`,
+      `<p style="margin:0 0 14px"><a href="${esc(signInUrl)}" style="${BUTTON}">Sign in</a></p>`,
       `<p style="margin:0;font-size:12px;${MUTED}">${esc(ignore)}</p>`,
-      `</div>`,
-    ].join("\n"),
+    ]),
   };
 }
 
@@ -216,16 +257,14 @@ export function buildAlreadySubscribedEmail({ manageUrl, unsubscribeUrl, siteUrl
   return {
     subject,
     text: [subject, "", intro, "", how, `Manage subscription: ${manageUrl}`, `Unsubscribe: ${unsubscribeUrl}`, "", ignore, ...(siteUrl ? ["", siteUrl] : [])].join("\n"),
-    html: [
-      `<div style="${FONT};max-width:640px">`,
-      `<h1 style="font-size:18px;margin:0 0 8px">${esc(subject)}</h1>`,
+    html: brandShell({ kicker: "Your subscription", preheader: "This address is already subscribed; nothing has changed." }, [
+      `<h1 style="${H1}">${esc(subject)}</h1>`,
       `<p style="margin:0 0 14px">${esc(intro)}</p>`,
       `<p style="margin:0 0 14px">${esc(how)}</p>`,
-      `<p style="margin:0 0 14px"><a href="${esc(manageUrl)}" style="display:inline-block;padding:10px 18px;background:#1a1a1a;color:#ffffff;text-decoration:none;border-radius:6px">Manage subscription</a></p>`,
+      `<p style="margin:0 0 14px"><a href="${esc(manageUrl)}" style="${BUTTON}">Manage subscription</a></p>`,
       `<p style="margin:0 0 14px">${esc(ignore)}</p>`,
       `<p style="margin:0;font-size:12px;${MUTED}"><a href="${esc(unsubscribeUrl)}" style="${MUTED}">Unsubscribe</a></p>`,
-      `</div>`,
-    ].join("\n"),
+    ]),
   };
 }
 
@@ -243,15 +282,13 @@ export function buildPlanEndingEmail({ endsAt, manageUrl, renewable = true, site
   return {
     subject,
     text: [subject, "", intro, "", how, `Manage subscription: ${manageUrl}`, "", ignore, ...(siteUrl ? ["", siteUrl] : [])].join("\n"),
-    html: [
-      `<div style="${FONT};max-width:640px">`,
-      `<h1 style="font-size:18px;margin:0 0 8px">${esc(subject)}</h1>`,
+    html: brandShell({ kicker: "Your Pro plan", preheader: `Pro ends on ${day} and won't renew.` }, [
+      `<h1 style="${H1}">${esc(subject)}</h1>`,
       `<p style="margin:0 0 14px">${esc(intro)}</p>`,
       `<p style="margin:0 0 14px">${esc(how)}</p>`,
-      `<p style="margin:0 0 14px"><a href="${esc(manageUrl)}" style="display:inline-block;padding:10px 18px;background:#1a1a1a;color:#ffffff;text-decoration:none;border-radius:6px">Manage subscription</a></p>`,
+      `<p style="margin:0 0 14px"><a href="${esc(manageUrl)}" style="${BUTTON}">Manage subscription</a></p>`,
       `<p style="margin:0;font-size:12px;${MUTED}">${esc(ignore)}</p>`,
-      `</div>`,
-    ].join("\n"),
+    ]),
   };
 }
 
@@ -268,13 +305,11 @@ export function buildProRequestEmail({ at, source }) {
   return {
     subject,
     text: [subject, "", ...lines].join("\n"),
-    html: [
-      `<div style="${FONT};max-width:640px">`,
-      `<h1 style="font-size:18px;margin:0 0 8px">${esc(subject)}</h1>`,
+    html: brandShell({ kicker: "Owner alert", preheader: "A subscriber asked for Pro." }, [
+      `<h1 style="${H1}">${esc(shortTitle(subject))}</h1>`,
       `<p style="margin:0 0 10px">${esc(lines[0])}</p>`,
       ...lines.slice(1).map((l) => `<p style="margin:0 0 6px;font-family:ui-monospace,monospace;font-size:12px">${esc(l)}</p>`),
-      `</div>`,
-    ].join("\n"),
+    ]),
   };
 }
 
