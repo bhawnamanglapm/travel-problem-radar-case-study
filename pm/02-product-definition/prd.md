@@ -20,7 +20,7 @@ saved problems, a share link) and 1 to 5 digests a day for the categories and ar
 | v1 (19 Oct) | v2 (23 Oct) | Now (30 Oct) | Source |
 |---|---|---|---|
 | One sweep a day from Vercel's cron | Every 5 hours from GitHub Actions, with Vercel's daily cron as a backstop | Up to 5 fixed UTC slots (00, 05, 10, 15, 20), as many as the Pro member with the highest choice needs; 1 with no Pro. Vercel's backstop at 00:05 UTC | T32, T35; [`sweep.yml`](../../.github/workflows/sweep.yml), [`vercel.json`](../../vercel.json) |
-| Live page open to everyone | Live board for Pro only (`BOARD_PAYWALL` on since 2026-10-23) | Same, plus a details panel, areas, search across all sweeps, saved problems and a share page | T36 to T40 |
+| Live page open to everyone | Live board for Pro only (`BOARD_PAYWALL` on since 2026-10-23) | Same, plus a details panel, areas (India among them), search across all sweeps, saved problems, a share page, Useful / Not useful votes and Ask the board (off until the owner's test); a public `/trends/` page with counts only | T36 to T40, T42 to T44 |
 | Email delivery was a non-goal | Free and Pro email digests, with double opt-in | Pro chooses 1 to 5 emails a day, and areas as well as categories | T32, T41 |
 | No accounts | Accounts with no passwords: an emailed sign-in link or Continue with Google | Passwords are optional beside the link and Google (2026-10-27) | T16; [CHANGELOG](../../CHANGELOG.md) 2026-10-27 |
 | No price | Pro at ₹299 a month, no GST charged; refund rule set | One Pro price, monthly or yearly: ₹1 each, the owner's real price for now (2026-10-29). Razorpay live since 2026-10-28 | [decisions.md](../../docs/decisions.md) 2026-10-23, 2026-10-26, 2026-10-29; T27 |

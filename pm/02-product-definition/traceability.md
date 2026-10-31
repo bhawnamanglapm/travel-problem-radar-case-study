@@ -2,9 +2,9 @@
 
 > **Stage 2 of 8.** Each requirement in [prd.md](prd.md), the code that meets it, and the automated test or check
 > that proves it. Every test named here runs offline with `npm test` or `npm run check`, also on every push. The
-> "Verified by" column names the section heading or comment inside each test file. Updated 2026-10-30: on `main` at
-> `e339d32`, 1,582 tests and 249 checks pass, and none fail (first written at `662bded`, 2026-10-23: 952 tests,
-> 199 checks).
+> "Verified by" column names the section heading or comment inside each test file. Updated 2026-10-31: on `main` at
+> `293d333`, 1,709 tests and 254 checks pass, and none fail (2026-10-30 at `e339d32`: 1,582 and 249; first written
+> at `662bded`, 2026-10-23: 952 tests, 199 checks).
 
 | Test file | Passing on 2026-10-30 | On 2026-10-23 | Covers |
 |---|---|---|---|
