@@ -5,7 +5,7 @@ grouped by date.
 
 ## 2026-10-31
 
-- T45, a brand header on every email (built on `feat/t45-email-header`, not merged). Each email sits in a white
+- T45, a brand header on every email (#144, merged and live). Each email sits in a white
   card under a dark-green banner with the "Travel Problem Radar" name, a short line (the sweep's date, or what the
   email is for) and an amber rule. HTML colour, not an image, and no link in it, so the teaser keeps one link. A
   hidden preview line (counts only for the digest), brand colours for text, links, buttons, the NEW tag and
