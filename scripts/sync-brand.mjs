@@ -5,7 +5,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 
 export const SELF_CONTAINED = [
   "about/index.html", "admin/index.html", "manage/index.html", "pricing/index.html", "signin/index.html",
-  "signup/index.html", "subscribe/index.html",
+  "signup/index.html", "subscribe/index.html", "trends/index.html",
   "legal/contact/index.html", "legal/privacy/index.html", "legal/refunds/index.html", "legal/terms/index.html",
 ];
 
