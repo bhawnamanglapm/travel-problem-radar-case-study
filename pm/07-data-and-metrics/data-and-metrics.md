@@ -3,8 +3,8 @@
 > **Stage 7 of 8.** What the product stores, how each KPI in the [KPI catalogue](../02-product-definition/kpis.md)
 > would be computed from it, and what isn't measured at all. Built from the code and from
 > [DEPLOYMENT.md](../../DEPLOYMENT.md#what-is-stored). **No counts are printed here**: running `stats` is the
-> owner's step, and this page never shows an address. Updated 2026-10-30 (first written 2026-10-24): the stores,
-> fields and scripts added by T29 and T32 to T42, and passwords.
+> owner's step, and this page never shows an address. Updated 2026-10-31 (first written 2026-10-24): the stores,
+> fields and scripts added by T29 and T32 to T43, and passwords.
 
 ## Where the data lives
 
@@ -20,7 +20,7 @@ Full table, with Blob paths: [DEPLOYMENT.md](../../DEPLOYMENT.md#what-is-stored)
 | `radar:llmlog:<id>` | One sweep's LLM log: each Claude call's request and response (never the key), usage per category (`usageByCat`, T29), and every page search found, with its link, title and age | 30 days | No | No |
 | `radar:seenIds` | Item IDs already seen, for the New flag | Up to 800 | No | No |
 | `radar:lastScheduled` | When the last scheduled sweep started, and its slot (`slotAt`, T35) | Overwritten | No | No |
-| `radar:sub:<id>` | One subscriber: address, status, plan, dates, categories, sign-in state, `emailOff`, Razorpay state. Since 2026-10-27 an optional password hash (`pw`, scrypt). Since T39 `saved`: up to 100 saved problems. Since T41 `areas`; since T42 `areasV`, which marks a list saved after India became its own area. `<id>` is a SHA-256 of the address | Until unsubscribed (Free) or deleted (Pro) | **Yes**: the address | No |
+| `radar:sub:<id>` | One subscriber: address, status, plan, dates, categories, sign-in state, `emailOff`, Razorpay state. Since 2026-10-27 an optional password hash (`pw`, scrypt). Since T39 `saved`: up to 100 saved problems. Since T41 `areas`; since T42 `areasV`, which marks a list saved after India became its own area. Since T43 `votes`: up to 500 Useful / Not useful votes (item, button, time), and `ask`: how many questions were asked today (the question and answer are never stored). `<id>` is a SHA-256 of the address | Until unsubscribed (Free) or deleted (Pro) | **Yes**: the address | No |
 | `radar:event:…` | One event: type, time and plan. **No address or id** | Until `prune-events` deletes it | No | No |
 | `radar:deliveries:<day>` | Record ids sent that day's Free digest | 7 days | Record ids, not addresses | No |
 | `radar:subscriberCount` | Pending plus active records at the last sweep | Overwritten | No | No |
@@ -51,6 +51,7 @@ sometimes a plan.
 | `checkoutstarted` | A Razorpay subscription is created at checkout | No |
 | `progranted`, `prorevoked` | A Razorpay webhook changes an account's plan | No |
 | `manualsweep` | A manual sweep runs (capped at 3 a day) | No |
+| `asked` | A Pro member's question to the board gets a reply (not on a model error); the plan only, never the question (T43) | No |
 
 ## Owner scripts that read the data
 
@@ -62,6 +63,7 @@ also shows members, plans, areas and payment mode, behind its own user and passw
 | `node scripts/llm-logs.mjs models` (also `list`, `summary`, `show`, `areas`) | `radar:llmlog:` | Per model, averages per sweep: items, pages, searches, tokens, cost and cost per item; failed calls; the items' source ages and links search never returned (`searched`). With `areas`, the items shown by area and India's share (T42) | KPI-20, KPI-01 (a proxy), KPI-03, KPI-06, KPI-08, KPI-09 |
 | [`scripts/cost-per-run.mjs`](../../scripts/cost-per-run.mjs) | `radar:llmlog:` | Each sweep's cost and each category's, at list prices (T29) | KPI-06 |
 | [`scripts/score-items.mjs`](../../scripts/score-items.mjs) | Saved sweeps | Picks 20 items (`--area India`: only India's), checks links and dates, writes a review sheet outside the repo for a person to score; then totals it | KPI-01 to KPI-05. Built; **no scoring recorded yet** |
+| [`scripts/item-votes.mjs`](../../scripts/item-votes.mjs) | `radar:sub:` (the `votes`), `radar:search` | The members who voted, Useful and Not useful counts, and the share of voted items found useful, overall and for India (`--area NAME` adds another area, `--top N` lists the most voted) (T43) | KPI-21; KPI-20's stretch, from readers |
 
 Readings so far, from `node scripts/llm-logs.mjs models` on 2026-10-30: 10 sweeps 26 to 30 Oct, all on `claude-haiku-5-5`, $0.1121 and 19.0
 items a sweep on average; 1 of 190 items had a link search never returned; the 18 items with a `sourceDate` had a
@@ -103,6 +105,7 @@ should be is **OWNER INPUT NEEDED**.
 | KPI-18 Paid retention | Razorpay | Subscriptions still active after a month ÷ active at its start | — |
 | KPI-19 Refunds and chargebacks | Razorpay | Refunds ÷ payments | Refunds are revoked by hand, with `revoke-pro --paid` since 2026-10-29 (R-07) |
 | KPI-20 India's share of items | The LLM logs, `radar:llmlog:` | `llm-logs.mjs areas --days 7`: the items each sweep showed (a failed call's items and a dropped item left out), placed by `areaOf(region)` as on the board; India ÷ all, and India ÷ sweeps | Logs are kept 30 days. Text naming India and another area counts as Global, and India with elsewhere in Asia as Asia, so items that touch India are undercounted |
+| KPI-21 Items members find useful | `votes` on member records, joined to `radar:search` | `item-votes.mjs`: voted items with more Useful than Not useful votes ÷ voted items; a tie counts as split; also for India items alone | Only Pro members vote, so it isn't a sample of all readers. An item gone from the search file keeps its votes but loses its area |
 
 ## Rules for the data
 

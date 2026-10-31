@@ -60,7 +60,7 @@ the owner's step, and this document prints counts only, never addresses.
 | KPI-17 | Free to paid conversion | new paid Pro ÷ new Free, a month | `checkoutstarted` events; Razorpay | **OWNER INPUT NEEDED** | Not measured |
 | KPI-18 | Paid retention | paid members still active after a month ÷ paid members at its start | Razorpay | **OWNER INPUT NEEDED** | Not measured; payments opened 2026-10-28 |
 | KPI-19 | Refunds and chargebacks | refunds ÷ payments | Razorpay | **OWNER INPUT NEEDED** | Not measured |
-| KPI-21 | Items members find useful | voted items with more Useful than Not useful votes ÷ voted items; also for India items alone | `node --env-file=.env.local scripts/item-votes.mjs` (T43) | **OWNER INPUT NEEDED** | Not measured: the buttons are built, not live. Members' votes, not the owner's scoring (KPI-04, KPI-20's stretch), and only Pro members vote |
+| KPI-21 | Items members find useful | voted items with more Useful than Not useful votes ÷ voted items; also for India items alone | `node --env-file=.env.local scripts/item-votes.mjs` (T43) | **OWNER INPUT NEEDED** | Not measured: the buttons are live for Pro since 2026-10-31 (#136); no votes read yet. Members' votes, not the owner's scoring (KPI-04, KPI-20's stretch), and only Pro members vote |
 
 ## What ₹1 means for these KPIs
 

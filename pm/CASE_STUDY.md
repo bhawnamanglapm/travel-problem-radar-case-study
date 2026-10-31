@@ -6,12 +6,12 @@ governance → business case → launch plan → data → testing*
 > **Not a simulation.** The product runs at https://radar.pehchanthetraveller.com/ (it was on
 > travel-problem-radar.vercel.app until 2026-10-28, which now redirects). Every figure below comes from a file in this
 > repository, linked from the stage pages. Payments opened on 2026-10-28 at ₹1 a month or a year, so there are no
-> revenue, conversion or retention results to report yet. Written 2026-10-24; updated 2026-10-30.
+> revenue, conversion or retention results to report yet. Written 2026-10-24; updated 2026-10-31.
 
 - 38 documents across 8 stages, plus 21 test-result files from the first test run (2026-10-30), each linking the
   engineering docs it summarises
-- 46 requirements in 12 epics, traced to their tests; 1,582 offline tests and 249 offline checks pass (at `e339d32`,
-  2026-10-30)
+- 48 requirements in 12 epics, traced to their tests; 1,670 offline tests and 249 offline checks pass (at `8cac2d7`,
+  2026-10-31)
 - A cost-floor business case: about ₹6,797 a month to run with payments; 24 to 28 members would cover it at ₹299. Pro
   costs ₹1 for now, which no number of members covers; the target price is the owner's open decision
 - 3 live ₹1 payments by 2026-10-29; no user research, and no finding scored by a person. Both are stated, not filled in
@@ -31,8 +31,9 @@ of it every day. The user is a product manager looking for travel problems worth
 One to five times a day, as often as the most frequent Pro member chooses, a server job asks Claude (Haiku 5.5),
 with web search, for recent problems in four categories, and saves up to 5 per category, plus up to 2 from India, with a
 source, severity and a one-line product opportunity. Sources over 60 days old are dropped, and new items are flagged. Readers get a public
-demo, a daily teaser email (Free), or the live board with details, areas, search across sweeps, saved problems and
-share pages, plus 1 to 5 emails a day (Pro, ₹1 a month or ₹1 a year since 2026-10-28; it was ₹299 a month in the
+demo, a daily teaser email (Free), or the live board with details, areas, search across sweeps, saved problems,
+share pages and Useful / Not useful votes (Ask the board, answering only from saved items, is built and off until
+the owner's test), plus 1 to 5 emails a day (Pro, ₹1 a month or ₹1 a year since 2026-10-28; it was ₹299 a month in the
 plan). [PRD v2](02-product-definition/prd.md)
 
 ### How I approached it: 8 stages
@@ -40,9 +41,9 @@ plan). [PRD v2](02-product-definition/prd.md)
 | Stage | What I did |
 |---|---|
 | **1. Discover** | Framed the problem; logged 8 assumptions with their evidence; compared 7 alternatives from published descriptions; wrote an interview plan, marked as not run |
-| **2. Define** | PRD v2 with 46 requirements; backlog of tasks T00 to T41 in 12 epics; traced requirements to tests, with the gaps listed; 19 KPIs with targets left to the owner |
+| **2. Define** | PRD v2 with 48 requirements; backlog of tasks T00 to T43 in 12 epics; traced requirements to tests, with the gaps listed; 21 KPIs, most targets left to the owner |
 | **3. Design** | Documented the live screens, the journey end to end, the display rules and the design trade-offs |
-| **4. Plan and govern** | Roadmap of 37 items, RAID log, 22 revised decisions recorded as change requests, stakeholders and a RACI for a one-person product |
+| **4. Plan and govern** | Roadmap of 41 items, RAID log, 25 revised decisions recorded as change requests, stakeholders and a RACI for a one-person product |
 | **5. Justify and launch** | Cost-floor business case with break-even and stress tests; go-to-market with gates; 22 launch-readiness checks, go/no-go and rollback; a post-launch plan with hypercare, playbooks and KPI triggers |
 | **6. Communicate** | One-page executive review ending in seven decisions for the owner, with those since taken marked |
 | **7. Measure** | The stored data, how each KPI is computed from it, what isn't measured, and a measurement plan |
