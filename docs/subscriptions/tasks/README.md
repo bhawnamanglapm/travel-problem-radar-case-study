@@ -39,7 +39,8 @@ email. Its ideas came from a comparison with Mindtrip (mindtrip.ai), read from p
 didn't render in a headless browser. Each one is built only when the owner says go. T42 (added 2026-10-30, at the owner's request) asks every
 category call for up to 2 items about India and makes India its own area. T43 (added 2026-10-31, at the owner's
 request) lets Pro members ask the board a question, answered by AI only from saved items, and mark items Useful or
-Not useful.
+Not useful. T44 (added 2026-10-31, at the owner's request) adds a public `/trends/` page: counts of new problems by
+area and category over time, and what's rising, with no item text.
 
 ```mermaid
 flowchart TD
@@ -103,6 +104,7 @@ flowchart TD
     T41["T41 Areas in Pro email"]
     T42["T42 India focus"]
     T43["T43 Ask the board + votes"]
+    T44["T44 Trends, public counts"]
   end
   T00 --> T04
   T01 --> T02
@@ -131,6 +133,7 @@ flowchart TD
   T37 --> T38 & T41
   T41 --> T42
   T38 & T39 & T42 --> T43
+  T38 & T42 --> T44
 ```
 
 **Pro before payments.** Phase 1 builds both plans. Until Phase 2, the owner grants Pro by hand with the admin
@@ -185,6 +188,7 @@ themselves. It is built only if the Phase 1 numbers pass the owner's gate ([pric
 | [T41](T41-email-areas.md) | Pro email: choose areas as well as categories | Dev | M | T37 |
 | [T42](T42-india-focus.md) | India focus: up to 2 India items in each category call, 4 searches, India as its own area, India's share from the logs | Dev | M | T37, T41 |
 | [T43](T43-ask-the-board.md) | Ask the board (RAG, Pro, off unless `ASK_ENABLED=1`): an answer only from saved items, each claim citing one; Useful / Not useful votes; `item-votes.mjs` | Dev | L | T38, T39, T42 |
+| [T44](T44-trends.md) | Trends (public, counts only): a tally of new problems per day by category and area in the search file; `/api/data?key=radar:trends`; the `/trends/` page with weekly and 30-day charts and a rising list | Dev | M | T37, T38, T42 |
 
 ## Decisions to settle before or during the build (OWNER INPUT NEEDED)
 

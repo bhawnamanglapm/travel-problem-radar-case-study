@@ -67,6 +67,7 @@ const CSS = `
 .tpr-tab { font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase;
   color:var(--muted); background:none; border:none; padding:7px 13px; border-radius:6px; cursor:pointer; }
 .tpr-tab.on { background:var(--surface2); color:var(--text); }
+a.tpr-tab { text-decoration:none; display:inline-block; }
 
 /* ---- archived-sweep banner ---- */
 .tpr-banner { display:flex; align-items:center; gap:12px; background:color-mix(in srgb, var(--accent) 10%, var(--surface));
@@ -1254,6 +1255,7 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
               {saved && saved.state !== "off" && (
                 <button className={"tpr-tab" + (view === "saved" ? " on" : "")} onClick={() => setView("saved")}>Saved</button>
               )}
+              {(live || demo) && <a className="tpr-tab" href="../trends/">Trends</a>}
             </div>
           )}
           {sweptAt && <div className="tpr-swept">{demo ? "Last replayed" : live ? "Updated 1 to 5 times a day · last sweep" : "Last swept"}<br /><b>{new Date(sweptAt).toLocaleString()}</b></div>}

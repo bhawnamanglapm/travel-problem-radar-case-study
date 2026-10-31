@@ -57,8 +57,17 @@ working in a real inbox; that is T12's staged launch.
 | [T41](T41-email-areas.md) Areas in Pro email | built 2026-10-30 on `feat/t41-email-areas`, merged to main (#105, `be97bd7`) and live | 577fb4e, bbd9259 | 1,417 pass | Added 2026-10-29, Phase 5. See T41 notes below |
 | [T42](T42-india-focus.md) India focus | built 2026-10-30 on `feat/india-focus`, merged to main (#132, `525ea4b`) and live | 7ae46aa, 52ef57f | 1,590 pass | Added 2026-10-30. See T42 notes below |
 | [T43](T43-ask-the-board.md) Ask the board and votes | built 2026-10-31 on `feat/ask-the-board`, merged to main (#136, `41f1e09`). Votes are live for Pro; Ask is off until `ASK_ENABLED=1`. The owner's Preview test is open | 2033224, 5594b64, 19040ab, 8e8c268 | 1,670 pass (76 in the new test-ask); 249 checks | Added 2026-10-31. See T43 notes below |
+| [T44](T44-trends.md) Trends | built 2026-10-31 on `feat/t44-trends`; not merged. The first tally is written by the first sweep after the merge | 43a823c, 9d5820a | 1,709 pass (39 in the new test-trends); 254 checks | Added 2026-10-31. See T44 notes below |
 
 ## Notes per task
+
+### T44
+- Built at the owner's request for trends and an India view; the owner chose a public page with counts only.
+- No model call and no store write. Seeding an existing search file happens on the first sweep after the merge.
+- Changes from the plan: cells are keyed `"cat|Area"` rather than by position; one colour for every bar, because
+  the brand's category colours fail the colour-blind check; `buildSearch` is unchanged.
+- Checked in headless Chrome against a local stand-in server with made-up counts, at 1100 px (light) and a narrow
+  window (dark). Not checked on a real deployment.
 
 ### T43
 - Built at the owner's request for more AI on the site and a RAG feature; plan approved 2026-10-31.

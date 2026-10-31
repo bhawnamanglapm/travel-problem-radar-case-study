@@ -76,6 +76,10 @@ Subscriber -> links in each email -> /manage/ (/api/account: plan, Request Pro o
   if they differ. One file instead of up to 60 sweep reads keeps a search at two Blob reads (the session and the
   file), within the Hobby plan's 10,000 simple operations a month. Kept sweeps the file lacks are counted on the
   board. A failed read or write never fails the sweep.
+- **Trends (T44).** The sweep adds its new problems (`isNew`) to a tally in the search file's `trends` field: counts
+  per UTC day keyed `"category|Area"`, at most 400 days (`api/_lib/trends.js`). A file without one is seeded from
+  its items' first-seen days, marked partial. `/api/data?key=radar:trends` returns `trendsView()`, counts only,
+  before the paywall, cached for an hour; `/trends/` draws it as SVG built with DOM calls.
 - **Filters in the URL (T38).** The board reads `?q=`, `?cat=`, `?area=` and `?all=1` on load and writes them with
   `history.replaceState` on every change; unknown values are dropped and the hash (`#report`, `#p=`) is kept. On a
   locked screen the search is kept in `sessionStorage` for 30 minutes, so `/live/` puts it back after sign-in. The

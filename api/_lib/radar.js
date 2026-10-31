@@ -3,6 +3,7 @@
 // fails if the prompt or category text drifts between the two.
 // Storage and fetch are passed in, so the offline tests can stub both.
 import { slotOf } from "./schedule.js";
+import { seedTrends, tallyTrends } from "./trends.js";
 
 export const CATS = [
   { key: "traveler_pain", label: "Traveler pain",
@@ -543,11 +544,13 @@ export async function runDailySweep({ storage, scan, now = () => Date.now(), man
   if (itemIndex) { try { await storage.set(KEY_ITEMS, JSON.stringify(itemIndex)); } catch (e) {} }
   // The search file (T38) doesn't either: one read and one write, and a missing file is built once from the kept
   // sweeps. One that can't be read or written is left for the next sweep, and the board counts what it lacks.
+  // It carries the trends tally (T44), seeded once from the kept items when the file has none.
   try {
     const keepIds = hist.map((e) => e.id);
     const raw = await storage.get(KEY_SEARCH);
     const prev = raw == null ? await buildSearch(storage, hist.slice(0, -1), keepIds) : JSON.parse(raw);
-    await storage.set(KEY_SEARCH, JSON.stringify(mergeSearch(prev, problems, id, at, keepIds)));
+    const trends = tallyTrends(prev && prev.trends ? prev.trends : seedTrends(prev && prev.items), problems, at);
+    await storage.set(KEY_SEARCH, JSON.stringify({ ...mergeSearch(prev, problems, id, at, keepIds), trends }));
   } catch (e) {}
   for (const d of drop) { try { await storage.del(sweepKey(d.id)); } catch (e) {} }
   const llmLog = await writeLog("saved");

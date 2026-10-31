@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<script>
+  // GitHub Pages also serves this file but has no /api/: send the visit to the Vercel copy, which does.
+  if (/\.github\.io$/.test(location.hostname)) location.replace("https://radar.pehchanthetraveller.com" + location.pathname.replace(/^\/travel-problem-radar-case-study/, "") + location.search + location.hash);
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Trends · Travel Problem Radar</title>
+<meta name="description" content="How many new travel problems the radar finds each week, by area and category, India first, and which are rising. Counts only, open to everyone." />
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#1d4e45" />
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0c1816" />
+<style>/* Brand tokens, copied from brand.css by scripts/sync-brand.mjs: edit brand.css, then run npm run sync:brand. */
+:root {
+  color-scheme: light dark;
+  --bg: #f6f9f8; --bg2: #eef4f2; --surface: #ffffff; --surface2: #f6f9f8;
+  --line: #d6e1df; --line2: #b9cac7;
+  --text: #0f2924; --text-2: #2f4a45; --muted: #516763; --faint: #5f736f;
+  --primary: #1d4e45; --primary-hover: #163d36; --on-primary: #f6f9f8; --link: #1d4e45;
+  --accent: #f5a524; --on-accent: #0f2924; --accent-text: #a15c07;
+  --high: #b91c1c; --medium: #a15c07; --error: #b91c1c;
+  --cat-traveler: #b4441c; --cat-gov: #1d4e45; --cat-web: #2563eb; --cat-industry: #6d28d9;
+  --display: 'Inter Tight', system-ui, -apple-system, sans-serif;
+  --body: 'Inter Tight', system-ui, -apple-system, sans-serif;
+  --wordmark: 'Italiana', Georgia, serif;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0c1816; --bg2: #10201d; --surface: #142421; --surface2: #1b2f2b;
+    --line: #293d39; --line2: #3a524d;
+    --text: #ecf3f2; --text-2: #c9d6d4; --muted: #a4b7b4; --faint: #8fa39f;
+    --primary: #1e5248; --primary-hover: #25665a; --on-primary: #ecf3f2; --link: #5fbfa9;
+    --accent: #f5a524; --on-accent: #0f2924; --accent-text: #f5a524;
+    --high: #f87171; --medium: #f5a524; --error: #f87171;
+    --cat-traveler: #f08a5d; --cat-gov: #5fbfa9; --cat-web: #7aa7ff; --cat-industry: #b79cff;
+  }
+}
+
+/* The skip link every page starts with (BUG-011): hidden until it gets keyboard focus. */
+.skip{position:absolute;left:-9999px;top:8px;background:var(--primary);color:var(--on-primary);padding:8px 12px;border-radius:6px;font-weight:600;z-index:100;}
+.skip:focus{left:8px;}
+</style><!-- end brand tokens -->
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body { font: 16px/1.55 var(--body); padding: 0 16px; }
+  main { max-width: 760px; margin: 0 auto; padding: 40px 0 56px; }
+  h1 { font-size: 26px; line-height: 1.25; margin: 0 0 12px; }
+  h2 { font-size: 18px; margin: 0 0 4px; }
+  p, li { color: var(--text-2); }
+  p { margin: 0 0 14px; }
+  ul { margin: 0 0 14px; padding-left: 20px; }
+  a { color: var(--link); }
+  a:focus-visible, button:focus-visible, rect:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+  .nav { font: 12px/1.5 var(--mono); color: var(--muted); margin: 0 0 28px; }
+  .nav a { color: var(--text); display: inline-block; padding: 4px 0; }
+  .small { font-size: 13px; color: var(--muted); }
+  /* Filters: one row each, above everything they scope. */
+  .filters { margin: 20px 0 8px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+  .chips .lab { font-size: 13px; color: var(--muted); width: 100%; }
+  .chip { font: 14px/1 var(--body); color: var(--text); background: var(--surface); border: 1px solid var(--line2); border-radius: 999px; padding: 8px 12px; min-height: 36px; cursor: pointer; }
+  .chip[aria-pressed="true"] { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 600; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 16px 0; }
+  .sub { font-size: 13px; color: var(--muted); margin: 0 0 12px; }
+  .chart { position: relative; }
+  svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .bar { fill: var(--link); }
+  .bar.part { fill-opacity: .45; }
+  .bar:hover, .bar:focus { fill: var(--primary-hover); fill-opacity: 1; }
+  .grid { stroke: var(--line); stroke-width: 1; }
+  .tick { fill: var(--muted); font: 11px var(--body); font-variant-numeric: tabular-nums; }
+  .val { fill: var(--text-2); font: 12px var(--body); font-variant-numeric: tabular-nums; }
+  .rowlab { fill: var(--text); font: 13px var(--body); }
+  .rowlab.sel { font-weight: 700; }
+  .rowhit { fill: transparent; cursor: pointer; }
+  .tip { position: absolute; pointer-events: none; background: var(--text); color: var(--bg); font-size: 13px; line-height: 1.35; padding: 6px 9px; border-radius: 6px; white-space: nowrap; transform: translate(-50%, calc(-100% - 8px)); display: none; z-index: 5; }
+  .tip b { font-size: 15px; }
+  details { margin-top: 10px; }
+  summary { cursor: pointer; font-size: 13px; color: var(--link); }
+  table { border-collapse: collapse; font-size: 13px; margin-top: 8px; width: 100%; }
+  th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line); }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  .rise { list-style: none; padding: 0; margin: 0; }
+  .rise li { padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .rise li:last-child { border-bottom: 0; }
+  .rise .up { font-weight: 600; color: var(--text); }
+  .note { border-left: 3px solid var(--accent); padding: 8px 12px; background: var(--surface); }
+  #status { color: var(--muted); }
+  footer { margin-top: 36px; padding-top: 16px; border-top: 1px solid var(--line); }
+  .site-foot { font-size: 13px; color: var(--muted); }
+  .site-foot a { display: inline-block; min-height: 24px; line-height: 24px; }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<main id="main">
+  <p class="nav"><a href="../">&larr; Home</a> &middot; <a href="../live/">Live board (Pro)</a> &middot; <a href="../pricing/">Pricing</a></p>
+  <h1>Trends</h1>
+  <p>How many new travel problems the radar finds, by area and by category, and which are rising. A problem counts once, on the day the radar first found it. This page shows counts only; the problems themselves are on the <a href="../live/">live board</a> for Pro members.</p>
+  <p id="status">Loading the counts&hellip;</p>
+
+  <div id="view" hidden>
+    <div class="filters" role="group" aria-label="Filters">
+      <div class="chips" id="areaChips"><span class="lab" id="areaLab">Area</span></div>
+      <div class="chips" id="catChips"><span class="lab" id="catLab">Category</span></div>
+    </div>
+    <p class="note" id="note"></p>
+
+    <section class="card" aria-labelledby="riseH">
+      <h2 id="riseH">Rising</h2>
+      <p class="sub" id="riseSub"></p>
+      <ul class="rise" id="riseList"></ul>
+    </section>
+
+    <section class="card" aria-labelledby="weekH">
+      <h2 id="weekH">New problems each week</h2>
+      <p class="sub" id="weekSub"></p>
+      <div class="chart" id="weekChart"></div>
+      <details><summary>Show as a table</summary><table id="weekTable"><thead><tr><th scope="col">Week starting</th><th scope="col">New problems</th><th scope="col">Note</th></tr></thead></table></details>
+    </section>
+
+    <section class="card" aria-labelledby="areaH">
+      <h2 id="areaH">The last 30 days, by area</h2>
+      <p class="sub" id="areaSub"></p>
+      <div class="chart" id="areaChart"></div>
+      <details><summary>Show as a table</summary><table id="areaTable"><thead><tr><th scope="col">Area</th><th scope="col">New problems</th></tr></thead></table></details>
+    </section>
+
+    <section class="card" aria-labelledby="catH">
+      <h2 id="catH">The last 30 days, by category</h2>
+      <p class="sub" id="catSub"></p>
+      <div class="chart" id="catChart"></div>
+      <details><summary>Show as a table</summary><table id="catTable"><thead><tr><th scope="col">Category</th><th scope="col">New problems</th></tr></thead></table></details>
+    </section>
+
+    <h2>How these are counted</h2>
+    <ul id="how"></ul>
+  </div>
+
+  <p class="small">Gathered by an AI model with web search. Items are not verified; check each source link.</p>
+  <footer><nav class="site-foot" aria-label="Site"><a href="../">Home</a> &middot; <a href="../about/">About</a> &middot; <a href="../trends/">Trends</a> &middot; <a href="../pricing/">Pricing</a> &middot; <a href="../legal/contact/">Contact</a> &middot; <a href="../legal/terms/">Terms</a> &middot; <a href="../legal/privacy/">Privacy</a> &middot; <a href="../legal/refunds/">Refunds</a> &middot; <a href="../admin/">Admin</a></nav></footer>
+</main>
+<script>
+(function () {
+  // Built with DOM and SVG elements only (no innerHTML): labels come from the server.
+  var SVG = "http://www.w3.org/2000/svg";
+  var DAY = 864e5, WEEKS_SHOWN = 26;
+  var data = null, area = "", cat = "";
+  var params = new URLSearchParams(location.search);
+
+  function el(tag, attrs, text) {
+    var e = document.createElement(tag);
+    for (var k in attrs || {}) e.setAttribute(k, attrs[k]);
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function sv(tag, attrs, text) {
+    var e = document.createElementNS(SVG, tag);
+    for (var k in attrs || {}) e.setAttribute(k, attrs[k]);
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); }
+  function $(id) { return document.getElementById(id); }
+  var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function fmtDay(d) { var t = new Date(d + "T00:00:00Z"); return t.getUTCDate() + " " + MONTHS[t.getUTCMonth()]; }
+  function fmtLong(d) { var t = new Date(d + "T00:00:00Z"); return fmtDay(d) + " " + t.getUTCFullYear(); }
+  function addDays(d, n) { return new Date(Date.parse(d + "T00:00:00Z") + n * DAY).toISOString().slice(0, 10); }
+  function catLabel(k) { for (var i = 0; i < data.cats.length; i++) if (data.cats[i].key === k) return data.cats[i].label; return k; }
+  function plural(n, one, many) { return n + " " + (n === 1 ? one : many); }
+  // A cell key is "cat|Area"; sum the cells that match the chosen area and category ("" means all).
+  function total(cells, a, c) {
+    var n = 0;
+    for (var k in cells) {
+      var i = k.indexOf("|");
+      if ((!c || k.slice(0, i) === c) && (!a || k.slice(i + 1) === a)) n += cells[k];
+    }
+    return n;
+  }
+  function scope() { return (area || "All areas") + " · " + (cat ? catLabel(cat) : "all categories"); }
+  function niceMax(m) { if (m <= 4) return 4; var p = Math.pow(10, Math.floor(Math.log10(m))), s = [1, 2, 2.5, 5, 10]; for (var i = 0; i < s.length; i++) if (s[i] * p >= m) return s[i] * p; return 10 * p; }
+  function boardLink(a, c) {
+    var q = new URLSearchParams();
+    if (a) q.set("area", a);
+    if (c) q.set("cat", c);
+    q.set("all", "1");
+    return "../live/?" + q.toString();
+  }
+
+  // One tooltip per chart, shown on hover and on keyboard focus. Values lead, labels follow.
+  function tipFor(box) {
+    var tip = el("div", { class: "tip", role: "status" });
+    box.appendChild(tip);
+    return function (mark, value, label) {
+      function show() {
+        clear(tip);
+        tip.appendChild(el("b", null, value));
+        tip.appendChild(document.createTextNode(" " + label));
+        var r = mark.getBoundingClientRect(), b = box.getBoundingClientRect();
+        var x = Math.min(Math.max(r.left + r.width / 2 - b.left, 70), b.width - 70);
+        tip.style.left = x + "px";
+        tip.style.top = (r.top - b.top) + "px";
+        tip.style.display = "block";
+      }
+      function hide() { tip.style.display = "none"; }
+      mark.addEventListener("pointerenter", show);
+      mark.addEventListener("pointerleave", hide);
+      mark.addEventListener("focus", show);
+      mark.addEventListener("blur", hide);
+    };
+  }
+  // A bar with a 4px rounded data end, square at the baseline.
+  function colPath(x, y, w, h) {
+    var r = Math.min(4, w / 2, h);
+    return "M" + x + "," + (y + h) + "V" + (y + r) + "Q" + x + "," + y + " " + (x + r) + "," + y + "H" + (x + w - r) + "Q" + (x + w) + "," + y + " " + (x + w) + "," + (y + r) + "V" + (y + h) + "Z";
+  }
+  function rowPath(x, y, w, h) {
+    var r = Math.min(4, h / 2, w);
+    return "M" + x + "," + y + "H" + (x + w - r) + "Q" + (x + w) + "," + y + " " + (x + w) + "," + (y + r) + "V" + (y + h - r) + "Q" + (x + w) + "," + (y + h) + " " + (x + w - r) + "," + (y + h) + "H" + x + "Z";
+  }
+  function table(t, head, rows) {
+    clear(t);
+    var tr = el("tr");
+    head.forEach(function (h) { tr.appendChild(el("th", { scope: "col" }, h)); });
+    t.appendChild(el("thead")).appendChild(tr);
+    var tb = t.appendChild(el("tbody"));
+    rows.forEach(function (r) {
+      var row = el("tr");
+      row.appendChild(el("th", { scope: "row" }, r[0]));
+      for (var i = 1; i < r.length; i++) row.appendChild(el("td", { class: typeof r[i] === "number" ? "n" : "" }, String(r[i])));
+      tb.appendChild(row);
+    });
+  }
+
+  function chips(box, items, current, set) {
+    var lab = box.firstElementChild;
+    clear(box);
+    box.appendChild(lab);
+    items.forEach(function (it) {
+      var b = el("button", { type: "button", class: "chip", "aria-pressed": String(it.value === current) }, it.label);
+      b.addEventListener("click", function () { set(it.value); });
+      box.appendChild(b);
+    });
+  }
+  function setArea(a) { area = a; syncUrl(); render(); }
+  function setCat(c) { cat = c; syncUrl(); render(); }
+  function syncUrl() {
+    var q = new URLSearchParams();
+    if (area) q.set("area", area);
+    if (cat) q.set("cat", cat);
+    var s = q.toString();
+    history.replaceState(null, "", location.pathname + (s ? "?" + s : ""));
+  }
+
+  // Weeks from the first recorded to this one; a week with no record shows as 0.
+  function weekSeries() {
+    var by = {};
+    data.weeks.forEach(function (w) { by[w.start] = w; });
+    var first = data.weeks.length ? data.weeks[0].start : data.today, out = [];
+    var t = new Date(data.today + "T00:00:00Z"), thisWeek = addDays(data.today, -((t.getUTCDay() + 6) % 7));
+    for (var d = first; d <= thisWeek; d = addDays(d, 7)) {
+      var w = by[d];
+      out.push({ start: d, n: w ? total(w.cells, area, cat) : 0, partial: !!(w && w.partial), current: d === thisWeek });
+    }
+    return out;
+  }
+
+  function drawWeeks() {
+    var all = weekSeries(), shown = all.slice(-WEEKS_SHOWN);
+    var box = $("weekChart");
+    clear(box);
+    $("weekSub").textContent = scope() + ". Weeks start on Monday (UTC)." + (all.length > shown.length ? " The chart shows the last " + shown.length + " weeks; the table has them all." : "");
+    var W = Math.max(box.clientWidth, 260), H = 220, L = 34, R = 8, T = 18, B = 26, iw = W - L - R, ih = H - T - B;
+    var max = niceMax(Math.max.apply(null, shown.map(function (w) { return w.n; }).concat([1])));
+    var s = sv("svg", { viewBox: "0 0 " + W + " " + H, role: "img", "aria-label": "New problems each week, " + scope() + ". The same numbers are in the table below." });
+    for (var g = 0; g <= 4; g++) {
+      var y = T + ih - ih * g / 4;
+      s.appendChild(sv("line", { class: "grid", x1: L, x2: W - R, y1: y, y2: y }));
+      s.appendChild(sv("text", { class: "tick", x: L - 6, y: y + 4, "text-anchor": "end" }, String(max * g / 4)));
+    }
+    var slot = iw / Math.max(shown.length, 1), bw = Math.min(24, slot - 2), tip = tipFor(box);
+    var every = Math.ceil(shown.length / Math.max(2, Math.floor(iw / 60)));
+    shown.forEach(function (w, i) {
+      var x = L + i * slot + (slot - bw) / 2, h = ih * w.n / max, y = T + ih - h;
+      var label = "week of " + fmtDay(w.start) + (w.current ? " (so far)" : w.partial ? " (partial)" : "");
+      if (w.n > 0) {
+        var p = sv("path", { class: "bar" + (w.partial || w.current ? " part" : ""), d: colPath(x, y, bw, h), tabindex: "0", "aria-label": plural(w.n, "new problem", "new problems") + ", " + label });
+        s.appendChild(p);
+        tip(p, String(w.n), label);
+      }
+      if ((shown.length - 1 - i) % every === 0) s.appendChild(sv("text", { class: "tick", x: L + i * slot + slot / 2, y: H - 8, "text-anchor": "middle" }, fmtDay(w.start)));
+    });
+    var last = shown[shown.length - 1];
+    if (last) s.appendChild(sv("text", { class: "val", x: L + (shown.length - 1) * slot + slot / 2, y: T + ih - ih * last.n / max - 6, "text-anchor": "middle" }, String(last.n)));
+    box.appendChild(s);
+    table($("weekTable"), ["Week starting", "New problems", "Note"], all.slice().reverse().map(function (w) {
+      return [fmtLong(w.start), w.n, w.current ? "this week, so far" : w.partial ? "partial" : ""];
+    }));
+  }
+
+  // Horizontal bars: one row per entity, labelled by name, all one colour. A row is a button that sets the filter.
+  function drawRows(box, rows, selected, onPick, label) {
+    clear(box);
+    var W = Math.max(box.clientWidth, 260), rowH = 30, bh = 18, L = Math.min(150, Math.round(W * 0.42)), R = 36, H = rows.length * rowH + 4, iw = W - L - R;
+    var max = Math.max.apply(null, rows.map(function (r) { return r.n; }).concat([1]));
+    var s = sv("svg", { viewBox: "0 0 " + W + " " + H, role: "group", "aria-label": label });
+    var tip = tipFor(box);
+    rows.forEach(function (r, i) {
+      var y = i * rowH + 4, g = sv("g");
+      var hit = sv("rect", { class: "rowhit", x: 0, y: y - 4, width: W, height: rowH, tabindex: "0", role: "button", "aria-pressed": String(r.key === selected), "aria-label": r.label + ": " + plural(r.n, "new problem", "new problems") + ". Filter by " + r.label });
+      g.appendChild(sv("text", { class: "rowlab" + (r.key === selected ? " sel" : ""), x: L - 10, y: y + bh / 2 + 5, "text-anchor": "end" }, r.label));
+      if (r.n > 0) g.appendChild(sv("path", { class: "bar", d: rowPath(L, y, Math.max(iw * r.n / max, 2), bh) }));
+      g.appendChild(sv("text", { class: "val", x: L + iw * r.n / max + 6, y: y + bh / 2 + 4 }, String(r.n)));
+      g.appendChild(hit);
+      hit.addEventListener("click", function () { onPick(r.key === selected ? "" : r.key); });
+      hit.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPick(r.key === selected ? "" : r.key); } });
+      tip(hit, String(r.n), r.label);
+      s.appendChild(g);
+    });
+    box.appendChild(s);
+  }
+
+  function drawAreas() {
+    var rows = data.areas.map(function (a) { return { key: a, label: a, n: total(data.last30, a, cat) }; });
+    $("areaSub").textContent = (cat ? catLabel(cat) : "All categories") + ", " + fmtDay(addDays(data.today, -29)) + " to " + fmtDay(data.today) + ". Pick an area to filter the page.";
+    drawRows($("areaChart"), rows, area, setArea, "New problems in the last 30 days by area");
+    table($("areaTable"), ["Area", "New problems"], rows.map(function (r) { return [r.label, r.n]; }));
+  }
+  function drawCats() {
+    var rows = data.cats.map(function (c) { return { key: c.key, label: c.label, n: total(data.last30, area, c.key) }; });
+    $("catSub").textContent = (area || "All areas") + ", " + fmtDay(addDays(data.today, -29)) + " to " + fmtDay(data.today) + ". Pick a category to filter the page.";
+    drawRows($("catChart"), rows, cat, setCat, "New problems in the last 30 days by category");
+    table($("catTable"), ["Category", "New problems"], rows.map(function (r) { return [r.label, r.n]; }));
+  }
+
+  function drawRising() {
+    var r = data.rising, list = $("riseList");
+    clear(list);
+    $("riseH").textContent = r.days === 30 ? "Rising this month" : "Rising this week";
+    $("riseSub").textContent = "The last " + r.days + " days against the " + r.days + " before, for areas with at least " + r.min + " new problems." + (r.days === 30 ? "" : " Until 60 days are recorded this compares weeks; then it compares 30 days.");
+    var rows = r.rows.filter(function (x) { return (!area || x.area === area) && (!cat || x.cat === cat); });
+    if (!r.enough) { list.appendChild(el("li", null, "Not enough days recorded yet: this needs " + 2 * r.days + " days, and " + plural(data.recorded, "day is", "days are") + " recorded.")); return; }
+    if (!rows.length) { list.appendChild(el("li", null, r.rows.length ? "Nothing rising for " + scope() + "." : "Nothing is rising right now.")); return; }
+    rows.forEach(function (x) {
+      var li = el("li");
+      var a = el("a", { href: boardLink(x.area, x.cat) }, x.area + " · " + (x.cat ? catLabel(x.cat) : "all categories"));
+      li.appendChild(a);
+      li.appendChild(document.createTextNode(": "));
+      li.appendChild(el("span", { class: "up" }, x.now + " new"));
+      li.appendChild(document.createTextNode(", up from " + x.before + "."));
+      list.appendChild(li);
+    });
+  }
+
+  function render() {
+    var areaItems = [{ value: "", label: "All" }].concat(["India"].concat(data.areas.filter(function (a) { return a !== "India"; })).filter(function (a) { return data.areas.indexOf(a) >= 0; }).map(function (a) { return { value: a, label: a }; }));
+    chips($("areaChips"), areaItems, area, setArea);
+    chips($("catChips"), [{ value: "", label: "All" }].concat(data.cats.map(function (c) { return { value: c.key, label: c.label }; })), cat, setCat);
+    drawRising();
+    drawWeeks();
+    drawAreas();
+    drawCats();
+  }
+
+  function honest() {
+    var how = $("how"), r = data.rising;
+    clear(how);
+    [
+      "Counting started on " + fmtLong(data.since) + ". Days are UTC days.",
+      data.partialDays ? "The first " + plural(data.partialDays, "day was", "days were") + " filled in from the sweeps the radar still kept, so " + (data.partialDays === 1 ? "it is" : "they are") + " partial: some problems found then aren't counted." : "",
+      "A problem counts once, on the day the radar first found it. The radar remembers about the last 800 problems it has seen, so a problem that comes back after that can rarely be counted again.",
+      "The area comes from the problem's region; a region naming India and another Asian country counts as Asia.",
+      "Problems are found by an AI model with web search and aren't checked by a person, so a count is how many the radar found, not how many happened."
+    ].forEach(function (t) { if (t) how.appendChild(el("li", null, t)); });
+    var note = $("note"), bits = [];
+    if (!r.enough) bits.push("Counting started on " + fmtLong(data.since) + ", so there are only " + plural(data.recorded, "day", "days") + " so far.");
+    if (r.partialBefore) bits.push("The earlier window includes partial days, which undercount it, so a rise may look bigger than it is.");
+    if (bits.length) note.textContent = bits.join(" "); else note.hidden = true;
+  }
+
+  fetch("/api/data?key=radar:trends").then(function (res) {
+    if (res.status === 404) throw new Error("none");
+    if (!res.ok) throw new Error("fail");
+    return res.json();
+  }).then(function (d) {
+    data = d;
+    var a = params.get("area"), c = params.get("cat");
+    if (a && data.areas.indexOf(a) >= 0) area = a;
+    if (c && data.cats.some(function (x) { return x.key === c; })) cat = c;
+    $("status").hidden = true;
+    $("view").hidden = false;
+    honest();
+    render();
+    // The charts are drawn at the width they have, so text stays readable on a phone: redraw when it changes.
+    var lastW = innerWidth, timer = 0;
+    addEventListener("resize", function () {
+      clearTimeout(timer);
+      timer = setTimeout(function () { if (innerWidth !== lastW) { lastW = innerWidth; render(); } }, 150);
+    });
+  }).catch(function (e) {
+    $("status").textContent = e && e.message === "none" ? "No counts yet: they start with the next sweep." : "The counts couldn't be loaded. Try again in a minute.";
+  });
+})();
+</script>
+</body>
+</html>

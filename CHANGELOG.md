@@ -5,6 +5,13 @@ grouped by date.
 
 ## 2026-10-31
 
+- T44, Trends (built on `feat/t44-trends`, not merged): a public [`/trends/`](trends/index.html) page with counts
+  only. New problems each week and in the last 30 days, by area (India first) and by category, and a rising list
+  whose rows open the live board's filters. The sweep keeps a tally of new problems per UTC day in the search file
+  (no extra write, at most 400 days), seeded once from the kept items with those days marked partial;
+  `/api/data?key=radar:trends` reads it without the paywall, cached for an hour. Trends is in every footer, the
+  home page's links and the board's tabs. REQ-49. `npm test` 1,709, `npm run check` 254. No model call or store
+  write.
 - Privacy page names Razorpay as a processor (payments live since 2026-10-28): what it receives (the record id and
   the plan, not the address) and the payment fields the record keeps.
 - Docs: [breach-plan.md](docs/subscriptions/breach-plan.md), a draft for the owner and an adviser. Contain, then
