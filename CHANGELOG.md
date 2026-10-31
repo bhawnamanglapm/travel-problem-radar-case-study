@@ -5,6 +5,11 @@ grouped by date.
 
 ## 2026-10-31
 
+- Privacy page names Razorpay as a processor (payments live since 2026-10-28): what it receives (the record id and
+  the plan, not the address) and the payment fields the record keeps.
+- Docs: [breach-plan.md](docs/subscriptions/breach-plan.md), a draft for the owner and an adviser. Contain, then
+  CERT-In within 6 hours (if it applies), the Board and each member without delay, and the Board's full report
+  within 72 hours (DPDP Rules, rule 7, from a secondary source). Templates and open items; not drilled.
 - T43, Ask the board and votes (#136, merged; votes live, Ask off until `ASK_ENABLED=1`): Pro members can ask a question, answered by AI
   only from items in the search file, each claim citing one. Keyword retrieval in plain JavaScript (no embeddings),
   filtered to the area a question names ("Indian" is India); a citation to an item not sent, or none at all, means

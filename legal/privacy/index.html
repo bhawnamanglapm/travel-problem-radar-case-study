@@ -80,6 +80,7 @@
     <li>if you mark problems Useful or Not useful (Pro): which problem, which button and when, at most 500 (the oldest dropped first). They stay until you press the button again to remove them or delete your account;</li>
     <li>if you ask the board a question (Pro): only how many questions you asked today, so we can apply the daily limit. We don&rsquo;t store or log the question or the answer;</li>
     <li>the dates you signed up, were sent a confirmation, confirmed, were sent an &ldquo;already subscribed&rdquo; email, and asked for Pro;</li>
+    <li>if you pay for Pro: the id of your Razorpay subscription, its status, the dates of your paid period, and the plan you chose (how many months, which categories, how many emails a day). We never see or store your card, UPI or bank details;</li>
     <li>a random code that makes the links in your emails work;</li>
     <li>if you continue with Google: only the email address Google gives us, which it says it has verified. We don&rsquo;t keep your Google account id, name, photo or any Google token;</li>
     <li>if you choose a password: a one-way hash of it (scrypt, with a random salt), never the password itself, and how many wrong passwords were tried in the last hour. Removing the password on the manage page deletes the hash;</li>
@@ -91,12 +92,13 @@
   <p>When you confirm your address or sign in, we set one cookie, <code>tpr_session</code>, so the site knows it&rsquo;s you. It holds your record&rsquo;s id (a one-way hash of your address, not the address itself), an expiry date and a signature. It lasts until you close the browser or sign out, and 12 hours at most. If you continue with Google, a second cookie, <code>tpr_oauth</code>, holds random values that check the reply comes from the sign-in you started. If your address has no account yet, it then holds that address while you decide whether to create one. It lasts 10 minutes at most and is deleted when you sign in or create the account. We set no advertising or tracking cookies.</p>
 
   <h2>What we use it for</h2>
-  <p>Only to send the digest you asked for, to let you sign in and manage or end it, to answer questions you ask the board, and to count sign-ups and unsubscribes. Votes are added up across members, without addresses, to see which problems readers find useful. We don&rsquo;t sell it, share it for advertising, or add you to any other list.</p>
+  <p>Only to send the digest you asked for, to let you sign in and manage or end it, to take payment for Pro, to answer questions you ask the board, and to count sign-ups and unsubscribes. Votes are added up across members, without addresses, to see which problems readers find useful. We don&rsquo;t sell it, share it for advertising, or add you to any other list.</p>
 
   <h2>Who handles it for us</h2>
   <ul>
     <li><b>Vercel</b> hosts the site and stores the records in a private store.</li>
     <li><b>Resend</b> sends the emails and tells us when an address bounces or marks an email as spam.</li>
+    <li><b>Razorpay</b>, only if you pay for Pro: it takes the payment and handles renewals and refunds. You enter your payment details in Razorpay&rsquo;s own checkout, not on our pages, and its checkout may ask for contact details itself. We send Razorpay only your record&rsquo;s id (the one-way hash of your address described under Cookies) and the plan you chose, not your email address. Deleting your account cancels your Razorpay plan first. Razorpay keeps its own payment records under its own policy.</li>
     <li><b>Google</b>, only if you choose &ldquo;Continue with Google&rdquo;: it confirms who you are and tells us your email address.</li>
     <li><b>Anthropic</b>, only if you ask the board a question: its AI model receives your question and the saved problems that match it, and writes the answer. It doesn&rsquo;t receive your address. Don&rsquo;t put personal details in a question.</li>
   </ul>
