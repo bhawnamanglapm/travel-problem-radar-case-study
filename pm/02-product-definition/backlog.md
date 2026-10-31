@@ -19,7 +19,7 @@
 | EP-08 Payments | Razorpay checkout, webhook, Pro lifecycle | T15, T19 to T22 | REQ-26 to REQ-28 | Live since 2026-10-28; T22 built 2026-10-30 (was: built and tested on staging, T22 to do) |
 | EP-09 Showing Pro and going live | Honest pricing pages and a go-live run | T23 to T27, T30 | REQ-29 to REQ-31 | Live with `paid: true` at ₹1 since 2026-10-28 (was: pages live with `paid: false`). Open: T23's owner inputs, Vercel Pro, T27's test-run record, T30's owner steps |
 | EP-10 The Pro plan | Pro chooses emails a day, one plan monthly or yearly, renewing, slots on time | T28, T32 to T35 | REQ-33 to REQ-36 | Live; T28 replaced by T32; T32's owner email check open |
-| EP-11 Board features | Details and history, areas, search all sweeps, saved problems, sharing, areas in email, India, Ask the board and votes, public trends | T36 to T44 | REQ-37 to REQ-42, REQ-47 to REQ-49 | Live (29 to 31 Oct; T42 on 30 Oct; T43's votes on 31 Oct). Ask is off until `ASK_ENABLED=1`, after the owner's Preview test (RM-41). T44 built, not merged |
+| EP-11 Board features | Details and history, areas, search all sweeps, saved problems, sharing, areas in email, India, Ask the board and votes, public trends | T36 to T44 | REQ-37 to REQ-42, REQ-47 to REQ-49 | Live (29 to 31 Oct; T42 on 30 Oct; T43's votes on 31 Oct). Ask is off until `ASK_ENABLED=1`, after the owner's Preview test (RM-41). T44 live on 31 Oct; its counts start with the next scheduled sweep |
 | EP-12 Measure | Cost per category, then decide on tiers | T29, T31 | REQ-46 | T29 done; T31 to do |
 
 EP-10 to EP-12 were added on 2026-10-30 for the tasks written after 2026-10-23. Changes outside a task file (the
@@ -66,7 +66,7 @@ flowchart LR
 | [T19](../../docs/subscriptions/tasks/T19-razorpay-library.md) | EP-08 | Razorpay library | M | Done | progress.md |
 | [T20](../../docs/subscriptions/tasks/T20-manage-page-and-checkout.md) | EP-08 | `/manage/` checkout and cancel | L | Done; test checkout passed on staging 2026-10-23 | progress.md |
 | [T21](../../docs/subscriptions/tasks/T21-razorpay-webhook.md) | EP-08 | Razorpay webhook | M | Done; staging check passed 2026-10-23 | progress.md |
-| [T22](../../docs/subscriptions/tasks/T22-pro-lifecycle-and-go-live.md) | EP-08 | Pro expiry, paid unsubscribe, key safety | M | Built 2026-10-30: 48-hour renewal grace, the sweep's tidy step, key-mismatch guard (was: to do, needs Vercel Pro) | progress.md |
+| [T22](../../docs/subscriptions/tasks/T22-pro-lifecycle-and-go-live.md) | EP-08 | Pro expiry, paid unsubscribe, key safety | M | Built 2026-10-30: 48-hour renewal grace, the sweep's tidy step, key-mismatch guard; docs done 2026-10-31 (was: to do, needs Vercel Pro) | progress.md |
 | [T23](../../docs/subscriptions/tasks/T23-pro-display-standards.md) | EP-09 | Display rules and owner inputs | S | Price, GST, trial, refund rule, about text and contact answered. International cards and domain renewal open. The yearly plan exists since 2026-10-26 (T33). progress.md still lists T23 as to do | T23; PR #74 |
 | [T24](../../docs/subscriptions/tasks/T24-pricing-page.md) | EP-09 | `/pricing/` and `plan.json` | M | Live; `paid: true` since 2026-10-26, charging since 2026-10-28, ₹1 a month and ₹1 a year (was `paid: false`, ₹299) | progress.md, `f7c4270` |
 | [T25](../../docs/subscriptions/tasks/T25-about-footer-legal.md) | EP-09 | `/about/`, footer, policy pages | M | All four policy pages live; terms since 2026-10-29 with the owner's plain liability clause. The adviser's check of the clause is open | PR #67, PR #74; progress.md |
@@ -88,7 +88,7 @@ flowchart LR
 | [T41](../../docs/subscriptions/tasks/T41-email-areas.md) | EP-11 | Areas in Pro email | M | Live 2026-10-30 | #105 |
 | [T42](../../docs/subscriptions/tasks/T42-india-focus.md) | EP-11 | India focus: India items in each call, India as an area | M | Live 2026-10-30 (#132, `525ea4b`) | `7ae46aa`, `52ef57f` |
 | [T43](../../docs/subscriptions/tasks/T43-ask-the-board.md) | EP-11 | Ask the board (answers only from saved items, each claim citing one) and Useful / Not useful votes | L | Merged 2026-10-31 (#136, `41f1e09`): votes live for Pro; Ask off until `ASK_ENABLED=1` | `2033224`, `5594b64`, `19040ab`, `8e8c268` |
-| [T44](../../docs/subscriptions/tasks/T44-trends.md) | EP-11 | Public `/trends/`: new problems a week and in the last 30 days by area and category, and what's rising; counts only, from a tally the sweep keeps in the search file | M | Built 2026-10-31 on `feat/t44-trends`; not merged | `43a823c`, `9d5820a` |
+| [T44](../../docs/subscriptions/tasks/T44-trends.md) | EP-11 | Public `/trends/`: new problems a week and in the last 30 days by area and category, and what's rising; counts only, from a tally the sweep keeps in the search file | M | Merged 2026-10-31 (#141, `293d333`) and live; the counts start with the next scheduled sweep | `43a823c`, `9d5820a` |
 
 ## Done in EP-01, before the task list
 

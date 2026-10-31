@@ -5,7 +5,7 @@ grouped by date.
 
 ## 2026-10-31
 
-- T44, Trends (built on `feat/t44-trends`, not merged): a public [`/trends/`](trends/index.html) page with counts
+- T44, Trends (#141, merged and live; the counts start with the next scheduled sweep): a public [`/trends/`](trends/index.html) page with counts
   only. New problems each week and in the last 30 days, by area (India first) and by category, and a rising list
   whose rows open the live board's filters. The sweep keeps a tally of new problems per UTC day in the search file
   (no extra write, at most 400 days), seeded once from the kept items with those days marked partial;
