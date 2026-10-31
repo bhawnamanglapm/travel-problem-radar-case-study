@@ -5,6 +5,13 @@ grouped by date.
 
 ## 2026-10-31
 
+- T45, a brand header on every email (built on `feat/t45-email-header`, not merged). Each email sits in a white
+  card under a dark-green banner with the "Travel Problem Radar" name, a short line (the sweep's date, or what the
+  email is for) and an amber rule. HTML colour, not an image, and no link in it, so the teaser keeps one link. A
+  hidden preview line (counts only for the digest), brand colours for text, links, buttons, the NEW tag and
+  severity, and the footer inside the card. Darkened after the owner's first test email looked washed out. Plain
+  text, subjects and links unchanged. `npm test` 1,719, `npm run check` 256. Two test emails sent to the owner
+  through Gmail; no subscriber email sent.
 - T44, Trends (#141, merged and live; the counts start with the next scheduled sweep): a public [`/trends/`](trends/index.html) page with counts
   only. New problems each week and in the last 30 days, by area (India first) and by category, and a rising list
   whose rows open the live board's filters. The sweep keeps a tally of new problems per UTC day in the search file

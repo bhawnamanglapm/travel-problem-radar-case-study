@@ -18,6 +18,9 @@ Every page takes the Pehchan brand (deep teal and amber), in light or dark to ma
 `brand.css` (2026-10-29; it was dark only). Every page starts with a skip link to its main content (2026-10-30,
 BUG-011; it was the home page only).
 
+Every email takes the same brand (T45, built 2026-10-31, not merged): a white card under a dark-green banner with
+the name and an amber rule, then the email's own content and the footer. Emails are light only.
+
 | Screen | Who it's for | What it does | Status |
 |---|---|---|---|
 | `/` Home | Visitors | Product page: what it finds, how it works, plans, FAQ. A sign-up / sign-in popup on every signed-out visit | Live since 2026-10-22 |

@@ -58,8 +58,18 @@ working in a real inbox; that is T12's staged launch.
 | [T42](T42-india-focus.md) India focus | built 2026-10-30 on `feat/india-focus`, merged to main (#132, `525ea4b`) and live | 7ae46aa, 52ef57f | 1,590 pass | Added 2026-10-30. See T42 notes below |
 | [T43](T43-ask-the-board.md) Ask the board and votes | built 2026-10-31 on `feat/ask-the-board`, merged to main (#136, `41f1e09`). Votes are live for Pro; Ask is off until `ASK_ENABLED=1`. The owner's Preview test is open | 2033224, 5594b64, 19040ab, 8e8c268 | 1,670 pass (76 in the new test-ask); 249 checks | Added 2026-10-31. See T43 notes below |
 | [T44](T44-trends.md) Trends | built 2026-10-31 on `feat/t44-trends`, merged to main (#141, `293d333`) and live. The first tally is written by the first scheduled sweep after the merge | 43a823c, 9d5820a | 1,709 pass (39 in the new test-trends); 254 checks | Added 2026-10-31. See T44 notes below |
+| [T45](T45-email-brand-header.md) Brand header on emails | built 2026-10-31 on `feat/t45-email-header`; not merged | 3acae67, 04aec40 | 1,719 pass (10 new); 256 checks | Added 2026-10-31. See T45 notes below |
 
 ## Notes per task
+
+### T45
+- Built at the owner's request to improve how the emails look. The owner chose the brand header.
+- The first test email looked washed out in Gmail ("Whole email washed out"), so `04aec40` darkened the
+  secondary text, lines, page colour and headings. The second test email showed the darker version.
+- Both test emails were the sample Pro digest with made-up problems, sent to the owner's inbox through the Gmail
+  connector, because the Resend key pulled from Vercel is a placeholder (Sensitive). No subscriber email was
+  sent.
+- Not checked: Outlook desktop (it ignores rounded corners and some padding), Apple Mail, and dark-mode mail apps.
 
 ### T44
 - Built at the owner's request for trends and an India view; the owner chose a public page with counts only.

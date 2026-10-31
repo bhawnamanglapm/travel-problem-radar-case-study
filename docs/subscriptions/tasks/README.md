@@ -40,7 +40,8 @@ didn't render in a headless browser. Each one is built only when the owner says 
 category call for up to 2 items about India and makes India its own area. T43 (added 2026-10-31, at the owner's
 request) lets Pro members ask the board a question, answered by AI only from saved items, and mark items Useful or
 Not useful. T44 (added 2026-10-31, at the owner's request) adds a public `/trends/` page: counts of new problems by
-area and category over time, and what's rising, with no item text.
+area and category over time, and what's rising, with no item text. T45 (added 2026-10-31, at the owner's request)
+puts a brand header on every email: the name on a dark-green banner with an amber rule, in the site's colours.
 
 ```mermaid
 flowchart TD
@@ -105,6 +106,7 @@ flowchart TD
     T42["T42 India focus"]
     T43["T43 Ask the board + votes"]
     T44["T44 Trends, public counts"]
+    T45["T45 Brand header on emails"]
   end
   T00 --> T04
   T01 --> T02
@@ -134,6 +136,7 @@ flowchart TD
   T41 --> T42
   T38 & T39 & T42 --> T43
   T38 & T42 --> T44
+  T04 --> T45
 ```
 
 **Pro before payments.** Phase 1 builds both plans. Until Phase 2, the owner grants Pro by hand with the admin
@@ -189,6 +192,7 @@ themselves. It is built only if the Phase 1 numbers pass the owner's gate ([pric
 | [T42](T42-india-focus.md) | India focus: up to 2 India items in each category call, 4 searches, India as its own area, India's share from the logs | Dev | M | T37, T41 |
 | [T43](T43-ask-the-board.md) | Ask the board (RAG, Pro, off unless `ASK_ENABLED=1`): an answer only from saved items, each claim citing one; Useful / Not useful votes; `item-votes.mjs` | Dev | L | T38, T39, T42 |
 | [T44](T44-trends.md) | Trends (public, counts only): a tally of new problems per day by category and area in the search file; `/api/data?key=radar:trends`; the `/trends/` page with weekly and 30-day charts and a rising list | Dev | M | T37, T38, T42 |
+| [T45](T45-email-brand-header.md) | A brand header on every email: banner, amber rule and a hidden preview line in a white card; brand colours checked against `brand.css`; the footer inside the card | Dev | S | T04 |
 
 ## Decisions to settle before or during the build (OWNER INPUT NEEDED)
 
