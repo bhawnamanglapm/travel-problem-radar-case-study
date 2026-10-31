@@ -20,10 +20,10 @@ Checking that a change didn't break what already worked. Here that's two layers:
 [check.yml](../../.github/workflows/check.yml) runs on every pull request and push to `main`, on Node 22:
 1. `npm ci`;
 2. `npm run build`, then fails if the built bundles differ from the committed ones (bundle freshness);
-3. `npm run check` (244 checks);
-4. `npm test` (1,582 checks).
+3. `npm run check` (254 checks);
+4. `npm test` (1,709 checks).
 
-All pass on `c848b94` (2026-10-30). The suites have grown from 952 tests and 199 checks on 2026-10-23, as each task
+All pass on `293d333` (2026-10-31); at the first test run (`c848b94`, 2026-10-30) they were 244 and 1,582. The suites have grown from 952 tests and 199 checks on 2026-10-23, as each task
 added its own.
 
 ## Gaps

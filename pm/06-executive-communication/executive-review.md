@@ -1,14 +1,15 @@
 # Executive review
 
 > **Stage 6 of 8.** One page for the owner, the person who decides. It summarises where the product stands and ends in
-> the decisions that are open. Every figure links its source; nothing here is new evidence. State on 2026-10-30
+> the decisions that are open. Every figure links its source; nothing here is new evidence. State on 2026-10-31
 > (first written 2026-10-24).
 
 ## In one paragraph
 
 Travel Problem Radar is live and taking payments. One to five times a day, as Pro members choose, it finds recent
 travel-industry problems on the web, each with a source and a product idea. Free members get a daily teaser; Pro
-members get the live board, with details, areas, search, saved problems and share pages, and 1 to 5 emails a day.
+members get the live board, with details, areas (India among them), search, saved problems, share pages and votes,
+and 1 to 5 emails a day. Anyone can see counts of new problems by area and category on a public trends page.
 **Payments opened on 2026-10-28 at ₹1 a month or ₹1 a year**, the owner's real price for now. Three things stand out:
 - at ₹1, revenue can't cover the running cost of about ₹6,797 a month at any number of members (R-12);
 - no finding has been scored by a person; the 2026-10-30 model test's blind review was marked by ChatGPT (R-01);
@@ -21,13 +22,13 @@ The next steps are a target price, the open launch items (Vercel Pro, Resend Pro
 
 | | Status | Source |
 |---|---|---|
-| Product | Live at radar.pehchanthetraveller.com (since 2026-10-28): demo, sign-up with an optional password, Google sign-in, Free and Pro emails, the Pro live board with details, areas, search across sweeps, saved problems and share pages, `/manage/` with plan and payment, `/admin/` | [PRD v2](../02-product-definition/prd.md); [flows and screens](../03-design/flows-and-screens.md) |
+| Product | Live at radar.pehchanthetraveller.com (since 2026-10-28): demo, sign-up with an optional password, Google sign-in, Free and Pro emails, the Pro live board with details, areas, search across sweeps, saved problems, share pages and Useful / Not useful votes (Ask the board is built and off until the owner's test), a public `/trends/` page with counts only, `/manage/` with plan and payment, `/admin/` | [PRD v2](../02-product-definition/prd.md); [flows and screens](../03-design/flows-and-screens.md) |
 | Sweeps | Running since 2026-10-25, on `claude-haiku-5-5`. 10 sweeps logged 26 to 30 Oct, 19.0 items each on average. The 26 to 29 Oct slots were all right, started 228 to 418 minutes late | `node scripts/llm-logs.mjs models` (2026-10-30); T35 in [progress.md](../../docs/subscriptions/tasks/progress.md) |
 | Quality | **Not measured by a person.** The model test's blind review (marked by ChatGPT) kept 28 of 55 Haiku items. Of 190 live items, 1 had a link web search never returned; the 18 dated sources had a median age of 8.5 days | [model test](../../docs/subscriptions/model-test-2026-10-30.md); [kpis.md](../02-product-definition/kpis.md) |
 | Users | 3 live ₹1 payments by 2026-10-29. `/admin/` showed 5 paid Pro, 2 of them test-mode subscriptions. No interviews run | T27 in [progress.md](../../docs/subscriptions/tasks/progress.md); [discovery log](../01-discovery/discovery-log.md) |
 | Payments | **Live** since 2026-10-28 (Razorpay live mode), ₹1 a month or ₹1 a year | [launch plan](../05-business-case-and-launch/launch-plan.md) |
 | Testing | First full run 2026-10-30: **not ready to sign off**. BUG-001 and BUG-008 to BUG-011 fixed; the owner closed 10 bugs without retests. BUG-002 (S1) open; IT-1 to IT-8 blocked by an old `staging`; UAT-3 not done | [test results](../08-testing/results/README.md); [TS19](../08-testing/TS19-bug-reporting-and-retesting.md) |
-| Engineering | 1,582 offline tests and 249 offline checks pass, at `e339d32` on 2026-10-30 (952 and 199 on 2026-10-23) | `npm test`, `npm run check`; [traceability](../02-product-definition/traceability.md) |
+| Engineering | 1,709 offline tests and 254 offline checks pass, at `293d333` on 2026-10-31 (1,582 and 249 on 2026-10-30; 952 and 199 on 2026-10-23) | `npm test`, `npm run check`; [traceability](../02-product-definition/traceability.md) |
 
 ## The numbers that exist
 
@@ -141,3 +142,4 @@ NEEDED** (R-12, RM-36).
    (LR-17).
 3. Update `staging` to `main` so IT-1 to IT-8 and UAT-3 can run (RM-35).
 4. Answer decisions 6 and 7, which cost nothing and set what the first month is measured against.
+5. Run the Preview test of Ask the board before it is switched on in Production (RM-41).

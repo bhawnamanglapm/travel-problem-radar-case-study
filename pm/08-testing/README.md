@@ -8,8 +8,8 @@
 Testing is strong offline and thin everywhere else.
 
 - **In place:**
-  - 8 offline suites with 1,582 checks (`npm test`);
-  - 244 site checks (`npm run check`);
+  - 10 offline suites with 1,709 checks (`npm test`, on `293d333`, 2026-10-31; 1,582 at the first test run);
+  - 254 site checks (`npm run check`; 244 at the first test run);
   - both run in CI on every pull request and push to `main`, with a check that the built bundles match their source
     ([check.yml](../../.github/workflows/check.yml)).
 - **Not written down anywhere:**

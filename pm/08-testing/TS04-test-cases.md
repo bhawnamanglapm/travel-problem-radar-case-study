@@ -4,7 +4,7 @@
 |---|---|
 | Component | Test cases |
 | Who | Claude Code writes them; the owner (QA) runs the manual ones |
-| Status | Partial: 1,582 automated checks; no manual cases written |
+| Status | Partial: 1,709 automated checks (2026-10-31); no manual cases written |
 | Depends on | TS03 |
 | Size | M |
 | Unblocks | TS08, TS09, TS12, TS16 |
@@ -12,25 +12,28 @@
 ## What it means here
 
 A test case is a scenario turned into steps, data and an expected result that someone can follow without asking.
-Here the automated cases already exist as checks in the 8 suites. What's missing is the manual cases: the ones that
+Here the automated cases already exist as checks in the 10 suites. What's missing is the manual cases: the ones that
 need a browser, an inbox, a card or a Google account.
 
 ## In place today
 
-Automated cases, counted on `c848b94` (2026-10-30), every one passing:
+Automated cases, counted on `293d333` (2026-10-31), every one passing. At the first test run (`c848b94`,
+2026-10-30) there were 8 suites, 1,582 checks and 244 site checks:
 
 | Suite | Checks |
 |---|---|
-| [test-sweep.mjs](../../scripts/test-sweep.mjs) | 249 |
-| [test-subscriptions.mjs](../../scripts/test-subscriptions.mjs) | 1,048 |
+| [test-sweep.mjs](../../scripts/test-sweep.mjs) | 253 |
+| [test-subscriptions.mjs](../../scripts/test-subscriptions.mjs) | 1,052 |
 | [test-compare.mjs](../../scripts/test-compare.mjs) | 40 |
-| [test-score.mjs](../../scripts/test-score.mjs) | 42 |
+| [test-score.mjs](../../scripts/test-score.mjs) | 46 |
 | [test-cost.mjs](../../scripts/test-cost.mjs) | 25 |
 | [test-plan.mjs](../../scripts/test-plan.mjs) | 73 |
 | [test-admin.mjs](../../scripts/test-admin.mjs) | 49 |
 | [test-password.mjs](../../scripts/test-password.mjs) | 56 |
-| **Total (`npm test`)** | **1,582** |
-| [check.mjs](../../scripts/check.mjs) (`npm run check`) | 244 |
+| [test-ask.mjs](../../scripts/test-ask.mjs) (T43) | 76 |
+| [test-trends.mjs](../../scripts/test-trends.mjs) (T44) | 39 |
+| **Total (`npm test`)** | **1,709** |
+| [check.mjs](../../scripts/check.mjs) (`npm run check`) | 254 |
 
 Each check prints `PASS` and a sentence that says what it proves, so the output reads as a case list.
 
