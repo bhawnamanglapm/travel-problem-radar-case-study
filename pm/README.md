@@ -19,7 +19,7 @@ documents in [`docs/`](../docs/) and links to them, so every fact keeps one home
 | **Domain** | Travel industry: traveler pain, government and policy changes, website and app failures, industry disruption |
 | **Timeline** | First built in July 2026 in Claude's app. Repository started 2026-08-01. Public demo, live page, subscriptions and payments built from 18 to 23 Oct 2026; payments live on 2026-10-28; board features (details, areas, search, saved, share) on 29 and 30 Oct; first full test run on 2026-10-30 ([CHANGELOG](../CHANGELOG.md)) |
 | **Status (2026-10-30)** | Live and charging. Razorpay has been in live mode since 2026-10-28, and Pro is paid monthly or yearly at ₹1. Sweeps run again since 2026-10-25 (I-01 closed), on `claude-haiku-5-5`. The first test run (TS01 to TS20, 2026-10-30) ended **not ready to sign off**. After it, BUG-001 and BUG-008 to BUG-011 were fixed and the owner closed every bug but BUG-002 (an account that can't see the board), which is open. Still open on the [launch checklist](05-business-case-and-launch/launch-plan.md): Vercel Pro, the test-mode run's record, an adviser's check of the terms ([progress](../docs/subscriptions/tasks/progress.md), [TS19](08-testing/TS19-bug-reporting-and-retesting.md)) |
-| **Build record** | 473 commits and 129 merged pull requests. 1,582 offline tests and 249 offline checks pass (`npm test`, `npm run check`), counted on `main` at `e339d32` on 2026-10-30. On 2026-10-23 it was 256 commits, 74 PRs, 952 tests and 199 checks |
+| **Build record** | 514 commits and 140 merged pull requests. 1,709 offline tests and 254 offline checks pass (`npm test`, `npm run check`), counted on `main` at `293d333` on 2026-10-31. On 2026-10-30 it was 473 commits, 129 PRs, 1,582 tests and 249 checks; on 2026-10-23, 256 commits, 74 PRs, 952 tests and 199 checks |
 | **Users** | **None recorded in the repo besides the owner.** 3 live ₹1 payments were captured by 2026-10-29 ([progress](../docs/subscriptions/tasks/progress.md), T27); the repo doesn't record who made them. No interviews, surveys or usage data exist yet ([README](../README.md#problem)) |
 | **Price** | ₹1 a month or ₹1 a year for Pro, no GST charged: the owner's real price for now (2026-10-29). It was ₹299 a month until 2026-10-25, and the [business case](05-business-case-and-launch/business-case.md) still uses ₹299 for break-even. The target price is **OWNER INPUT NEEDED** ([decisions](../docs/decisions.md), [costing](../docs/subscriptions/costing.md)) |
 
@@ -37,12 +37,14 @@ The user is a product manager looking for travel problems worth solving, startin
 1 to 5 times a day (as often as the Pro member who asked for the most emails a day; once a day with no Pro), a
 server job asks Claude, with web search, for recent problems in four categories. It saves up to 5 items per
 category, plus up to 2 from India (T42), each with a source link, severity, region and a one-line product opportunity, and drops an item whose
-source is over 60 days old. Items not seen in an earlier sweep are flagged New. Readers get the results in three
+source is over 60 days old. Items not seen in an earlier sweep are flagged New. Readers get the results in four
 ways:
 - **a public demo** that replays a saved July 2026 sample;
 - **a live board** for Pro members, with a details panel and history for each problem, area filters, search across
   every saved sweep, saved problems, a share link for one problem, Useful / Not useful votes, and "Ask the board"
   (answers only from saved items, each claim citing one; off until the owner's test, T43);
+- **a public trends page** with counts only: new problems each week and in the last 30 days by area (India first)
+  and category, and what's rising (T44; the counts start with the next scheduled sweep);
 - **email digests**: a daily teaser for Free, and for Pro 1 to 5 digests a day, for the categories and areas they
   choose.
 
@@ -87,7 +89,7 @@ The IDs link the stages, as in a larger programme:
 | `DSC-` | Discovery assumption | [discovery-log.md](01-discovery/discovery-log.md) |
 | `ALT-` | Alternative a user has today | [alternatives.md](01-discovery/alternatives.md) |
 | `REQ-` | Requirement. `REQ-01` to `REQ-11` are R1 to R11 of the [v1 PRD](../docs/PRD.md) | [prd.md](02-product-definition/prd.md) |
-| `EP-` | Epic, grouping the build tasks `T00` to `T41` | [backlog.md](02-product-definition/backlog.md) |
+| `EP-` | Epic, grouping the build tasks `T00` to `T44` | [backlog.md](02-product-definition/backlog.md) |
 | `KPI-` | Measure of success | [kpis.md](02-product-definition/kpis.md) |
 | `R-` `A-` `I-` `D-` | Risk, assumption, issue, dependency | [raid-log.md](04-planning-and-governance/raid-log.md) |
 | `CR-` | Change request: a decision later revised | [change-log.md](04-planning-and-governance/change-log.md) |

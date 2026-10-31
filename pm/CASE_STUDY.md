@@ -10,7 +10,7 @@ governance → business case → launch plan → data → testing*
 
 - 38 documents across 8 stages, plus 21 test-result files from the first test run (2026-10-30), each linking the
   engineering docs it summarises
-- 48 requirements in 12 epics, traced to their tests; 1,670 offline tests and 249 offline checks pass (at `8cac2d7`,
+- 49 requirements in 12 epics, traced to their tests; 1,709 offline tests and 254 offline checks pass (at `293d333`,
   2026-10-31)
 - A cost-floor business case: about ₹6,797 a month to run with payments; 24 to 28 members would cover it at ₹299. Pro
   costs ₹1 for now, which no number of members covers; the target price is the owner's open decision
@@ -41,7 +41,7 @@ plan). [PRD v2](02-product-definition/prd.md)
 | Stage | What I did |
 |---|---|
 | **1. Discover** | Framed the problem; logged 8 assumptions with their evidence; compared 7 alternatives from published descriptions; wrote an interview plan, marked as not run |
-| **2. Define** | PRD v2 with 48 requirements; backlog of tasks T00 to T43 in 12 epics; traced requirements to tests, with the gaps listed; 21 KPIs, most targets left to the owner |
+| **2. Define** | PRD v2 with 49 requirements; backlog of tasks T00 to T44 in 12 epics; traced requirements to tests, with the gaps listed; 21 KPIs, most targets left to the owner |
 | **3. Design** | Documented the live screens, the journey end to end, the display rules and the design trade-offs |
 | **4. Plan and govern** | Roadmap of 41 items, RAID log, 25 revised decisions recorded as change requests, stakeholders and a RACI for a one-person product |
 | **5. Justify and launch** | Cost-floor business case with break-even and stress tests; go-to-market with gates; 22 launch-readiness checks, go/no-go and rollback; a post-launch plan with hypercare, playbooks and KPI triggers |
