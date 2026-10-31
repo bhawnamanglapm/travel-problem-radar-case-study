@@ -15,7 +15,7 @@ Full table, with Blob paths: [DEPLOYMENT.md](../../DEPLOYMENT.md#what-is-stored)
 |---|---|---|---|---|
 | `radar:history` | One entry per saved sweep: `id`, `at`, `total`, `newCount`, `highCount`, and `manual` for a manual sweep | Last 60 sweeps | No | Yes |
 | `radar:sweep:<id>` | One sweep's items: `id`, `cat`, `title`, `summary`, `source`, `link`, `region`, `date`, `severity`, `opportunity`, `isNew`. Since 2026-10-30 `sourceDate`, when search gave the page's age; sources over 60 days old are dropped. Since T36 each item's history: `firstAt`, `seen`, `prev`, `firstEarlier` | While in the last 60 | No | Yes |
-| `radar:search` | The "All saved sweeps" search (T38): the latest copy of each item in the kept sweeps, with `sweep` and `sweepAt` | Rebuilt each sweep | No | Yes (Pro only) |
+| `radar:search` | The "All saved sweeps" search (T38): the latest copy of each item in the kept sweeps, with `sweep` and `sweepAt`. Since T44, a `trends` field: new problems per UTC day, keyed by category and area, and the days that are partial (filled from the kept items when the tally began) | Rebuilt each sweep; the tally keeps at most 400 days | No | Items: yes (Pro only). The tally's counts: yes, to everyone, through `/api/data?key=radar:trends` (no ids, titles or links) |
 | `radar:items` | Each item's history (T36): first sweep, number of sweeps, up to 6 latest sweep ids | Trimmed to `radar:seenIds` | No | No |
 | `radar:llmlog:<id>` | One sweep's LLM log: each Claude call's request and response (never the key), usage per category (`usageByCat`, T29), and every page search found, with its link, title and age | 30 days | No | No |
 | `radar:seenIds` | Item IDs already seen, for the New flag | Up to 800 | No | No |
