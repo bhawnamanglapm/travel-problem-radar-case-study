@@ -45,6 +45,7 @@
 | RM-38 | On or after 2026-11-06, a week after T42 went live, read `llm-logs.mjs areas` and `models`, then decide whether a 5th, India-only call is needed | India's share was 1.1% before T42 (KPI-20). Whether one more search a call lifts it, how good the India items are, and what it costs aren't known (R-15, R-16) | [T42](../../docs/subscriptions/tasks/T42-india-focus.md); [kpis.md](../02-product-definition/kpis.md) |
 | RM-39 | After RM-38 shows India items are good: a free, public, monthly "India travel problems" report, the top problems by category, each linking its source | Something to put in front of an official; tests DSC-10 | The owner: "I want to take this till govt of india" (2026-10-31); [go-to-market.md](../05-business-case-and-launch/go-to-market.md#the-path-to-the-government-of-india-proposed-not-done) |
 | RM-40 | Take the report to government: state tourism departments first, then the central ministries; the data law check first (R-17) | The owner's aim. No official has been contacted | The same |
+| RM-41 | The owner's Preview test of Ask the board: `ASK_ENABLED=1` in Preview only, 20 to 30 prepared questions as Pro (some about India, a few with no answer on the board); then Production only on the owner's yes. Once members have voted, read `item-votes.mjs` for KPI-21 | Ask is built and off. Whether answers cite the right items, and what a question costs, aren't measured (R-18) | [T43](../../docs/subscriptions/tasks/T43-ask-the-board.md); [costing.md](../../docs/subscriptions/costing.md#ask-the-board-t43) |
 
 ## Later: only if users ask for it
 
@@ -77,6 +78,7 @@ flowchart LR
   RM07 --> RM35["RM-35 Staging, IT and UAT-3"]
   RM07 --> RM36["RM-36 Target price"]
   RM38["RM-38 Read India share"] --> RM39["RM-39 India report"] --> RM40["RM-40 Government"]
+  RM41["RM-41 Ask: Preview test"]
 ```
 
 pricing.md's rule not to charge before a real sweep is scored ([decisions.md](../../docs/decisions.md), 2026-10-22)

@@ -41,12 +41,13 @@ source is over 60 days old. Items not seen in an earlier sweep are flagged New. 
 ways:
 - **a public demo** that replays a saved July 2026 sample;
 - **a live board** for Pro members, with a details panel and history for each problem, area filters, search across
-  every saved sweep, saved problems and a share link for one problem;
+  every saved sweep, saved problems, a share link for one problem, Useful / Not useful votes, and "Ask the board"
+  (answers only from saved items, each claim citing one; off until the owner's test, T43);
 - **email digests**: a daily teaser for Free, and for Pro 1 to 5 digests a day, for the categories and areas they
   choose.
 
 Source: [TECHNICAL.md](../docs/TECHNICAL.md), [paid-website.md](../docs/subscriptions/paid-website.md),
-[CHANGELOG](../CHANGELOG.md) 2026-10-29 and 2026-10-30.
+[CHANGELOG](../CHANGELOG.md) 2026-10-29 to 2026-10-31.
 
 ## How I approached it
 

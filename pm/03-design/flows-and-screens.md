@@ -4,7 +4,7 @@
 > page lists the screens, summarises the user journeys and the rules every Pro page follows, and links the detailed
 > designs: [account-flows.md](../../docs/subscriptions/account-flows.md) (the flows as built, with a review),
 > [paid-website.md](../../docs/subscriptions/paid-website.md) (who sees what) and
-> [homepage-review.md](../../docs/site/homepage-review.md) (the home page audit). State on 2026-10-30 (first written
+> [homepage-review.md](../../docs/site/homepage-review.md) (the home page audit). State on 2026-10-31 (first written
 > 2026-10-24).
 
 ## Screens
@@ -22,7 +22,7 @@ BUG-011; it was the home page only).
 |---|---|---|---|
 | `/` Home | Visitors | Product page: what it finds, how it works, plans, FAQ. A sign-up / sign-in popup on every signed-out visit | Live since 2026-10-22 |
 | `/demo/` | Anyone | Replays the saved July 2026 sample, with no AI calls (REQ-07) | Live |
-| `/live/` Live board | Pro | Every sweep, New flags, Copy report. One card per category with its counts; area and category chips; search in this sweep or all saved sweeps; a Details panel with each problem's history; Save, and a fourth tab, Saved; Share. Others see a sign-in or upgrade panel (REQ-24) | Live; locked since 2026-10-23; board features 29 and 30 Oct (T36 to T40) |
+| `/live/` Live board | Pro | Every sweep, New flags, Copy report. One card per category with its counts; area and category chips; search in this sweep or all saved sweeps; a Details panel with each problem's history; Save, and a fourth tab, Saved; Share; 👍 Useful / 👎 Not useful under each card. An "Ask the board" box above the area tiles, when switched on: a question, an optional category and the questions left today; the answer in plain text with numbered sources and a line saying it was written by AI. Others see a sign-in or upgrade panel (REQ-24) | Live; locked since 2026-10-23; board features 29 to 31 Oct (T36 to T43). Ask is off until `ASK_ENABLED=1` |
 | `/p/<sweep>/<item>` Share page | Anyone with the link | One problem: headline, category, severity, source, region and date for everyone; the summary, opportunity and source link for Pro. Not indexed; a preview card with `og.png` | Live 2026-10-30 (T40) |
 | `/subscribe/` Plans | — | Redirects to `/pricing/` since 2026-10-28; the file is kept but no longer reachable | Retired |
 | `/signup/` | Visitors | The one sign-up form, with an unticked "I'd also like Pro" box and an optional password. With Pro ticked, confirming goes straight to payment (`/manage/?pay=1`) | Live |
@@ -45,6 +45,7 @@ Status sources: [decisions.md](../../docs/decisions.md) 2026-10-22 and 2026-10-2
 | Demo with the July 2026 sample | Yes | Yes | Yes |
 | Live board, history, Copy report | Sign-in panel | Upgrade panel | Yes |
 | Details, areas, search all sweeps, saved problems | On the demo's sample | On the demo's sample | Yes, on the live board |
+| Useful / Not useful votes; Ask the board (when on) | No | No | Yes, on the live board |
 | A shared problem's page | Headline and facts | Headline and facts | In full |
 | Email | No | A daily teaser: counts and headlines for all four categories | 1 to 5 digests a day, as chosen |
 | Choose categories and areas | No | No | Yes |
