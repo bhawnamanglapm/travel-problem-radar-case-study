@@ -2152,7 +2152,7 @@ const iso = (ms) => new Date(ms).toISOString();
     // value 8613844 gave too, so the text, subjects, recipients and keys are as before T41.
     const noHtml = (d) => createHash("sha256").update(JSON.stringify(d.calls.filter((c) => c.body.some((m) => /Pro update/.test(m.text)))
       .map((c) => ({ ...c, body: c.body.map(({ html, ...m }) => m) })))).digest("hex");
-    const MAIN = "a1839335baf5d018d506278d4b75ae7e3a8ce14ed183ae74f7529e4d7536a837";
+    const MAIN = "165120aa67016c4568bb13a5f98b34fbaf2f0c1c2c55a681c3df6f7d85ee4b41";
     const NO_HTML = "ebe30e066149c0334f300048f06196c430ba3784127a3ee8494dd241554428a4";
     const [withNull, withAbsent] = [await da(before), await da(before, { absent: true })];
     check(fp(withNull) === MAIN && fp(withAbsent) === MAIN, "pro areas: with no areas chosen, the Pro emails and idempotency keys are byte for byte the same with areas null or absent");

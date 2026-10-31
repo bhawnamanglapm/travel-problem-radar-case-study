@@ -15,15 +15,17 @@ const longDate = (at) => `${Number(at.slice(8, 10))} ${MONTHS[Number(at.slice(5,
 
 // The site's light brand colours (brand.css), written out because email can't use CSS variables.
 // scripts/check.mjs checks every text colour against its background for 4.5:1 (T45).
+// Secondary text uses --text-2, not the lighter --muted, and lines use --line2: the owner found the first
+// version washed out in Gmail.
 export const EMAIL_COLORS = {
-  page: "#f6f9f8", card: "#ffffff", line: "#d6e1df",
-  text: "#0f2924", muted: "#516763", link: "#1d4e45",
-  primary: "#1d4e45", onPrimary: "#f6f9f8", bannerSub: "#d6e1df",
+  page: "#eef4f2", card: "#ffffff", line: "#b9cac7",
+  text: "#0f2924", text2: "#2f4a45", link: "#1d4e45",
+  primary: "#1d4e45", onPrimary: "#f6f9f8",
   accent: "#f5a524", onAccent: "#0f2924", high: "#b91c1c", medium: "#a15c07",
 };
 const C = EMAIL_COLORS;
-const FONT = `font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5;color:${C.text}`;
-const MUTED = `color:${C.muted}`;
+const FONT = `font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5;color:${C.text}`;
+const MUTED = `color:${C.text2}`;
 const LINK = `color:${C.link}`;
 const BUTTON = `display:inline-block;padding:10px 18px;background:${C.primary};color:${C.onPrimary};text-decoration:none;border-radius:6px;font-weight:600`;
 const H1 = "font-size:20px;line-height:1.3;margin:0 0 6px";
@@ -42,7 +44,7 @@ function brandShell({ kicker = "", preheader = "" }, body) {
     `<div style="max-width:640px;margin:0 auto;background:${C.card};border:1px solid ${C.line};border-radius:8px;overflow:hidden">`,
     `<div style="background:${C.primary};padding:18px 24px;border-bottom:4px solid ${C.accent}">`,
     `<div style="font-family:Georgia,'Times New Roman',serif;font-size:24px;line-height:1.2;letter-spacing:.02em;color:${C.onPrimary}">Travel Problem Radar</div>`,
-    kicker ? `<div style="margin-top:4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:${C.bannerSub}">${esc(kicker)}</div>` : "",
+    kicker ? `<div style="margin-top:4px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:${C.accent}">${esc(kicker)}</div>` : "",
     `</div>`,
     `<div style="padding:20px 24px 24px">`,
     ...body,
@@ -120,7 +122,7 @@ export function buildDigestEmail({ at, problems, perCat = {}, manual = false }, 
     const items = problems.filter((p) => p.cat === c.key);
     if (!items.length) return;
     text.push("", `${c.label.toUpperCase()} (${items.length})`);
-    html.push(`<h2 style="font-size:13px;letter-spacing:.04em;text-transform:uppercase;margin:24px 0 10px;padding-bottom:4px;border-bottom:1px solid ${C.line};${MUTED}">${esc(c.label)} (${items.length})</h2>`);
+    html.push(`<h2 style="font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;margin:24px 0 10px;padding-bottom:4px;border-bottom:2px solid ${C.line};color:${C.primary}">${esc(c.label)} (${items.length})</h2>`);
     if (teaser) {
       items.forEach((p) => {
         text.push(`- ${p.isNew ? "NEW " : ""}${p.title}`);

@@ -484,11 +484,12 @@ for (const [mode, t] of Object.entries(modes)) {
 }
 // The emails (T45) carry the light brand colours as plain values; each text colour on its background.
 const { EMAIL_COLORS: ec } = await import("../api/_lib/email.js");
-const emailPairs = [...["text", "muted", "link", "high", "medium"].flatMap((fg) => ["card", "page"].map((bg) => [fg, bg])),
-  ["onPrimary", "primary"], ["bannerSub", "primary"], ["onAccent", "accent"]];
+const emailPairs = [...["text", "text2", "link", "primary", "high", "medium"].flatMap((fg) => ["card", "page"].map((bg) => [fg, bg])),
+  ["onPrimary", "primary"], ["accent", "primary"], ["onAccent", "accent"]];
 const lowEmail = emailPairs.filter(([fg, bg]) => !ec[fg] || !ec[bg] || contrast(ec[fg], ec[bg]) < 4.5).map(([fg, bg]) => `${fg} on ${bg}`);
 check(lowEmail.length === 0, `emails: every text color passes 4.5:1 (${emailPairs.length} pairs)${lowEmail.length ? ": " + lowEmail.join("; ") : ""}`);
-check(["text", "muted", "link", "primary", "accent", "high", "medium"].every((k) => ec[k] === lightTokens[{ text: "--text", muted: "--muted", link: "--link", primary: "--primary", accent: "--accent", high: "--high", medium: "--medium" }[k]]),
+const emailTokens = { page: "--bg2", line: "--line2", text: "--text", text2: "--text-2", link: "--link", primary: "--primary", onPrimary: "--on-primary", accent: "--accent", onAccent: "--on-accent", high: "--high", medium: "--medium" };
+check(Object.entries(emailTokens).every(([k, t]) => ec[k] === lightTokens[t]),
   "emails: their colours match brand.css (light)");
 
 console.log(failures.length ? `\n${failures.length} failure(s)` : "\nAll checks passed.");
