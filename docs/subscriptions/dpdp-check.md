@@ -42,7 +42,7 @@ From [`api/_lib/subscribers.js`](../../api/_lib/subscribers.js) and the [privacy
 | Consent | Consent that is free, specific and given by a clear act, and as easy to withdraw as to give | Double opt-in: nothing is sent until the address is confirmed from the email. Every email has Unsubscribe; for Free, that deletes the record | No tick box or "I agree" at sign-up: is confirming the address a clear enough act? |
 | Legitimate uses | Some uses need no consent | Payments are for a contract the member starts | Which of the radar's uses count: **to verify** |
 | Security safeguards | Reasonable safeguards against a breach | Private Blob store; scrypt password hashes; hashed sign-in codes; a signed session cookie, 12 hours at most; the address never logged; the IP address only as a short hash, deleted in 2 hours | The read-write Blob token sits on the owner's machine (`.env.local`). No written list of who has access. Whether the Rules require keeping access logs for a set time: **to verify** |
-| Breach notification | Tell the Board and each person affected | **No written breach plan** | Write one: who decides, what is told to whom, how fast. The deadline in the Rules: **to verify** |
+| Breach notification | Tell the Board and each person affected | A **draft** plan, 2026-10-31: [breach-plan.md](breach-plan.md). Not reviewed or drilled | Rule 7, from a secondary source: each member and the Board without delay, the Board's full report within 72 hours. CERT-In's 6 hours may apply too. Open: whether CERT-In covers this business, how the Board takes notices, and the start date (the plan's open items) |
 | Retention and erasure | Delete when the purpose is over or consent is withdrawn | Unconfirmed in 7 days: deleted. Free unsubscribe, a hard bounce or a spam mark: deleted at once. **Delete my account** cancels Razorpay first, then deletes the record, its Razorpay index files and its id in the delivery files (`deleteAccount`, `deleteSubscriberData`) | A Pro member who turns emails off keeps the account until they delete it, with no time limit. Razorpay, Resend and Vercel keep their own logs. Tax law may require payment records to be kept: how that fits with erasure |
 | Rights of the person | See, correct and erase their data; a grievance route; name someone to act for them | The manage page changes choices and deletes the account; requests to see or delete data go to the privacy page's contact, with a same-day reply promised | No self-serve copy of the data. Naming someone to act for them is not covered. The time allowed to answer a grievance: **to verify** |
 | Children | Verifiable consent of a parent | No age question, and the terms don't say members must be adults | Whether a line in the terms ("18 or over") is enough, or more is needed |
@@ -65,7 +65,7 @@ The radar's items come from public sources about travel problems, not from membe
 Nothing is changed by this document. Likely changes, each for the owner to decide after advice:
 
 - name the Data Protection Board on the privacy page (Razorpay was named 2026-10-31);
-- a written breach plan;
+- the breach plan, drafted 2026-10-31 ([breach-plan.md](breach-plan.md)): the adviser's answers to its open items;
 - an age line in the terms;
 - a time limit for Pro accounts with emails off.
 
