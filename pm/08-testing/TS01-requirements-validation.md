@@ -20,7 +20,7 @@ the original and is kept for history.
 
 - PRD v2 lists each REQ with its source (a T-file, a decision or a PR) and a status.
 - [traceability.md](../02-product-definition/traceability.md) maps each REQ to code and to a test. Its counts are
-  from `293d333` (2026-10-31: 1,709 tests, 254 checks); it was first written at `662bded` (952 and 199).
+  from `fa4f8e6` (2026-10-31: 1,719 tests, 256 checks); it was first written at `662bded` (952 and 199).
 - The T-files in [docs/subscriptions/tasks/](../../docs/subscriptions/tasks/) are the detailed requirements for
   each feature, with acceptance criteria.
 
