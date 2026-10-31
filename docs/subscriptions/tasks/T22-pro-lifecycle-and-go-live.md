@@ -83,8 +83,8 @@ the policy pages and the new Pro wording (T23 to T26). The unsubscribe wording i
 - [x] Unsubscribing a paid record cancels billing before deleting; a failed cancel keeps the record
 - [x] Test keys can't work on Production, live keys can't work on Preview (2026-10-30)
 - [x] Grace period and tidy step, with the `rzpMismatch` count (2026-10-30)
-- [ ] Docs updated: DEPLOYMENT.md (Razorpay section, roll back), TECHNICAL.md, README.md "What's next",
-  pricing.md, decisions.md (refund rule, grace period), CHANGELOG.md
+- [x] Docs updated: DEPLOYMENT.md (Razorpay section, roll back), TECHNICAL.md, README.md "What's next",
+  pricing.md, decisions.md (refund rule, grace period), CHANGELOG.md (2026-10-31)
 
 ## Tests
 

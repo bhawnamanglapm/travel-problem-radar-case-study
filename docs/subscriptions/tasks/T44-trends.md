@@ -12,7 +12,8 @@
 > and per category over time, plus a 'rising this month' list." The owner chose **everyone** as the audience: a
 > public page with counts only. The problems' text, summaries and links stay Pro only.
 >
-> **Built on `feat/t44-trends`; not merged.** The first tally is written by the first sweep after the merge.
+> **Merged to main on 2026-10-31 (#141, `293d333`) and live.** The first tally is written by the first scheduled
+> sweep after the merge; until then the page says "No counts yet" and `/api/data?key=radar:trends` answers `404`.
 
 ## Why
 
@@ -77,7 +78,8 @@ and seeding an old file, and the handler (public with `BOARD_PAYWALL=1`, no ids,
 ## Not checked
 
 - Checked in headless Chrome against a local stand-in server with made-up counts, at 1100 px (light) and a narrow
-  window (dark). Not checked on a real deployment: Preview has no tally until a sweep runs there, and none is run
-  without the owner's yes.
+  window (dark). Preview had no tally, because no sweep ran there without the owner's yes.
+- In production after the merge (2026-10-31): the page loads (`200`) and the counts read answers `404` until the first
+  scheduled sweep. Not yet seen with real counts.
 - Not in this task: filling earlier days from the LLM logs (kept 30 days; a production write), severity splits, a
   map, Hindi labels.

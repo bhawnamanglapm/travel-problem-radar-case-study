@@ -86,8 +86,8 @@ The free daily email goes out after the first saved sweep of the UTC day. That i
 | 1 | Anthropic credit, then one sweep that saves all 4 categories (RM-01) | Owner |
 | 2 | [T32](tasks/T32-sweeps-per-day.md): each Pro member chooses 1 to 5 emails a day (default 2), and every page says so. Replaces T28 | Dev |
 | 3 | [T30](tasks/T30-owner-launch-checklist.md): the owner's launch steps, starting with the terms page, then Razorpay activation | Owner, in parallel |
-| 4 | [T22](tasks/T22-pro-lifecycle-and-go-live.md): Pro expiry, paid unsubscribe, key safety (after Vercel Pro) | Dev |
-| 5 | [T27](tasks/T27-razorpay-test-run-and-go-live.md): test run on a Preview, then go-live | Owner + Dev |
+| 4 | [T22](tasks/T22-pro-lifecycle-and-go-live.md): Pro expiry, paid unsubscribe, key safety. Done 2026-10-30 | Dev |
+| 5 | [T27](tasks/T27-razorpay-test-run-and-go-live.md): test run on a Preview, then go-live. Live since 2026-10-28 | Owner + Dev |
 | 6 | [T31](tasks/T31-measure-and-add-tiers.md): measure the first 20 to 30 paying members, then decide on tiers | Owner + Dev |
 
 [T29](tasks/T29-usage-by-category.md) (usage per category) is optional and can be built at any point; T31 uses it if

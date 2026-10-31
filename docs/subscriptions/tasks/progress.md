@@ -35,7 +35,7 @@ working in a real inbox; that is T12's staged launch.
 | [T20](T20-manage-page-and-checkout.md) `/manage/` page, checkout, cancel | done; test checkout passed on `staging` (2026-10-23). `staging` is 121 commits behind `main` (2026-10-25): update it before the next test run (T33) | branch `feat/checkout` | 782 pass (714 subscriber + 68 sweep; +40 new); 113 `npm run check` checks (+3) | See "T20" below |
 | [T21](T21-razorpay-webhook.md) Razorpay webhook | done; staging check passed (2026-10-23) | branch `feat/razorpay-webhook` | 834 pass (766 subscriber + 68 sweep; +43 new); 114 `npm run check` checks (+1) | See "T21" below |
 | Pricing and About pages (Razorpay's site review) | planned; costs measured ([costing.md](../costing.md)); split into T23 to T26 on 2026-10-23 | branch `docs/costing-and-pages-plan` | docs only | Plan: [pricing-and-about-pages.md](../pricing-and-about-pages.md) |
-| [T22](T22-pro-lifecycle-and-go-live.md) Pro expiry, paid unsubscribe, key safety | built 2026-10-30: a 48-hour grace for paid Pro due to renew (`PRO_GRACE_HOURS`), the sweep's tidy step (`proLapsed`, `rzpMismatch`), key safety (a test key on Production or a live key on a Preview turns payments off; `razorpay: "key mismatch"` in the sweep reply) and `subscribers.mjs show --check`. Built earlier: paid unsubscribe cancels in Razorpay first, and an approved renewal's 6-hour grace (`RENEW_GRACE_HOURS`). Test run and go-live moved to T27 | | | Docs still listed in the acceptance criteria: README "What's next", pricing.md, and the refund rule in decisions.md |
+| [T22](T22-pro-lifecycle-and-go-live.md) Pro expiry, paid unsubscribe, key safety | built 2026-10-30: a 48-hour grace for paid Pro due to renew (`PRO_GRACE_HOURS`), the sweep's tidy step (`proLapsed`, `rzpMismatch`), key safety (a test key on Production or a live key on a Preview turns payments off; `razorpay: "key mismatch"` in the sweep reply) and `subscribers.mjs show --check`. Built earlier: paid unsubscribe cancels in Razorpay first, and an approved renewal's 6-hour grace (`RENEW_GRACE_HOURS`). Test run and go-live moved to T27 | | | Docs done 2026-10-31: TECHNICAL.md and pricing.md's build order; DEPLOYMENT.md, decisions.md (refund rule, grace), CHANGELOG and README "What's next" already covered it |
 | [T23](T23-pro-display-standards.md) Display rules, owner inputs | todo; waits for owner inputs 1 to 9 | | | |
 | [T24](T24-pricing-page.md) `/pricing/`, `plan.json` | shipped: `paid: true` on main since 2026-10-26 (`f7c4270`), live since go-live 2026-10-28. Price ₹1 a month and ₹1 a year, the owner's real price for now (2026-10-29; was ₹299). GST reads "no GST charged" until a CA advises; the refund rule is filled | branch `feat/t24-pricing-page` | 37 new plan tests; 162 `npm run check` checks (+48) | Build steps now in `package.json` `build:site` (Vercel's 256-character `buildCommand` limit). Built site unchanged; `check-plan.mjs` not run yet (needs keys) |
 | [T25](T25-about-footer-legal.md) `/about/`, footer, policy pages | footer live (#67). `/about/` shipped 2026-10-23 with the owner's text; refund rule in `plan.json`. All four policy pages live: privacy, contact and refunds earlier, terms on 2026-10-29 (its liability clause is the owner's plain draft, not checked by an adviser) | #67; branch `feat/about-and-refund-rule` | 4 new plan tests; 184 `npm run check` checks | Built site differs from main only in the footers. See T25's "Built" section |
@@ -57,7 +57,7 @@ working in a real inbox; that is T12's staged launch.
 | [T41](T41-email-areas.md) Areas in Pro email | built 2026-10-30 on `feat/t41-email-areas`, merged to main (#105, `be97bd7`) and live | 577fb4e, bbd9259 | 1,417 pass | Added 2026-10-29, Phase 5. See T41 notes below |
 | [T42](T42-india-focus.md) India focus | built 2026-10-30 on `feat/india-focus`, merged to main (#132, `525ea4b`) and live | 7ae46aa, 52ef57f | 1,590 pass | Added 2026-10-30. See T42 notes below |
 | [T43](T43-ask-the-board.md) Ask the board and votes | built 2026-10-31 on `feat/ask-the-board`, merged to main (#136, `41f1e09`). Votes are live for Pro; Ask is off until `ASK_ENABLED=1`. The owner's Preview test is open | 2033224, 5594b64, 19040ab, 8e8c268 | 1,670 pass (76 in the new test-ask); 249 checks | Added 2026-10-31. See T43 notes below |
-| [T44](T44-trends.md) Trends | built 2026-10-31 on `feat/t44-trends`; not merged. The first tally is written by the first sweep after the merge | 43a823c, 9d5820a | 1,709 pass (39 in the new test-trends); 254 checks | Added 2026-10-31. See T44 notes below |
+| [T44](T44-trends.md) Trends | built 2026-10-31 on `feat/t44-trends`, merged to main (#141, `293d333`) and live. The first tally is written by the first scheduled sweep after the merge | 43a823c, 9d5820a | 1,709 pass (39 in the new test-trends); 254 checks | Added 2026-10-31. See T44 notes below |
 
 ## Notes per task
 
@@ -67,7 +67,9 @@ working in a real inbox; that is T12's staged launch.
 - Changes from the plan: cells are keyed `"cat|Area"` rather than by position; one colour for every bar, because
   the brand's category colours fail the colour-blind check; `buildSearch` is unchanged.
 - Checked in headless Chrome against a local stand-in server with made-up counts, at 1100 px (light) and a narrow
-  window (dark). Not checked on a real deployment.
+  window (dark). In production after the merge (2026-10-31): `/trends/` loads (`200`) and
+  `/api/data?key=radar:trends` answers `404` until the first scheduled sweep writes the tally. Not yet seen with real
+  counts.
 
 ### T43
 - Built at the owner's request for more AI on the site and a RAG feature; plan approved 2026-10-31.

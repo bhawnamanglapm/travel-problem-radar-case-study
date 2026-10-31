@@ -144,12 +144,12 @@ Email has been sent through a real Resend account since 21 Oct 2026, from the ve
 | `api/_lib/storage.js` | The private Blob store: `get`, `set`, `del`, `list`; reads skip Blob's CDN cache except for `/api/data` |
 | `api/_lib/slack.js`, `email.js` | The Slack post; every email (owner digest, subscriber digest, confirmation, Pro request) and Resend sending |
 | `api/_lib/http.js` | Shared request helpers: allowed methods, body reading with a size limit, JSON and HTML replies |
-| `api/_lib/subscribers.js` | Subscriber records, tokens, plans and event records |
+| `api/_lib/subscribers.js` | Subscriber records, tokens, plans and event records. A paid Pro that Razorpay says will renew stays Pro for `PRO_GRACE_HOURS` (48) past `proUntil`, because a renewal's charge can arrive late; owner-granted Pro has no grace (T22) |
 | `api/_lib/subscription-handlers.js` | The four subscriber endpoints, the per-IP sign-up limit and the Resend webhook |
 | `api/_lib/ask.js` | Ask the board (T43): keyword retrieval over the search file, filtered by the area a question names; the prompt; the Haiku call; the citation check. Used by `/api/account`'s `ask` action |
 | `api/_lib/subscriber-delivery.js` | After a saved sweep: Pro and Free sends, the 24-hour roll-up, resuming a cut-off send |
 | `api/_lib/plan.js` | Pro's price from `plan.json` (T33): one plan, a `monthly` and a `yearly` price; the periods on sale; and `RAZORPAY_PLANS` (one ₹1 Razorpay plan per period; a subscription's quantity is the price). Used by `/api/account`, `fill-plan` and `check-plan` |
-| `api/_lib/razorpay.js` | Razorpay for paid Pro (T19): create, cancel and fetch a subscription, and the webhook and Checkout signature checks. Used by `/api/account`'s checkout, checkout-return and cancel (T20) |
+| `api/_lib/razorpay.js` | Razorpay for paid Pro (T19): create, cancel and fetch a subscription, and the webhook and Checkout signature checks. Used by `/api/account`'s checkout, checkout-return and cancel (T20). `keyMismatch` (T22): a test key on Production or a live key on a Preview turns payments off; the webhook answers `503` and the sweep reply shows `razorpay: "key mismatch"` |
 | `vercel.json` | Daily backstop cron (00:05 UTC), 300 s limit, build that publishes `index.html`, `demo/`, `live/`, `subscribe/`, `manage/`; the `/p/<sweep>/<item>` rewrite to `/api/data` (T40); security headers, with the full CSP report-only (BUG-010) |
 | `og.png`, `scripts/og-card.html` | The link-preview image (1200×630) and the page it was rendered from (T40) |
 | `travel-problem-radar.jsx` | The dashboard component (live in Claude's app, demo on the web) |
