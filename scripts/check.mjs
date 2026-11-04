@@ -393,8 +393,11 @@ check([bundle, liveBundle].every((b) => b.includes("radar:search") && b.includes
 const carryText = (t) => (t.match(/\n\/\/ Carry-forward \(T46\):[\s\S]*?\n\/\/ End of carry-forward\.\n/) || [""])[0];
 check(!!carryText(jsx) && carryText(jsx) === carryText(srv) && /function findCarry\(/.test(carryText(jsx)) && /function catOk\(/.test(carryText(jsx)),
   "catOk and findCarry are the same text in the artifact and the server");
-check([bundle, liveBundle].every((b) => b.includes("radar:lastRun") && b.includes("tpr-group-status") && b.includes("nothing found this time")),
-  "both bundles are built with the failed-check fallback (the last run, the category status line)");
+check([bundle, liveBundle].every((b) => b.includes("tpr-group-status") && b.includes("nothing found this time") && b.includes("Showing results from the sweep of")),
+  "both bundles are built with the failed-check fallback (the category status line)");
+// T47: only the owner is told a check failed; the board never says so or reads the last run.
+check([bundle, liveBundle].every((b) => !b.includes("radar:lastRun") && !/couldn[’']t complete/.test(b)),
+  "neither bundle names a failed check or reads the last run");
 const home = readFileSync("index.html", "utf8");
 const homeForm = (home.match(/<form[^>]*\baction="live\/"[^>]*>[\s\S]*?<\/form>/) || [""])[0];
 check(/method="get"/i.test(homeForm) && /<input[^>]*type="search"[^>]*name="q"|<input[^>]*name="q"[^>]*type="search"/.test(homeForm)
