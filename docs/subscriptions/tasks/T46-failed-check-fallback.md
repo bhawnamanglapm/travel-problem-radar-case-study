@@ -12,6 +12,11 @@
 > successful results when a sweep fails, with their time and a note that the latest check couldn't complete, and
 > showing "no new findings" only when a check really finished.
 
+> **Changed by [T47](T47-failures-owner-only.md) (2026-11-04):** the board no longer says a check failed. The
+> status lines lost "couldn't complete", the banner and the Copy report line are gone, and `/api/data` refuses
+> `radar:lastRun` again. The subscriber emails now carry a failed category's last results too. The rest of this
+> page describes T46 as it was built.
+
 ## Why
 
 Before T46 the board handled a failed check in only one case.

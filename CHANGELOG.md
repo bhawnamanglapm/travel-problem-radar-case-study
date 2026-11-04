@@ -5,7 +5,13 @@ grouped by date.
 
 ## 2026-11-04
 
-- T46, a failed check keeps the last results (from a reader's feedback; on a branch, not merged). Each saved sweep
+- T47, only the owner hears that a check failed (at the owner's request; on a branch, not merged). The board drops
+  "couldn't complete" from its status lines, the banner and the Copy report line, and no longer reads
+  `radar:lastRun`, which `/api/data` refuses again. A failed category's last results now reach the Pro and Free
+  emails, tagged "From the sweep of {day}". When every check fails, subscribers still get an email with the last
+  results. The owner's digest, failure notice and alert still name the failure. `npm test` 1,748, `npm run check`
+  259; the board and sample emails checked in headless Chrome. No production sweep yet.
+- T46, a failed check keeps the last results (from a reader's feedback; #147, merged and live). Each saved sweep
   records ok or failed per category, and every sweep that ran writes `radar:lastRun` (Pro only through
   `/api/data`). On the board, a failed category shows its items from the newest earlier sweep where its check
   finished, tagged with that sweep's day, under a line saying the latest check couldn't complete. "Checked {time}:

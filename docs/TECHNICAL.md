@@ -89,10 +89,15 @@ Subscriber -> links in each email -> /manage/ (/api/account: plan, Request Pro o
   text), and every sweep that ran writes `radar:lastRun` (`{ at, saved, id?, cats }`, best effort). On the board, a
   failed category runs `findCarry`: back through the history, at most 12 reads shared by a cached loader, to the
   newest sweep whose check finished (`catOk`; a sweep without `cats` counts by its items). Those items show tagged
-  with their sweep, and use that sweep for star, votes and share. A status line says which case applies; "nothing
-  found" only for a check that finished. A banner names a last run newer than the latest sweep that saved nothing.
-  Nothing is copied between sweep files. `catOk`/`findCarry` are one text block in the jsx and `api/_lib/radar.js`,
-  checked by `npm run check`.
+  with their sweep, and use that sweep for star, votes and share. "Nothing found" shows only for a check that
+  finished. Nothing is copied between sweep files. `catOk`/`findCarry` are one text block in the jsx and
+  `api/_lib/radar.js`, checked by `npm run check`.
+- **Failures for the owner only (T47).** The board never names a failed check: a carried category says "Showing
+  results from the sweep of {day}", and there is no banner. `radar:lastRun` is for the owner and `/api/data`
+  refuses it. `carryFor(storage, sweep)` in `api/_lib/subscriber-delivery.js` runs `findCarry` for each failed
+  category and adds those items, not New and with `fromAt`, to the Pro and Free emails before their filters. Their
+  meta line says "From the sweep of {day}". An empty run with a failed category also delivers to subscribers, under
+  its own id, with every item from the carry.
 - **Filters in the URL (T38).** The board reads `?q=`, `?cat=`, `?area=` and `?all=1` on load and writes them with
   `history.replaceState` on every change; unknown values are dropped and the hash (`#report`, `#p=`) is kept. On a
   locked screen the search is kept in `sessionStorage` for 30 minutes, so `/live/` puts it back after sign-in. The
