@@ -25,10 +25,10 @@ export function failedCats(perCat = {}, cats = CATS) {
     error: String(perCat[c.key]).replace(/^failed:?\s*/, "").slice(0, ERR_MAX) || "no reason given",
   }));
 }
-// "1 of 4 categories failed this run; the board shows its last results instead." (T46)
+// "1 of 4 categories failed this run; subscribers and the board get its last results instead." (T46, T47)
 export function failedLine(failed, of) {
   const n = failed.length;
-  return `${n} of ${of} categor${of === 1 ? "y" : "ies"} failed this run; the board shows ${n === 1 ? "its" : "their"} last results instead.`;
+  return `${n} of ${of} categor${of === 1 ? "y" : "ies"} failed this run; subscribers and the board get ${n === 1 ? "its" : "their"} last results instead.`;
 }
 
 // Areas (T37): a fixed list the board filters by, and areaOf() to place the AI's free-text region in one.
@@ -127,8 +127,8 @@ export const KEY_SEARCH = "radar:search";
 export const DEFAULT_MODEL = "claude-haiku-5-5";
 // When the last scheduled sweep started, saved or not. Not readable through /api/data.
 export const KEY_LAST_SCHEDULED = "radar:lastScheduled";
-// The last sweep that ran, saved or not (T46): { at, saved, id (when saved), cats }. Readable through /api/data,
-// so the board can say when the latest check couldn't complete. Each category's "ok" or "failed" only, no error.
+// The last sweep that ran, saved or not (T46): { at, saved, id (when saved), cats }. For the owner, in the Blob
+// store; not readable through /api/data since T47. Each category's "ok" or "failed" only, no error.
 export const KEY_LAST_RUN = "radar:lastRun";
 export const sweepKey = (id) => "radar:sweep:" + id;
 // One file per sweep that ran (saved, empty or failed): every Claude call's request and response.
@@ -531,7 +531,8 @@ export async function runDailySweep({ storage, scan, now = () => Date.now(), man
 
   if (merged.length === 0) {
     await writeLastRun({ saved: false });
-    return { status: "empty", perCat, usage, llmLog: await writeLog("empty") };
+    // id, at, the slot and cats let subscribers get the failed categories' last results (T47).
+    return { status: "empty", id, at, ...slotFields, cats, perCat, usage, llmLog: await writeLog("empty") };
   }
 
   merged.sort((a, b) => (b.isNew - a.isNew) || (SEV_RANK[b.severity] - SEV_RANK[a.severity]));

@@ -131,7 +131,9 @@ export function buildDigestEmail({ at, problems, perCat = {}, manual = false }, 
       return;
     }
     items.forEach((p) => {
-      const meta = [p.source, p.region, sourceLabel(p, Date.parse(at)) || p.date].filter(Boolean).join(" · ");
+      // A failed category's last results (T47) say which sweep they are from, without naming the failure.
+      const meta = [p.source, p.region, sourceLabel(p, Date.parse(at)) || p.date, p.fromAt ? `From the sweep of ${longDate(p.fromAt)}` : ""]
+        .filter(Boolean).join(" · ");
       text.push(`- [${p.severity}]${p.isNew ? " NEW" : ""} ${p.title}`);
       if (p.summary) text.push(`  ${p.summary}`);
       text.push(`  ${meta}`);
