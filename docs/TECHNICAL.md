@@ -85,6 +85,14 @@ Subscriber -> links in each email -> /manage/ (/api/account: plan, Request Pro o
   line. `EMAIL_COLORS` holds the colours; `npm run check` tests them for 4.5:1 and against their light-mode
   tokens in `brand.css`. `withSubscriberFooter` puts the footer before the shell's `<!--end-->` marker, inside
   the card. Only the HTML changed: plain text, subjects, links and headers are as before.
+- **Failed-check fallback (T46).** Each saved sweep has `cats`, `"ok"` or `"failed"` per category (no error
+  text), and every sweep that ran writes `radar:lastRun` (`{ at, saved, id?, cats }`, best effort). On the board, a
+  failed category runs `findCarry`: back through the history, at most 12 reads shared by a cached loader, to the
+  newest sweep whose check finished (`catOk`; a sweep without `cats` counts by its items). Those items show tagged
+  with their sweep, and use that sweep for star, votes and share. A status line says which case applies; "nothing
+  found" only for a check that finished. A banner names a last run newer than the latest sweep that saved nothing.
+  Nothing is copied between sweep files. `catOk`/`findCarry` are one text block in the jsx and `api/_lib/radar.js`,
+  checked by `npm run check`.
 - **Filters in the URL (T38).** The board reads `?q=`, `?cat=`, `?area=` and `?all=1` on load and writes them with
   `history.replaceState` on every change; unknown values are dropped and the hash (`#report`, `#p=`) is kept. On a
   locked screen the search is kept in `sessionStorage` for 30 minutes, so `/live/` puts it back after sign-in. The

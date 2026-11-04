@@ -389,6 +389,12 @@ const searchText = (t) => (t.match(/\n\/\/ Search file \(T38\):[\s\S]*?\n\/\/ En
 check(!!searchText(jsx) && searchText(jsx) === searchText(srv) && /function mergeSearch\(/.test(searchText(jsx)), "mergeSearch is the same text in the artifact and the server");
 check([bundle, liveBundle].every((b) => b.includes("radar:search") && b.includes("All saved sweeps") && b.includes("This sweep") && b.includes("tpr-board-search")),
   "both bundles are built with the all-sweeps search (the search file, the scope chips, the kept search)");
+// T46: a failed category's earlier results are found the same way on the server and on the board.
+const carryText = (t) => (t.match(/\n\/\/ Carry-forward \(T46\):[\s\S]*?\n\/\/ End of carry-forward\.\n/) || [""])[0];
+check(!!carryText(jsx) && carryText(jsx) === carryText(srv) && /function findCarry\(/.test(carryText(jsx)) && /function catOk\(/.test(carryText(jsx)),
+  "catOk and findCarry are the same text in the artifact and the server");
+check([bundle, liveBundle].every((b) => b.includes("radar:lastRun") && b.includes("tpr-group-status") && b.includes("nothing found this time")),
+  "both bundles are built with the failed-check fallback (the last run, the category status line)");
 const home = readFileSync("index.html", "utf8");
 const homeForm = (home.match(/<form[^>]*\baction="live\/"[^>]*>[\s\S]*?<\/form>/) || [""])[0];
 check(/method="get"/i.test(homeForm) && /<input[^>]*type="search"[^>]*name="q"|<input[^>]*name="q"[^>]*type="search"/.test(homeForm)

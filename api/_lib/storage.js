@@ -14,6 +14,7 @@ const FILES = {
   "radar:items": "history/items",
   "radar:search": "history/search",
   "radar:lastScheduled": "state/last-scheduled",
+  "radar:lastRun": "state/last-run",
   "radar:subscriberCount": "state/subscriber-count",
 };
 const tidy = (s) => s.replace(/[^a-z0-9]+/gi, "-");

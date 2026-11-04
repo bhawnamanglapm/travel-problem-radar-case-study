@@ -134,6 +134,9 @@ a.tpr-tab { text-decoration:none; display:inline-block; }
 .tpr-group-title h2 { margin:0; font-family:var(--display); font-size:17px; font-weight:600; letter-spacing:-.01em; color:var(--text); }
 .tpr-group-title p { margin:2px 0 0; font-size:12.5px; color:var(--muted); line-height:1.45; }
 .tpr-group-count { font-family:var(--mono); font-size:11px; color:var(--muted); margin-top:4px; white-space:nowrap; }
+/* T46: why a category shows earlier results, or that its check found nothing */
+.tpr-group-status { margin:10px 0 0 22px; font-size:13px; color:var(--text-2); line-height:1.45; }
+.tpr-group-status.warn { color:var(--accent-text); }
 .tpr-group-toggle { background:none; border:1px solid var(--line); color:var(--text); font-family:var(--body);
   font-size:12.5px; font-weight:500; padding:6px 12px; border-radius:8px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
 .tpr-group-toggle:hover { border-color:var(--link); color:var(--link); }
@@ -393,6 +396,25 @@ function mergeSearch(prev, problems, sweepId, at, keepSweepIds) {
 }
 // End of search file.
 
+// Carry-forward (T46): a category whose check failed in a sweep shows its items from the newest earlier sweep
+// where its check finished. A sweep's `cats` holds each category's "ok" or "failed"; one saved before T46 has
+// none, and counts a category as ok when it has items in it. `load(id)` reads one sweep (null if it can't) and
+// is called at most `maxReads` times. Returns { id, at, items } or null.
+// The same text is in travel-problem-radar.jsx and api/_lib/radar.js; scripts/check.mjs fails if they differ.
+function catOk(sweep, key) {
+  if (!sweep || !Array.isArray(sweep.problems)) return false;
+  if (sweep.cats && typeof sweep.cats === "object") return sweep.cats[key] === "ok";
+  return sweep.problems.some((p) => p && p.cat === key);
+}
+async function findCarry(entries, fromIndex, key, load, maxReads = 12) {
+  for (let i = fromIndex - 1, reads = 0; i >= 0 && reads < maxReads; i--, reads++) {
+    const sw = await load(entries[i].id);
+    if (catOk(sw, key)) return { id: entries[i].id, at: entries[i].at, items: sw.problems.filter((p) => p && p.cat === key) };
+  }
+  return null;
+}
+// End of carry-forward.
+
 // Board URL (T38): the filters a link carries. ?q= the search, ?cat= a category key, ?area= one of AREAS, ?all=1
 // all saved sweeps. Unknown values are ignored; boardQuery leaves out the defaults and keeps any other parameter.
 // scripts/test-sweep.mjs runs this block on its own.
@@ -516,6 +538,7 @@ const KEY_LEGACY = "radar:lastSweep";
 const KEY_ITEMS = "radar:items"; // each item's history (T36); the live board never reads it
 const KEY_SEARCH = "radar:search"; // every item in the kept sweeps, for "All saved sweeps" (T38)
 const KEY_SAVED = "radar:saved"; // the demo's saved problems (T39); the live board keeps them on the account
+const KEY_LAST_RUN = "radar:lastRun"; // the last sweep that ran, saved or not (T46); only the live board has it
 const sweepKey = (id) => "radar:sweep:" + id;
 
 // Each item's history (T36). `index` maps an id to { f: first sweep id, n: sweeps it was in, s: its latest
@@ -718,6 +741,10 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
   const [scope, setScope] = useState(start.all ? "all" : "sweep"); // this sweep | all saved sweeps (T38)
   // The search file once loaded: { state: loading | done | missing | error, items, sweeps, missing }.
   const [searchFile, setSearchFile] = useState(null);
+  // T46: the open sweep's `cats` (null before T46 and in local or demo mode) and, for each category whose check
+  // failed, what findCarry found ({ id, at, items } or null). `ready` is false while it looks.
+  const [carry, setCarry] = useState({ id: null, cats: null, found: {}, ready: true });
+  const [lastRun, setLastRun] = useState(null); // radar:lastRun (T46): { at, saved, id, cats }
   const [collapsed, setCollapsed] = useState(() => new Set()); // category keys whose group is folded
   const [copied, setCopied] = useState(false);
   const seenRef = useRef(new Set());
@@ -1025,10 +1052,33 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
         const want = hashItemId();
         const it = want && full.problems.find((p) => p.id === want);
         if (it) setDetail(it);
+        loadCarry(hist, latest.id, full);
+        // A missing or unreadable last run just means no banner.
+        if (live) {
+          try { const lr = await loadJSON(KEY_LAST_RUN); if (lr && typeof lr === "object" && lr.at) setLastRun(lr); } catch (e) {}
+        }
         return;
       }
     }
     if (wantReport) runSweep("report");
+  }
+
+  // T46: for each category whose check failed in sweep `id`, the newest earlier sweep where it finished. The
+  // categories share one cached read per sweep. A sweep with no `cats` (before T46, local, demo) carries nothing.
+  async function loadCarry(hist, id, full) {
+    const cats = full && full.cats && typeof full.cats === "object" ? full.cats : null;
+    const failed = cats ? CATS.filter((c) => cats[c.key] === "failed") : [];
+    setCarry({ id, cats, found: {}, ready: !failed.length });
+    if (!failed.length) return;
+    const at = hist.findIndex((e) => e.id === id);
+    const cache = new Map();
+    const load = (sid) => {
+      if (!cache.has(sid)) cache.set(sid, loadJSON(sweepKey(sid)).catch(() => null));
+      return cache.get(sid);
+    };
+    const found = {};
+    for (const c of failed) found[c.key] = at > 0 ? await findCarry(hist, at, c.key, load) : null;
+    setCarry((cur) => (cur.id === id ? { id, cats, found, ready: true } : cur));
   }
 
   async function runSweep(nextView = "board") {
@@ -1125,6 +1175,7 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
       setSweptAt(e ? e.at : full.at);
       setView("board");
       setFCat("all"); setFSev("all"); setFArea("all"); setQuery(""); setScope("sweep");
+      loadCarry(history, id, full);
     }
   }
 
@@ -1135,7 +1186,17 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
   // All saved sweeps (T38) pools the search file's items; every filter works on them the same way.
   const all = scope === "all";
   const allReady = all && searchFile && searchFile.state === "done";
-  const pool = all ? searchItems : problems;
+  // T46: each category's outcome in the open sweep ("ok", "failed", or null when the sweep didn't record it), and
+  // the failed categories' earlier items, which keep the sweep they came from. `problems` stays this sweep's own.
+  const sweepCats = carry.id === selId ? carry.cats : null;
+  const cats = all ? null : sweepCats;
+  const catState = (key) => (cats && (cats[key] === "ok" || cats[key] === "failed") ? cats[key] : null);
+  const ownIds = new Set(problems.map((p) => p.id));
+  const carried = cats ? Object.values(carry.found).filter(Boolean).flatMap((f) =>
+    f.items.filter((p) => !ownIds.has(p.id)).map((p) => ({ ...p, carried: true, sweep: f.id, sweepAt: f.at, isNew: false }))) : [];
+  const checkWord = isLatest ? "The latest check" : "This sweep’s check";
+  const runTime = (at) => new Date(at).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  const pool = all ? searchItems : [...problems, ...carried];
   // Every filter but the area, so each area's count is the cards that picking it would show (T37).
   const others = pool.filter((p) => {
     if (fCat !== "all" && p.cat !== fCat) return false;
@@ -1150,8 +1211,22 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
   const areaList = AREAS.filter((a) => areaN.get(a) || a === fArea);
   const showAreaTiles = areaCount(pool).size >= 2;
   const pickArea = (a) => setFArea((cur) => (cur === a ? "all" : a));
-  // shown is already sorted (new first, then severity), so each group keeps that order
-  const groups = CATS.map((c) => ({ c, items: shown.filter((p) => p.cat === c.key) })).filter((g) => g.items.length);
+  // shown is already sorted (new first, then severity), so each group keeps that order. A category with a status
+  // line (T46) shows even when empty, but only with no filter set; otherwise "No problems match" says it.
+  const unfiltered = fCat === "all" && fSev === "all" && fArea === "all" && !query.trim();
+  const groups = CATS.map((c) => ({ c, items: shown.filter((p) => p.cat === c.key), state: catState(c.key) }))
+    .filter((g) => g.items.length || (g.state && unfiltered));
+  // The line under a category's head: why it shows earlier items, or that its check found nothing (T46).
+  const statusLine = (key, n) => {
+    const st = catState(key);
+    if (st === "ok") return n ? null : `Checked ${runTime(sweptAt)}: nothing found this time.`;
+    if (st !== "failed") return null;
+    if (!carry.ready) return `${checkWord} couldn’t complete. Looking for earlier results…`;
+    const f = carry.found[key];
+    if (!f) return `${checkWord} couldn’t complete, and there are no earlier results to show.`;
+    if (!f.items.length) return `${checkWord} couldn’t complete. The last check that finished, in the sweep of ${sweepDay(f.at)}, found nothing.`;
+    return `${checkWord} couldn’t complete. Showing results from the sweep of ${sweepDay(f.at)}.`;
+  };
   const setGroupOpen = (key, open) => setCollapsed((s) => {
     const n = new Set(s);
     if (open) n.delete(key); else n.add(key);
@@ -1168,6 +1243,8 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
       lines.push(`Swept ${d.toLocaleString()}`);
     }
     lines.push(`${problems.length} problems · ${newCount} new · ${highCount} high severity`);
+    // T46: a failed category is named; its earlier items aren't listed, since the report is stamped with this sweep.
+    CATS.filter((c) => sweepCats && sweepCats[c.key] === "failed").forEach((c) => lines.push(`${c.label}: ${checkWord.toLowerCase()} couldn’t complete`));
     lines.push("");
     if (newCount) {
       lines.push(`== NEW SINCE LAST SWEEP (${newCount}) ==`);
@@ -1205,6 +1282,10 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
 
   const showStats = status === "done" && view !== "history" && view !== "saved" && !(all && view === "board");
   const showBanner = status === "done" && !isLatest && view !== "history" && view !== "saved" && !(all && view === "board");
+  // T46: the last run after the latest saved sweep saved nothing (every category failed).
+  const latestAt = history.length ? history[history.length - 1].at : null;
+  const showRunFailed = status === "done" && isLatest && view !== "history" && view !== "saved" && lastRun && lastRun.saved === false
+    && latestAt && Date.parse(lastRun.at) > Date.parse(latestAt);
 
   // A card's body, on the board and in the Saved tab.
   const cardBody = (p) => (
@@ -1272,6 +1353,13 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
         <div className="tpr-banner">
           <span>Viewing an archived sweep from <b>{new Date(sweptAt).toLocaleString()}</b>.</span>
           <button onClick={() => openSweep(latestId)}>Back to latest</button>
+        </div>
+      )}
+
+      {showRunFailed && (
+        <div className="tpr-scope-line" role="status">
+          <span className="warn">The latest check, at {runTime(lastRun.at)}, couldn’t complete.</span> Showing the results
+          from {runTime(latestAt)}; they’ll update after the next check that finishes.
         </div>
       )}
 
@@ -1396,8 +1484,9 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
       {/* board */}
       {status === "done" && view === "board" && (
         <div className="tpr-groups">
-          {groups.map(({ c, items }) => {
+          {groups.map(({ c, items, state }) => {
             const open = !collapsed.has(c.key);
+            const line = statusLine(c.key, items.length);
             const nNew = items.filter((p) => p.isNew).length;
             const nHigh = items.filter((p) => p.severity === "High").length;
             const id = "tpr-group-" + c.key;
@@ -1414,31 +1503,34 @@ export default function TravelProblemRadar({ sample, remote } = {}) {
                     {nNew > 0 && !all && ` · ${nNew} new`}
                     {nHigh > 0 && ` · ${nHigh} high`}
                   </span>
-                  <button className="tpr-group-toggle" aria-expanded={open} aria-controls={id}
-                    onClick={() => setGroupOpen(c.key, !open)}>
-                    <span className="chev" aria-hidden="true">▾</span>{open ? "Hide" : "Show"}
-                    <span className="tpr-sr"> {c.label}</span>
-                  </button>
+                  {items.length > 0 && (
+                    <button className="tpr-group-toggle" aria-expanded={open} aria-controls={id}
+                      onClick={() => setGroupOpen(c.key, !open)}>
+                      <span className="chev" aria-hidden="true">▾</span>{open ? "Hide" : "Show"}
+                      <span className="tpr-sr"> {c.label}</span>
+                    </button>
+                  )}
                 </div>
-                <div className="tpr-board" id={id} hidden={!open}>
+                {line && <p className={"tpr-group-status" + (state === "failed" ? " warn" : "")}>{line}</p>}
+                {items.length > 0 && <div className="tpr-board" id={id} hidden={!open}>
                   {items.map((p) => (
                     <div className="tpr-card" key={p.id}>
-                      {(all || p.isNew || canSave) && (
+                      {(all || p.carried || p.isNew || canSave) && (
                         <div className="tpr-card-top">
-                          {all ? <span className="tpr-from">Sweep of {sweepDay(p.sweepAt)}</span> : p.isNew && <span className="tpr-new">New</span>}
-                          {star(p, all ? p.sweep : selId, all ? p.sweepAt : sweptAt)}
+                          {all || p.carried ? <span className="tpr-from">Sweep of {sweepDay(p.sweepAt)}</span> : p.isNew && <span className="tpr-new">New</span>}
+                          {star(p, all || p.carried ? p.sweep : selId, all || p.carried ? p.sweepAt : sweptAt)}
                         </div>
                       )}
                       {starNote(p)}
                       {cardBody(p)}
-                      {voteRow(p, all ? p.sweep : selId)}
+                      {voteRow(p, all || p.carried ? p.sweep : selId)}
                     </div>
                   ))}
-                </div>
+                </div>}
               </section>
             );
           })}
-          {shown.length === 0 && (!all || allReady) && (
+          {shown.length === 0 && !groups.length && (!all || allReady) && (
             <div className="tpr-note">No problems match these filters.</div>
           )}
         </div>

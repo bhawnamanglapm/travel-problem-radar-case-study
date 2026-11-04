@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { buildDigestEmail } from "../api/_lib/email.js";
 import { makeDataHandler, makeSweepHandler } from "../api/_lib/handlers.js";
 import { buildDigest } from "../api/_lib/slack.js";
-import { AREAS, CATS, KEY_ITEMS, KEY_LLMLOG_PREFIX, KEY_SEARCH, LOG_QUOTE_MAX, LOG_TITLE_MAX, areaOf, dateSources, extractProblems, llmLogKey, logContent, mergeSearch, pageAgeDays, runDailySweep, sourceLabel, scanCategory, sweepKey, trackItems, trimSeen } from "../api/_lib/radar.js";
+import { AREAS, CATS, KEY_ITEMS, KEY_LAST_RUN, KEY_LLMLOG_PREFIX, KEY_SEARCH, LOG_QUOTE_MAX, LOG_TITLE_MAX, areaOf, catOk, dateSources, extractProblems, findCarry, llmLogKey, logContent, mergeSearch, pageAgeDays, runDailySweep, sourceLabel, scanCategory, sweepKey, trackItems, trimSeen } from "../api/_lib/radar.js";
 import { SLOTS_BY_FREQ, dueSlot, normaliseSweepsPerDay, previousSlotAt, siteSweepsPerDay, slotOf, sweepLimits, sweepsPerDayOf } from "../api/_lib/schedule.js";
 import { check, finish, memStorage, mockRes } from "./test-helpers.mjs";
 
@@ -145,12 +145,76 @@ const sweepOpts = (storage, byCat, now) => ({
 
   const st2 = memStorage();
   const none = await runDailySweep(sweepOpts(st2, { traveler_pain: "http", gov_policy: "http", web_app: "http", industry: "http" }, () => 1_800_000_000_000));
-  check(none.status === "empty" && [...st2.m.keys()].sort().join() === "radar:lastScheduled," + llmLogKey("1800000000000"),
-    "all four failed: nothing saved but the start time and the LLM log");
+  check(none.status === "empty" && [...st2.m.keys()].sort().join() === "radar:lastRun,radar:lastScheduled," + llmLogKey("1800000000000"),
+    "all four failed: nothing saved but the start time, the last run (T46) and the LLM log");
 
   const cut = await runDailySweep(sweepOpts(memStorage(), { traveler_pain: "cutoff", gov_policy: [item(1)], web_app: [], industry: [] }, () => 1_800_000_000_000));
   check(cut.perCat.traveler_pain === "failed: empty (stop_reason: max_tokens)", "a failed category says why the model stopped");
   check(cut.usage.output === 8150 && cut.usage.searches === 7 && cut.usage.input === 400, "usage includes failed categories, which are billed too");
+}
+
+// ---- T46: each category's outcome, radar:lastRun and carry-forward
+{
+  const T = 1_800_000_000_000;
+  const st = memStorage();
+  const out = await runDailySweep(sweepOpts(st, { traveler_pain: "http", gov_policy: [item(1)], web_app: [], industry: "cutoff" }, () => T));
+  const saved = JSON.parse(st.m.get(sweepKey(out.id)));
+  check(out.status === "saved" && JSON.stringify(saved.cats) === JSON.stringify({ traveler_pain: "failed", gov_policy: "ok", web_app: "ok", industry: "failed" }),
+    "a partial failure saves each category's ok or failed with the sweep");
+  check(!/529|stop_reason|max_tokens|empty/.test(JSON.stringify(saved.cats)), "the sweep's cats hold no error text");
+  const last = JSON.parse(st.m.get(KEY_LAST_RUN));
+  check(last.saved === true && last.id === out.id && last.at === saved.at && JSON.stringify(last.cats) === JSON.stringify(saved.cats),
+    "a saved sweep writes radar:lastRun { at, saved: true, id, cats }");
+  check(JSON.parse(st.m.get("radar:history"))[0].cats === undefined, "the history entry is unchanged: no cats in it");
+
+  const before = st.m.get(KEY_LAST_RUN);
+  const skip = await runDailySweep(sweepOpts(st, { traveler_pain: [item(2)], gov_policy: [], web_app: [], industry: [] }, () => T + 3600 * 1000));
+  check(skip.status === "skipped" && st.m.get(KEY_LAST_RUN) === before, "a skipped run leaves radar:lastRun alone");
+
+  const allFail = { traveler_pain: "http", gov_policy: "http", web_app: "http", industry: "http" };
+  await runDailySweep(sweepOpts(st, allFail, () => T + 6 * 3600 * 1000));
+  const failedRun = JSON.parse(st.m.get(KEY_LAST_RUN));
+  check(failedRun.saved === false && failedRun.id === undefined && failedRun.at === new Date(T + 6 * 3600 * 1000).toISOString()
+    && Object.values(failedRun.cats).every((v) => v === "failed") && JSON.parse(st.m.get("radar:history")).length === 1,
+    "all four failed: radar:lastRun is { at, saved: false, cats } and no sweep is saved");
+
+  const broken = memStorage();
+  const set = broken.set;
+  broken.set = async (k, v) => { if (k === KEY_LAST_RUN) throw new Error("blob down"); return set(k, v); };
+  const still = await runDailySweep(sweepOpts(broken, { traveler_pain: [item(3)], gov_policy: [], web_app: [], industry: [] }, () => T));
+  check(still.status === "saved" && broken.m.has(sweepKey(still.id)) && !broken.m.has(KEY_LAST_RUN), "a radar:lastRun write that throws doesn't fail the sweep");
+
+  // catOk: a sweep's cats decide; a sweep saved before T46 has none and counts a category with items in it
+  const withCats = { cats: { traveler_pain: "ok", gov_policy: "failed" }, problems: [{ cat: "gov_policy" }] };
+  check(catOk(withCats, "traveler_pain") && !catOk(withCats, "gov_policy") && !catOk(withCats, "web_app"), "catOk: cats decide when the sweep has them");
+  const old = { problems: [{ cat: "traveler_pain" }] };
+  check(catOk(old, "traveler_pain") && !catOk(old, "gov_policy") && !catOk(null, "traveler_pain") && !catOk({}, "traveler_pain"),
+    "catOk: an old sweep with no cats counts a category with items as ok; a missing sweep is never ok");
+
+  // findCarry: the newest earlier sweep where the category's check finished
+  const sweeps = {
+    s1: { cats: { gov_policy: "ok" }, problems: [{ cat: "gov_policy", title: "A" }, { cat: "web_app", title: "W" }] },
+    s2: { problems: [{ cat: "web_app", title: "W2" }] }, // before T46: no gov_policy items, so not ok for it
+    s3: { cats: { gov_policy: "failed" }, problems: [] },
+    s4: { cats: { gov_policy: "failed" }, problems: [] },
+  };
+  const entries = ["s1", "s2", "s3", "s4"].map((id, i) => ({ id, at: "2026-11-0" + (i + 1) + "T10:00:00.000Z" }));
+  const reads = [];
+  const cache = new Map();
+  const load = (id) => { if (!cache.has(id)) { reads.push(id); cache.set(id, Promise.resolve(sweeps[id] || null)); } return cache.get(id); };
+  const got = await findCarry(entries, 3, "gov_policy", load);
+  check(got && got.id === "s1" && got.at === entries[0].at && got.items.length === 1 && got.items[0].title === "A",
+    "findCarry: walks back past failed and old sweeps to the newest one where the check finished, with only that category's items");
+  const web = await findCarry(entries, 3, "web_app", load);
+  check(web && web.id === "s2" && web.items[0].title === "W2" && reads.join() === "s3,s2,s1", "findCarry: a caching loader shares reads between categories");
+  check((await findCarry(entries, 0, "gov_policy", load)) === null && (await findCarry(entries, 3, "industry", load)) === null,
+    "findCarry: nothing earlier, or no sweep where it finished, is null");
+  const many = Array.from({ length: 20 }, (_, i) => ({ id: "f" + i, at: "x" }));
+  let n = 0;
+  const far = await findCarry(many, 20, "gov_policy", async (id) => { n++; return id === "f0" ? { cats: { gov_policy: "ok" }, problems: [] } : { cats: { gov_policy: "failed" }, problems: [] }; });
+  check(far === null && n === 12, `findCarry: stops after 12 reads (${n})`);
+  check(JSON.stringify(await findCarry([{ id: "e", at: "t" }, { id: "x", at: "u" }], 1, "web_app", async () => ({ cats: { web_app: "ok" }, problems: [] })))
+    === JSON.stringify({ id: "e", at: "t", items: [] }), "findCarry: a finished check that found nothing is still the answer, with no items");
 }
 
 // ---- LLM log: every call's request and response, kept in the store
@@ -821,7 +885,7 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   check(ok.res.code === 200 && ok.res.json().slack === "sent" && ok.posts.length === 1, "saved sweep: digest posted to Slack once");
   check(text.includes("<https://example.com/1|Fees &lt;rise&gt; &amp; more>") && text.includes("*NEW*"),
     "digest links each title to its source, escapes Slack control characters, marks New");
-  check(text.includes("*FAILED: 1 of 4 categories failed this run; its problems are missing from this sweep.*")
+  check(text.includes("*FAILED: 1 of 4 categories failed this run; the board shows its last results instead.*")
     && /\n• Gov &amp; policy: \S/.test(text) && text.includes("<https://radar.example.com/live/|Open the live board>"),
     "digest flags failed categories with each one's error, and links the live board");
   check(ok.posts[0].unfurl_links === false && !ok.res.body.includes("not-a-real-secret") && !("problems" in ok.res.json()),
@@ -891,7 +955,7 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
     `subject has the time, the counts and the trigger (${req.body.subject})`);
   check(req.body.html.includes("<a href=\"https://example.com/a&quot;b\" style=\"color:#1d4e45;font-weight:600\">Fees &lt;rise&gt; &amp; more</a>") && !/<rise>/.test(req.body.html),
     "HTML part escapes titles and links");
-  check(req.body.text.includes("Fees <rise> & more") && req.body.text.includes("FAILED: 1 of 4 categories failed this run; its problems are missing from this sweep.")
+  check(req.body.text.includes("Fees <rise> & more") && req.body.text.includes("FAILED: 1 of 4 categories failed this run; the board shows its last results instead.")
     && /\n  Gov & policy: \S/.test(req.body.text)
     && req.body.text.includes("Live board: https://radar.example.com/live/") && /not verified/.test(req.body.text),
     "plain-text part has the items, failed categories with their errors, live board link and the not-verified note");
@@ -945,12 +1009,12 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   const m = buildDigestEmail({ at, problems, perCat: two });
   check(m.subject === "Travel Problem Radar · FAILED: Gov & policy, Industry · 2027-01-15 08:00 UTC · 1 problems, 1 new",
     `two failed: both named in the subject, first (${m.subject})`);
-  check(m.text.includes("FAILED: 2 of 4 categories failed this run; their problems are missing from this sweep.")
+  check(m.text.includes("FAILED: 2 of 4 categories failed this run; the board shows their last results instead.")
     && m.text.includes("  Gov & policy: <b>overloaded</b> & retry") && m.text.includes("  Industry: timeout") && !/failed: timeout/.test(m.text),
     "email: each failed category with its error, without the failed: prefix");
   check(m.html.includes("<li>Gov &amp; policy: &lt;b&gt;overloaded&lt;/b&gt; &amp; retry</li>") && !m.html.includes("<b>overloaded"), "email: the error is escaped in HTML");
   const s = buildDigest({ at, problems, perCat: two });
-  check(s.includes("*FAILED: 2 of 4 categories failed this run; their problems are missing from this sweep.*")
+  check(s.includes("*FAILED: 2 of 4 categories failed this run; the board shows their last results instead.*")
     && s.includes("• Gov &amp; policy: &lt;b&gt;overloaded&lt;/b&gt; &amp; retry") && s.includes("• Industry: timeout"), "slack: the same alert, escaped for Slack");
   const long = buildDigestEmail({ at, problems, perCat: { industry: "failed: " + "x".repeat(1000) } });
   const line = long.text.split("\n").find((l) => l.startsWith("  Industry: "));
@@ -1083,6 +1147,9 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   check((await call("/api/data?key=radar:items")).code === 400, "the item index is not exposed (T36)");
   st.m.set("radar:search", "{\"sweeps\":[],\"items\":[]}");
   check((await call("/api/data?key=radar:search")).code === 200, "the search file is served (T38)");
+  check((await call("/api/data?key=radar:lastRun")).code === 404, "no last run yet: 404 (T46)");
+  st.m.set("radar:lastRun", "{\"at\":\"2026-11-03T10:00:00.000Z\",\"saved\":false,\"cats\":{}}");
+  check((await call("/api/data?key=radar:lastRun")).code === 200, "the last run is served (T46)");
   check((await call("/api/data?key=" + llmLogKey("1800000000000"))).code === 400, "LLM logs are not exposed");
   check((await call("/api/data?key=../../etc/passwd")).code === 400, "path-like keys are rejected");
   check((await call("/api/data")).code === 400, "missing key is rejected");

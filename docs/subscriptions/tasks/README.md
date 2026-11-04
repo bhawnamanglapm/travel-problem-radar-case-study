@@ -41,7 +41,9 @@ category call for up to 2 items about India and makes India its own area. T43 (a
 request) lets Pro members ask the board a question, answered by AI only from saved items, and mark items Useful or
 Not useful. T44 (added 2026-10-31, at the owner's request) adds a public `/trends/` page: counts of new problems by
 area and category over time, and what's rising, with no item text. T45 (added 2026-10-31, at the owner's request)
-puts a brand header on every email: the name on a dark-green banner with an amber rule, in the site's colours.
+puts a brand header on every email: the name on a dark-green banner with an amber rule, in the site's colours. T46
+(added 2026-11-04, from a reader's feedback) keeps a category's last good results on the board when its check fails,
+and says "nothing found" only when a check finished.
 
 ```mermaid
 flowchart TD
@@ -107,6 +109,7 @@ flowchart TD
     T43["T43 Ask the board + votes"]
     T44["T44 Trends, public counts"]
     T45["T45 Brand header on emails"]
+    T46["T46 Failed check keeps last results"]
   end
   T00 --> T04
   T01 --> T02
@@ -137,6 +140,7 @@ flowchart TD
   T38 & T39 & T42 --> T43
   T38 & T42 --> T44
   T04 --> T45
+  T35 & T38 --> T46
 ```
 
 **Pro before payments.** Phase 1 builds both plans. Until Phase 2, the owner grants Pro by hand with the admin
@@ -193,6 +197,7 @@ themselves. It is built only if the Phase 1 numbers pass the owner's gate ([pric
 | [T43](T43-ask-the-board.md) | Ask the board (RAG, Pro, off unless `ASK_ENABLED=1`): an answer only from saved items, each claim citing one; Useful / Not useful votes; `item-votes.mjs` | Dev | L | T38, T39, T42 |
 | [T44](T44-trends.md) | Trends (public, counts only): a tally of new problems per day by category and area in the search file; `/api/data?key=radar:trends`; the `/trends/` page with weekly and 30-day charts and a rising list | Dev | M | T37, T38, T42 |
 | [T45](T45-email-brand-header.md) | A brand header on every email: banner, amber rule and a hidden preview line in a white card; brand colours checked against `brand.css`; the footer inside the card | Dev | S | T04 |
+| [T46](T46-failed-check-fallback.md) | A failed check keeps the last results: ok or failed per category in each sweep, `radar:lastRun`; the board shows a failed category's last good items with their sweep's day, "nothing found" only after a check that finished, and a banner for a run that saved nothing | Dev | M | T35, T38 |
 
 ## Decisions to settle before or during the build (OWNER INPUT NEEDED)
 

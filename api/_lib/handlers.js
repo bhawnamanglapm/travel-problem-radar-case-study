@@ -112,8 +112,9 @@ export function makeSweepHandler({ env, storage, fetchFn, now, randomBytes = cry
   };
 }
 
-// Read-only, and only for the kinds of key the dashboard asks for: the index, a sweep, the search file (T38).
-const ALLOWED_KEY = /^radar:(history|search|sweep:\d{10,16})$/;
+// Read-only, and only for the kinds of key the dashboard asks for: the index, a sweep, the search file (T38),
+// the last run (T46).
+const ALLOWED_KEY = /^radar:(history|search|lastRun|sweep:\d{10,16})$/;
 // The trends page's counts (T44): read from the search file's tally and open to everyone, paywall or not, as the
 // reply holds no ids, titles or links. Cached an hour, since the tally changes only when a sweep runs.
 const TRENDS_KEY = "radar:trends";
