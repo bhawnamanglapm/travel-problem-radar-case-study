@@ -25,10 +25,10 @@ export function failedCats(perCat = {}, cats = CATS) {
     error: String(perCat[c.key]).replace(/^failed:?\s*/, "").slice(0, ERR_MAX) || "no reason given",
   }));
 }
-// "1 of 4 categories failed this run; its problems are missing from this sweep."
+// "1 of 4 categories failed this run; the board shows its last results instead." (T46)
 export function failedLine(failed, of) {
   const n = failed.length;
-  return `${n} of ${of} categor${of === 1 ? "y" : "ies"} failed this run; ${n === 1 ? "its" : "their"} problems are missing from this sweep.`;
+  return `${n} of ${of} categor${of === 1 ? "y" : "ies"} failed this run; the board shows ${n === 1 ? "its" : "their"} last results instead.`;
 }
 
 // Areas (T37): a fixed list the board filters by, and areaOf() to place the AI's free-text region in one.
@@ -96,6 +96,26 @@ function mergeSearch(prev, problems, sweepId, at, keepSweepIds) {
 // End of search file.
 export { mergeSearch };
 
+// Carry-forward (T46): a category whose check failed in a sweep shows its items from the newest earlier sweep
+// where its check finished. A sweep's `cats` holds each category's "ok" or "failed"; one saved before T46 has
+// none, and counts a category as ok when it has items in it. `load(id)` reads one sweep (null if it can't) and
+// is called at most `maxReads` times. Returns { id, at, items } or null.
+// The same text is in travel-problem-radar.jsx and api/_lib/radar.js; scripts/check.mjs fails if they differ.
+function catOk(sweep, key) {
+  if (!sweep || !Array.isArray(sweep.problems)) return false;
+  if (sweep.cats && typeof sweep.cats === "object") return sweep.cats[key] === "ok";
+  return sweep.problems.some((p) => p && p.cat === key);
+}
+async function findCarry(entries, fromIndex, key, load, maxReads = 12) {
+  for (let i = fromIndex - 1, reads = 0; i >= 0 && reads < maxReads; i--, reads++) {
+    const sw = await load(entries[i].id);
+    if (catOk(sw, key)) return { id: entries[i].id, at: entries[i].at, items: sw.problems.filter((p) => p && p.cat === key) };
+  }
+  return null;
+}
+// End of carry-forward.
+export { catOk, findCarry };
+
 export const KEY_SEEN = "radar:seenIds";
 export const KEY_INDEX = "radar:history";
 // Each item's history (T36), kept with the seen ids. Not readable through /api/data: the board gets the
@@ -107,6 +127,9 @@ export const KEY_SEARCH = "radar:search";
 export const DEFAULT_MODEL = "claude-haiku-5-5";
 // When the last scheduled sweep started, saved or not. Not readable through /api/data.
 export const KEY_LAST_SCHEDULED = "radar:lastScheduled";
+// The last sweep that ran, saved or not (T46): { at, saved, id (when saved), cats }. Readable through /api/data,
+// so the board can say when the latest check couldn't complete. Each category's "ok" or "failed" only, no error.
+export const KEY_LAST_RUN = "radar:lastRun";
 export const sweepKey = (id) => "radar:sweep:" + id;
 // One file per sweep that ran (saved, empty or failed): every Claude call's request and response.
 // Vercel's Hobby plan keeps function logs for an hour; these stay in the private store for 30 days.
@@ -500,8 +523,16 @@ export async function runDailySweep({ storage, scan, now = () => Date.now(), man
     summary: { calls: calls.length, failed: calls.filter((c) => c.error).length, ...usage, links, usageByCat },
     calls,
   }, { t, tidy });
+  // Each category's outcome (T46), saved with the sweep and in radar:lastRun. Best effort: it never fails a sweep.
+  const cats = Object.fromEntries(CATS.map((c) => [c.key, /^failed/.test(perCat[c.key] || "") ? "failed" : "ok"]));
+  const writeLastRun = async (fields) => {
+    try { await storage.set(KEY_LAST_RUN, JSON.stringify({ at, ...fields, cats })); } catch (e) {}
+  };
 
-  if (merged.length === 0) return { status: "empty", perCat, usage, llmLog: await writeLog("empty") };
+  if (merged.length === 0) {
+    await writeLastRun({ saved: false });
+    return { status: "empty", perCat, usage, llmLog: await writeLog("empty") };
+  }
 
   merged.sort((a, b) => (b.isNew - a.isNew) || (SEV_RANK[b.severity] - SEV_RANK[a.severity]));
 
@@ -532,7 +563,7 @@ export async function runDailySweep({ storage, scan, now = () => Date.now(), man
 
   // The new sweep and the index first: old files go only once nothing points at them.
   try {
-    await storage.set(sweepKey(id), JSON.stringify({ at, ...slotFields, problems }));
+    await storage.set(sweepKey(id), JSON.stringify({ at, ...slotFields, cats, problems }));
     await storage.set(KEY_INDEX, JSON.stringify(hist));
     await storage.set(KEY_SEEN, JSON.stringify(keepIds));
   } catch (e) {
@@ -553,6 +584,7 @@ export async function runDailySweep({ storage, scan, now = () => Date.now(), man
     await storage.set(KEY_SEARCH, JSON.stringify({ ...mergeSearch(prev, problems, id, at, keepIds), trends }));
   } catch (e) {}
   for (const d of drop) { try { await storage.del(sweepKey(d.id)); } catch (e) {} }
+  await writeLastRun({ saved: true, id });
   const llmLog = await writeLog("saved");
 
   return { status: "saved", id, at, ...slotFields, total: entry.total, newCount: entry.newCount, perCat, usage, llmLog, problems };
