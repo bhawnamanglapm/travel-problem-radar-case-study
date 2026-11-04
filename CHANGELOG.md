@@ -3,6 +3,17 @@
 Built from the git history. Dates are commit dates. The project has no version numbers or releases, so entries are
 grouped by date.
 
+## 2026-11-04
+
+- T46, a failed check keeps the last results (from a reader's feedback; on a branch, not merged). Each saved sweep
+  records ok or failed per category, and every sweep that ran writes `radar:lastRun` (Pro only through
+  `/api/data`). On the board, a failed category shows its items from the newest earlier sweep where its check
+  finished, tagged with that sweep's day, under a line saying the latest check couldn't complete. "Checked {time}:
+  nothing found this time" shows only for a check that finished. A run that saved nothing after the latest sweep
+  gets a banner above the stats. Nothing is copied between sweep files; sweeps saved before T46 look as before. The
+  owner's digest says the board shows a failed category's last results. `npm test` 1,736, `npm run check` 258;
+  checked in headless Chrome against a local stub. No production sweep yet.
+
 ## 2026-10-31
 
 - T45, a brand header on every email (#144, merged and live). Each email sits in a white
