@@ -3,7 +3,7 @@
 // remembered in radar:deliveries:<YYYYMMDD>, so a send that is cut off picks up later without
 // sending anyone the same digest twice. Never throws; the result and the log hold counts only.
 import { buildDigestEmail, buildPlanEndingEmail, sendBatch, withSubscriberFooter } from "./email.js";
-import { KEY_INDEX, areaOf, sweepKey } from "./radar.js";
+import { CATS, KEY_INDEX, areaOf, findCarry, sweepKey } from "./radar.js";
 import { IPHIT_KEEP_HOURS, KEY_IPHIT_PREFIX, KEY_RZPEVENT_PREFIX, KEY_SUBSCRIBER_COUNT, RZP_EVENT_KEEP_DAYS, managePath, senderOk, siteUrl, utcHour } from "./subscription-handlers.js";
 import { DEFAULT_SWEEPS_PER_DAY, SLOTS_BY_FREQ, previousSlotAt, slotOf, sweepLimits, sweepsPerDayOf } from "./schedule.js";
 import { KEY_DELIVERIES_PREFIX, PENDING_TTL_DAYS, deleteSubscriber, effectivePlan, listSubscribers, normaliseAreas, normaliseCats, readAreas, recordEvent, updateSubscriber, utcDay } from "./subscribers.js";
@@ -72,6 +72,32 @@ export async function buildRollup(storage, sweep, now, { include } = {}) {
   }
   return [...byId.values()].sort((a, b) => (b.isNew - a.isNew) || ((SEV_RANK[b.severity] || 0) - (SEV_RANK[a.severity] || 0)));
 }
+
+// Carry-forward for subscribers (T47): each category whose check failed in `sweep` brings its items from the
+// newest earlier sweep where it finished, as the board does. They aren't New and carry fromAt, the time of the
+// sweep they are from. Counted from the sweep's place in the index, or from the end when it wasn't saved. A
+// sweep with no `cats` (saved before T46) brings none.
+export async function carryFor(storage, sweep) {
+  const cats = sweep && sweep.cats && typeof sweep.cats === "object" ? sweep.cats : {};
+  const failed = CATS.filter((c) => cats[c.key] === "failed");
+  if (!failed.length) return [];
+  const hist = await readJSON(storage, KEY_INDEX);
+  const entries = (Array.isArray(hist) ? hist : []).filter((e) => e && e.id);
+  const at = entries.findIndex((e) => e.id === sweep.id);
+  const read = new Map();
+  const load = (id) => { if (!read.has(id)) read.set(id, readJSON(storage, sweepKey(id))); return read.get(id); };
+  const out = [];
+  for (const c of failed) {
+    const f = await findCarry(entries, at < 0 ? entries.length : at, c.key, load);
+    if (f) f.items.forEach((p) => out.push({ ...p, isNew: false, fromAt: f.at }));
+  }
+  return out;
+}
+// A list with the carried items it doesn't already hold.
+const withCarry = (list, carried) => {
+  const ids = new Set(list.map((p) => p.id));
+  return [...list, ...carried.filter((p) => !ids.has(p.id))];
+};
 
 // A Pro record's categories as a group key: "all", or the chosen keys joined with "+". A stored
 // value that normaliseCats wouldn't accept (hand-edited, or from an older shape) counts as "all".
@@ -147,6 +173,8 @@ export async function deliverToSubscribers({ env, storage, fetchFn, now, randomB
       ...withSubscriberFooter(mail, { unsubscribeUrl: `${site}/api/unsubscribe?id=${r.id}&t=${r.token}`, manageUrl: site + managePath(r.id, r.token), plan }),
     });
     const liveUrl = `${site}/live/`;
+    // A failed category's last results (T47), read once for Pro and Free.
+    const carried = await carryFor(storage, sweep);
     let halted = false;
     const note = (r) => { if (r.stopped && !result.stopped) { result.stopped = r.stopped; halted = true; } };
 
@@ -179,9 +207,9 @@ export async function deliverToSubscribers({ env, storage, fetchFn, now, randomB
       const problemsFor = async (f) => {
         if (!sinceSlot.has(f)) {
           const from = previousSlotAt(f, slot);
-          sinceSlot.set(f, await buildRollup(storage, sweep, t, {
+          sinceSlot.set(f, withCarry(await buildRollup(storage, sweep, t, {
             include: (e) => !e.manual && slotAtOf(e) > from && slotAtOf(e) <= slot.at && Date.parse(e.at) <= t,
-          }));
+          }), carried));
         }
         return sinceSlot.get(f);
       };
@@ -222,7 +250,7 @@ export async function deliverToSubscribers({ env, storage, fetchFn, now, randomB
     if (due.length && halted) {
       result.free.deferred = due.length;
     } else if (due.length) {
-      const problems = await buildRollup(storage, sweep, t);
+      const problems = withCarry(await buildRollup(storage, sweep, t), carried);
       const mail = teaser
         ? buildDigestEmail({ at: sweep.at, problems, perCat: {} }, liveUrl, { heading: "Travel Problem Radar: daily summary", subjectLead: "daily summary", teaser, signInUrl: `${site}/signin/` })
         : buildDigestEmail({ at: sweep.at, problems, perCat: {} }, liveUrl, { heading: "Travel Problem Radar: daily digest", subjectLead: "daily" });

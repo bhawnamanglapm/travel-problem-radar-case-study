@@ -147,6 +147,9 @@ const sweepOpts = (storage, byCat, now) => ({
   const none = await runDailySweep(sweepOpts(st2, { traveler_pain: "http", gov_policy: "http", web_app: "http", industry: "http" }, () => 1_800_000_000_000));
   check(none.status === "empty" && [...st2.m.keys()].sort().join() === "radar:lastRun,radar:lastScheduled," + llmLogKey("1800000000000"),
     "all four failed: nothing saved but the start time, the last run (T46) and the LLM log");
+  check(none.id === "1800000000000" && none.at === new Date(1_800_000_000_000).toISOString()
+    && Object.values(none.cats).length === 4 && Object.values(none.cats).every((v) => v === "failed") && !("problems" in none),
+    "all four failed: the result has the run's id, time and each category's outcome, for subscribers (T47)");
 
   const cut = await runDailySweep(sweepOpts(memStorage(), { traveler_pain: "cutoff", gov_policy: [item(1)], web_app: [], industry: [] }, () => 1_800_000_000_000));
   check(cut.perCat.traveler_pain === "failed: empty (stop_reason: max_tokens)", "a failed category says why the model stopped");
@@ -885,7 +888,7 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   check(ok.res.code === 200 && ok.res.json().slack === "sent" && ok.posts.length === 1, "saved sweep: digest posted to Slack once");
   check(text.includes("<https://example.com/1|Fees &lt;rise&gt; &amp; more>") && text.includes("*NEW*"),
     "digest links each title to its source, escapes Slack control characters, marks New");
-  check(text.includes("*FAILED: 1 of 4 categories failed this run; the board shows its last results instead.*")
+  check(text.includes("*FAILED: 1 of 4 categories failed this run; subscribers and the board get its last results instead.*")
     && /\n• Gov &amp; policy: \S/.test(text) && text.includes("<https://radar.example.com/live/|Open the live board>"),
     "digest flags failed categories with each one's error, and links the live board");
   check(ok.posts[0].unfurl_links === false && !ok.res.body.includes("not-a-real-secret") && !("problems" in ok.res.json()),
@@ -955,7 +958,7 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
     `subject has the time, the counts and the trigger (${req.body.subject})`);
   check(req.body.html.includes("<a href=\"https://example.com/a&quot;b\" style=\"color:#1d4e45;font-weight:600\">Fees &lt;rise&gt; &amp; more</a>") && !/<rise>/.test(req.body.html),
     "HTML part escapes titles and links");
-  check(req.body.text.includes("Fees <rise> & more") && req.body.text.includes("FAILED: 1 of 4 categories failed this run; the board shows its last results instead.")
+  check(req.body.text.includes("Fees <rise> & more") && req.body.text.includes("FAILED: 1 of 4 categories failed this run; subscribers and the board get its last results instead.")
     && /\n  Gov & policy: \S/.test(req.body.text)
     && req.body.text.includes("Live board: https://radar.example.com/live/") && /not verified/.test(req.body.text),
     "plain-text part has the items, failed categories with their errors, live board link and the not-verified note");
@@ -1009,12 +1012,12 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   const m = buildDigestEmail({ at, problems, perCat: two });
   check(m.subject === "Travel Problem Radar · FAILED: Gov & policy, Industry · 2027-01-15 08:00 UTC · 1 problems, 1 new",
     `two failed: both named in the subject, first (${m.subject})`);
-  check(m.text.includes("FAILED: 2 of 4 categories failed this run; the board shows their last results instead.")
+  check(m.text.includes("FAILED: 2 of 4 categories failed this run; subscribers and the board get their last results instead.")
     && m.text.includes("  Gov & policy: <b>overloaded</b> & retry") && m.text.includes("  Industry: timeout") && !/failed: timeout/.test(m.text),
     "email: each failed category with its error, without the failed: prefix");
   check(m.html.includes("<li>Gov &amp; policy: &lt;b&gt;overloaded&lt;/b&gt; &amp; retry</li>") && !m.html.includes("<b>overloaded"), "email: the error is escaped in HTML");
   const s = buildDigest({ at, problems, perCat: two });
-  check(s.includes("*FAILED: 2 of 4 categories failed this run; the board shows their last results instead.*")
+  check(s.includes("*FAILED: 2 of 4 categories failed this run; subscribers and the board get their last results instead.*")
     && s.includes("• Gov &amp; policy: &lt;b&gt;overloaded&lt;/b&gt; &amp; retry") && s.includes("• Industry: timeout"), "slack: the same alert, escaped for Slack");
   const long = buildDigestEmail({ at, problems, perCat: { industry: "failed: " + "x".repeat(1000) } });
   const line = long.text.split("\n").find((l) => l.startsWith("  Industry: "));
@@ -1147,9 +1150,8 @@ check(extractProblems({ content: [{ type: "text", text: "```json\n[{\"title\":\"
   check((await call("/api/data?key=radar:items")).code === 400, "the item index is not exposed (T36)");
   st.m.set("radar:search", "{\"sweeps\":[],\"items\":[]}");
   check((await call("/api/data?key=radar:search")).code === 200, "the search file is served (T38)");
-  check((await call("/api/data?key=radar:lastRun")).code === 404, "no last run yet: 404 (T46)");
   st.m.set("radar:lastRun", "{\"at\":\"2026-11-03T10:00:00.000Z\",\"saved\":false,\"cats\":{}}");
-  check((await call("/api/data?key=radar:lastRun")).code === 200, "the last run is served (T46)");
+  check((await call("/api/data?key=radar:lastRun")).code === 400, "the last run is not exposed: only the owner hears of a failed check (T47)");
   check((await call("/api/data?key=" + llmLogKey("1800000000000"))).code === 400, "LLM logs are not exposed");
   check((await call("/api/data?key=../../etc/passwd")).code === 400, "path-like keys are rejected");
   check((await call("/api/data")).code === 400, "missing key is rejected");

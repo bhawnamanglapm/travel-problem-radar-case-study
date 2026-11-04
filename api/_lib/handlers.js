@@ -104,6 +104,17 @@ export function makeSweepHandler({ env, storage, fetchFn, now, randomBytes = cry
     if (out.status === "empty") {
       const failed = { at: new Date(now()).toISOString(), perCat: out.perCat };
       Object.assign(summary, await deliver(buildFailureNotice(failed), buildFailureEmail(failed)));
+      // T47: a run that saved nothing because checks failed still reaches subscribers, with the failed categories'
+      // last results. One where every check finished and found nothing sends them nothing, as before.
+      if (out.cats && Object.values(out.cats).includes("failed")) {
+        try {
+          summary.subscribers = await deliverToSubscribers({
+            env, storage, fetchFn, now, randomBytes, log, sweep: { ...out, problems: [] }, scheduled, deadlineAt: startedAt + SUBSCRIBER_DEADLINE_MS,
+          });
+        } catch (e) {
+          summary.subscribers = { error: "subscriber delivery failed" };
+        }
+      }
     }
     // T22: a Razorpay key in the wrong environment turns payments off; said here so the Actions log shows it.
     // It names the problem only, never the key.
@@ -112,9 +123,9 @@ export function makeSweepHandler({ env, storage, fetchFn, now, randomBytes = cry
   };
 }
 
-// Read-only, and only for the kinds of key the dashboard asks for: the index, a sweep, the search file (T38),
-// the last run (T46).
-const ALLOWED_KEY = /^radar:(history|search|lastRun|sweep:\d{10,16})$/;
+// Read-only, and only for the kinds of key the dashboard asks for: the index, a sweep, the search file (T38).
+// Not the last run: since T47 only the owner hears that a check failed.
+const ALLOWED_KEY = /^radar:(history|search|sweep:\d{10,16})$/;
 // The trends page's counts (T44): read from the search file's tally and open to everyone, paywall or not, as the
 // reply holds no ids, titles or links. Cached an hour, since the tally changes only when a sweep runs.
 const TRENDS_KEY = "radar:trends";

@@ -14,7 +14,7 @@ import {
   KEY_IPHIT_PREFIX, KEY_SUBSCRIBER_COUNT, WEBHOOK_TOLERANCE_S, clientIp, makeConfirmHandler, makeResendWebhookHandler, makeSubscribeHandler, makeUnsubscribeHandler,
   siteUrl, utcHour, verifySvix,
 } from "../api/_lib/subscription-handlers.js";
-import { deliverToSubscribers, proAreasKey, proCatsKey } from "../api/_lib/subscriber-delivery.js";
+import { carryFor, deliverToSubscribers, proAreasKey, proCatsKey } from "../api/_lib/subscriber-delivery.js";
 import { makeDataHandler } from "../api/_lib/handlers.js";
 import { RAZORPAY_API, cancelSubscription, createSubscription, fetchSubscription, isTestKey, keyMismatch, razorpayConfigured, verifyCheckout, verifyWebhook } from "../api/_lib/razorpay.js";
 import { check, finish, memStorage, mockRes } from "./test-helpers.mjs";
@@ -1107,7 +1107,7 @@ const iso = (ms) => new Date(ms).toISOString();
       }
       const body = JSON.parse(init.body);
       const kind = String(url).endsWith("/emails/batch") ? "batch" : "owner";
-      calls.push({ kind, body });
+      calls.push({ kind, body, headers: init.headers || {} });
       const forced = resend[kind];
       if (forced === "throw") throw new Error("socket hang up for sub@example.com");
       if (forced) return { ok: false, status: forced.status, headers: h, json: async () => forced.body || {} };
@@ -1121,7 +1121,7 @@ const iso = (ms) => new Date(ms).toISOString();
       await putSubscriber(st, rec);
       return rec;
     };
-    return { st, calls, logs, call, addSub, kinds: () => calls.filter((c) => c.kind !== "anthropic").map((c) => c.kind) };
+    return { st, calls, logs, call, addSub, setClock: (ms) => { clock = ms; }, kinds: () => calls.filter((c) => c.kind !== "anthropic").map((c) => c.kind) };
   };
 
   // 1. saved scheduled sweep, 1 Pro + 1 Free: the owner first, then one batch per audience
@@ -1209,10 +1209,40 @@ const iso = (ms) => new Date(ms).toISOString();
   await w.call();
   const again = await w.call(); // a second scheduled call within 2 h
   check(again.code === 200 && again.json().status === "skipped" && !("subscribers" in again.json()), "sweep: a skipped reply has no subscribers field");
-  const e = world({ byCat: () => "not json" });
-  e.st.m.clear();
+  const e = world({ byCat: () => "[]" });
+  await e.addSub(1, "pro");
   const emptyRes = await e.call();
-  check(emptyRes.code === 502 && !("subscribers" in emptyRes.json()), "sweep: an empty (502) reply has no subscribers field");
+  check(emptyRes.code === 502 && !("subscribers" in emptyRes.json()) && !e.kinds().includes("batch"),
+    "sweep: an empty (502) reply where every check finished has no subscribers field and sends them nothing");
+
+  // 8b. T47: a run where every check failed saves nothing, but subscribers still get the last results
+  {
+    let failing = false;
+    const fw = world({ byCat: (k) => (failing ? "not json" : k === "traveler_pain" ? answer : "[]") });
+    await fw.addSub(1, "pro");
+    await fw.addSub(2, "free");
+    const first = await fw.call(); // 21 Oct 08:09, saved
+    const firstPro = fw.calls.filter((c) => c.kind === "batch")[0];
+    fw.setClock(Date.UTC(2026, 9, 22, 8, 9, 10)); // the next day, slot 05 again
+    failing = true;
+    const from = fw.calls.length;
+    const r = await fw.call();
+    const b = r.json();
+    const mails = fw.calls.slice(from).filter((c) => c.kind !== "anthropic");
+    const batches = mails.filter((c) => c.kind === "batch");
+    const pro = batches.find((c) => /Pro update/.test(c.body[0].text));
+    const free = batches.find((c) => /daily digest/.test(c.body[0].text));
+    check(first.json().status === "saved" && r.code === 502 && b.status === "empty" && b.subscribers && b.subscribers.pro.sent === 1 && b.subscribers.free.sent === 1,
+      "sweep (T47): every check failed: still 502 empty, and Pro and Free each get an email");
+    check(mails[0].kind === "owner" && /sweep failed/.test(mails[0].body.subject), "sweep (T47): the owner's failure email still goes first");
+    const both = [pro, free].filter(Boolean).flatMap((c) => [c.body[0].text, c.body[0].html]);
+    check(both.length === 4 && both.every((x) => x.includes("Problem 1") && x.includes("From the sweep of 21 October 2026")),
+      "sweep (T47): both emails hold the last results, each tagged with the sweep they are from");
+    check(both.every((x) => !/FAILED|failed this run|couldn[’']t complete/.test(x)), "sweep (T47): neither email says a check failed");
+    const key = (c) => c && c.headers["idempotency-key"];
+    check(key(pro) && key(firstPro) && key(pro) !== key(firstPro) && key(pro).startsWith(b.id || "none"),
+      `sweep (T47): the Pro email's key is the failed run's, not the last saved sweep's (${key(pro)} vs ${key(firstPro)})`);
+  }
   const noKey = world({ env: { ANTHROPIC_API_KEY: "" } });
   const nk = await noKey.call();
   check(nk.code === 500 && !("subscribers" in nk.json()) && noKey.kinds().length === 0, "sweep: a missing API key gives 500 without subscribers and no Resend call");
@@ -1226,6 +1256,62 @@ const iso = (ms) => new Date(ms).toISOString();
   let refused = 0;
   for (const k of keys) { const r = mockRes(); await dh({ method: "GET", url: "/api/data?key=" + encodeURIComponent(k), headers: {} }, r); if (r.code === 400) refused++; }
   check(keys.length >= 3 && refused === keys.length, `sweep: every subscriber key a sweep wrote is refused by /api/data (${refused}/${keys.length})`);
+}
+
+// ---- T47: subscribers get a failed category's last results
+{
+  const H = 3600_000;
+  const P = (id, cat, title) => ({ id, cat, title, summary: "", source: "S", link: "https://example.com/" + id, region: "Global", date: "2026-10-20", severity: "Medium", opportunity: "", isNew: true });
+  const okAll = { traveler_pain: "ok", gov_policy: "ok", web_app: "ok", industry: "ok" };
+  const world = async (sweeps) => {
+    const st = memStorage();
+    await st.set("radar:history", JSON.stringify(sweeps.map((w) => ({ id: w.id, at: w.at }))));
+    for (const w of sweeps) await st.set("radar:sweep:" + w.id, JSON.stringify(w));
+    let reads = 0;
+    const get = st.get;
+    st.get = async (k) => { if (k.startsWith("radar:sweep:")) reads++; return get(k); };
+    return { st, reads: () => reads };
+  };
+  const s1 = { id: String(T0 - 30 * H), at: iso(T0 - 30 * H), cats: okAll, problems: [P("a", "traveler_pain", "Old pain"), P("g", "gov_policy", "Old policy")] };
+  const s2 = { id: String(T0 - 10 * H), at: iso(T0 - 10 * H), cats: { ...okAll, traveler_pain: "failed", gov_policy: "failed" }, problems: [P("w", "web_app", "App thing")] };
+  const s3 = { id: String(T0), at: iso(T0), cats: { ...okAll, traveler_pain: "failed", gov_policy: "failed" }, problems: [P("i", "industry", "Industry thing")] };
+
+  let w = await world([s1, s2, s3]);
+  let c = await carryFor(w.st, s3);
+  check(c.map((p) => p.id).join() === "a,g" && c.every((p) => p.isNew === false && p.fromAt === s1.at),
+    "carryFor: each failed category's items from the newest sweep where its check finished, not New, with fromAt");
+  check(w.reads() === 2, `carryFor: a sweep two failed categories share is read once (${w.reads()} reads)`);
+  w = await world([s1, s2]);
+  c = await carryFor(w.st, { id: "1792999999999", at: iso(T0), cats: s3.cats, problems: [] });
+  check(c.map((p) => p.id).join() === "a,g", "carryFor: a run that wasn't saved counts back from the end of the index");
+  w = await world([s1, s2, s3]);
+  check((await carryFor(w.st, { ...s3, cats: undefined })).length === 0 && (await carryFor(w.st, { ...s3, cats: okAll })).length === 0 && w.reads() === 0,
+    "carryFor: a sweep with no cats, or none failed, brings nothing and reads nothing");
+
+  // Free: an item in the 24-hour roll-up and in the carry comes once, from the roll-up
+  const s0 = { id: String(T0 - 20 * H), at: iso(T0 - 20 * H), cats: { ...okAll, gov_policy: "failed" }, problems: [P("a", "traveler_pain", "Old pain")] };
+  w = await world([s1, s0, s3]);
+  await putSubscriber(w.st, { ...newPending("f1@example.com", { now: T0 - 40 * H, randomBytes: seeded(41) }), token: "tokf", status: "active", plan: "free" });
+  const sent = [];
+  const fetchFn = async (url, init) => { const b = JSON.parse(init.body); sent.push(...b); return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ data: b.map(() => ({ id: "x" })) }) }; };
+  const r = await deliverToSubscribers({ env: { SUBSCRIPTIONS_ENABLED: "1", RESEND_API_KEY: "re_k", EMAIL_FROM: "Radar <hello@pehchanthetraveller.com>", SITE_URL: "https://site.example" },
+    storage: w.st, fetchFn, now: () => T0, randomBytes: seeded(3), sweep: s3, scheduled: false, log: () => {} });
+  const t = sent[0] ? sent[0].text : "";
+  check(r.free.sent === 1 && t.split("Old pain").length === 2 && t.includes("Old policy") && t.includes("Industry thing"),
+    "Free (T47): a failed category's last results are added, and one already in the roll-up isn't doubled");
+  const line = (title) => t.split("\n").slice(t.split("\n").findIndex((l) => l.includes(title))).find((l) => l.includes(" · ")) || "";
+  check(line("Old policy").includes("From the sweep of 20 October 2026") && !line("Old pain").includes("From the sweep of"),
+    "Free (T47): only the carried item says which sweep it is from");
+
+  // Pro: a member who chose only a failed category gets its last results instead of nothing
+  w = await world([s1, s0, s3]);
+  await putSubscriber(w.st, { ...newPending("p1@example.com", { now: T0 - 40 * H, randomBytes: seeded(42) }), token: "tokp", status: "active", plan: "pro", proSource: "owner", sweepsPerDay: 5, cats: ["gov_policy"] });
+  sent.length = 0;
+  const rp = await deliverToSubscribers({ env: { SUBSCRIPTIONS_ENABLED: "1", RESEND_API_KEY: "re_k", EMAIL_FROM: "Radar <hello@pehchanthetraveller.com>", SITE_URL: "https://site.example" },
+    storage: w.st, fetchFn, now: () => T0, randomBytes: seeded(3), sweep: s3, scheduled: true, log: () => {} });
+  const pt = (sent.find((m) => /Pro update/.test(m.text)) || {}).text || "";
+  check(rp.pro.sent === 1 && pt.includes("Old policy") && pt.includes("From the sweep of 20 October 2026") && !pt.includes("Industry thing") && !/FAILED/.test(pt),
+    "Pro (T47): a member who chose only a failed category gets its last results, tagged, and no failure line");
 }
 
 // ---- T11: owner admin script (scripts/subscribers.mjs)
@@ -3096,8 +3182,8 @@ const iso = (ms) => new Date(ms).toISOString();
     check((await call(on, { key: "radar:search" })).code === 401 && (await call(on, { c: cookie(free), key: "radar:search" })).code === 402
       && (await call(on, { c: cookie(pro), key: "radar:search" })).code === 200, "board switch on: the search file is for Pro only, like the sweeps (T38)");
     await sweeps.set("radar:lastRun", "{\"at\":\"2026-11-03T10:00:00.000Z\",\"saved\":false,\"cats\":{}}");
-    check((await call(on, { key: "radar:lastRun" })).code === 401 && (await call(on, { c: cookie(free), key: "radar:lastRun" })).code === 402
-      && (await call(on, { c: cookie(pro), key: "radar:lastRun" })).code === 200, "board switch on: the last run is for Pro only, like the sweeps (T46)");
+    check((await call(on, { c: cookie(pro), key: "radar:lastRun" })).code === 400 && (await call({}, { key: "radar:lastRun" })).code === 400,
+      "the last run is refused for everyone, Pro included, with the board switch on or off (T47)");
     for (const [c, label] of [
       [cookie(pro, { secret: "another-secret-of-enough-length-000" }), "signed with another secret"],
       [cookie(pro, { at: T0 - 13 * 3600 * 1000 }), "expired"],
